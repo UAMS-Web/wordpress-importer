@@ -325,8 +325,10 @@ class FormConfigurationManager
         string $value,
         array $formFields
     ): string {
-        // Nothing to translate.
+        // Nothing to translate. Without this return the pattern below matches nothing and
+        // hands the value back unchanged, so it only saves the work.
         if (! \str_contains($value, '{field:')) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $value;
         }
 
@@ -369,6 +371,10 @@ class FormConfigurationManager
 
             $key = $field['key'] ?? null;
 
+            // The mutant admits '' and shuts out its own placeholder string. A merge tag
+            // names at least one character from [A-Za-z0-9_-], so it can read neither, and
+            // the check changes no translation.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             if (\is_string($key) && $key !== '') {
                 // ---
                 // Derived from the KEY, identically to
@@ -380,12 +386,13 @@ class FormConfigurationManager
                 $handles[$key] = $this->ninjaFieldHandle($key);
             }
 
-            // A repeater nests its own fields, and merge tags can name them.
+            // A repeater nests its own fields, and merge tags can name them. Added key by
+            // key rather than with array_merge(), which renumbers the int keys PHP makes
+            // of all-digit field keys such as '10'.
             if (($field['type'] ?? null) === 'repeater' && \is_array($field['fields'] ?? null)) {
-                $handles = \array_merge(
-                    $handles,
-                    $this->fieldHandlesByKey($field['fields'])
-                );
+                foreach ($this->fieldHandlesByKey($field['fields']) as $nestedKey => $nestedHandle) {
+                    $handles[$nestedKey] = $nestedHandle;
+                }
             }
         }
 
@@ -746,6 +753,8 @@ class FormConfigurationManager
 
             $unresolved = [];
 
+            // With no match there is nothing to scan, so `>= 0` and `> -1` behave alike.
+            // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
             if (\preg_match_all('/\{field:([^}]+)\}/', $source, $matches) > 0) {
                 foreach ($matches[1] as $referenced) {
                     if (! \in_array($referenced, $known, true)) {
@@ -782,6 +791,9 @@ class FormConfigurationManager
 
             $key = $field['key'] ?? null;
 
+            // A reference is compared strictly as a string, so a key that is not a string
+            // and is admitted here could never match one.
+            // @pest-mutate-ignore: BooleanAndToBooleanOr
             if (\is_string($key) && $key !== '') {
                 $keys[] = $key;
             }
@@ -867,6 +879,8 @@ class FormConfigurationManager
         $active = $action['active'] ?? null;
 
         if ($active === null) {
+            // null is not among the values below, so the final test also returns true.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
@@ -1056,6 +1070,9 @@ class FormConfigurationManager
         );
 
         // Then the system tags, which need no field context.
+        // str_replace() pairs the two arrays by position, not by key, so re-indexing the
+        // replacements changes nothing.
+        // @pest-mutate-ignore: UnwrapArrayValues
         return \str_replace(
             \array_keys($this->getVariableMappings()),
             \array_values($this->getVariableMappings()),

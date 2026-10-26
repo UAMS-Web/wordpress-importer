@@ -89,7 +89,10 @@ trait FormPluginCoordinatorTrait
             $this->formIdExtractor->getFormIdsUsedWithPageSlugs($xmlParser) as $formId => $pageSlugs
         ) {
             // Ids arrive as ints or numeric strings depending on how the plugin writes the
-            // block attribute; normalise so callers compare against one type.
+            // block attribute; normalise so callers compare against one type. An array key
+            // is already an int or a string, and only the string '' is empty, so dropping
+            // the cast changes no result; it keeps the empty check reading as a string test.
+            // @pest-mutate-ignore: RemoveStringCast
             $key = (string) $formId;
 
             if ($key === '') {
@@ -171,10 +174,5 @@ trait FormPluginCoordinatorTrait
             $output,
             $command
         );
-    }
-
-    public function getFormTitleAttributeName(): string
-    {
-        return 'title';
     }
 }

@@ -455,6 +455,19 @@ it('streams every unfiltered item past a poisoned one', function (): void {
     unlink($path);
 });
 
+it('reports the filter registered when the registry already holds it', function (): void {
+    // A second registration of one name fails, so a process whose flag was lost
+    // (or a second class loader) must find the name rather than register again
+    expect(WxrSanitizingStreamFilter::register())->toBeTrue();
+
+    $flag = new ReflectionProperty(WxrSanitizingStreamFilter::class, 'registered');
+    $flag->setValue(null, false);
+
+    expect(WxrSanitizingStreamFilter::register())->toBeTrue()
+        ->and(stream_get_filters())->toContain(WxrSanitizingStreamFilter::FILTER_NAME)
+        ->and($flag->getValue())->toBeTrue();
+});
+
 it('emits the withheld tail when the stream closes', function (): void {
     // The filter holds back bytes that may be a split token and only releases
     // them on teardown. Without that release the document loses its last bytes.

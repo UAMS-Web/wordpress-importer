@@ -278,3 +278,15 @@ it('never returns the retired video set handle', function (string $url): void {
     'https://vimeo.com/1',
     'https://app.box.com/shared/static/a.mp4',
 ])->group('video-sets');
+
+it('routes a blank or whitespace-only URL nowhere', function (string $url): void {
+    // Pins the empty-input result before the redundant `$url === ''` early return is
+    // removed: an empty string carries no host, so no platform resolver can match it.
+    expect(VideoSetType::resolve($url))->toBeNull()
+        ->and(VideoSetType::forUrl($url))->toBeNull()
+        ->and(VideoSetType::canonicalUrl($url))->toBeNull();
+})->with([
+    'empty' => [''],
+    'spaces' => ['   '],
+    'tab and newline' => ["\t\n"],
+])->group('video-sets');

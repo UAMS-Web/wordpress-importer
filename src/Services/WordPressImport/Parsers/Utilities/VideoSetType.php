@@ -87,13 +87,10 @@ class VideoSetType
     public static function resolve(
         string $url
     ): ?array {
-        // Normalize so a padded or protocol-relative URL still matches
+        // Normalize so a padded or protocol-relative URL still matches. An empty
+        // result needs no guard of its own: it carries no host, so every platform
+        // resolver below refuses it.
         $url = \trim($url);
-
-        // Nothing to route
-        if ($url === '') {
-            return null;
-        }
 
         // ---
         // Refuse a URL carrying a character that could break out of the attribute it

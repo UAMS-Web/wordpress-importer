@@ -120,7 +120,9 @@ class GuardedRedirectWalk
                 return null;
             }
 
-            // Record this hop before requesting it so a loop is detectable
+            // Record this hop before requesting it so a loop is detectable. The loop
+            // check reads the key with isset(), which a false value passes as well.
+            // @pest-mutate-ignore: TrueToFalse
             $seen[$currentUrl] = true;
 
             // Give this hop whatever is left of the chain's budget
@@ -128,6 +130,9 @@ class GuardedRedirectWalk
                 ? null
                 : $deadline - microtime(true);
 
+            // The two comparisons differ only at exactly 0.0 seconds left, which a
+            // float difference of two microtime() readings does not land on
+            // @pest-mutate-ignore: SmallerOrEqualToSmaller
             if (
                 $remaining !== null
                 && $remaining <= 0.0

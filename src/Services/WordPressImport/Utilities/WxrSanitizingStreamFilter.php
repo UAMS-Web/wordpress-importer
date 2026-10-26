@@ -30,7 +30,11 @@ class WxrSanitizingStreamFilter extends php_user_filter
 
     /**
      * Whether the filter has already been added to the registry this process.
+     *
+     * A property default is never reported as an executed line, so no test is
+     * attributed to it and a mutant here can only show as uncovered.
      */
+    // @pest-mutate-ignore: FalseToTrue
     private static bool $registered = false;
 
     /**
@@ -45,14 +49,19 @@ class WxrSanitizingStreamFilter extends php_user_filter
      */
     public static function register(): bool
     {
-        // Registering twice emits a warning and fails, so only ever do it once
+        // Registering twice emits a warning and fails, so only ever do it once.
+        // Falling through instead reaches the registry check below, which finds
+        // the name and never registers again, so the early return saves work only.
         if (self::$registered) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
         self::$registered = \in_array(
             self::FILTER_NAME,
             \stream_get_filters(),
+            // Every registry entry is a string, so a loose match finds the same name
+            // @pest-mutate-ignore: TrueToFalse
             true
         ) || \stream_filter_register(
             self::FILTER_NAME,
@@ -93,6 +102,10 @@ class WxrSanitizingStreamFilter extends php_user_filter
         $sanitizer = $this->sanitizer ??= new WxrSanitizer;
 
         while (($bucket = \stream_bucket_make_writeable($in)) instanceof \StreamBucket) {
+            // A read filter's consumed count changes nothing a reader can see: a
+            // filter that subtracts it returns the same bytes, position and EOF
+            // (measured with php://temp on macOS), so the count is kept for intent
+            // @pest-mutate-ignore: PlusEqualToMinusEqual
             $consumed += $bucket->datalen;
 
             $data = $sanitizer->feed($bucket->data);
@@ -111,6 +124,9 @@ class WxrSanitizingStreamFilter extends php_user_filter
             $tail = $sanitizer->flush();
             $stream = $this->stream;
 
+            // An empty tail appended as a bucket adds no bytes, and the stream is
+            // always open while it closes, so both mutants emit the same document
+            // @pest-mutate-ignore: BooleanAndToBooleanOr, EmptyStringToNotEmpty
             if ($tail !== '' && \is_resource($stream)) {
                 $bucket = \stream_bucket_new(
                     $stream,

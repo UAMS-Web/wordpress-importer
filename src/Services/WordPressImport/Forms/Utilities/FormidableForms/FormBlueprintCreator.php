@@ -354,6 +354,9 @@ class FormBlueprintCreator
                 $formId
             );
 
+            // The loop below over no fields builds no sets and returns the same empty
+            // array, so this return only saves the walk.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -362,12 +365,10 @@ class FormBlueprintCreator
         $setFields = [];
 
         foreach ($childFormFields as $childField) {
-            // Skip values that are not valid field arrays.
-            if (! \is_array($childField)) {
-                continue;
-            }
-
-            // Skip certain field types that shouldn't be in repeater sets
+            // Skip certain field types that shouldn't be in repeater sets. Any default
+            // but the two marker names skips nothing, so the empty default is one choice
+            // among equivalent ones.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             if (
                 \in_array(
                     $childField['type'] ?? '',
@@ -464,7 +465,7 @@ class FormBlueprintCreator
      *
      * @param  string  $childFormId  The child form ID
      * @param  array<int|string, mixed>  $allFields  Array of all form fields
-     * @return array<int|string, mixed> Array of child form fields
+     * @return list<array<int|string, mixed>> Array of child form fields
      */
     private function getChildFormFields(
         string $childFormId,

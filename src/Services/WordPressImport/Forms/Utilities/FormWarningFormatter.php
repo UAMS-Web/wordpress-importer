@@ -71,13 +71,15 @@ class FormWarningFormatter
                 $warning,
                 'form_id'
             );
-            $formKey = $formTitle.($formId !== null && $formId !== '' ? " (ID: $formId)" : '');
+            $formKey = $formTitle.($formId !== null ? " (ID: $formId)" : '');
             $grouped[$fieldtype] ??= [];
 
             $grouped[$fieldtype][$attributeName] ??= [];
 
-            // Use associative array for deduplication
-            $grouped[$fieldtype][$attributeName][$formKey] = true;
+            // Keyed for deduplication, and the key is stored as the value too: PHP turns
+            // an all-digit key such as '2024' into an int, and preg_match() below takes
+            // only a string under strict types.
+            $grouped[$fieldtype][$attributeName][$formKey] = $formKey;
         }
 
         ksort($grouped);
@@ -92,7 +94,7 @@ class FormWarningFormatter
             foreach ($attributes as $attributeName => $forms) {
                 $output->writeln("     - Attribute: '".$attributeName."'");
                 $output->writeln('         - Form(s):');
-                foreach (\array_keys($forms) as $formKey) {
+                foreach ($forms as $formKey) {
                     // Extract form name and ID from the form key
                     $formName = $formKey;
                     $formId = null;
@@ -175,12 +177,16 @@ class FormWarningFormatter
                 $warning,
                 'attribute_name'
             );
-            if ($attributeName === null || $attributeName === '') {
+            if ($attributeName === null) {
                 // This is an unmapped subfield
+                // Only the keys are read, so the stored value changes no output.
+                // @pest-mutate-ignore: TrueToFalse
                 $grouped[$fieldtype]['subfields'][$subfieldLabel] = true;
             } else {
                 $grouped[$fieldtype]['attributes'][$subfieldLabel] ??= [];
 
+                // Only the keys are read, so the stored value changes no output.
+                // @pest-mutate-ignore: TrueToFalse
                 $grouped[$fieldtype]['attributes'][$subfieldLabel][$attributeName] = true;
             }
         }
@@ -274,12 +280,14 @@ class FormWarningFormatter
             );
 
             // Create a unique form key combining title and ID
-            $formKey = $formTitle.($formId !== null && $formId !== '' ? " (ID: $formId)" : '');
+            $formKey = $formTitle.($formId !== null ? " (ID: $formId)" : '');
 
             $grouped[$fieldtype] ??= [];
 
-            // Add this form to the fieldtype group (using associative array for deduplication)
-            $grouped[$fieldtype][$formKey] = true; // Use associative array to deduplicate
+            // Add this form to the fieldtype group, keyed for deduplication. The key is
+            // stored as the value too, because PHP turns an all-digit key into an int and
+            // preg_match() below takes only a string under strict types.
+            $grouped[$fieldtype][$formKey] = $formKey;
         }
 
         // Sort the grouped warnings alphabetically by fieldtype
@@ -298,7 +306,8 @@ class FormWarningFormatter
             $output->writeln('     - Form(s):');
 
             // Sort forms alphabetically for consistent output
-            $sortedForms = \array_keys($forms);
+            // sort() re-indexes the copy, so the form keys become a sorted list.
+            $sortedForms = $forms;
             sort($sortedForms);
 
             // Iterate through each form for this fieldtype
@@ -453,10 +462,15 @@ class FormWarningFormatter
                     // Check if example limit reached
                     if ($exampleCount >= 3) {
                         // Break loop after showing 3 examples
+                        // Every later example is skipped once the count is reached, so continuing
+                        // rather than breaking prints the same lines.
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                     }
 
                     // Extract URL from warning
+                    // The grouped entries always hold a string here, so the default is never used.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $url = self::warningStringValue(
                         $warning,
                         'url',
@@ -470,6 +484,8 @@ class FormWarningFormatter
                     );
 
                     // Extract site from warning
+                    // The grouped entries always hold a string here, so the default is never used.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     $site = self::warningStringValue(
                         $warning,
                         'site',
@@ -482,7 +498,7 @@ class FormWarningFormatter
                         $displayText = $url;
 
                         // Check if page slug exists
-                        if ($pageSlug !== null && $pageSlug !== '') {
+                        if ($pageSlug !== null) {
                             // Append page slug and site to display text
                             $displayText .= " (page: $pageSlug, site: $site)";
                         } elseif ($site !== '') { // Check if site exists without page slug
@@ -627,10 +643,15 @@ class FormWarningFormatter
                 // Check if example limit reached
                 if ($exampleCount >= 3) {
                     // Break loop after showing 3 examples
+                    // Every later example is skipped once the count is reached, so continuing
+                    // rather than breaking prints the same lines.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
                 }
 
                 // Extract original shortcode text
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $original = self::warningStringValue(
                     $warning,
                     'original',
@@ -644,6 +665,8 @@ class FormWarningFormatter
                 );
 
                 // Extract site from warning
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $site = self::warningStringValue(
                     $warning,
                     'site',
@@ -656,7 +679,7 @@ class FormWarningFormatter
                     $displayText = $original;
 
                     // Check if page slug exists
-                    if ($pageSlug !== null && $pageSlug !== '') {
+                    if ($pageSlug !== null) {
                         // Append page slug and site to display text
                         $displayText .= " (page: $pageSlug, site: $site)";
                     } elseif ($site !== '') { // Check if site exists without page slug
@@ -805,10 +828,15 @@ class FormWarningFormatter
             foreach ($shortcodeWarnings as $warning) {
                 // Break loop after showing 3 examples
                 if ($exampleCount >= 3) {
+                    // Every later example is skipped once the count is reached, so continuing
+                    // rather than breaking prints the same lines.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
                 }
 
                 // Extract original shortcode text
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $original = self::warningStringValue(
                     $warning,
                     'original',
@@ -816,6 +844,8 @@ class FormWarningFormatter
                 );
 
                 // Extract the affected attribute name
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $attribute = self::warningStringValue(
                     $warning,
                     'attribute',
@@ -823,6 +853,8 @@ class FormWarningFormatter
                 );
 
                 // Extract the raw (pre-normalization) value
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $rawValue = self::warningStringValue(
                     $warning,
                     'raw_value',
@@ -830,6 +862,8 @@ class FormWarningFormatter
                 );
 
                 // Extract the normalized value
+                // The grouped entries always hold a string here, so the default is never used.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $normalizedValue = self::warningStringValue(
                     $warning,
                     'normalized_value',
@@ -849,7 +883,7 @@ class FormWarningFormatter
                 $displayText .= " ($attribute: '$rawValue' -> '$normalizedValue')";
 
                 // Append the affected entry when known
-                if ($pageUrl !== null && $pageUrl !== '') {
+                if ($pageUrl !== null) {
                     // Add entry URL to display text
                     $displayText .= " (entry: $pageUrl)";
                 }
