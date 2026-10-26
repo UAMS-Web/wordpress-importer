@@ -111,7 +111,7 @@ function embedYoutubeHtml(string $align = 'aligncenter', string $caption = ''): 
 
     return '<div data-set-type="youtube"'.SetMarkupNonce::attribute()
         .' data-set-attr-embed_mode="simple"'
-        .' data-set-attr-url="'.htmlspecialchars((string) ($resolved['url'] ?? '')).'"'
+        .' data-set-attr-url="'.htmlspecialchars($resolved['url'] ?? '').'"'
         .' data-set-attr-aspect_ratio="16by9"'
         .' data-set-attr-align="'.$align.'"'
         .($caption === '' ? '' : ' data-set-attr-caption="'.htmlspecialchars($caption).'"')
@@ -186,8 +186,8 @@ describe('unsupported embeds', function (): void {
                 'site' => 'default',
                 'page_slug' => null,
             ]])
-            ->and($warnings[0]['message'])->toBe("EmbedProcessor::process: Unsupported embed type 'none' with provider 'unknown'")
-            ->and($warnings[0]['context']['providerNameSlug'])->toBe('');
+            ->and(data_get($warnings, '0.message'))->toBe("EmbedProcessor::process: Unsupported embed type 'none' with provider 'unknown'")
+            ->and(data_get($warnings, '0.context.providerNameSlug'))->toBe('');
     });
 
     it('treats non-scalar attributes as missing and scalars as strings', function (): void {
@@ -209,8 +209,8 @@ describe('unsupported embeds', function (): void {
 
         embedProcess(embedComment('<!-- wp:embed -->'), ['type' => 'rich']);
 
-        expect($warnings[0]['message'])->toBe("EmbedProcessor::process: Unsupported embed type 'rich' with provider 'unknown' (from entry: https://example.com/about/)")
-            ->and($warnings[0]['context']['entry_url'])->toBe('https://example.com/about/');
+        expect(data_get($warnings, '0.message'))->toBe("EmbedProcessor::process: Unsupported embed type 'rich' with provider 'unknown' (from entry: https://example.com/about/)")
+            ->and(data_get($warnings, '0.context.entry_url'))->toBe('https://example.com/about/');
     });
 
     it('does not treat a typeless embed as video when its URL is not a string or not a video', function (array $attributes): void {
@@ -233,9 +233,9 @@ describe('video embeds', function (): void {
         $result = embedProcess($node, $attributes);
 
         expect($result)->toBeArray()
-            ->and($result['html'])->toBe(embedYoutubeHtml())
-            ->and($result['processedNode'])->toBe($node->nextSibling)
-            ->and($result['skipCount'])->toBe(3)
+            ->and(data_get($result, 'html'))->toBe(embedYoutubeHtml())
+            ->and(data_get($result, 'processedNode'))->toBe($node->nextSibling)
+            ->and(data_get($result, 'skipCount'))->toBe(3)
             ->and(ImportWarningManager::getWarnings('content', 'unsupported_embeds'))->toBe([]);
     })->with([
         'typed' => [['type' => 'video', 'url' => EMBED_YOUTUBE_URL]],
@@ -252,6 +252,8 @@ describe('video embeds', function (): void {
         'empty attribute' => [['align' => ''], 'alignwide'],
         'non-scalar attribute' => [['align' => ['center']], 'alignwide'],
         'no attribute' => [[], 'alignwide'],
+        'left, which a video set centers' => [['align' => 'left'], 'aligncenter'],
+        'right, which a video set centers' => [['align' => 'right'], 'aligncenter'],
     ]);
 
     it('keeps the first trimmed figcaption', function (): void {

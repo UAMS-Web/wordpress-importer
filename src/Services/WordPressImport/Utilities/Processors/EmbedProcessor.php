@@ -383,10 +383,8 @@ class EmbedProcessor implements BlockProcessorInterface
         // ---
         $resolved = VideoSetType::resolve($videoUrl);
 
-        $setType = $resolved['type'] ?? null;
-
         // Check if the provider is unsupported (no platform-specific set hosts it)
-        if ($setType === null || $resolved === null) {
+        if ($resolved === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -432,10 +430,7 @@ class EmbedProcessor implements BlockProcessorInterface
         // Loop through child nodes to find figcaption element
         foreach ($figureNode->childNodes as $child) {
             // Check if child is a figcaption element
-            if (
-                $child instanceof DOMElement
-                && $child->nodeName === 'figcaption'
-            ) {
+            if ($child->nodeName === 'figcaption') {
                 // Extract caption text content
                 $caption = \trim($child->textContent);
 
@@ -451,7 +446,6 @@ class EmbedProcessor implements BlockProcessorInterface
         // justified by the source data (wordpress-importer-archive#298).
         // ---
         $values = [
-            'type' => $setType,
             'embed_mode' => VideoSetType::EMBED_MODE_SIMPLE,
             'url' => $resolved['url'],
             'aspect_ratio' => '16by9', // Default per uamsweb_common_video.yaml
@@ -466,7 +460,7 @@ class EmbedProcessor implements BlockProcessorInterface
 
         // Generate Tiptap HTML from values
         $html = $this->buildVideoSetHtml(
-            $setType,
+            $resolved['type'],
             $values
         );
 
@@ -485,7 +479,7 @@ class EmbedProcessor implements BlockProcessorInterface
      * data-set-attr attributes for Statamic Bard video sets.
      *
      * @param  string  $setType  The platform-specific set handle (`youtube` / `vimeo` / `box`)
-     * @param  array<string, string>  $values  Array of video set values (type, url, embed_mode, aspect_ratio, align, caption)
+     * @param  array<string, string>  $values  Array of video set values (embed_mode, url, aspect_ratio, align, caption)
      * @return string Tiptap HTML string
      */
     private function buildVideoSetHtml(
@@ -495,22 +489,24 @@ class EmbedProcessor implements BlockProcessorInterface
         // Initialize HTML attributes string
         $attrs = '';
 
-        // Loop through values to build HTML attributes
+        // Append one data attribute per value
         foreach ($values as $key => $value) {
-            // Check if key is not 'type' (type is used in data-set-type attribute)
-            if ($key !== 'type') {
-                // Append attribute to HTML attributes string
-                $attrs .= \sprintf(
-                    ' data-set-attr-%s="%s"',
-                    htmlspecialchars($key),
-                    htmlspecialchars($value)
-                );
-            }
+            $attrs .= \sprintf(
+                ' data-set-attr-%s="%s"',
+                // The keys are the fixed handles written by processVideoEmbed(), none
+                // of which contains a character htmlspecialchars() changes.
+                // @pest-mutate-ignore: UnwrapHtmlspecialchars
+                htmlspecialchars($key),
+                htmlspecialchars($value)
+            );
         }
 
         // Generate Tiptap HTML div element with video set attributes
         return \sprintf(
             '<div data-set-type="%s"%s%s></div>',
+            // VideoSetType::resolve() only returns youtube, vimeo or box, none of
+            // which contains a character htmlspecialchars() changes.
+            // @pest-mutate-ignore: UnwrapHtmlspecialchars
             htmlspecialchars($setType),
             SetMarkupNonce::attribute(),
             $attrs
@@ -562,6 +558,7 @@ class EmbedProcessor implements BlockProcessorInterface
         // a node in its own document does not fail, so the cast only satisfies
         // the string|false return type.
         return \substr(
+            // @pest-mutate-ignore: RemoveStringCast
             (string) $doc->saveHTML($node),
             0,
             100
