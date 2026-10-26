@@ -124,7 +124,7 @@ it('re-roots a content-relative path under the owning store', function (): void 
 
 it('re-roots each content subdirectory under the store that owns it', function (string $subdirectory, string $storeKey): void {
     // One row per entry in ContentRoot::STORE_BY_SUBDIRECTORY, so dropping an entry
-    // fails its row rather than resolving through a neighbour or throwing unseen.
+    // fails its row rather than resolving through a neighbor or throwing unseen.
     $mirror = contentRootTempBase().'/wpimport-97-'.\str_replace('/', '-', $subdirectory);
 
     withStoreDirectory($storeKey, $mirror, function () use ($mirror, $subdirectory): void {

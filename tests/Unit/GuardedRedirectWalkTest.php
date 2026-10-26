@@ -173,8 +173,11 @@ it('narrows each hop timeout to what is left of the chain budget', function (): 
     //
     // The first hop must burn more than a whole second, or `(int) ceil()` rounds
     // both hops to the same number and the assertion below passes whether the
-    // narrowing happens or not. It burns 1.6s, so the second hop has about 28.4s
-    // left: rounded up that is 29, where rounding to nearest would give 28.
+    // narrowing happens or not. It burns 1.51s, so the second hop has just under
+    // 28.5s left: rounded up that is 29, where rounding to nearest would give 28.
+    // The two differ only while the fraction left is under one half, so 1.51s is
+    // as close to that edge as the test can sit, and it tolerates up to 0.49s of
+    // overhead before the second hop is sent.
     $timeouts = [];
 
     Http::globalMiddleware(
@@ -186,7 +189,7 @@ it('narrows each hop timeout to what is left of the chain budget', function (): 
                 $timeouts[] = $options['timeout'] ?? null;
 
                 if ((string) $request->getUri() === 'https://93.184.216.34/a') {
-                    usleep(1_600_000);
+                    usleep(1_510_000);
 
                     return Create::promiseFor(
                         new Psr7Response(302, ['Location' => 'https://93.184.216.34/b'])
@@ -533,7 +536,7 @@ it('swallows a transport failure by default', function (): void {
         ->and($cases)->toBe([GuardedFetchRefusal::TransportFailure]);
 });
 
-it('sends the given User-Agent and leaves the client default otherwise', function (): void {
+it('sends the given User-Agent, and does not send it when none is given', function (): void {
     Http::fake(['*' => Http::response('', 200)]);
 
     (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: false, userAgent: 'UAMS-Importer/97'))->follow(WALK_START_URL);
