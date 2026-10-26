@@ -216,6 +216,7 @@ describe('import by attachment id', function (): void {
     })->with([
         'empty string' => [''],
         'array' => [[562]],
+        'false' => [false],
     ]);
 
     it('imports a zero id, which is scalar and non-empty as a string', function (): void {
@@ -267,7 +268,7 @@ describe('the basename fallback', function (): void {
             assetImporterAttachment('', 'https://example.org/photo.jpg'),
             assetImporterAttachment('200', 'https://example.org/unrelated.jpg'),
             assetImporterAttachment('300', 'https://example.org/uploads/photo.jpg'),
-            assetImporterAttachment('400', 'https://example.org/uploads/photo-2.jpg'),
+            assetImporterAttachment('400', 'https://example.org/uploads/photo-300.jpg'),
         ];
         $importer = assetImporterMock();
         $importer->shouldReceive('importImage')->once()->ordered()->withSomeOfArgs('562')->andReturn(null);
