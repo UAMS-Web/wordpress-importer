@@ -175,9 +175,4 @@ trait FormPluginCoordinatorTrait
             $command
         );
     }
-
-    public function getFormTitleAttributeName(): string
-    {
-        return 'title';
-    }
 }
