@@ -189,6 +189,9 @@ class UserInteractionHandler implements FormPluginUserInteractionHandlerContract
             }
         }
 
+        // The caller only iterates the result and compares it with [], so re-indexing
+        // changes no outcome; it keeps the documented list shape.
+        // @pest-mutate-ignore: UnwrapArrayValues
         return \array_values(\array_unique($formIds));
     }
 
