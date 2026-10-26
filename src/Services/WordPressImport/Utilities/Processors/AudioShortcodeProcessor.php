@@ -239,7 +239,7 @@ class AudioShortcodeProcessor implements ShortcodeProcessorInterface
             'https://news.uamsweb.com/upload/media/' => 'https://news.uams.edu/wp-content/uploads/',
         ];
 
-        // Apply substitutions in order of specificity (longer patterns first)
+        // Apply the first matching substitution
         foreach ($substitutions as $pattern => $replacement) {
             if (
                 \str_starts_with(
@@ -251,7 +251,10 @@ class AudioShortcodeProcessor implements ShortcodeProcessorInterface
                     $url,
                     \strlen($pattern)
                 );
-                break; // Only apply the first matching substitution
+                // Every replacement starts with https://news.uams.edu/wp-content/uploads/,
+                // which no pattern prefixes, so continuing could never match again.
+                // @pest-mutate-ignore: BreakToContinue
+                break;
             }
         }
 
