@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
+use DOMComment;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMNodeList;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -37,24 +37,15 @@ class EmbedProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        // Check if node is an XML comment node (WordPress blocks are stored as comments)
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            // Return false for non-comment nodes
-            return false;
-        }
-
-        // Capture comment text and ensure it is a string before trimming
-        $commentText = $node->nodeValue;
-
-        // Return false when the comment node value is missing
-        if (! \is_string($commentText)) {
+        // Only comment nodes can carry a WordPress block marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
         // Check if comment matches wp:embed or wp:core-embed block pattern
         return \preg_match(
             '/^wp:(?:core-)?embed(?:\/[^\s]+)?(?:\s*({.+?}))?\s*$/s',
-            \trim($commentText)
+            \trim($node->data)
         ) === 1;
     }
 
@@ -271,26 +262,20 @@ class EmbedProcessor implements BlockProcessorInterface
         // Create XPath query object for finding elements
         $xpath = new DOMXPath($doc);
 
-        // Initialize figure node variable
-        $figureNode = null;
-
         // Query for figure element containing wp-block-embed class after the comment node
         $figureNodes = $xpath->query(
             'following-sibling::figure[contains(@class, "wp-block-embed")][1]',
             $node
         );
 
-        // Check if figure nodes were found
-        if (
-            $figureNodes instanceof DOMNodeList
-            && $figureNodes->length > 0
-        ) {
-            // Get first figure node from query results
-            $figureNode = $figureNodes->item(0);
-        }
+        // Select the first figure found. query() returns false only for a
+        // malformed expression or context node, which this constant expression
+        // and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 
         // Check if figure node is missing (invalid embed block structure)
-        if ($figureNode === null) {
+        if (! $figureNode instanceof DOMElement) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -313,10 +298,6 @@ class EmbedProcessor implements BlockProcessorInterface
             return null;
         }
 
-        if (! $figureNode instanceof DOMElement) {
-            return null;
-        }
-
         // Get wrapper div element from figure node
         $wrapper = $figureNode->getElementsByTagName('div')->item(0);
 
@@ -334,6 +315,7 @@ class EmbedProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug,
                     'node_html' => $this->buildNodeHtmlSnippet(
+                        $doc,
                         $figureNode
                     ),
                 ]
@@ -367,6 +349,7 @@ class EmbedProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug,
                     'node_html' => $this->buildNodeHtmlSnippet(
+                        $doc,
                         $figureNode
                     ),
                 ]
@@ -502,7 +485,7 @@ class EmbedProcessor implements BlockProcessorInterface
      * data-set-attr attributes for Statamic Bard video sets.
      *
      * @param  string  $setType  The platform-specific set handle (`youtube` / `vimeo` / `box`)
-     * @param  array<int|string, mixed>  $values  Array of video set values (type, url, embed_mode, aspect_ratio, align, caption)
+     * @param  array<string, string>  $values  Array of video set values (type, url, embed_mode, aspect_ratio, align, caption)
      * @return string Tiptap HTML string
      */
     private function buildVideoSetHtml(
@@ -516,19 +499,11 @@ class EmbedProcessor implements BlockProcessorInterface
         foreach ($values as $key => $value) {
             // Check if key is not 'type' (type is used in data-set-type attribute)
             if ($key !== 'type') {
-                // Normalize the key to a string for safe HTML escaping
-                $normalizedKey = \is_string($key) ? $key : (string) $key;
-
-                // Normalize the value to a scalar string for safe HTML escaping
-                if (! \is_scalar($value)) {
-                    continue;
-                }
-
                 // Append attribute to HTML attributes string
                 $attrs .= \sprintf(
                     ' data-set-attr-%s="%s"',
-                    htmlspecialchars($normalizedKey),
-                    htmlspecialchars((string) $value)
+                    htmlspecialchars($key),
+                    htmlspecialchars($value)
                 );
             }
         }
@@ -575,31 +550,19 @@ class EmbedProcessor implements BlockProcessorInterface
     /**
      * Build a short HTML snippet for logging.
      *
+     * @param  DOMDocument  $doc  The document the node belongs to
      * @param  DOMNode  $node  Node to serialize for diagnostics
-     * @return string Serialized HTML snippet (max 100 chars) or placeholder text
+     * @return string Serialized HTML snippet (max 100 chars)
      */
     private function buildNodeHtmlSnippet(
+        DOMDocument $doc,
         DOMNode $node
     ): string {
-        // Access the node owner document for HTML serialization
-        $ownerDocument = $node->ownerDocument;
-
-        // Return placeholder when owner document is unavailable
-        if (! $ownerDocument instanceof DOMDocument) {
-            return '[unavailable]';
-        }
-
-        // Serialize node HTML for contextual logging
-        $nodeHtml = $ownerDocument->saveHTML($node);
-
-        // Return placeholder when serialization fails
-        if ($nodeHtml === false) {
-            return '[unavailable]';
-        }
-
-        // Return a short snippet to avoid oversized log payloads
+        // Return a short snippet to avoid oversized log payloads. saveHTML() of
+        // a node in its own document does not fail, so the cast only satisfies
+        // the string|false return type.
         return \substr(
-            $nodeHtml,
+            (string) $doc->saveHTML($node),
             0,
             100
         ).'...';
