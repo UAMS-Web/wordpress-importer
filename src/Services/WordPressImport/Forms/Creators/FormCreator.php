@@ -80,12 +80,18 @@ class FormCreator
 
         // Build the Statamic form handle: '{{site handle}}_{{form plugin}}_{{source form id}}_{{sluggified title}}'
         $sourceFormId = $formData['id'] ?? '';
+        // Concatenation casts a scalar the same way, so dropping the cast changes no
+        // handle; it keeps the variable a string for the static analysis.
+        // @pest-mutate-ignore: RemoveStringCast
         $sourceFormId = \is_scalar($sourceFormId) ? (string) $sourceFormId : '';
 
         $handle = $siteHandle.'_'.$pluginName.'_'.$sourceFormId.'_'.Str::slug($formTitle);
 
         // Create a new Statamic form instance with the generated handle
         $form = FormFacade::make($handle);
+        // FormFacade::make() always returns a Form, so the assertion only narrows the
+        // facade's return type for the static analysis and cannot change a result.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         assert($form instanceof Form);
         $form->title($name); // Set the form's display title
 
