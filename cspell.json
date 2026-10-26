@@ -1,0 +1,76 @@
+{
+    "version": "0.2",
+    "language": "en",
+    "dictionaryDefinitions": [
+        {
+            "name": "project-words",
+            "path": "./project-words.txt",
+            "addWords": true
+        }
+    ],
+    "dictionaries": [
+        "project-words"
+    ],
+    "ignorePaths": [
+        "node_modules/**",
+        "vendor/**",
+        "package-lock.json",
+        "composer.lock",
+        ".phpstan-cache/**"
+    ],
+    "ignoreRegExpList": [
+        "/\\b(?:PVT|PVTSSF|PVTIF|PVTF|PVTI)_[A-Za-z0-9_\\u2026-]*/g",
+        "/\\b[BIT]_kwDO[A-Za-z0-9_-]+/g",
+        "/\\b[BCT]0[A-Z0-9]{8,}\\b/g"
+    ],
+    "overrides": [
+        {
+            "filename": [
+                ".claude/rules/*.md"
+            ],
+            "words": [
+                "comman"
+            ]
+        },
+        {
+            "filename": [
+                ".claude/skills/laravel-best-practices/**"
+            ],
+            "words": [
+                "Ünchen",
+                "pload",
+                "Jalr",
+                "FEMI"
+            ]
+        },
+        {
+            "filename": [
+                "docs/technical-reference.md"
+            ],
+            "words": [
+                "pload"
+            ]
+        },
+        {
+            "filename": [
+                ".claude/rules/american-english-prose.md",
+                ".claude/history/american-english-prose.md"
+            ],
+            "words": [
+                "analysed",
+                "analyzzes",
+                "behaviour",
+                "behavioural",
+                "behaviours",
+                "catalyse",
+                "defence",
+                "generalise",
+                "licence",
+                "neighbour",
+                "neighbours",
+                "organised",
+                "paralyse"
+            ]
+        }
+    ]
+}

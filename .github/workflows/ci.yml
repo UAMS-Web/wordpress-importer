@@ -1,0 +1,345 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel an in-flight run when a PR is pushed again; keep push-to-main runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# RUN_REMOTE_CI — org-budget kill-switch, mirroring uams-statamic (UAMS-Web/uams-statamic#980).
+# GitHub Actions minutes bill to the shared UAMS-Web org pool. Set an Actions
+# variable `RUN_REMOTE_CI` to `false` (org- or repo-level) to make every job
+# below report `skipped` and burn zero runner minutes; unset (or any other
+# value) runs CI as normal. The rulesets on `main` require a pull request but no
+# status check, so a skipped job never blocks a merge.
+#
+# PARITY: `local-ci.json`, the shared local CI runner's job list (wordpress-importer-archive#1319), reproduces
+# the jobs below for local runs (no Docker, no act, no Actions minutes), used when
+# this switch is off. Run it with `node scripts/ci-local.mjs`. The two are kept in
+# lockstep BY HAND; a change to a job's run command here must be mirrored there
+# (and vice versa). Each job's `run` step is flagged `# PARITY:`.
+# `scripts/ci-local.test.mjs` checks the job names and the commands that can be
+# compared mechanically. A pre-commit hook (`.githooks/pre-commit`, auto-wired by
+# composer) blocks a commit that stages only one of these two files; bypass with
+# `--no-verify`. See `.claude/skills/local-ci/SKILL.md`.
+#
+# LOCAL-ONLY (intentionally no job here): `dependencies`, which installs into the
+# runner's reused slot, and has nothing to do in a fresh container; `synced-files`
+# and `handed-back-workflow`, the drift checks on files the shared sync delivers;
+# and the runner's `--branch` / `--worktree-path` slot handling. A hosted runner
+# checks the ref out into a clean container, so there is nothing to mirror. Parity
+# covers the pass/fail surface of the jobs below, not how a local run acquires its
+# working tree. See `.claude/rules/worktrees.md`.
+
+jobs:
+  validate:
+    name: Composer validate
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+
+      # Catches a `composer.json` edit that left `composer.lock`'s content hash
+      # stale -- harmless to resolution, but it warns on every `composer install`
+      # on every machine until fixed. `--no-check-publish` and `--no-check-all`
+      # because this package is consumed by path/VCS rather than published.
+      # PARITY: mirrored by the `validate` job in local-ci.json.
+      - name: Run composer validate
+        run: composer validate --no-check-publish --no-check-all
+
+  pest:
+    name: Pest (Unit + Integration suites)
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      # OPcache + JIT roughly halve a cold PHP test run; harmless for the small
+      # standalone suite but keeps parity with the host app's tuned runner.
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring, dom, fileinfo, simplexml, xml
+          coverage: none
+          tools: composer:v2
+          ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
+
+      # All dependencies are public (statamic/cms included), so the default
+      # GITHUB_TOKEN only serves to lift api.github.com's anonymous rate limit
+      # for dist downloads — no private-repo access is needed.
+      - name: Configure Composer GitHub token
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Determine Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # The `Unit` (pure PHP) and `Integration` (minimal Statamic via Orchestra
+      # Testbench / `AddonTestCase`) suites are both standalone-safe. The
+      # `Feature` suite extends the host app's `Tests\TestCase` and runs inside
+      # the uams-statamic app, not here — see tests/CLAUDE.md. One standalone test
+      # reads the private Exports fixtures when they are present,
+      # TaxonomyDestinationTest, and it skips when they are not. This checkout never
+      # initializes the submodule, so it skips here and needs no extra token. That
+      # also means the stale-corpus case scripts/prepare-dependencies.mjs reconciles (wordpress-importer-archive#1139) cannot arise
+      # here: a slot's initialized submodule can lag its ref, and this checkout has none.
+      # PARITY: mirrored by the `pest` job in local-ci.json.
+      - name: Run Pest (Unit + Integration suites)
+        run: vendor/bin/pest --testsuite=Unit,Integration
+
+  pint:
+    name: Pint
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Configure Composer GitHub token
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Determine Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Lint with the repo's pinned `laravel/pint` (not a floating global tool),
+      # so CI and a local `vendor/bin/pint` can never disagree on version/rules.
+      # The tree is Pint-clean, so lint it whole rather than scoping to the diff.
+      #
+      # `.` plus the dot-directories, because PHP-CS-Fixer's Finder skips dot-directories
+      # and Pint exposes no switch to re-include them: a bare `vendor/bin/pint --test`
+      # exits 0 over `.cursor/*.php` without opening it. Naming a path explicitly defeats
+      # the Finder. Enumerated from git rather than hard-coded, so a dot-directory added
+      # later is covered without anyone remembering to add it here.
+      #
+      # `git ls-files` failing must not degrade to "lint everything except the blind spot",
+      # so the pipeline is `set -o pipefail` and an empty enumeration is still a clean run
+      # of `.` — the failure surfaces as a non-zero exit rather than a quiet pass.
+      # PARITY: mirrored by the `pint` job in local-ci.json (scripts/run-pint.mjs).
+      - name: Run Pint
+        run: |
+          set -o pipefail
+          dirs=$(git ls-files -- '*.php' \
+            | awk -F/ '{ for (i = 1; i < NF; i++) if ($i ~ /^\./) { d = $1; for (j = 2; j <= i; j++) d = d "/" $j; print d; break } }' \
+            | sort -u)
+          echo "dot-directories linted explicitly: ${dirs:-(none)}"
+          vendor/bin/pint --test . $dirs
+
+  spell:
+    name: Spell check
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install the spell-check toolchain
+        run: npm ci
+
+      # Checks the prose corpus only -- `.claude/`, `docs/` and the README --
+      # which is what wordpress-importer-archive#922 decided. The PHP tree is excluded deliberately: it
+      # contributes 1,237 further unknown words, almost all WordPress field
+      # names from one mapping file, and none of them are prose defects.
+      #
+      # `--dot` is load-bearing. Without it the glob skips dot-directories, so
+      # `.claude/` is never read and the job reports a clean pass over nothing.
+      # PARITY: mirrored by the `spell` job in local-ci.json (scripts/run-spell.mjs).
+      - name: Run cspell
+        # --no-must-find-files is kept so one non-matching glob does not fail the run, but it
+        # also suppresses the only signal separating "read the corpus and found nothing" from
+        # "read nothing at all" — measured on cspell 10.0.1, a zero-file run exits 0 with the
+        # flag and 1 without it. The floor is restored here instead. Mirrors the
+        # spellFloorRefusal() check in scripts/run-spell.mjs.
+        run: |
+          set -o pipefail
+          out=$(npx cspell --no-progress --no-must-find-files --dot ".claude/**/*.md" "docs/**/*.md" "README.md" "AGENTS.md" "CLAUDE.md" "tests/CLAUDE.md" ".github/**/*.md" 2>&1) || rc=$?
+          printf '%s\n' "$out"
+          if [ -n "${rc:-}" ]; then exit "$rc"; fi
+          files=$(printf '%s' "$out" | sed -n 's/.*Files checked: \([0-9][0-9]*\).*/\1/p' | tail -1)
+          if [ -z "$files" ]; then
+            echo 'cspell printed no "Files checked" summary — output shape changed, so a pass cannot be trusted' >&2
+            exit 1
+          fi
+          if [ "$files" -eq 0 ]; then
+            echo 'cspell checked 0 files — the corpus globs matched nothing, so a pass means nothing' >&2
+            exit 1
+          fi
+
+  node-test:
+    name: Node tests
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # Deliberately no `npm ci` and no `cache: npm`. Every import across the seven
+      # test files is a `node:` builtin -- node:assert/strict, node:child_process,
+      # node:fs, node:os, node:path, node:test, node:url -- with no bare package
+      # name among them, so this job needs Node and nothing else. That also keeps it
+      # runnable in a tree with no `node_modules`, which wordpress-importer-archive#950 records as the state
+      # every tree is currently in.
+      #
+      # The glob is quoted so Node expands it rather than the shell: `node --test`
+      # accepts a pattern directly since v22, and an unquoted glob would resolve
+      # differently between the runner's shell and a Windows spawn. A bare directory
+      # argument does NOT work -- `node --test scripts/` fails with "Cannot find
+      # module .../scripts", measured on v22.22.3.
+      # PARITY: mirrored by the `node-test` job in local-ci.json.
+      - name: Run the script tests
+        run: node --test "scripts/*.test.mjs"
+
+  python-test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # Runs every *.test.py file (wordpress-importer-archive#1155). A `*.test.py` name is not an importable
+      # module, so `unittest` discovery never reaches one, and one of the files is
+      # under .claude/skills/ rather than scripts/. The Node driver finds both and
+      # runs each with the runner image's python3; it fails rather than skips when
+      # there is no Python 3 or nothing to run. No `npm ci`: it imports only
+      # `node:` builtins and scripts/spawn-helpers.mjs.
+      # PARITY: mirrored by the `python-test` job in local-ci.json.
+      - name: Run the Python tests
+        run: node scripts/python-tests.mjs
+
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      # PHPStan resolves reflection against real extension classes (DOMDocument,
+      # SimpleXMLElement, …), so mirror the test job's extension set.
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring, dom, fileinfo, simplexml, xml
+          coverage: none
+          tools: composer:v2
+
+      - name: Configure Composer GitHub token
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Determine Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # `--error-format=github` surfaces each violation as an inline PR annotation.
+      # `--memory-limit=-1` is required: setup-php applies php.ini-production
+      # (`memory_limit = 128M`), and a level-max analysis of this ~140k-line
+      # `src/` exhausts that and crashes before reporting — an OOM on every run,
+      # independent of code correctness.
+      # PARITY: mirrored by the `phpstan` job in local-ci.json, which runs
+      # `phpstan analyse --memory-limit=-1` (i.e. `composer stan`) — dropping the
+      # display-only `--no-progress` and `--error-format=github` (PR-annotation)
+      # flags. Pass/fail is identical.
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --error-format=github --memory-limit=-1
+
+  rector:
+    name: Rector
+    runs-on: ubuntu-latest
+    if: vars.RUN_REMOTE_CI != 'false'
+    steps:
+      - uses: actions/checkout@v7
+
+      # Rector reflects over the same classes PHPStan does, so mirror its extension set.
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: intl, mbstring, dom, fileinfo, simplexml, xml
+          coverage: none
+          tools: composer:v2
+
+      - name: Configure Composer GitHub token
+        run: composer config --global github-oauth.github.com "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Determine Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config --global cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # The `test:refactor` composer script: `rector.php`'s gating profile, reported and not
+      # applied. Rector exits non-zero when it would change a file, which fails the job (wordpress-importer-archive#1334).
+      # PARITY: mirrored by the `rector` job in local-ci.json.
+      - name: Run Rector
+        run: vendor/bin/rector --dry-run --no-progress-bar

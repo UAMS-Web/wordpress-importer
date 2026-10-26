@@ -1,0 +1,37 @@
+{
+    "0": {
+        "id": "1",
+        "title": "Simple Contact",
+        "description": "Synthetic single-notification form for the notification-import audit.",
+        "fields": [
+            { "id": 1, "label": "Name", "type": "text", "isRequired": true },
+            { "id": 2, "label": "Email", "type": "email", "isRequired": true },
+            { "id": 3, "label": "Message", "type": "textarea", "isRequired": false }
+        ],
+        "notifications": {
+            "n1": {
+                "id": "n1",
+                "isActive": true,
+                "name": "Admin Notification",
+                "event": "form_submission",
+                "toType": "email",
+                "to": "admin@example.test",
+                "from": "{admin_email}",
+                "fromName": "{form_title}",
+                "replyTo": "{Email:2}",
+                "subject": "New submission from {form_title}",
+                "message": "{all_fields}",
+                "disableAutoformat": false
+            }
+        },
+        "confirmations": {
+            "c1": {
+                "id": "c1",
+                "name": "Default Confirmation",
+                "isDefault": true,
+                "type": "message",
+                "message": "Thanks for contacting us."
+            }
+        }
+    }
+}

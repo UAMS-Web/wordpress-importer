@@ -1,0 +1,67 @@
+---
+description: "Cut a release each business day at 10:00 Central when there is unreleased work."
+alwaysApply: true
+---
+<!--
+  Synced from UAMS-Web/uams-claude-skills: shared/.claude/rules/cutting-releases.md
+  Edit it there, not here; the next sync overwrites this copy.
+  Delivered to this repository through the profile(s): core.
+-->
+# Rule — cut a release each business day at 10:00 Central when there is unreleased work
+
+Releases are **retrospective semver tags on `main`**: a changelog checkpoint over "everything merged since the last tag," not a deploy gate or a release branch. The trunk-based flow is unchanged: vetted PRs merge to `main` continuously. This rule fixes the one thing that flow leaves open (**when to cut the tag**) so the release line neither drifts to zero nor turns into per-PR noise.
+
+**Why this is a standing order.** Left undefined, the cadence decays, and releases are only useful as a changelog if they actually get cut on a rhythm. A fixed daily time gives every repository the same predictable rhythm, keeps each release to at most one day's work, and makes "cut the release" a checklist item someone owns rather than a thing everyone assumes someone else did.
+
+History: [cutting-releases.md § Overview](../../.claude/history/cutting-releases.md#overview).
+
+## How to apply
+
+1. **The cadence: one release a day, at 10:00 Central, on business days, when there is unreleased work.** At 10:00 in `America/Chicago` time, Monday to Friday, check whether `main` carries any commit since the last tag (`git fetch origin && git rev-list --count <last-tag>..origin/main`). If it does, tag `main` at its tip and publish the release; if it does not, cut nothing that day. Skip weekends, and skip U.S. federal holidays where possible (where the run can tell the date is one); work that merges on a skipped day goes out at the next business day's cut. **Bump the minor** (`0.x.0`) if the batch shipped any feature or structural work, **the patch** (`0.x.y`) if it was refinement-only. The same cadence holds in every repository; what differs between them is only how the cut is made (item 4).
+
+   **After tagging, the consumer adopts the release.** `uams-statamic` pins this package by a tagged caret range, so a tag is what makes merged work reachable there. Bump the constraint in `uams-statamic` (`composer.json` → `composer update uams-web/wordpress-importer`) when the app should adopt the new release: through Dependabot's pull request where one opens, by hand otherwise.
+
+2. **A breaking change ships at the next daily cut, and its notes call it out.** There is no separate release for one. When a change that would be a major bump at 1.0+ merges (a framework or `statamic/cms` major upgrade, a content-model handle rename or a mapping-contract rename a consumer depends on, an importer, addon or service restructure), it goes out with the rest of that day's work at the next 10:00 cut, and the release notes lead with its `**Breaking change**: <impact and required action>` callout so a reader cannot miss it among the other changes. (The breaking-change classes and the callout format live in [`writing-release-notes`](../../.claude/skills/writing-release-notes/SKILL.md).) Those examples are illustrations of a test, not the test itself.
+
+   This repository has written the test down: *What counts as breaking* below states it.
+
+3. **The version line is the repository's decision, recorded with its other decisions, not this rule's.** This rule only fixes when a tag is cut on whatever line the repository is on.
+
+   **Stay in 0.x until Launch.** `1.0.0` is Launch; every release before it is a `--prerelease`. The minor/patch semantics, the breaking-change classes, and the rationale (an app, not a library, in `uams-statamic`; an internal migration tool, not a general-purpose library, in `wordpress-importer`) are recorded in [`docs/DECISIONS.md`](../../docs/DECISIONS.md).
+
+4. **Mechanics are not this rule's job.** *How* to write the notes, generate the body, tag, and publish lives in the [`writing-release-notes`](../../.claude/skills/writing-release-notes/SKILL.md) skill. This rule is only the *when*.
+
+   Here that is the [`README.md`](../../README.md#releasing) "Cutting a release" section and the skill (`git tag -a … && gh release create … --prerelease --verify-tag`).
+
+5. **Who may cut it is not this rule's job either, and is not implied by it.** A release due under the triggers above is still cut only on the operator's authorization (given in the session's own chat or recorded as a standing grant, and nothing else) as stated under *Who may cut it* in the [`writing-release-notes`](../../.claude/skills/writing-release-notes/SKILL.md) skill. A scheduled 10:00 run needs a standing grant that covers it.
+
+6. **Cut it from a local checkout. A Claude Code cloud session cannot tag or publish at all.** `git push <tag>`, `POST git/tags`, `POST git/refs` and `POST /releases` are each refused `403`, and it is the **session type** rather than the token, so a broader credential does not lift it. Everything *up to* the tag (deriving the version, generating the notes, checking whether a release is due) works fine there; only the last step must move. Read the refusal as the environment, not as a defect to debug, before automating a release.
+
+   The verbatim error strings are in [`docs/runbooks/claude-code-cloud-sessions.md`](../../docs/runbooks/claude-code-cloud-sessions.md#tags-and-releases-cannot-be-written).
+
+## What counts as breaking
+
+**A change is breaking when it alters this package's own declared surface.** The surface is declared in [`README.md`](../../README.md#public-surface): a console command and its options, the `ServiceProvider` registration and the bindings it performs, and a named list of classes. **The test is applied to a diff, in this repository, without consulting the consuming app:** a diff is breaking when it removes, renames, or changes the contract of anything in that table. Nothing else is, however `public` it happens to be.
+
+**The surface is the declared one, not what the app imports, and not the package's public API in the abstract.** Both readings were considered and rejected:
+
+- **What the app imports.** The accurate test, and it makes a release decision depend on reading another repository. The natural way to perform that reading is an import grep, and it returns a confident, incomplete answer: the command is consumed **by name** rather than by `use`, so removing `--source` breaks the app's suite and moves no import anywhere. A test whose obvious implementation is silently wrong on the surface the only consumer actually depends on is not worth writing down.
+- **Anything `public` in `src/`.** Local and mechanical, and it over-fires. One cycle changed 137 `src/` files, none of which anyone needed to classify. A trigger that fires every time stops being read.
+
+**The three examples in item 2 reconcile with the test rather than sitting beside it:**
+
+| Example | Why it is breaking |
+| --- | --- |
+| A `statamic/cms` major upgrade | Changes the declared dependency constraint. |
+| An importer or service restructure | Breaking **only** where it moves a declared class, which is why that cycle's 137 changed files were not. |
+| A mapping-contract or handle rename the app depends on | Breaking where the app depends on it, and the declaration is the record of which those are. |
+
+**The declaration can drift, and that is the accepted cost.** It is a local claim about a cross-repo fact, which is what makes it cheap. The mitigation is re-measuring it when the app's pin moves, not pretending it cannot drift.
+
+History: [cutting-releases.md § What counts as breaking](../../.claude/history/cutting-releases.md#what-counts-as-breaking).
+
+## The DRY line
+
+This file is the standing statement of **when** to cut a release. The **how** (title format, heading vocabulary, `gh` mechanics) is the [`writing-release-notes`](../../.claude/skills/writing-release-notes/SKILL.md) skill; the **versioning rationale** (which line the repository is on, minor/patch, what the next major means, breaking-change classes) is the repository's own decisions record. It sits inside the branch → PR → merge flow in `AGENTS.md`.
+
+It also states **what counts as breaking**: the **declared surface** that test reads is [`README.md`](../../README.md#public-surface). The test lives here, the surface is declared there, and neither restates the other. The release section of that README is the other half of the **how**.

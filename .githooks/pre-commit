@@ -1,0 +1,46 @@
+#!/bin/sh
+#
+# CI parity. Keep the remote CI (.github/workflows/ci.yml) and the shared local
+# CI runner's job list (local-ci.json, wordpress-importer-archive#1319) in lockstep. They are
+# hand-maintained mirrors with no shared source of truth, so they silently
+# drift when only one is edited. This gate blocks a commit that stages exactly
+# ONE of them.
+#
+# It is a co-change gate, NOT a semantic check: it does not compare commands
+# (the two files are intentionally not alike: local-ci.json carries local-only
+# jobs a fresh Actions checkout has no counterpart for). It only insists the
+# two change together so a human reviews both.
+#
+# Legitimate one-sided edits exist (a typo in a ci.yml comment; a local-only
+# job). For those, bypass with:  git commit --no-verify
+#
+# The second gate this hook carried, on the exports gitlink (wordpress-importer-archive#1143), went with
+# the submodule (wordpress-importer-archive#1426).
+#
+# Installed via `git config core.hooksPath .githooks`, wired automatically from
+# composer post-install/post-update (scripts/setup-git-hooks.php).
+
+status=0
+
+CI_FILE=".github/workflows/ci.yml"
+SCRIPT_FILE="local-ci.json"
+
+staged=$(git diff --cached --name-only)
+
+echo "$staged" | grep -qxF "$CI_FILE"     && ci=1 || ci=0
+echo "$staged" | grep -qxF "$SCRIPT_FILE" && sc=1 || sc=0
+
+if [ "$ci" -ne "$sc" ]; then
+    echo "" >&2
+    echo "CI parity gate: you staged only one of the mirrored CI files:" >&2
+    echo "    $CI_FILE" >&2
+    echo "    $SCRIPT_FILE" >&2
+    echo "" >&2
+    echo "These must change together. Update the other (follow the '# PARITY:'" >&2
+    echo "markers in ci.yml), or bypass for an intentional one-sided change:" >&2
+    echo "    git commit --no-verify" >&2
+    echo "" >&2
+    status=1
+fi
+
+exit $status

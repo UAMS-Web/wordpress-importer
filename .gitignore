@@ -1,0 +1,52 @@
+/vendor
+.DS_Store
+/storage
+.phpstan-cache/
+.phpunit.result.cache
+.claude/worktrees/
+.claude/settings.local.json
+
+# Materialized WXR parts. WxrMaterializer names its output `wxr.NNN.xml`, and a mutation
+# run over it applies mutants that corrupt the path assembly — writing parts into whatever
+# the working directory happens to be. Two reached `main` that way (wordpress-importer-archive#663). The mutants are
+# doing their job; this rule is what keeps their output out of a commit.
+/wxr.*.xml
+
+# The run manifest the same writer emits beside those parts (wordpress-importer-archive#1090). It is a separate rule
+# because `/wxr.*.xml` does not cover it — the manifest is `.json`, so the pattern that makes
+# a scattered part uncommittable would have left the file describing it committable.
+/wxr.manifest.json
+
+# Per-process fake Stache directories (wordpress-importer-archive#824). `StatamicTestCase` gives each PHP
+# process its own `dev-null-<pid>` so two suites in one tree stop corrupting each
+# other, and removes it in teardown. A run killed mid-test cannot, so the pattern
+# is ignored rather than left to show up as untracked in somebody's next commit.
+/tests/__fixtures__/dev-null-*/
+/tests/__fixtures__/dev-null-outside-*/
+/tests/__fixtures__/workbench-*/
+
+# Dev-only spell-check toolchain (wordpress-importer-archive#922). Not shipped; the package is Composer-installed.
+node_modules/
+
+# Windows crash dumps (wordpress-importer-archive#969). A `grep` crash writes `<prog>.exe.stackdump` beside whatever
+# directory it ran in -- and the crash is documented rather than exotic: this repo's
+# `validate-a-probe-before-citing-an-absence` records `grep -iF` aborting on GNU grep 3.1
+# under Git Bash with no UTF-8 locale. So they recur, and each one sits untracked in a
+# shared checkout until someone notices. One was misattributed by two concurrent sessions
+# before its modification time showed it belonged to neither. Unanchored: the dump lands
+# next to the working directory, not only at the repository root.
+*.stackdump
+
+# Python bytecode caches (wordpress-importer-archive#1207). The `python-test` gate job runs with bytecode writing off,
+# so this is for running a `*.test.py` by hand, as the `writing-release-notes` skill says to.
+# A python.org build writes `__pycache__/` beside the module it imports; left untracked, it is
+# staged by a broad `git add` and makes `worktree-slots release` refuse the slot. Unanchored,
+# because the cache lands next to whichever module was imported.
+__pycache__/
+*.pyc
+
+# Where the exports submodule used to sit (wordpress-importer-archive#1426). The corpus now lives only in
+# UAMS-Web/wordpress-importer-exports, read through WORDPRESS_IMPORTER_EXPORTS; a tree
+# that had it initialized keeps the clone after the gitlink is gone, and this keeps that
+# clone from reading as untracked work or being added back by a broad `git add`.
+/src/Services/WordPressImport/Tests/Exports/

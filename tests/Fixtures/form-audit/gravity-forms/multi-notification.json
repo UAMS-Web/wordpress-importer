@@ -1,0 +1,48 @@
+{
+    "0": {
+        "id": "2",
+        "title": "Multi Notification",
+        "description": "Synthetic two-notification form (admin + user) for the audit; exercises the notification->email-config fan-out.",
+        "fields": [
+            { "id": 1, "label": "Name", "type": "text", "isRequired": true },
+            { "id": 2, "label": "Email", "type": "email", "isRequired": true }
+        ],
+        "notifications": {
+            "n1": {
+                "id": "n1",
+                "isActive": true,
+                "name": "Admin Notification",
+                "event": "form_submission",
+                "toType": "email",
+                "to": "admin@example.test",
+                "from": "{admin_email}",
+                "fromName": "{form_title}",
+                "subject": "New submission from {form_title}",
+                "message": "{all_fields}",
+                "disableAutoformat": false
+            },
+            "n2": {
+                "id": "n2",
+                "isActive": true,
+                "name": "User Confirmation Email",
+                "event": "form_submission",
+                "toType": "field",
+                "toField": "2",
+                "from": "{admin_email}",
+                "fromName": "Support",
+                "subject": "We received your message",
+                "message": "Thanks {Name:1}, we will be in touch.",
+                "disableAutoformat": false
+            }
+        },
+        "confirmations": {
+            "c1": {
+                "id": "c1",
+                "name": "Default Confirmation",
+                "isDefault": true,
+                "type": "message",
+                "message": "Thanks for contacting us."
+            }
+        }
+    }
+}

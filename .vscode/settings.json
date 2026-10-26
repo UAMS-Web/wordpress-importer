@@ -1,0 +1,6 @@
+{
+    "intelephense.environment.includePaths": [
+        "tests/Support/IdeStubs"
+    ],
+    "php.workspace.includePath": "tests/Support/IdeStubs"
+}

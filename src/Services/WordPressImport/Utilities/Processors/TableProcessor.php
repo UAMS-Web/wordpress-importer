@@ -1,0 +1,428 @@
+<?php
+
+declare(strict_types=1);
+
+namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+
+use DOMDocument;
+use DOMElement;
+use DOMNode;
+use DOMNodeList;
+use DOMXPath;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\Console\Output\OutputInterface;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+
+/**
+ * Processes WordPress wp:table blocks into Tiptap-compatible HTML for Statamic
+ * Bard sets.
+ */
+class TableProcessor implements BlockProcessorInterface
+{
+    /**
+     * Determines if the processor can handle the given DOM node.
+     *
+     * @param  DOMNode  $node  The DOM node to check
+     * @param  string  $site  The site handle
+     * @param  ?string  $pageSlug  The page slug (optional)
+     * @return bool True if the node is a wp:table comment, false otherwise
+     */
+    public function canProcess(
+        DOMNode $node,
+        string $site,
+        ?string $pageSlug
+    ): bool {
+        // Ignore unused interface parameters for this implementation.
+        unset(
+            $site,
+            $pageSlug
+        );
+
+        // Check whether the node is an XML comment.
+        if ($node->nodeType !== XML_COMMENT_NODE) {
+            return false;
+        }
+
+        // Ensure the comment value is a string before matching.
+        if (! \is_string($node->nodeValue)) {
+            return false;
+        }
+
+        // Match the wp:table block comment format.
+        return \preg_match(
+            '/^wp:table(?:\s*({.+?}))?\s*$/s',
+            \trim($node->nodeValue)
+        ) === 1;
+    }
+
+    /**
+     * Processes a wp:table block into Tiptap-compatible HTML.
+     *
+     * @param  DOMNode  $node  The DOM node (wp:table comment)
+     * @param  array<int|string, mixed>  $attributes  Block attributes from the wp:table comment
+     * @param  string  $site  Site handle for context
+     * @param  AssetImporter  $assetImporter  Asset importer instance (unused)
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Media attachments (unused)
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
+     * @param  ?string  $pageSlug  The page slug (optional)
+     * @return array<int|string, mixed>|string|null Array with 'html', 'processedNode', and 'skipCount', Tiptap HTML string, or null if invalid
+     */
+    public function process(
+        DOMNode $node,
+        array $attributes,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null
+    ): array|string|null {
+        // Ignore unused interface parameters for this implementation.
+        unset(
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms
+        );
+
+        // Resolve the owner document for XPath operations.
+        $doc = $node->ownerDocument;
+        if (! $doc instanceof DOMDocument) {
+            return null;
+        }
+
+        // Create an XPath helper scoped to the owner document.
+        $xpath = new DOMXPath($doc);
+        $figureNode = null;
+
+        // Find the next figure node after the wp:table comment
+        $figureNodes = $xpath->query(
+            'following-sibling::figure[contains(@class, "wp-block-table")][1]',
+            $node
+        );
+        if (
+            $figureNodes instanceof DOMNodeList
+            && $figureNodes->length > 0
+        ) {
+            $figureNode = $figureNodes->item(0);
+        }
+
+        if ($figureNode === null) {
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'pageSlug' => $pageSlug ?? 'none',
+                    'attributes' => $attributes,
+                ]
+            );
+
+            // Log warning about missing figure node
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    'TableProcessor::process: No valid wp:table figure found',
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+
+            return null;
+        }
+
+        if (! $figureNode instanceof DOMElement) {
+            return null;
+        }
+
+        $tableNode = null;
+        foreach ($figureNode->getElementsByTagName('table') as $table) {
+            $tableNode = $table;
+            break;
+        }
+
+        if ($tableNode === null) {
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'pageSlug' => $pageSlug ?? 'none',
+                    'node_html' => \substr(
+                        $this->renderNodeSnippet($figureNode),
+                        0,
+                        100
+                    ).'...',
+                ]
+            );
+
+            // Log warning about missing table node
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    'TableProcessor::process: No table found in wp:table block',
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+
+            return null;
+        }
+
+        $tableData = [];
+        $firstRowHeaders = false;
+        $lastRowFooters = false;
+        $firstColumnHeaders = false;
+        $fixedWidthTableCells = false;
+
+        // Check for has-fixed-layout class on table element
+        if (
+            $tableNode->hasAttribute('class')
+            && \preg_match(
+                '/\bhas-fixed-layout\b/',
+                $tableNode->getAttribute('class')
+            ) === 1
+        ) {
+            $fixedWidthTableCells = true;
+        }
+
+        // Process table sections
+        $thead = $tableNode->getElementsByTagName('thead')->item(0);
+        $tbody = $tableNode->getElementsByTagName('tbody')->item(0);
+        $tfoot = $tableNode->getElementsByTagName('tfoot')->item(0);
+
+        if ($thead !== null) {
+            $firstRowHeaders = true;
+            foreach ($thead->getElementsByTagName('tr') as $tr) {
+                $row = [];
+                foreach ($tr->getElementsByTagName('th') as $th) {
+                    $row[] = $this->getInnerHTML($th);
+                }
+
+                if ($row !== []) {
+                    $tableData[] = ['cells' => $row];
+                }
+            }
+        }
+
+        if ($tbody !== null) {
+            foreach ($tbody->getElementsByTagName('tr') as $tr) {
+                $row = [];
+                $cells = $tr->getElementsByTagName('td');
+                foreach ($cells as $td) {
+                    $row[] = $this->getInnerHTML($td);
+                }
+
+                if ($row !== []) {
+                    $tableData[] = ['cells' => $row];
+                }
+            }
+        }
+
+        if ($tfoot !== null) {
+            $lastRowFooters = true;
+            foreach ($tfoot->getElementsByTagName('tr') as $tr) {
+                $row = [];
+                foreach ($tr->getElementsByTagName('td') as $td) {
+                    $row[] = $this->getInnerHTML($td);
+                }
+
+                if ($row !== []) {
+                    $tableData[] = ['cells' => $row];
+                }
+            }
+        }
+
+        if ($tableData === []) {
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'pageSlug' => $pageSlug ?? 'none',
+                    'node_html' => \substr(
+                        $this->renderNodeSnippet($figureNode),
+                        0,
+                        100
+                    ).'...',
+                ]
+            );
+
+            // Log warning about empty table data
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    'TableProcessor::process: No valid table rows parsed in wp:table block',
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+
+            return null;
+        }
+
+        // Alignment
+        $alignInput = $attributes['align'] ?? $figureNode->getAttribute('class');
+        if (! \is_string($alignInput)) {
+            $alignInput = '';
+        }
+
+        $align = Alignment::translate(
+            $alignInput,
+            false
+        );
+
+        // Striped style
+        $striped = \preg_match(
+            '/\bis-style-stripes\b/',
+            $figureNode->getAttribute('class')
+        ) === 1;
+
+        // Caption
+        $captionNode = $figureNode->getElementsByTagName('figcaption')->item(0);
+        $caption = $captionNode !== null ? \trim($captionNode->textContent) : '';
+
+        $values = [
+            'type' => 'table',
+            'align' => $align,
+            'striped' => $striped,
+            'first_row_headers' => $firstRowHeaders,
+            'first_column_headers' => $firstColumnHeaders,
+            'last_row_footers' => $lastRowFooters,
+            'fixed_width_table_cells' => $fixedWidthTableCells,
+            'table_data' => $tableData,
+        ];
+
+        if ($caption !== '') {
+            $values['caption'] = $caption;
+        }
+
+        // Convert to Tiptap HTML
+        $attrs = '';
+        $booleanFields = ['first_row_headers', 'first_column_headers', 'last_row_footers', 'striped', 'fixed_width_table_cells'];
+        foreach ($values as $key => $value) {
+            if ($key === 'table_data') {
+                // Use single quotes for table_data to avoid conflicts with JSON double quotes
+                $attrs .= \sprintf(
+                    " data-set-attr-%s='%s'",
+                    htmlspecialchars($key),
+                    htmlspecialchars(
+                        $this->encodeJsonAttributeValue($value),
+                        ENT_QUOTES,
+                        'UTF-8'
+                    )
+                );
+
+                continue;
+            }
+
+            if (
+                ! \is_string($value)
+                && ! \is_bool($value)
+            ) {
+                continue;
+            }
+
+            // Ensure boolean values are serialized as strings for HTML attributes.
+            $attrValue = \is_bool($value) ? ($value ? 'true' : 'false') : $value;
+            $attrs .= \sprintf(
+                ' data-set-attr-%s="%s"',
+                htmlspecialchars($key),
+                htmlspecialchars($attrValue)
+            );
+        }
+
+        // Add boolean fields metadata
+        $attrs .= \sprintf(
+            ' data-set-boolean-fields="%s"',
+            htmlspecialchars(
+                \implode(
+                    ',',
+                    $booleanFields
+                )
+            )
+        );
+
+        $html = \sprintf(
+            '<div data-set-type="table"%s%s></div>',
+            SetMarkupNonce::attribute(),
+            $attrs
+        );
+
+        return [
+            'html' => $html,
+            'processedNode' => $figureNode,
+            'skipCount' => 3, // Skip opening comment, figure node, and closing comment
+        ];
+    }
+
+    /**
+     * Get the inner HTML of a DOM element as a string.
+     *
+     * @param  DOMNode  $element  The DOM element to extract inner HTML from
+     * @return string The inner HTML string
+     */
+    private function getInnerHTML(
+        DOMNode $element
+    ): string {
+        // Return an empty string when no owner document is available.
+        if (! $element->ownerDocument instanceof DOMDocument) {
+            return '';
+        }
+
+        // Build the inner HTML by rendering each child node.
+        $innerHTML = '';
+        foreach ($element->childNodes as $child) {
+            $childHtml = $element->ownerDocument->saveHTML($child);
+            if (! \is_string($childHtml)) {
+                continue;
+            }
+
+            $innerHTML .= $childHtml;
+        }
+
+        // Return a trimmed inner HTML string.
+        return \trim($innerHTML);
+    }
+
+    /**
+     * Render a DOM element to HTML for log snippets.
+     *
+     * @param  DOMElement  $element  The element to render
+     * @return string Safe rendered HTML or an empty string
+     */
+    private function renderNodeSnippet(
+        DOMElement $element
+    ): string {
+        // Return an empty value when the owner document is unavailable.
+        if (! $element->ownerDocument instanceof DOMDocument) {
+            return '';
+        }
+
+        // Render the element to an HTML string.
+        $html = $element->ownerDocument->saveHTML($element);
+        if (! \is_string($html)) {
+            return '';
+        }
+
+        // Return the rendered HTML content.
+        return $html;
+    }
+
+    /**
+     * Encode mixed data to a safe JSON attribute string.
+     *
+     * @param  mixed  $value  The value to encode
+     * @return string JSON representation for HTML attributes
+     */
+    private function encodeJsonAttributeValue(
+        mixed $value
+    ): string {
+        // Encode the value to JSON for storage in a data attribute.
+        $json = \json_encode($value);
+        if (! \is_string($json)) {
+            return '[]';
+        }
+
+        // Return the encoded JSON string.
+        return $json;
+    }
+}

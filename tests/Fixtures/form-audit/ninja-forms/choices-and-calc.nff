@@ -1,0 +1,2035 @@
+{
+  "settings": {
+    "objectType": "Form Setting",
+    "editActive": true,
+    "title": "Miracle Stars",
+    "created_at": "2021-06-15 17:38:36",
+    "form_title": "UAMS Partner's Card",
+    "default_label_pos": "above",
+    "show_title": 0,
+    "clear_complete": "1",
+    "hide_complete": "1",
+    "logged_in": "0",
+    "wrapper_class": "",
+    "element_class": "",
+    "key": "",
+    "add_submit": "1",
+    "currency": "",
+    "repeatable_fieldsets": "",
+    "unique_field_error": "A form with this value has already been submitted.",
+    "not_logged_in_msg": "",
+    "sub_limit_msg": "The form has reached its submission limit.",
+    "calculations": [
+      {
+        "errors": [],
+        "max_options": "0",
+        "order": "0",
+        "new": "",
+        "options": [],
+        "name": "Total",
+        "eq": "{field:number_of_miracle_stars_1637610265081:calc} + {field:donate_additional_amount_to_support_cancer_patients_1623685178335:calc}",
+        "dec": "2",
+        "settingModel": {
+          "settings": false,
+          "hide_merge_tags": false,
+          "error": false,
+          "name": "calculations",
+          "type": "option-repeater",
+          "label": " <a href=\"#\" class=\"nf-add-new\">Add New</a>",
+          "width": "full",
+          "group": "primary",
+          "tmpl_row": "tmpl-nf-edit-setting-calculation-repeater-row",
+          "columns": {
+            "name": {
+              "header": "Variable Name",
+              "default": ""
+            },
+            "eq": {
+              "header": "Equation",
+              "default": ""
+            },
+            "dec": {
+              "header": "Precision",
+              "default": "2"
+            }
+          },
+          "use_merge_tags": {
+            "exclude": [
+              "user",
+              "system",
+              "post"
+            ]
+          }
+        }
+      }
+    ],
+    "conditions": [
+      {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [
+          {
+            "connector": "AND",
+            "key": "number_of_miracle_stars_1637610265081",
+            "comparator": "equal",
+            "value": "one",
+            "type": "field",
+            "modelType": "when"
+          }
+        ],
+        "then": [
+          {
+            "key": "miracle_star_card_information_1731603929904",
+            "trigger": "show_field",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      {
+        "collapsed": false,
+        "process": 1,
+        "connector": "all",
+        "when": [
+          {
+            "connector": "AND",
+            "key": "number_of_miracle_stars_1637610265081",
+            "comparator": "",
+            "value": "2",
+            "type": "field",
+            "modelType": "when"
+          }
+        ],
+        "then": [
+          {
+            "key": "miracle_star_card_information_1731603929904",
+            "trigger": "show_field",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      }
+    ],
+    "formContentData": [
+      "html_1669842110839",
+      "firstname_1623450936153",
+      "lastname_1623450937439",
+      "email_1623450939394",
+      "phone_1623684813039",
+      "hr_1623450963203",
+      "number_of_miracle_stars_1637610265081",
+      "hr_1623451024914",
+      "html_1623451027498",
+      "hr_1623451066156",
+      "html_1670002420367",
+      "miracle_star_card_information_1731603929904",
+      "hr_1623451149647",
+      "html_1669842064163",
+      "cardholder_first_name_1623682985623",
+      "cardholder_last_name_1623682977301",
+      "address_1623683683568",
+      "city_1623683530355",
+      "liststate_1623683536115",
+      "zip_code_1623684603313",
+      "creditcardnumber_1623684352542",
+      "creditcardcvc_1623684352554",
+      "creditcardexpiration_1623684352566",
+      "submit_1623451176372"
+    ],
+    "drawerDisabled": false,
+    "changeEmailErrorMsg": "",
+    "changeDateErrorMsg": "",
+    "confirmFieldErrorMsg": "",
+    "fieldNumberNumMinError": "",
+    "fieldNumberNumMaxError": "",
+    "fieldNumberIncrementBy": "",
+    "formErrorsCorrectErrors": "",
+    "validateRequiredField": "",
+    "honeypotHoneypotError": "",
+    "fieldsMarkedRequired": "",
+    "use_document_title": "0",
+    "document_title": "Cancer Institute Digital Card",
+    "use_document_body": "1",
+    "document_body": "\n\n<table background=\"https://cancer.uams.edu/partners-card/wp-content/uploads/sites/10/2021/08/partners-card.jpg\" width=\"1080px\" height=\"1920px\">\n\n\n\n\n<tbody>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n  <tr>\n    <td></td>\n  </tr>\n</tbody>\n</table>",
+    "header_position": "left",
+    "company_name": "",
+    "header_address_1": "",
+    "header_address_2": "",
+    "header_city_state_province": "",
+    "header_phone": "",
+    "header_email": "",
+    "header_date": "",
+    "footer_position": "left",
+    "document_filename": "digitalcard",
+    "toggle_header_settings": "0",
+    "use_document_filename": "1",
+    "allow_public_link": 0,
+    "embed_form": "",
+    "form_title_heading_level": "3",
+    "objectDomain": "display"
+  },
+  "fields": [
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 1,
+      "idAttribute": "id",
+      "label": "HTML",
+      "type": "html",
+      "default": "<h2>Miracle Star Buyer Information</h2>",
+      "container_class": "",
+      "element_class": "",
+      "key": "html_1669842110839",
+      "drawerDisabled": false,
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 2,
+      "idAttribute": "id",
+      "type": "firstname",
+      "label": "First Name",
+      "key": "firstname_1623450936153",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "custom_name_attribute": "fname",
+      "personally_identifiable": 1,
+      "value": "",
+      "field_label": "First Name",
+      "field_key": "firstname_1623450936153"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 3,
+      "idAttribute": "id",
+      "type": "lastname",
+      "label": "Last Name",
+      "key": "lastname_1623450937439",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "custom_name_attribute": "lname",
+      "personally_identifiable": 1,
+      "value": "",
+      "field_label": "Last Name",
+      "field_key": "lastname_1623450937439"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 4,
+      "idAttribute": "id",
+      "type": "email",
+      "label": "Email",
+      "key": "email_1623450939394",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "custom_name_attribute": "email",
+      "personally_identifiable": 1,
+      "value": "",
+      "field_label": "Email",
+      "field_key": "email_1623450939394"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 5,
+      "idAttribute": "id",
+      "label": "Phone",
+      "type": "phone",
+      "key": "phone_1623684813039",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "input_limit": "",
+      "input_limit_type": "characters",
+      "input_limit_msg": "Character(s) left",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "mask": "",
+      "custom_mask": "",
+      "custom_name_attribute": "phone",
+      "personally_identifiable": 1,
+      "value": "",
+      "field_label": "Phone",
+      "field_key": "phone_1623684813039"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 6,
+      "idAttribute": "id",
+      "type": "hr",
+      "label": "Divider",
+      "container_class": "",
+      "element_class": "",
+      "key": "hr_1623450963203",
+      "field_label": "Divider",
+      "field_key": "hr_1623450963203",
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 7,
+      "idAttribute": "id",
+      "type": "listselect",
+      "label": "Number of Miracle Stars",
+      "key": "number_of_miracle_stars_1637610265081",
+      "label_pos": "default",
+      "required": 1,
+      "options": [
+        {
+          "label": "1",
+          "value": "1",
+          "calc": "4",
+          "selected": "1",
+          "order": "0",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "options",
+            "type": "option-repeater",
+            "label": "Options <a href=\"#\" class=\"nf-add-new\">Add New</a> <a href=\"#\" class=\"extra nf-open-import-tooltip\"><i class=\"fa fa-sign-in\" aria-hidden=\"true\"></i> Import</a>",
+            "width": "full",
+            "group": "",
+            "value": [
+              {
+                "label": "One",
+                "value": "one",
+                "calc": "",
+                "selected": 0,
+                "order": 0
+              },
+              {
+                "label": "Two",
+                "value": "two",
+                "calc": "",
+                "selected": 0,
+                "order": 1
+              },
+              {
+                "label": "Three",
+                "value": "three",
+                "calc": "",
+                "selected": 0,
+                "order": 2
+              }
+            ],
+            "columns": {
+              "label": {
+                "header": "Label",
+                "default": ""
+              },
+              "value": {
+                "header": "Value",
+                "default": ""
+              },
+              "calc": {
+                "header": "Calc Value",
+                "default": ""
+              },
+              "selected": {
+                "header": "<span class=\"dashicons dashicons-yes\"></span>",
+                "default": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "2",
+          "value": "2",
+          "calc": "8",
+          "selected": "1",
+          "order": "1"
+        },
+        {
+          "label": "3",
+          "value": "3",
+          "calc": "12",
+          "selected": "1",
+          "order": "2"
+        },
+        {
+          "label": "4",
+          "value": "4",
+          "calc": "16",
+          "selected": 1,
+          "order": 3
+        }
+      ],
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "drawerDisabled": false,
+      "field_label": "Number of Cards",
+      "field_key": "number_of_cards_1623450991588"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 8,
+      "idAttribute": "id",
+      "type": "hr",
+      "label": "Divider",
+      "container_class": "",
+      "element_class": "",
+      "key": "hr_1623451024914",
+      "field_label": "Divider",
+      "field_key": "hr_1623451024914",
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 9,
+      "idAttribute": "id",
+      "type": "html",
+      "label": "HTML",
+      "default": "<p><span style=\"font-weight: 600;\">Total:</span>&nbsp;$ {calc:Total}<br></p>",
+      "container_class": "",
+      "element_class": "",
+      "key": "html_1623451027498",
+      "drawerDisabled": false,
+      "field_label": "HTML",
+      "field_key": "html_1623451027498",
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 10,
+      "idAttribute": "id",
+      "type": "hr",
+      "label": "Divider",
+      "container_class": "",
+      "element_class": "",
+      "key": "hr_1623451066156",
+      "drawerDisabled": "",
+      "field_label": "Divider",
+      "field_key": "hr_1623451066156",
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 11,
+      "idAttribute": "id",
+      "label": "HTML Copy",
+      "type": "html",
+      "default": "<h2>Add your Miracle Star Names</h2>",
+      "container_class": "",
+      "element_class": "",
+      "key": "html_1670002420367",
+      "drawerDisabled": false,
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 12,
+      "idAttribute": "id",
+      "label": "Miracle Star Card Information",
+      "type": "repeater",
+      "container_class": "",
+      "element_class": "",
+      "fields": [
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 1,
+          "idAttribute": "id",
+          "id": "30.1",
+          "label": "Select One",
+          "type": "listradio",
+          "repeaterField": true,
+          "key": "select_one_1637610483210",
+          "label_pos": "default",
+          "required": 1,
+          "options": [
+            {
+              "label": "In honor of ",
+              "value": "in-honor-of",
+              "calc": "",
+              "selected": 0,
+              "order": 0,
+              "settingModel": {
+                "settings": false,
+                "hide_merge_tags": false,
+                "error": false,
+                "name": "options",
+                "type": "option-repeater",
+                "label": "Options <a href=\"#\" class=\"nf-add-new\">Add New</a> <a href=\"#\" class=\"extra nf-open-import-tooltip\"><i class=\"fa fa-sign-in\" aria-hidden=\"true\"></i> Import</a>",
+                "width": "full",
+                "group": "",
+                "value": [
+                  {
+                    "label": "One",
+                    "value": "one",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 0
+                  },
+                  {
+                    "label": "Two",
+                    "value": "two",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 1
+                  },
+                  {
+                    "label": "Three",
+                    "value": "three",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 2
+                  }
+                ],
+                "columns": {
+                  "label": {
+                    "header": "Label",
+                    "default": ""
+                  },
+                  "value": {
+                    "header": "Value",
+                    "default": ""
+                  },
+                  "calc": {
+                    "header": "Calc Value",
+                    "default": ""
+                  },
+                  "selected": {
+                    "header": "<span class=\"dashicons dashicons-yes\"></span>",
+                    "default": 0
+                  }
+                }
+              }
+            },
+            {
+              "label": "In memory of",
+              "value": "in-memory-of",
+              "calc": "",
+              "selected": 0,
+              "order": 1
+            }
+          ],
+          "container_class": "",
+          "element_class": "",
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "drawerDisabled": false
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 3,
+          "idAttribute": "id",
+          "id": "30.11",
+          "label": "Name of Memory or Honor of:",
+          "type": "textbox",
+          "repeaterField": true,
+          "key": "name_of_memory_or_honor_of_1670527743220",
+          "label_pos": "default",
+          "required": 1,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "",
+          "personally_identifiable": "",
+          "value": "",
+          "drawerDisabled": false,
+          "custom_autocomplete": null
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 4,
+          "idAttribute": "id",
+          "id": "30.2",
+          "label": "Send Miracle Star to (Name of Person)",
+          "type": "textbox",
+          "repeaterField": true,
+          "key": "send_miracle_star_to_name_of_person_1670528110147",
+          "label_pos": "default",
+          "required": 1,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "",
+          "personally_identifiable": "",
+          "value": "",
+          "drawerDisabled": false,
+          "custom_autocomplete": null
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 5,
+          "idAttribute": "id",
+          "id": "30.3",
+          "label": "How should it be sent?",
+          "type": "listradio",
+          "repeaterField": true,
+          "key": "how_should_it_be_sent_1637610751995",
+          "label_pos": "default",
+          "required": 1,
+          "options": [
+            {
+              "label": "Email",
+              "value": "email",
+              "calc": "",
+              "selected": 1,
+              "order": 0,
+              "settingModel": {
+                "settings": false,
+                "hide_merge_tags": false,
+                "error": false,
+                "name": "options",
+                "type": "option-repeater",
+                "label": "Options <a href=\"#\" class=\"nf-add-new\">Add New</a> <a href=\"#\" class=\"extra nf-open-import-tooltip\"><i class=\"fa fa-sign-in\" aria-hidden=\"true\"></i> Import</a>",
+                "width": "full",
+                "group": "",
+                "value": [
+                  {
+                    "label": "One",
+                    "value": "one",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 0
+                  },
+                  {
+                    "label": "Two",
+                    "value": "two",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 1
+                  },
+                  {
+                    "label": "Three",
+                    "value": "three",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 2
+                  }
+                ],
+                "columns": {
+                  "label": {
+                    "header": "Label",
+                    "default": ""
+                  },
+                  "value": {
+                    "header": "Value",
+                    "default": ""
+                  },
+                  "calc": {
+                    "header": "Calc Value",
+                    "default": ""
+                  },
+                  "selected": {
+                    "header": "<span class=\"dashicons dashicons-yes\"></span>",
+                    "default": 0
+                  }
+                }
+              }
+            },
+            {
+              "label": "US Mail",
+              "value": "us-mail",
+              "calc": "",
+              "selected": 0,
+              "order": 1
+            }
+          ],
+          "container_class": "",
+          "element_class": "",
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "drawerDisabled": false
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 6,
+          "idAttribute": "id",
+          "id": "30.4",
+          "label": "Address",
+          "type": "address",
+          "repeaterField": true,
+          "key": "",
+          "label_pos": "default",
+          "required": false,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "address",
+          "personally_identifiable": "1",
+          "value": "",
+          "drawerDisabled": false
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 7,
+          "idAttribute": "id",
+          "id": "30.5",
+          "label": "City",
+          "type": "city",
+          "repeaterField": true,
+          "key": "",
+          "label_pos": "default",
+          "required": false,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "city",
+          "personally_identifiable": "",
+          "value": ""
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 8,
+          "idAttribute": "id",
+          "id": "30.6",
+          "label": "US States",
+          "type": "liststate",
+          "repeaterField": true,
+          "key": "",
+          "label_pos": "default",
+          "required": false,
+          "options": [
+            {
+              "label": "- Select State -",
+              "value": "",
+              "calc": "",
+              "selected": 0,
+              "order": 0,
+              "settingModel": {
+                "settings": false,
+                "hide_merge_tags": false,
+                "error": false,
+                "name": "options",
+                "type": "option-repeater",
+                "label": "Options <a href=\"#\" class=\"nf-add-new\">Add New</a> <a href=\"#\" class=\"extra nf-open-import-tooltip\"><i class=\"fa fa-sign-in\" aria-hidden=\"true\"></i> Import</a>",
+                "width": "full",
+                "group": "",
+                "value": [
+                  {
+                    "label": "One",
+                    "value": "one",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 0
+                  },
+                  {
+                    "label": "Two",
+                    "value": "two",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 1
+                  },
+                  {
+                    "label": "Three",
+                    "value": "three",
+                    "calc": "",
+                    "selected": 0,
+                    "order": 2
+                  }
+                ],
+                "columns": {
+                  "label": {
+                    "header": "Label",
+                    "default": ""
+                  },
+                  "value": {
+                    "header": "Value",
+                    "default": ""
+                  },
+                  "calc": {
+                    "header": "Calc Value",
+                    "default": ""
+                  },
+                  "selected": {
+                    "header": "<span class=\"dashicons dashicons-yes\"></span>",
+                    "default": 0
+                  }
+                }
+              }
+            },
+            {
+              "label": "Alabama",
+              "value": "AL",
+              "calc": "",
+              "selected": 0,
+              "order": 1
+            },
+            {
+              "label": "Alaska",
+              "value": "AK",
+              "calc": "",
+              "selected": 0,
+              "order": 2
+            },
+            {
+              "label": "Arizona",
+              "value": "AZ",
+              "calc": "",
+              "selected": 0,
+              "order": 3
+            }
+          ],
+          "container_class": "",
+          "element_class": "",
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 9,
+          "idAttribute": "id",
+          "id": "30.7",
+          "label": "Zip",
+          "type": "zip",
+          "repeaterField": true,
+          "key": "",
+          "label_pos": "default",
+          "required": false,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "zip",
+          "personally_identifiable": "",
+          "value": ""
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 10,
+          "idAttribute": "id",
+          "id": "30.8",
+          "label": "Email Address of Recipient",
+          "type": "email",
+          "repeaterField": true,
+          "key": "email_address_of_recipient_1731604011354",
+          "label_pos": "default",
+          "required": false,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "custom_name_attribute": "email",
+          "personally_identifiable": "1",
+          "disable_browser_autocomplete": null,
+          "value": "",
+          "drawerDisabled": false
+        },
+        {
+          "objectType": "Field",
+          "objectDomain": "fields",
+          "editActive": false,
+          "order": 11,
+          "idAttribute": "id",
+          "id": "30.9",
+          "label": "Donated by",
+          "type": "textbox",
+          "repeaterField": true,
+          "key": "donated_by_1637610907205",
+          "label_pos": "default",
+          "required": false,
+          "default": "",
+          "placeholder": "",
+          "container_class": "",
+          "element_class": "",
+          "input_limit": "",
+          "input_limit_type": "characters",
+          "input_limit_msg": "Character(s) left",
+          "manual_key": false,
+          "disable_input": null,
+          "admin_label": "",
+          "help_text": "",
+          "desc_text": null,
+          "disable_browser_autocomplete": null,
+          "mask": "",
+          "custom_mask": "",
+          "custom_name_attribute": "",
+          "personally_identifiable": "",
+          "value": "",
+          "drawerDisabled": false,
+          "custom_autocomplete": null
+        }
+      ],
+      "key": "miracle_star_card_information_1731603929904",
+      "drawerDisabled": false,
+      "desc_text": "<p>Add your card information below.&nbsp; There is a button below to add more cards.</p>",
+      "button_text": "Add Another Miracle Star"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 13,
+      "idAttribute": "id",
+      "type": "hr",
+      "label": "Divider",
+      "container_class": "",
+      "element_class": "",
+      "key": "hr_1623451149647",
+      "field_label": "Divider",
+      "field_key": "hr_1623451149647",
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 14,
+      "idAttribute": "id",
+      "label": "HTML",
+      "type": "html",
+      "default": "<h2>Payment Information</h2>",
+      "container_class": "",
+      "element_class": "",
+      "key": "html_1669842064163",
+      "drawerDisabled": false,
+      "admin_label": ""
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 15,
+      "idAttribute": "id",
+      "label": "Cardholder First Name",
+      "type": "firstname",
+      "key": "cardholder_first_name_1623682985623",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "custom_name_attribute": "fname",
+      "personally_identifiable": 1,
+      "value": "",
+      "drawerDisabled": "",
+      "field_label": "Cardholder First Name",
+      "field_key": "cardholder_first_name_1623682985623"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 16,
+      "idAttribute": "id",
+      "label": "Cardholder Last Name",
+      "type": "lastname",
+      "key": "cardholder_last_name_1623682977301",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "custom_name_attribute": "lname",
+      "personally_identifiable": 1,
+      "value": "",
+      "drawerDisabled": "",
+      "field_label": "Cardholder Last Name",
+      "field_key": "cardholder_last_name_1623682977301"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 17,
+      "idAttribute": "id",
+      "label": "Address",
+      "type": "address",
+      "key": "address_1623683683568",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "input_limit": "",
+      "input_limit_type": "characters",
+      "input_limit_msg": "Character(s) left",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "mask": "",
+      "custom_mask": "",
+      "custom_name_attribute": "address",
+      "personally_identifiable": 1,
+      "value": "",
+      "drawerDisabled": "",
+      "field_label": "Address",
+      "field_key": "address_1623683683568"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 18,
+      "idAttribute": "id",
+      "label": "City",
+      "type": "city",
+      "key": "city_1623683530355",
+      "label_pos": "default",
+      "required": 1,
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "input_limit": "",
+      "input_limit_type": "characters",
+      "input_limit_msg": "Character(s) left",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "mask": "",
+      "custom_mask": "",
+      "custom_name_attribute": "city",
+      "personally_identifiable": "",
+      "value": "",
+      "field_label": "City",
+      "field_key": "city_1623683530355"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 19,
+      "idAttribute": "id",
+      "label": "US States",
+      "type": "liststate",
+      "key": "liststate_1623683536115",
+      "label_pos": "default",
+      "required": 1,
+      "options": [
+        {
+          "label": "- Select State -",
+          "value": "",
+          "calc": "",
+          "selected": "0",
+          "order": "0",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "options",
+            "type": "option-repeater",
+            "label": "Options <a href=\"#\" class=\"nf-add-new\">Add New</a> <a href=\"#\" class=\"extra nf-open-import-tooltip\"><i class=\"fa fa-sign-in\" aria-hidden=\"true\"></i> Import</a>",
+            "width": "full",
+            "group": "",
+            "value": [
+              {
+                "label": "One",
+                "value": "one",
+                "calc": "",
+                "selected": 0,
+                "order": 0
+              },
+              {
+                "label": "Two",
+                "value": "two",
+                "calc": "",
+                "selected": 0,
+                "order": 1
+              },
+              {
+                "label": "Three",
+                "value": "three",
+                "calc": "",
+                "selected": 0,
+                "order": 2
+              }
+            ],
+            "columns": {
+              "label": {
+                "header": "Label",
+                "default": ""
+              },
+              "value": {
+                "header": "Value",
+                "default": ""
+              },
+              "calc": {
+                "header": "Calc Value",
+                "default": ""
+              },
+              "selected": {
+                "header": "<span class=\"dashicons dashicons-yes\"></span>",
+                "default": 0
+              }
+            }
+          }
+        },
+        {
+          "label": "Alabama",
+          "value": "AL",
+          "calc": "",
+          "selected": "0",
+          "order": "1"
+        },
+        {
+          "label": "Alaska",
+          "value": "AK",
+          "calc": "",
+          "selected": "0",
+          "order": "2"
+        },
+        {
+          "label": "Arizona",
+          "value": "AZ",
+          "calc": "",
+          "selected": "0",
+          "order": "3"
+        }
+      ],
+      "container_class": "",
+      "element_class": "",
+      "admin_label": "",
+      "help_text": "",
+      "field_label": "US States",
+      "field_key": "liststate_1623683536115",
+      "drawerDisabled": false
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 20,
+      "idAttribute": "id",
+      "type": "creditcardzip",
+      "label": "Zip Code",
+      "key": "zip_code_1623684603313",
+      "label_pos": "default",
+      "required": "",
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "mask": "",
+      "custom_mask": "",
+      "custom_name_attribute": "zip",
+      "personally_identifiable": "",
+      "drawerDisabled": "",
+      "field_label": "Zip Code",
+      "field_key": "zip_code_1623684603313"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 21,
+      "idAttribute": "id",
+      "type": "creditcardnumber",
+      "label": "Credit Card Number",
+      "key": "creditcardnumber_1623684352542",
+      "label_pos": "default",
+      "required": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "field_label": "Credit Card Number",
+      "field_key": "creditcardnumber_1623684352542"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 22,
+      "idAttribute": "id",
+      "type": "creditcardcvc",
+      "label": "Credit Card CVC",
+      "key": "creditcardcvc_1623684352554",
+      "label_pos": "default",
+      "required": "",
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "field_label": "Credit Card CVC",
+      "field_key": "creditcardcvc_1623684352554"
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 23,
+      "idAttribute": "id",
+      "type": "creditcardexpiration",
+      "label": "Credit Card Expiration",
+      "key": "creditcardexpiration_1623684352566",
+      "label_pos": "default",
+      "required": "",
+      "default": "",
+      "placeholder": "",
+      "container_class": "",
+      "element_class": "",
+      "manual_key": "",
+      "admin_label": "",
+      "help_text": "",
+      "mask": "99/9999",
+      "field_label": "Credit Card Expiration",
+      "field_key": "creditcardexpiration_1623684352566",
+      "drawerDisabled": false
+    },
+    {
+      "objectType": "Field",
+      "objectDomain": "fields",
+      "editActive": false,
+      "order": 24,
+      "idAttribute": "id",
+      "type": "submit",
+      "label": "Submit",
+      "processing_label": "Processing",
+      "container_class": "",
+      "element_class": "",
+      "key": "submit_1623451176372",
+      "field_label": "Submit",
+      "field_key": "submit_1623451176372",
+      "admin_label": ""
+    }
+  ],
+  "actions": [
+    {
+      "title": "",
+      "key": "",
+      "type": "save",
+      "active": "1",
+      "created_at": "2021-06-11 13:39:37",
+      "label": "Store Submission",
+      "objectType": "Action",
+      "objectDomain": "actions",
+      "editActive": "",
+      "order": "3",
+      "conditions": {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [],
+        "then": [
+          {
+            "key": "select_one_1637610483210",
+            "trigger": "",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      "to": "{wp:admin_email}",
+      "reply_to": "",
+      "email_subject": "Ninja Forms Submission",
+      "email_message": "{fields_table}",
+      "email_message_plain": "",
+      "from_name": "",
+      "from_address": "",
+      "email_format": "html",
+      "cc": "",
+      "bcc": "",
+      "success_msg": "Your form has been successfully submitted.",
+      "redirect_url": "",
+      "submitter_email": "email_1623450939394",
+      "fields-save-toggle": "save_all",
+      "exception_fields": [],
+      "set_subs_to_expire": "0",
+      "subs_expire_time": "90",
+      "drawerDisabled": "",
+      "parent_id": "2"
+    },
+    {
+      "title": "",
+      "key": "",
+      "type": "collectpayment",
+      "active": "1",
+      "created_at": "2021-06-11 15:18:31",
+      "label": "Collect Payment",
+      "objectType": "Action",
+      "objectDomain": "actions",
+      "editActive": "",
+      "conditions": {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [],
+        "then": [
+          {
+            "key": "select_one_1637610483210",
+            "trigger": "",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      "to": "{wp:admin_email}",
+      "reply_to": "",
+      "email_subject": "Ninja Forms Submission",
+      "email_message": "{fields_table}",
+      "email_message_plain": "",
+      "from_name": "",
+      "from_address": "",
+      "email_format": "html",
+      "cc": "",
+      "bcc": "",
+      "success_msg": "Your form has been successfully submitted.",
+      "redirect_url": "",
+      "submitter_email": "",
+      "fields-save-toggle": "save_all",
+      "exception_fields": [],
+      "set_subs_to_expire": "0",
+      "subs_expire_time": "90",
+      "message": "This action adds users to WordPress' personal data export tool, allowing admins to comply with the GDPR and other privacy regulations from the site's front end.",
+      "score": "0.5",
+      "tag": "",
+      "payment_gateways": "elavon",
+      "payment_total_type": "calc",
+      "payment_total": "{calc:Total}",
+      "nfelavon_field_map": [
+        {
+          "errors": [],
+          "max_options": "0",
+          "order": "1",
+          "new": "",
+          "options": {
+            "form_field": [],
+            "field_map": [
+              {
+                "label": "None",
+                "value": "None"
+              },
+              {
+                "label": "Cardholder Address",
+                "value": "CardholderAddress"
+              },
+              {
+                "label": "Invoice Number",
+                "value": "InvoiceNumber"
+              },
+              {
+                "label": "Customer Code",
+                "value": "CustomerCode"
+              },
+              {
+                "label": "Sales Tax",
+                "value": "SalesTax"
+              },
+              {
+                "label": "DBA Name",
+                "value": "DBAName"
+              },
+              {
+                "label": "Transaction Currency",
+                "value": "TransactionCurrency"
+              },
+              {
+                "label": "First Name",
+                "value": "FirstName"
+              },
+              {
+                "label": "Last Name",
+                "value": "LastName"
+              }
+            ]
+          },
+          "form_field": "{field:cardholder_first_name_1623682985623}",
+          "field_map": "FirstName",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "nfelavon_field_map",
+            "type": "option-repeater",
+            "label": "Elavon Field Map <a href=\"#\" class=\"nf-add-new\">Add New</a>",
+            "width": "full",
+            "group": "primary",
+            "tmpl_row": "nf-tmpl-nfelavon-custom-field-map-row",
+            "value": [],
+            "columns": {
+              "form_field": {
+                "header": "Form Field",
+                "default": "",
+                "options": []
+              },
+              "field_map": {
+                "header": "Elavon Field",
+                "default": "",
+                "options": [
+                  {
+                    "label": "None",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Cardholder Address",
+                    "value": "CardholderAddress"
+                  },
+                  {
+                    "label": "Invoice Number",
+                    "value": "InvoiceNumber"
+                  },
+                  {
+                    "label": "Customer Code",
+                    "value": "CustomerCode"
+                  },
+                  {
+                    "label": "Sales Tax",
+                    "value": "SalesTax"
+                  },
+                  {
+                    "label": "DBA Name",
+                    "value": "DBAName"
+                  },
+                  {
+                    "label": "Transaction Currency",
+                    "value": "TransactionCurrency"
+                  },
+                  {
+                    "label": "First Name",
+                    "value": "FirstName"
+                  },
+                  {
+                    "label": "Last Name",
+                    "value": "LastName"
+                  }
+                ]
+              }
+            },
+            "deps": {
+              "payment_gateways": "elavon",
+              "settings": [
+                {
+                  "name": "payment_gateways",
+                  "value": "elavon"
+                }
+              ],
+              "match": "all"
+            }
+          }
+        },
+        {
+          "errors": [],
+          "max_options": "0",
+          "order": "2",
+          "new": "",
+          "options": {
+            "form_field": [],
+            "field_map": [
+              {
+                "label": "None",
+                "value": "None"
+              },
+              {
+                "label": "Cardholder Address",
+                "value": "CardholderAddress"
+              },
+              {
+                "label": "Invoice Number",
+                "value": "InvoiceNumber"
+              },
+              {
+                "label": "Customer Code",
+                "value": "CustomerCode"
+              },
+              {
+                "label": "Sales Tax",
+                "value": "SalesTax"
+              },
+              {
+                "label": "DBA Name",
+                "value": "DBAName"
+              },
+              {
+                "label": "Transaction Currency",
+                "value": "TransactionCurrency"
+              },
+              {
+                "label": "First Name",
+                "value": "FirstName"
+              },
+              {
+                "label": "Last Name",
+                "value": "LastName"
+              }
+            ]
+          },
+          "form_field": "{field:cardholder_last_name_1623682977301}",
+          "field_map": "LastName",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "nfelavon_field_map",
+            "type": "option-repeater",
+            "label": "Elavon Field Map <a href=\"#\" class=\"nf-add-new\">Add New</a>",
+            "width": "full",
+            "group": "primary",
+            "tmpl_row": "nf-tmpl-nfelavon-custom-field-map-row",
+            "value": [],
+            "columns": {
+              "form_field": {
+                "header": "Form Field",
+                "default": "",
+                "options": []
+              },
+              "field_map": {
+                "header": "Elavon Field",
+                "default": "",
+                "options": [
+                  {
+                    "label": "None",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Cardholder Address",
+                    "value": "CardholderAddress"
+                  },
+                  {
+                    "label": "Invoice Number",
+                    "value": "InvoiceNumber"
+                  },
+                  {
+                    "label": "Customer Code",
+                    "value": "CustomerCode"
+                  },
+                  {
+                    "label": "Sales Tax",
+                    "value": "SalesTax"
+                  },
+                  {
+                    "label": "DBA Name",
+                    "value": "DBAName"
+                  },
+                  {
+                    "label": "Transaction Currency",
+                    "value": "TransactionCurrency"
+                  },
+                  {
+                    "label": "First Name",
+                    "value": "FirstName"
+                  },
+                  {
+                    "label": "Last Name",
+                    "value": "LastName"
+                  }
+                ]
+              }
+            },
+            "deps": {
+              "payment_gateways": "elavon",
+              "settings": [
+                {
+                  "name": "payment_gateways",
+                  "value": "elavon"
+                }
+              ],
+              "match": "all"
+            }
+          }
+        },
+        {
+          "errors": [],
+          "max_options": "0",
+          "order": "2",
+          "new": "",
+          "options": {
+            "form_field": [],
+            "field_map": [
+              {
+                "label": "None",
+                "value": "None"
+              },
+              {
+                "label": "Cardholder Address",
+                "value": "CardholderAddress"
+              },
+              {
+                "label": "Invoice Number",
+                "value": "InvoiceNumber"
+              },
+              {
+                "label": "Customer Code",
+                "value": "CustomerCode"
+              },
+              {
+                "label": "Sales Tax",
+                "value": "SalesTax"
+              },
+              {
+                "label": "DBA Name",
+                "value": "DBAName"
+              },
+              {
+                "label": "Transaction Currency",
+                "value": "TransactionCurrency"
+              },
+              {
+                "label": "First Name",
+                "value": "FirstName"
+              },
+              {
+                "label": "Last Name",
+                "value": "LastName"
+              }
+            ]
+          },
+          "form_field": "{field:address_1623683683568}, {field:city_1623683530355}, {field:liststate_1623683536115}, {field:creditcardzip_1623684352579}",
+          "field_map": "CardholderAddress",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "nfelavon_field_map",
+            "type": "option-repeater",
+            "label": "Elavon Field Map <a href=\"#\" class=\"nf-add-new\">Add New</a>",
+            "width": "full",
+            "group": "primary",
+            "tmpl_row": "nf-tmpl-nfelavon-custom-field-map-row",
+            "value": [],
+            "columns": {
+              "form_field": {
+                "header": "Form Field",
+                "default": "",
+                "options": []
+              },
+              "field_map": {
+                "header": "Elavon Field",
+                "default": "",
+                "options": [
+                  {
+                    "label": "None",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Cardholder Address",
+                    "value": "CardholderAddress"
+                  },
+                  {
+                    "label": "Invoice Number",
+                    "value": "InvoiceNumber"
+                  },
+                  {
+                    "label": "Customer Code",
+                    "value": "CustomerCode"
+                  },
+                  {
+                    "label": "Sales Tax",
+                    "value": "SalesTax"
+                  },
+                  {
+                    "label": "DBA Name",
+                    "value": "DBAName"
+                  },
+                  {
+                    "label": "Transaction Currency",
+                    "value": "TransactionCurrency"
+                  },
+                  {
+                    "label": "First Name",
+                    "value": "FirstName"
+                  },
+                  {
+                    "label": "Last Name",
+                    "value": "LastName"
+                  }
+                ]
+              }
+            },
+            "deps": {
+              "payment_gateways": "elavon",
+              "settings": [
+                {
+                  "name": "payment_gateways",
+                  "value": "elavon"
+                }
+              ],
+              "match": "all"
+            }
+          }
+        },
+        {
+          "errors": [],
+          "max_options": "0",
+          "order": "3",
+          "new": "",
+          "options": {
+            "form_field": [],
+            "field_map": [
+              {
+                "label": "None",
+                "value": "None"
+              },
+              {
+                "label": "Cardholder Address",
+                "value": "CardholderAddress"
+              },
+              {
+                "label": "Invoice Number",
+                "value": "InvoiceNumber"
+              },
+              {
+                "label": "Customer Code",
+                "value": "CustomerCode"
+              },
+              {
+                "label": "Sales Tax",
+                "value": "SalesTax"
+              },
+              {
+                "label": "DBA Name",
+                "value": "DBAName"
+              },
+              {
+                "label": "Transaction Currency",
+                "value": "TransactionCurrency"
+              },
+              {
+                "label": "First Name",
+                "value": "FirstName"
+              },
+              {
+                "label": "Last Name",
+                "value": "LastName"
+              }
+            ]
+          },
+          "form_field": "",
+          "field_map": "",
+          "settingModel": {
+            "settings": false,
+            "hide_merge_tags": false,
+            "error": false,
+            "name": "nfelavon_field_map",
+            "type": "option-repeater",
+            "label": "Elavon Field Map <a href=\"#\" class=\"nf-add-new\">Add New</a>",
+            "width": "full",
+            "group": "primary",
+            "tmpl_row": "nf-tmpl-nfelavon-custom-field-map-row",
+            "value": [],
+            "columns": {
+              "form_field": {
+                "header": "Form Field",
+                "default": "",
+                "options": []
+              },
+              "field_map": {
+                "header": "Elavon Field",
+                "default": "",
+                "options": [
+                  {
+                    "label": "None",
+                    "value": "None"
+                  },
+                  {
+                    "label": "Cardholder Address",
+                    "value": "CardholderAddress"
+                  },
+                  {
+                    "label": "Invoice Number",
+                    "value": "InvoiceNumber"
+                  },
+                  {
+                    "label": "Customer Code",
+                    "value": "CustomerCode"
+                  },
+                  {
+                    "label": "Sales Tax",
+                    "value": "SalesTax"
+                  },
+                  {
+                    "label": "DBA Name",
+                    "value": "DBAName"
+                  },
+                  {
+                    "label": "Transaction Currency",
+                    "value": "TransactionCurrency"
+                  },
+                  {
+                    "label": "First Name",
+                    "value": "FirstName"
+                  },
+                  {
+                    "label": "Last Name",
+                    "value": "LastName"
+                  }
+                ]
+              }
+            },
+            "deps": {
+              "payment_gateways": "elavon",
+              "settings": [
+                {
+                  "name": "payment_gateways",
+                  "value": "elavon"
+                }
+              ],
+              "match": "all"
+            }
+          }
+        }
+      ],
+      "drawerDisabled": "",
+      "parent_id": "2",
+      "": "- Choose GTM if your website integrates with GA4 through Google Tag Manager using a Container ID (GTM-XXXXXXX). A custom Tag is required. Please see our documentation for details. ",
+      "method_type": "ga4",
+      "event_name": ""
+    },
+    {
+      "title": "",
+      "key": "",
+      "type": "successmessage",
+      "active": "1",
+      "created_at": "2021-06-11 13:39:37",
+      "label": "Success Message",
+      "objectType": "Action",
+      "objectDomain": "actions",
+      "editActive": "",
+      "message": "Your form has been successfully submitted.",
+      "order": "1",
+      "conditions": {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [],
+        "then": [
+          {
+            "key": "select_one_1637610483210",
+            "trigger": "",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      "to": "{wp:admin_email}",
+      "reply_to": "",
+      "email_subject": "Ninja Forms Submission",
+      "email_message": "{fields_table}",
+      "email_message_plain": "",
+      "from_name": "",
+      "from_address": "",
+      "email_format": "html",
+      "cc": "",
+      "bcc": "",
+      "success_msg": "Thank you for supporting the UAMS&nbsp;Winthrop P. Rockefeller Cancer Institute Miracle Stars. The tree has brightened our building and the spirits of the many patients who come through our doors each holiday season. We would like to invite you to be a part of this wonderful tradition by sponsoring a star as a special holiday greeting or to pay tribute to a special person.&nbsp; If you have any questions please call the&nbsp;<span style=\"color: rgb(33, 33, 33); font-family: &quot;Fira Sans&quot;, sans-serif; font-size: 18px;\">Cancer Institute Volunteer Office at <a href=\"tel:501-686-8286\">501-686-8286</a>.</span>",
+      "parent_id": "2",
+      "drawerDisabled": ""
+    },
+    {
+      "title": "",
+      "key": "",
+      "type": "email",
+      "active": "1",
+      "created_at": "2021-06-11 13:39:37",
+      "label": "Admin Email",
+      "objectType": "Action",
+      "objectDomain": "actions",
+      "editActive": "",
+      "order": "2",
+      "conditions": {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [],
+        "then": [
+          {
+            "key": "select_one_1637610483210",
+            "trigger": "",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      "to": "donations@example.edu, outreach@example.edu",
+      "reply_to": "{field:email_1623450939394}",
+      "email_subject": "UAMS Winthrop P. Rockefeller Cancer Institute Miracle Stars",
+      "email_message": "{fields_table}",
+      "email_message_plain": "",
+      "from_name": "UAMS Winthrop P. Rockefeller Cancer Institute",
+      "from_address": "webteam@example.edu",
+      "email_format": "html",
+      "cc": "",
+      "bcc": "",
+      "drawerDisabled": "",
+      "parent_id": "2"
+    },
+    {
+      "title": "",
+      "key": "",
+      "type": "email",
+      "active": "1",
+      "created_at": "2021-08-31 12:08:00",
+      "label": "Customer Email",
+      "objectType": "Action",
+      "objectDomain": "actions",
+      "editActive": "",
+      "conditions": {
+        "collapsed": "",
+        "process": "1",
+        "connector": "all",
+        "when": [],
+        "then": [
+          {
+            "key": "select_one_1637610483210",
+            "trigger": "",
+            "value": "",
+            "type": "field",
+            "modelType": "then"
+          }
+        ],
+        "else": []
+      },
+      "to": "{field:email_1623450939394}",
+      "reply_to": "",
+      "email_subject": "Thank you for supporting the UAMS Winthrop P. Rockefeller Cancer Institute Miracle Stars!",
+      "email_message": "<p>Thank you for supporting the UAMS&nbsp;Winthrop P. Rockefeller Cancer Institute Miracle Stars.  The tree has brightened our building and the spirits of the many patients who come through our doors each holiday season. We would like to invite you to be a part of this wonderful tradition by sponsoring a star as a special holiday greeting or to pay tribute to a special person.<br><br><img src=\"https://cancer.uams.edu/get-involved/wp-content/uploads/sites/5/2022/12/thank-you.jpg\" style=\"width: 563px;\"><br><br>{fields_table}</p>",
+      "email_message_plain": "",
+      "from_name": "UAMS Winthrop P. Rockefeller Cancer Institute",
+      "from_address": "",
+      "email_format": "html",
+      "cc": "",
+      "bcc": "",
+      "drawerDisabled": "",
+      "parent_id": "2"
+    }
+  ]
+}

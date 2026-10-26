@@ -1,0 +1,368 @@
+<?php
+
+declare(strict_types=1);
+
+namespace UAMSWeb\WordPressImporter\Services\WordPressImport\ReusableBlocks;
+
+use Exception;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\Console\Output\OutputInterface;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\ReusableBlockEntryCreator;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+
+/**
+ * Coordinates reusable block (wp_block) import operations.
+ *
+ * Handles importing WordPress wp_block post items that are referenced by
+ * wp:block blocks encountered during content processing. Manages the
+ * lifecycle of wp_block imports including tracking post IDs, importing
+ * entries, and enabling the reusable_content collection.
+ *
+ * Follows the Single Responsibility Principle by focusing solely on
+ * reusable block import coordination.
+ */
+class ReusableBlockCoordinator
+{
+    /**
+     * XML parser instance.
+     */
+    private ?XmlParser $xmlParser = null;
+
+    /**
+     * Asset importer instance.
+     */
+    private ?AssetImporter $assetImporter = null;
+
+    /**
+     * Constructs the ReusableBlockCoordinator with dependencies.
+     *
+     * @param  SiteManager  $siteManager  Site manager for collection operations
+     * @param  CollectionStructureManager  $collectionStructureManager  Collection structure manager for structure initialization
+     */
+    public function __construct(private SiteManager $siteManager, private CollectionStructureManager $collectionStructureManager) {}
+
+    /**
+     * Sets the XML parser instance.
+     *
+     * @param  XmlParser  $xmlParser  The XML parser instance
+     */
+    public function setXmlParser(
+        XmlParser $xmlParser
+    ): void {
+        // Store XML parser instance
+        $this->xmlParser = $xmlParser;
+    }
+
+    /**
+     * Sets the asset importer instance.
+     *
+     * @param  AssetImporter  $assetImporter  The asset importer instance
+     */
+    public function setAssetImporter(
+        AssetImporter $assetImporter
+    ): void {
+        // Store asset importer instance
+        $this->assetImporter = $assetImporter;
+    }
+
+    /**
+     * Clears tracked wp_block post IDs at the start of processing.
+     *
+     * Should be called at the beginning of each import cycle to ensure
+     * a clean state.
+     */
+    public function clearWpBlockPostIds(): void
+    {
+        // Clear all tracked wp_block post IDs
+        WpBlockBlockProcessor::clearWpBlockPostIds();
+    }
+
+    /**
+     * Processes reusable block imports for a site.
+     *
+     * Imports wp_block items that were referenced by wp:block blocks
+     * during content processing. Enables the reusable_content collection
+     * if any wp_block items were detected. Clears tracked wp_block post
+     * IDs after processing.
+     *
+     * @param  string  $site  The site handle
+     * @param  OutputInterface  $output  Console output interface
+     *
+     * @throws Exception If XML parser or asset importer is not set
+     */
+    public function processReusableBlockImports(
+        string $site,
+        OutputInterface $output
+    ): void {
+        // Cache wp_block post IDs before import
+        $cachedWpBlockPostIds = WpBlockBlockProcessor::getWpBlockPostIds();
+
+        // Check if no wp_block content is detected
+        if ($cachedWpBlockPostIds === []) {
+            // No wp_block items to import, return early
+            return;
+        }
+
+        // Inform user that reusable block import phase is starting
+        $output->writeln('Processing reusable content imports...');
+
+        // Enable the reusable_content collection for the site
+        $this->siteManager->enableCollectionForSite(
+            $site,
+            'reusable_content',
+            $output
+        );
+
+        // Initialize structure for the reusable_content collection
+        $this->collectionStructureManager->initializeStructureForSite(
+            'reusable_content',
+            $site,
+            $output
+        );
+
+        // Import wp_block items that were referenced in content
+        $this->importWpBlocks(
+            $site,
+            $output
+        );
+
+        // Clear wp_block post IDs after processing is complete
+        WpBlockBlockProcessor::clearWpBlockPostIds();
+    }
+
+    /**
+     * Imports wp_block items referenced by wp:block blocks in content.
+     *
+     * Processes wp_block post items that are referenced by wp:block blocks
+     * encountered during content processing. Creates entries in the
+     * 'reusable_content' collection for each referenced wp_block post ID.
+     * Handles recursive wp_block references by processing newly discovered
+     * wp_blocks until no new ones are found.
+     *
+     * @param  string  $site  The site handle
+     * @param  OutputInterface  $output  Console output interface
+     *
+     * @throws Exception If XML parser or asset importer is not set
+     */
+    private function importWpBlocks(
+        string $site,
+        OutputInterface $output
+    ): void {
+        // ---
+        // Ensure dependencies are set
+        // ---
+
+        // Check if XML parser or asset importer is not set
+        if (
+            ! $this->xmlParser instanceof XmlParser
+            || ! $this->assetImporter instanceof AssetImporter
+        ) {
+            // Throw exception if dependencies are missing
+            throw new Exception(
+                'XML parser or asset importer not set for wp_block imports.'
+            );
+        }
+
+        // ---
+        // Initialize dependencies
+        // ---
+
+        // Get XML parser instance
+        $xmlParser = $this->xmlParser;
+
+        // Get asset importer instance
+        $assetImporter = $this->assetImporter;
+
+        // Get all wp_block items from XML
+        $wpBlocks = $xmlParser->getItems('wp_block');
+
+        // Create reusable block entry creator instance
+        $creator = new ReusableBlockEntryCreator;
+
+        // ---
+        // Track imported post IDs globally to avoid infinite loops
+        // ---
+
+        // Initialize array to track imported wp_block post IDs across iterations
+        $importedPostIds = [];
+
+        // Initialize counter for imported wp_blocks
+        $importedCount = 0;
+
+        // ---
+        // Process wp_blocks in a loop until no new ones are discovered. Continue
+        // processing until no new wp_blocks are found.
+        // ---
+
+        // Set maximum iterations to prevent infinite loops
+        $maxIterations = 100;
+
+        // Initialize iteration counter
+        $iteration = 0;
+
+        // Loop until max iterations reached or no new wp_blocks found
+        while ($iteration < $maxIterations) {
+            // ---
+            // Get wp_block post IDs that were encountered during content processing
+            // (includes newly discovered ones from previous iteration)
+            // ---
+            $wpBlockPostIds = WpBlockBlockProcessor::getWpBlockPostIds();
+
+            // Deduplicate wp_block post IDs for import
+            $uniqueWpBlockPostIds = array_unique($wpBlockPostIds);
+
+            // ---
+            // Filter out already processed wp_blocks
+            // ---
+
+            // Filter to only include wp_blocks that haven't been processed yet
+            $newWpBlockPostIds = \array_diff(
+                $uniqueWpBlockPostIds,
+                $importedPostIds
+            );
+
+            // Check if no new wp_block post IDs to process
+            if ($newWpBlockPostIds === []) {
+                // Break loop if no new wp_blocks found
+                break;
+            }
+
+            // Initialize array to store wp_blocks that need to be processed
+            $wpBlocksToProcess = [];
+
+            // Loop through all available wp_blocks to filter those that match our criteria
+            foreach ($wpBlocks as $wpBlock) {
+                // Extract the WordPress post ID from the wp_block item
+                $postId = XpathHelper::getStringValue(
+                    $wpBlock,
+                    'wp:post_id'
+                );
+
+                // ---
+                // Check if this wp_block's post ID is in our target list and hasn't been
+                // processed yet
+                // ---
+                if (
+                    \in_array(
+                        $postId,
+                        $newWpBlockPostIds,
+                        true
+                    )
+                    && ! \in_array(
+                        $postId,
+                        $importedPostIds,
+                        true
+                    )
+                ) {
+                    // Add this wp_block to our processing queue
+                    $wpBlocksToProcess[] = $wpBlock;
+
+                    // Mark this post ID as processed to avoid duplicates
+                    $importedPostIds[] = $postId;
+                }
+            }
+
+            // Process each wp_block individually
+            foreach ($wpBlocksToProcess as $wpBlock) {
+                // Extract the WordPress post ID from the wp_block item
+                $postId = XpathHelper::getStringValue(
+                    $wpBlock,
+                    'wp:post_id'
+                );
+
+                // ---
+                // Create a new XML parser instance for this specific wp_block to avoid state
+                // conflicts
+                // ---
+                $wpBlockXmlParser = new XmlParser;
+
+                // Resolve the source XML file path before parsing
+                $filePath = $xmlParser->getFilePath();
+
+                // Skip this wp_block when the parser has no file path
+                if ($filePath === null) {
+                    continue;
+                }
+
+                // Parse the XML file with the new parser instance
+                $wpBlockXmlParser->parse($filePath);
+
+                // Point the isolated parser at every export part so its item and
+                // attachment readers span the whole split export (cross-part refs)
+                $wpBlockXmlParser->setFilePaths($xmlParser->getFilePaths());
+
+                // Override the parser's items to only include this specific wp_block
+                $wpBlockXmlParser->setItems([$wpBlock]);
+
+                // Create the wp_block entry using the isolated parser instance
+                $creator->createEntries(
+                    $site,
+                    'reusable_content',
+                    $wpBlockXmlParser,
+                    $assetImporter,
+                    $output,
+                    new MetadataMapper,
+                    new ContentProcessor
+                );
+
+                // Increment the count of successfully imported wp_blocks
+                $importedCount++;
+
+                // Add delay to ensure filesystem writes are complete
+                usleep(300000); // 300ms delay
+
+                // Clean up variables to free up memory
+                unset($wpBlockXmlParser);
+            }
+
+            // Increment iteration counter
+            $iteration++;
+
+            // Clean up iteration variables
+            unset(
+                $wpBlocksToProcess,
+                $wpBlockPostIds,
+                $uniqueWpBlockPostIds,
+                $newWpBlockPostIds
+            );
+        }
+
+        // Check if max iterations reached (safety check)
+        if ($iteration >= $maxIterations) {
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'importedCount' => $importedCount,
+                    'importedPostIds' => $importedPostIds,
+                ]
+            );
+
+            // Log warning about potential infinite loop
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    "ReusableBlockCoordinator::importWpBlocks: Reached maximum iterations ($maxIterations). Possible circular wp_block references.",
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
+        // Clean up variables to free up memory
+        unset(
+            $importedPostIds,
+            $xmlParser,
+            $assetImporter,
+            $wpBlocks,
+            $creator
+        );
+    }
+}

@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+*.php text eol=lf
+*.{json,md,xml,yml,yaml,neon,dist} text eol=lf
+*.{sh,bash} text eol=lf
+
+*.{png,gif,jpg,jpeg,webp,ico,pdf,zip} -text
+# Resolve a concurrent append to the decision log by keeping both sides rather than
+# conflicting. WHERE THIS APPLIES IS NOT OBVIOUS AND IS MEASURED IN docs/DECISIONS.md:
+# git reads this file from the tree of the checkout PERFORMING the merge, so it applies
+# only when that checkout's tree carries this line. NO LANDING HAS IT: the repository is
+# squash-only, so a pull request reaches main as a forge-authored commit and the forge
+# does not honour merge=union. It can only apply to a LOCAL merge before landing -- an
+# author syncing, or an operator's trial merge -- and a branch cut before this line
+# landed has neither. The structural guard that pairs with it is
+# scripts/check-decision-log.mjs.
+docs/DECISIONS.md merge=union

@@ -1,0 +1,789 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+    xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+    xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:wp="http://wordpress.org/export/1.2/"
+>
+
+    <channel>
+        <title>Academic Senate</title>
+        <link>https://academicsenate.uams.edu</link>
+        <description>UAMS</description>
+        <pubDate>Wed, 09 Apr 2025 14:15:32 +0000</pubDate>
+        <language>en-US</language>
+        <wp:wxr_version>1.2</wp:wxr_version>
+        <wp:base_site_url>https://uamsdev.com/</wp:base_site_url>
+        <wp:base_blog_url>https://academicsenate.uams.edu</wp:base_blog_url>
+
+
+        <wp:category>
+            <wp:term_id>1</wp:term_id>
+            <wp:category_nicename><![CDATA[news]]></wp:category_nicename>
+            <wp:category_parent><![CDATA[]]></wp:category_parent>
+            <wp:cat_name><![CDATA[News]]></wp:cat_name>
+        </wp:category>
+        <wp:term>
+            <wp:term_id>5</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[committees]]></wp:term_slug>
+            <wp:term_parent><![CDATA[]]></wp:term_parent>
+            <wp:term_name><![CDATA[Committees]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>6</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[communications-committee]]></wp:term_slug>
+            <wp:term_parent><![CDATA[committees]]></wp:term_parent>
+            <wp:term_name><![CDATA[Communications Committee]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>13</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[communications-committee-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[communications-committee]]></wp:term_parent>
+            <wp:term_name><![CDATA[Communications Committee, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>55</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[communications-committee-active-chair]]></wp:term_slug>
+            <wp:term_parent><![CDATA[communications-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Communications Committee, Active, Chair]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>56</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[communications-committee-active-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[communications-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Communications Committee, Active, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>7</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[faculty-affairs-committee]]></wp:term_slug>
+            <wp:term_parent><![CDATA[committees]]></wp:term_parent>
+            <wp:term_name><![CDATA[Faculty Affairs Committee]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>12</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[faculty-affairs-committee-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[faculty-affairs-committee]]></wp:term_parent>
+            <wp:term_name><![CDATA[Faculty Affairs Committee, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>57</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[faculty-affairs-committee-active-chair]]></wp:term_slug>
+            <wp:term_parent><![CDATA[faculty-affairs-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Faculty Affairs Committee, Active, Chair]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>58</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[faculty-affairs-committee-active-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[faculty-affairs-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Faculty Affairs Committee, Active, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>3</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers]]></wp:term_slug>
+            <wp:term_parent><![CDATA[]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>25</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2011-2012]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2011-2012]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>53</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2011-2012-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2011-2012]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2011-2012, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>30</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2011-2012-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2011-2012]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2011-2012, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>24</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2012-2013]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2012-2013]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>52</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2012-2013-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2012-2013]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2012-2013, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>31</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2012-2013-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2012-2013]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2012-2013, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>23</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2013-2014]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2013-2014]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>51</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2013-2014-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2013-2014]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2013-2014, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>32</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2013-2014-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2013-2014]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2013-2014, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>22</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2014-2015]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2014-2015]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>50</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2014-2015-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2014-2015]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2014-2015, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>33</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2014-2015-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2014-2015]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2014-2015, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>21</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2015-2016]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2015-2016]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>49</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2015-2016-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2015-2016]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2015-2016, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>34</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2015-2016-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2015-2016]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2015-2016, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>20</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2016-2017]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2016-2017]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>48</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2016-2017-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2016-2017]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2016-2017, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>35</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2016-2017-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2016-2017]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2016-2017, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>19</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2017-2018]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2017-2018]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>47</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2017-2018-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2017-2018]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2017-2018, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>36</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2017-2018-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2017-2018]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2017-2018, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>18</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2018-2019]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2018-2019]]></wp:term_name>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[headline]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[intro_text]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[display_title]]></wp:meta_key>
+                <wp:meta_value><![CDATA[0]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[display_description]]></wp:meta_key>
+                <wp:meta_value><![CDATA[0]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[doctitle]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[description]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[keywords]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[layout]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[noindex]]></wp:meta_key>
+                <wp:meta_value><![CDATA[0]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[nofollow]]></wp:meta_key>
+                <wp:meta_value><![CDATA[0]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[noarchive]]></wp:meta_key>
+                <wp:meta_value><![CDATA[0]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_titles_title]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_titles_desc]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_robots_breadcrumbs]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_robots_canonical]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_fb_title]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_fb_desc]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_fb_img]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_twitter_title]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_twitter_desc]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_social_twitter_img]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_redirections_type]]></wp:meta_key>
+                <wp:meta_value><![CDATA[301]]></wp:meta_value>
+            </wp:termmeta>
+            <wp:termmeta>
+                <wp:meta_key><![CDATA[_seopress_redirections_value]]></wp:meta_key>
+                <wp:meta_value><![CDATA[]]></wp:meta_value>
+            </wp:termmeta>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>46</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2018-2019-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2018-2019]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2018-2019, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>37</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2018-2019-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2018-2019]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2018-2019, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>17</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2019-2020]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2019-2020]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>45</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2019-2020-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2019-2020]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2019-2020, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>38</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2019-2020-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2019-2020]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2019-2020, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>26</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2020-2021]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2020-2021]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>44</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2020-2021-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2020-2021]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2020-2021, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>39</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2020-2021-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2020-2021]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2020-2021, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>27</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2021-2022]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2021-2022]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>43</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2021-2022-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2021-2022]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2021-2022, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>40</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2021-2022-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2021-2022]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2021-2022, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>28</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2022-2023]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2022-2023]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>42</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2022-2023-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2022-2023]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2022-2023, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>41</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-2022-2023-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-2022-2023]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, 2022-2023, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>14</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>54</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-active-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, Active, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>29</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[officers-active-president]]></wp:term_slug>
+            <wp:term_parent><![CDATA[officers-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Officers, Active, President]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>4</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives]]></wp:term_slug>
+            <wp:term_parent><![CDATA[]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>67</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-academic-affairs]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, Academic Affairs]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>68</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-academic-affairs-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-academic-affairs]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, Academic Affairs, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>61</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-health-professions]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Health Professions]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>74</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-health-professions-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-college-of-health-professions]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Health Professions, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>64</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-medicine]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Medicine]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>71</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-medicine-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-college-of-medicine]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Medicine, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>65</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-nursing]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Nursing]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>70</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-nursing-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-college-of-nursing]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Nursing, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>66</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-pharmacy]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Pharmacy]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>69</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-pharmacy-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-college-of-pharmacy]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Pharmacy, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>63</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-public-health]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Public Health]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>72</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-college-of-public-health-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-college-of-public-health]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, College of Public Health, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>62</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-graduate-school]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, Graduate School]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>73</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[representatives-graduate-school-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[representatives-graduate-school]]></wp:term_parent>
+            <wp:term_name><![CDATA[Representatives, Graduate School, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>8</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[research-committee]]></wp:term_slug>
+            <wp:term_parent><![CDATA[committees]]></wp:term_parent>
+            <wp:term_name><![CDATA[Research Committee]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>11</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[research-committee-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[research-committee]]></wp:term_parent>
+            <wp:term_name><![CDATA[Research Committee, Active]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>59</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[research-committee-active-chair]]></wp:term_slug>
+            <wp:term_parent><![CDATA[research-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Research Committee, Active, Chair]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>60</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[research-committee-active-members]]></wp:term_slug>
+            <wp:term_parent><![CDATA[research-committee-active]]></wp:term_parent>
+            <wp:term_name><![CDATA[Research Committee, Active, Members]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>9</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[clinical-affairs-committee]]></wp:term_slug>
+            <wp:term_parent><![CDATA[committees]]></wp:term_parent>
+            <wp:term_name><![CDATA[Clinical Affairs Committee]]></wp:term_name>
+        </wp:term>
+        <wp:term>
+            <wp:term_id>10</wp:term_id>
+            <wp:term_taxonomy><![CDATA[uamspeople-categories]]></wp:term_taxonomy>
+            <wp:term_slug><![CDATA[clinical-affairs-committee-active]]></wp:term_slug>
+            <wp:term_parent><![CDATA[clinical-affairs-committee]]></wp:term_parent>
+            <wp:term_name><![CDATA[Clinical Affairs Committee, Active]]></wp:term_name>
+        </wp:term>
+
+        <generator>https://wordpress.org/?v=6.7.2</generator>
+
+        <item>
+            <title><![CDATA[Auto Draft]]></title>
+            <link>https://academicsenate.uams.edu/?post_type=redirect_rule&#038;p=1110</link>
+            <pubDate>Wed, 12 Oct 2022 16:41:20 +0000</pubDate>
+            <dc:creator><![CDATA[jdaugherty]]></dc:creator>
+            <guid isPermaLink="false">
+                https://academicsenate.uamsdev.com/?post_type=redirect_rule&#038;p=1110</guid>
+            <description></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+            <wp:post_id>1110</wp:post_id>
+            <wp:post_date><![CDATA[2022-10-12 11:41:20]]></wp:post_date>
+            <wp:post_date_gmt><![CDATA[2022-10-12 16:41:20]]></wp:post_date_gmt>
+            <wp:post_modified><![CDATA[2025-04-06 10:02:55]]></wp:post_modified>
+            <wp:post_modified_gmt><![CDATA[2025-04-06 15:02:55]]></wp:post_modified_gmt>
+            <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+            <wp:ping_status><![CDATA[closed]]></wp:ping_status>
+            <wp:post_name><![CDATA[auto-draft]]></wp:post_name>
+            <wp:status><![CDATA[publish]]></wp:status>
+            <wp:post_parent>0</wp:post_parent>
+            <wp:menu_order>44</wp:menu_order>
+            <wp:post_type><![CDATA[redirect_rule]]></wp:post_type>
+            <wp:post_password><![CDATA[]]></wp:post_password>
+            <wp:is_sticky>0</wp:is_sticky>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_edit_last]]></wp:meta_key>
+                <wp:meta_value><![CDATA[2]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_from_regex]]></wp:meta_key>
+                <wp:meta_value><![CDATA[1]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_from]]></wp:meta_key>
+                <wp:meta_value><![CDATA[^\/wp-content\/uploads\/sites\/175\/(?:(?:200[0-9]|201[0-9]|202[0-1])\/(?:0[1-9]|1[0-2])|2022\/(?:0[1-9]|10))\/(.+)]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_to]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/wp-content/uploads/sites/52/2022/10/$1]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_status_code]]></wp:meta_key>
+                <wp:meta_value><![CDATA[301]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_notes]]></wp:meta_key>
+                <wp:meta_value><![CDATA[Site migration for Academic Senate site UAMS 2016 theme to UAMS 2020 theme. Redirecting media assets uploaded from January 2000 through October 2022 to a destination URL for media assets uploaded in October 2022.]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_message]]></wp:meta_key>
+                <wp:meta_value><![CDATA[test]]></wp:meta_value>
+            </wp:postmeta>
+        </item>
+<item>
+            <title><![CDATA[Auto Draft]]></title>
+            <link>https://academicsenate.uams.edu/?post_type=redirect_rule&#038;p=1111</link>
+            <pubDate>Wed, 12 Oct 2022 16:48:59 +0000</pubDate>
+            <dc:creator><![CDATA[jdaugherty]]></dc:creator>
+            <guid isPermaLink="false">
+                https://academicsenate.uamsdev.com/?post_type=redirect_rule&#038;p=1111</guid>
+            <description></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+            <wp:post_id>1111</wp:post_id>
+            <wp:post_date><![CDATA[2022-10-12 11:48:59]]></wp:post_date>
+            <wp:post_date_gmt><![CDATA[2022-10-12 16:48:59]]></wp:post_date_gmt>
+            <wp:post_modified><![CDATA[2022-10-12 11:49:35]]></wp:post_modified>
+            <wp:post_modified_gmt><![CDATA[2022-10-12 16:49:35]]></wp:post_modified_gmt>
+            <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+            <wp:ping_status><![CDATA[closed]]></wp:ping_status>
+            <wp:post_name><![CDATA[auto-draft-2]]></wp:post_name>
+            <wp:status><![CDATA[publish]]></wp:status>
+            <wp:post_parent>0</wp:post_parent>
+            <wp:menu_order>30</wp:menu_order>
+            <wp:post_type><![CDATA[redirect_rule]]></wp:post_type>
+            <wp:post_password><![CDATA[]]></wp:post_password>
+            <wp:is_sticky>0</wp:is_sticky>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_edit_last]]></wp:meta_key>
+                <wp:meta_value><![CDATA[2]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_from]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/2017/05/chancellors-award-for-distinguished-service/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_to]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/news/chancellors-award-for-distinguished-service/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_status_code]]></wp:meta_key>
+                <wp:meta_value><![CDATA[301]]></wp:meta_value>
+            </wp:postmeta>
+        </item>
+<item>
+            <title><![CDATA[Auto Draft]]></title>
+            <link>https://academicsenate.uams.edu/?post_type=redirect_rule&#038;p=1112</link>
+            <pubDate>Wed, 12 Oct 2022 16:49:29 +0000</pubDate>
+            <dc:creator><![CDATA[jdaugherty]]></dc:creator>
+            <guid isPermaLink="false">
+                https://academicsenate.uamsdev.com/?post_type=redirect_rule&#038;p=1112</guid>
+            <description></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+            <wp:post_id>1112</wp:post_id>
+            <wp:post_date><![CDATA[2022-10-12 11:49:29]]></wp:post_date>
+            <wp:post_date_gmt><![CDATA[2022-10-12 16:49:29]]></wp:post_date_gmt>
+            <wp:post_modified><![CDATA[2022-10-12 11:49:29]]></wp:post_modified>
+            <wp:post_modified_gmt><![CDATA[2022-10-12 16:49:29]]></wp:post_modified_gmt>
+            <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+            <wp:ping_status><![CDATA[closed]]></wp:ping_status>
+            <wp:post_name><![CDATA[auto-draft-3]]></wp:post_name>
+            <wp:status><![CDATA[publish]]></wp:status>
+            <wp:post_parent>0</wp:post_parent>
+            <wp:menu_order>30</wp:menu_order>
+            <wp:post_type><![CDATA[redirect_rule]]></wp:post_type>
+            <wp:post_password><![CDATA[]]></wp:post_password>
+            <wp:is_sticky>0</wp:is_sticky>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_edit_last]]></wp:meta_key>
+                <wp:meta_value><![CDATA[2]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_from]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/2018/12/uams-head-start-classroom/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_to]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/news/uams-head-start-classroom/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_status_code]]></wp:meta_key>
+                <wp:meta_value><![CDATA[301]]></wp:meta_value>
+            </wp:postmeta>
+        </item>
+<item>
+            <title><![CDATA[Auto Draft]]></title>
+            <link>https://academicsenate.uams.edu/?post_type=redirect_rule&#038;p=1115</link>
+            <pubDate>Wed, 12 Oct 2022 17:00:21 +0000</pubDate>
+            <dc:creator><![CDATA[jdaugherty]]></dc:creator>
+            <guid isPermaLink="false">
+                https://academicsenate.uamsdev.com/?post_type=redirect_rule&#038;p=1115</guid>
+            <description></description>
+            <content:encoded><![CDATA[]]></content:encoded>
+            <excerpt:encoded><![CDATA[]]></excerpt:encoded>
+            <wp:post_id>1115</wp:post_id>
+            <wp:post_date><![CDATA[2022-10-12 12:00:21]]></wp:post_date>
+            <wp:post_date_gmt><![CDATA[2022-10-12 17:00:21]]></wp:post_date_gmt>
+            <wp:post_modified><![CDATA[2022-10-12 12:00:21]]></wp:post_modified>
+            <wp:post_modified_gmt><![CDATA[2022-10-12 17:00:21]]></wp:post_modified_gmt>
+            <wp:comment_status><![CDATA[closed]]></wp:comment_status>
+            <wp:ping_status><![CDATA[closed]]></wp:ping_status>
+            <wp:post_name><![CDATA[auto-draft-4]]></wp:post_name>
+            <wp:status><![CDATA[publish]]></wp:status>
+            <wp:post_parent>0</wp:post_parent>
+            <wp:menu_order>49</wp:menu_order>
+            <wp:post_type><![CDATA[redirect_rule]]></wp:post_type>
+            <wp:post_password><![CDATA[]]></wp:post_password>
+            <wp:is_sticky>0</wp:is_sticky>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_edit_last]]></wp:meta_key>
+                <wp:meta_value><![CDATA[2]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_from]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/category/uncategorized/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_to]]></wp:meta_key>
+                <wp:meta_value><![CDATA[/category/news/*]]></wp:meta_value>
+            </wp:postmeta>
+            <wp:postmeta>
+                <wp:meta_key><![CDATA[_redirect_rule_status_code]]></wp:meta_key>
+                <wp:meta_value><![CDATA[301]]></wp:meta_value>
+            </wp:postmeta>
+        </item>
+	</channel>
+</rss>

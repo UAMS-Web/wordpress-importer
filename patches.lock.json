@@ -1,0 +1,17 @@
+{
+    "_hash": "da7414629e86b5de0a138973729ae999c8c068622a79c3a50d50a5a1ee178703",
+    "patches": {
+        "pestphp/pest-plugin-mutate": [
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)",
+                "url": "patches/pest-plugin-mutate-ignore-annotated-statement.patch",
+                "sha256": "6e7b44d2ad69b8f58fc9cdf066d06dcdbd48a022f326422925868d38882141a2",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            }
+        ]
+    }
+}

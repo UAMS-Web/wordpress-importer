@@ -1,0 +1,108 @@
+{
+    "name": "uams-web/wordpress-importer",
+    "description": "WordPress XML export importer for Statamic",
+    "keywords": [
+        "statamic",
+        "wordpress",
+        "gravity forms",
+        "formidable forms",
+        "tablepress",
+        "importer",
+        "uams"
+    ],
+    "homepage": "https://github.com/UAMS-Web/wordpress-importer",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "UAMS Web Services"
+        },
+        {
+            "name": "Josh Daugherty",
+            "role": "Web Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/UAMS-Web/wordpress-importer/issues",
+        "source": "https://github.com/UAMS-Web/wordpress-importer"
+    },
+    "autoload": {
+        "psr-4": {
+            "UAMSWeb\\WordPressImporter\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "UAMSWeb\\WordPressImporter\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "WordPress Importer",
+            "description": "Import WordPress XML exports into Statamic."
+        },
+        "laravel": {
+            "providers": [
+                "UAMSWeb\\WordPressImporter\\ServiceProvider"
+            ]
+        }
+    },
+    "require": {
+        "php": "^8.4",
+        "james-heinrich/getid3": "^1.9",
+        "laravel/prompts": "^0.3",
+        "statamic/cms": "6.37.0",
+        "uams-web/wordpress-wxr-cleanup": "^1.0"
+    },
+    "require-dev": {
+        "cweagans/composer-patches": "^2.0",
+        "laravel/pint": "^1.29",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^11.1",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-drift": "^5.0",
+        "pestphp/pest-plugin-phpstan": "^5.0",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "phpunit/phpunit": "^13.0",
+        "rector/rector": "^2.6"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "cweagans/composer-patches": true,
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true,
+            "pixelfear/composer-dist-plugin": true
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php scripts/setup-git-hooks.php"
+        ],
+        "post-update-cmd": [
+            "@php scripts/setup-git-hooks.php"
+        ],
+        "test": "pest --testsuite=Unit,Integration",
+        "stan": "phpstan analyse --memory-limit=-1",
+        "ci": [
+            "@stan",
+            "pint --test",
+            "@test"
+        ],
+        "refactor": "rector",
+        "refactor:sweep": "rector --clear-cache --config=rector-sweep.php",
+        "test:refactor": "rector --dry-run",
+        "test:refactor:sweep": "rector --dry-run --clear-cache --config=rector-sweep.php",
+        "pint": "pint",
+        "test:pint": "pint --test"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/UAMS-Web/wordpress-wxr-cleanup.git"
+        }
+    ]
+}

@@ -1,0 +1,39 @@
+{
+    "attribution": {
+        "pr": "",
+        "sessionUrl": false
+    },
+    "permissions": {
+        "allow": [
+            "mcp__Claude_Code_Remote__create_trigger",
+            "mcp__Claude_Code_Remote__update_trigger",
+            "mcp__Claude_Code_Remote__delete_trigger",
+            "mcp__Claude_Code_Remote__list_triggers",
+            "mcp__Claude_Code_Remote__send_later",
+            "Bash(gh api:*)",
+            "Bash(git fetch:*)",
+            "Bash(git status:*)",
+            "Bash(git log:*)",
+            "Bash(git diff:*)",
+            "Bash(git show:*)",
+            "Bash(git add:*)",
+            "Bash(git commit:*)",
+            "Bash(git push:*)",
+            "Bash(git checkout:*)",
+            "Bash(git rev-list:*)",
+            "Bash(git ls-remote:*)",
+            "Bash(git branch:*)",
+            "Bash(node scripts/worktree-slots.mjs:*)",
+            "Bash(node --test:*)"
+        ],
+        "deny": [
+            "Bash(git push --force:*)",
+            "Bash(git push -f:*)",
+            "Bash(git push --delete:*)",
+            "Bash(git push -d:*)",
+            "Bash(git branch -D:*)",
+            "Bash(gh api --method DELETE:*)",
+            "Bash(gh api -X DELETE:*)"
+        ]
+    }
+}

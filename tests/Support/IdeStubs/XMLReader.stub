@@ -1,0 +1,32 @@
+<?php
+
+/**
+ * PHPStan stub for XMLReader instance methods incorrectly inferred as static.
+ */
+class XMLReader
+{
+    public function open(
+        string $uri,
+        ?string $encoding = null,
+        int $flags = 0
+    ): bool {
+    }
+
+    public function read(): bool
+    {
+    }
+
+    public function close(): bool
+    {
+    }
+
+    public function readOuterXml(): string|false
+    {
+    }
+
+    public int $nodeType;
+
+    public string $name;
+
+    public string $value;
+}

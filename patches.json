@@ -1,0 +1,29 @@
+{
+    "_comment": [
+        "Patches applied to dev dependencies by cweagans/composer-patches.",
+        "",
+        "This MUST stay a separate patches file rather than an `extra.patches` block in",
+        "composer.json. `extra` is copied verbatim into a consumer's composer.lock, and",
+        "the plugin's Dependencies resolver reads `extra.patches` out of that lock data for",
+        "every package in `packages`, so declaring patches inline would make THIS",
+        "package's dev patches leak into `uams-statamic` (which requires us in production)",
+        "and be applied against its vendor tree. Reading a dependency's patches FILE is an",
+        "unimplemented TODO in the resolver, so this form stays correctly root-only.",
+        "",
+        "pest-plugin-mutate-ignore-annotated-statement.patch: the traverser still calls",
+        "NodeVisitor::leaveNode() on a node whose enterNode() returned",
+        "DONT_TRAVERSE_CURRENT_AND_CHILDREN, so a `@pest-mutate-ignore` marker above a",
+        "statement did not suppress a mutator that targets the statement itself (wordpress-importer-archive#1401).",
+        "The patch remembers the marked node and skips it in leaveNode().",
+        "",
+        "REMOVAL CRITERION: drop the patch (and, if it is the last one, this file,",
+        "patches.lock.json, and the cweagans/composer-patches dev dependency) once a",
+        "tagged pestphp/pest-plugin-mutate release on the 5.x line ships the fix. Tracked",
+        "in #1423."
+    ],
+    "patches": {
+        "pestphp/pest-plugin-mutate": {
+            "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)": "patches/pest-plugin-mutate-ignore-annotated-statement.patch"
+        }
+    }
+}

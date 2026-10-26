@@ -1,0 +1,68 @@
+{
+  "_note": "The shared local CI runner's job list for this repository (wordpress-importer-archive#1319). Run it through scripts/ci-local.mjs, which places the --branch slot. Every job is always selected, as the private runner this replaces ran every job on every run, and chain is off so one run reports every failure. The eight jobs from validate to python-test mirror .github/workflows/ci.yml; dependencies, synced-files and handed-back-workflow are local only.",
+  "base": "main",
+  "php": "8.4",
+  "jobs": [
+    {
+      "name": "dependencies",
+      "_note": "Local only. In the runner's own slot, composer install, and npm ci when node_modules/ differs from package-lock.json. Anywhere else it installs nothing and fails on drift. scripts/ci-local.mjs adds it to every --jobs list, because the runner ignores always once --jobs names a subset. No requires: an absent tool fails the job rather than skipping it.",
+      "run": "node scripts/prepare-dependencies.mjs",
+      "always": true
+    },
+    {
+      "name": "validate",
+      "run": "composer validate --no-check-publish --no-check-all",
+      "always": true
+    },
+    {
+      "name": "pint",
+      "_note": "The whole tree plus every dot-directory holding tracked PHP, which Pint's Finder otherwise skips; see scripts/run-pint.mjs.",
+      "run": "node scripts/run-pint.mjs",
+      "always": true
+    },
+    {
+      "name": "phpstan",
+      "run": "vendor/bin/phpstan analyse --memory-limit=-1",
+      "always": true
+    },
+    {
+      "name": "rector",
+      "run": "vendor/bin/rector --dry-run --no-progress-bar",
+      "always": true
+    },
+    {
+      "name": "pest",
+      "run": "vendor/bin/pest --testsuite=Unit,Integration",
+      "always": true
+    },
+    {
+      "name": "spell",
+      "_note": "The prose corpus with a zero-files floor; see scripts/run-spell.mjs. Not npm run spell, which checks a broader corpus than the gate.",
+      "run": "node scripts/run-spell.mjs",
+      "always": true
+    },
+    {
+      "name": "node-test",
+      "_note": "One command over the glob, quoted so Node expands it, exactly as ci.yml runs it: a glob that matches nothing fails the job rather than passing over zero files.",
+      "run": "node --test \"scripts/*.test.mjs\"",
+      "always": true
+    },
+    {
+      "name": "python-test",
+      "run": "node scripts/python-tests.mjs",
+      "always": true
+    },
+    {
+      "name": "synced-files",
+      "_note": "Local only. A hand edit to a file the shared sync manages fails the run.",
+      "run": "node .claude/skills/synced-files/scripts/check-synced-files.mjs",
+      "always": true
+    },
+    {
+      "name": "handed-back-workflow",
+      "_note": "Local only. Fails when .github/workflows/clear-handed-back.yml differs from the shared template or is missing.",
+      "run": "node .claude/skills/handed-back-label/scripts/check-handed-back-workflow.mjs",
+      "always": true
+    }
+  ]
+}

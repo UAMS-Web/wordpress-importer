@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<forms>
+<form>
+		<id>3</id>
+		<form_key><![CDATA[l3220]]></form_key>
+		<name><![CDATA[[scrubbed]]]></name>
+		<description><![CDATA[[scrubbed]]]></description>
+		<created_at>2020-10-06 15:46:57</created_at>
+		<logged_in>0</logged_in>
+		<is_template>0</is_template>
+		<editable>0</editable>
+		<options><![CDATA[{"submit_html":"<div class=\"frm_submit\">\n[if back_button]<button type=\"submit\" name=\"frm_prev_page\" formnovalidate=\"formnovalidate\" class=\"frm_prev_page\" [back_hook]>[back_label]<\/button>[\/if back_button]\n<button class=\"frm_button_submit\" type=\"submit\"  [button_action]>[button_label]<\/button>\n[if save_draft]<a href=\"#\" tabindex=\"0\" class=\"frm_save_draft\" [draft_hook]>[draft_label]<\/a>[\/if save_draft]\n<\/div>","cookie_expiration":8000,"prev_value":"Previous","submit_conditions":{"show_hide":"show","any_all":"all","hide_field":[],"hide_opt":[],"hide_cond":[]},"open_date":"2020-10-06 10:46"}]]></options>
+		<status><![CDATA[published]]></status>
+		<parent_form_id>2</parent_form_id>
+		<field>
+			<id>598</id>
+			<field_key><![CDATA[d2d5t]]></field_key>
+			<name><![CDATA[[scrubbed]]]></name>
+			<description><![CDATA[[scrubbed]]]></description>
+			<type><![CDATA[radio]]></type>
+			<default_value><![CDATA[[scrubbed]]]></default_value>
+			<field_order>24</field_order>
+			<form_id>3</form_id>
+			<required>1</required>
+			<options><![CDATA[{"1":{"label":"Prospecting \u2014 Casting a wide net to attract new customers","value":"prospecting","image":"0"},"2":{"label":"Remarketing \u2014 Focuses on nurturing relationships with existing customers","value":"remarketing","image":"0"},"3":{"label":"Retargeting (Subset of Remarketing) \u2014 Targeting customers who have visited certain UAMS websites","value":"remarketing_retargeting","image":"0"}}]]></options>
+			<field_options><![CDATA[{"align":"block","admin_only":[""],"other":"0","in_section":"19","get_values_form":"","get_values_field":"","watch_lookup":[],"get_most_recent_value":"","lookup_filter_current_user":false,"separate_value":"1","custom_html":"<div id=\"frm_field_[id]_container\" class=\"frm_form_field form-field [required_class][error_class]\">\r\n\t<label for=\"field_[key]\" id=\"field_[key]_label\" class=\"frm_primary_label\">[field_name]\r\n\t\t<span class=\"frm_required\" aria-hidden=\"true\">[required_label]<\/span>\r\n\t<\/label>\r\n\t[if description]<div class=\"frm_description\" id=\"frm_desc_field_[key]\">[description]<\/div>[\/if description]\r\n\t[input]\r\n\t[if error]<div class=\"frm_error\" role=\"alert\" id=\"frm_error_field_[key]\">[error]<\/div>[\/if error]\r\n<\/div>","btsp":"","image_options":"0","image_size":"small"}]]></field_options>
+		</field><field>
+			<id>287</id>
+			<field_key><![CDATA[ihgqn]]></field_key>
+			<name><![CDATA[[scrubbed]]]></name>
+			<description><![CDATA[[scrubbed]]]></description>
+			<type><![CDATA[radio]]></type>
+			<default_value><![CDATA[[scrubbed]]]></default_value>
+			<field_order>28</field_order>
+			<form_id>3</form_id>
+			<required>1</required>
+			<options><![CDATA[{"1":{"label":"UAMS News Release","value":"news-release","image":"0"},"other_2":"Other"}]]></options>
+			<field_options><![CDATA[{"align":"block","hide_field":["275"],"hide_opt":["Other"],"admin_only":[""],"other":"1","in_section":"19","get_values_form":"","get_values_field":"","watch_lookup":[],"get_most_recent_value":"","lookup_filter_current_user":false,"blank":"This field cannot be blank.","separate_value":"1","custom_html":"<div id=\"frm_field_[id]_container\" class=\"frm_form_field form-field [required_class][error_class]\">\r\n    <label for=\"field_[key]\" id=\"field_[key]_label\" class=\"frm_primary_label\">[field_name]\r\n        <span class=\"frm_required\" aria-hidden=\"true\">[required_label]<\/span>\r\n    <\/label>\r\n    [if description]<div class=\"frm_description\" id=\"frm_desc_field_[key]\">[description]<\/div>[\/if description]\r\n    [input]\r\n    [if error]<div class=\"frm_error\" id=\"frm_error_field_[key]\">[error]<\/div>[\/if error]\r\n<\/div>","btsp":"","image_options":"0","image_size":"small"}]]></field_options>
+		</field></form>
+</forms>
