@@ -450,10 +450,6 @@ class FormBlueprintCreator
         $setFields = [];
 
         foreach ($childFormFields as $childField) {
-            if (! \is_array($childField)) {
-                continue;
-            }
-
             // Only the comparison with 'form' reads this, and any default but 'form' skips
             // nothing, so the empty default is one choice among equivalent ones.
             // @pest-mutate-ignore: EmptyStringToNotEmpty
@@ -532,7 +528,7 @@ class FormBlueprintCreator
      *
      * @param  string  $childFormId  The child form ID
      * @param  array<int|string, mixed>  $allFields  Array of all form fields
-     * @return array<int|string, mixed> Array of child form fields
+     * @return list<array<int|string, mixed>> Array of child form fields
      */
     private function getChildFormFields(
         string $childFormId,

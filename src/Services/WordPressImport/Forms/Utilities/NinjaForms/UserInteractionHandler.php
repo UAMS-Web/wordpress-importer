@@ -231,13 +231,10 @@ class UserInteractionHandler implements FormPluginUserInteractionHandlerContract
         $byId = [];
 
         foreach ($forms as $form) {
-            // Narrowing for the type system rather than a runtime guard, and recorded as such
-            // because it cannot be covered: `select()` returns `array<int|string, mixed>`, so
-            // `$form` is `mixed` and level max refuses the offset read below without it —
-            // while `MigrationApiFormLoader` has ALREADY dropped every non-array entry, so no
-            // input reaching here can take this branch. Deleting it leaves every test green
-            // (measured: a surviving mutant), which is the correct result for an equivalent
-            // mutant and not a gap to close with a test that would pass either way.
+            // `select()` returns `array<int|string, mixed>`, so `$form` is `mixed` and level
+            // max refuses the offset read below without this. `MigrationApiFormLoader` already
+            // drops every non-array entry, so a real run never takes the branch; the contract
+            // still allows one, and the unit test passes one through a mocked selector.
             if (! is_array($form)) {
                 continue;
             }

@@ -137,6 +137,9 @@ it('binds served forms from the migration API without a per-form prompt', functi
     // One read for the whole site. A digit-string id is accepted, including one with a leading
     // zero, which is a string key unless cast; a non-numeric one is filed nowhere.
     $this->selector->expects($this->once())->method('select')->willReturn([
+        // The real loader drops entries that are not forms; the contract still allows one,
+        // and it is first so the forms after it are still read.
+        'not a form',
         ['id' => 7, 'title' => 'Contact'],
         ['id' => '12', 'title' => 'Apply'],
         ['id' => '040', 'title' => 'Register'],

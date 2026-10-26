@@ -69,6 +69,8 @@ function gfbcChildForm(): array
         'id' => 7,
         'title' => 'Courses',
         'fields' => [
+            // An entry that is not a field is passed over.
+            'not a field',
             ['id' => 1, 'formId' => 7, 'type' => 'text', 'label' => 'Course Code'],
             // A nested form inside a nested form is not carried into the set.
             ['id' => 2, 'formId' => 7, 'type' => 'form', 'label' => 'Deeper', 'gpnfForm' => '9'],
@@ -110,25 +112,32 @@ it('caps no other field, even one whose type only loosely equals an upload type'
     'a boolean type' => [true],
 ]);
 
-it('points an option field at its product, matching ids however they are written', function (): void {
+it('points an option field at its product, matching ids however they are written', function (int|string $reference, int|string $productId): void {
     $allFields = [
         'not a field',
         ['id' => '43', 'type' => 'product', 'label' => 'Adult Ticket'],
-        ['id' => 44, 'type' => 'product', 'label' => 'Child Ticket'],
+        ['id' => $productId, 'type' => 'product', 'label' => 'Child Ticket'],
     ];
 
-    $attributes = gfbcCall('getMappedFieldAttributes', null, ['id' => 45, 'type' => 'option', 'label' => 'Size', 'productField' => 44], 'gravity-forms', $allFields);
+    $attributes = gfbcCall('getMappedFieldAttributes', null, ['id' => 45, 'type' => 'option', 'label' => 'Size', 'productField' => $reference], 'gravity-forms', $allFields);
     $expected = gfbcCall('generateFieldHandle', null, $allFields[2]);
 
     expect($expected)->toBeString()->not->toBe('')
         ->and(\is_array($attributes) ? ($attributes['product_field'] ?? null) : null)->toBe($expected);
-});
+})->with([
+    'an int reference to a string id' => [44, '44'],
+    'a string reference to an int id' => ['44', 44],
+]);
 
-it('leaves an option field with an empty product reference unlinked', function (): void {
-    $attributes = gfbcCall('getMappedFieldAttributes', null, ['id' => 45, 'type' => 'option', 'label' => 'Size', 'productField' => ''], 'gravity-forms', [['id' => '', 'type' => 'product', 'label' => 'Blank']]);
+it('leaves an option field unlinked when its product reference names no field', function (mixed $reference): void {
+    $attributes = gfbcCall('getMappedFieldAttributes', null, ['id' => 45, 'type' => 'option', 'label' => 'Size', 'productField' => $reference], 'gravity-forms', [['id' => '', 'type' => 'product', 'label' => 'Blank'], ['id' => 44, 'type' => 'product', 'label' => 'Child Ticket']]);
 
     expect(\is_array($attributes) && \array_key_exists('product_field', $attributes))->toBeFalse();
-});
+})->with([
+    'an empty reference' => [''],
+    'a reference that is not scalar' => [[44]],
+    'an id no field carries' => [99],
+]);
 
 it('builds the replicator set from the child form, skipping its own nested forms', function (): void {
     $sourceForms = [
