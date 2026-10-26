@@ -8,8 +8,8 @@ declare(strict_types=1);
  * The three plugin blueprint creators reach the trait only with their own mapping tables,
  * which never return a linked field together with set attributes or subfields, never fail to
  * build a blueprint, and always define every lookup the trait calls. The probe here supplies
- * those cases: a configurable mapping class built on the real FieldtypeMappingTrait, one whose
- * lookups return the wrong types, and one that defines none of them.
+ * those cases: a configurable mapping class that follows FieldtypeMappingTrait's rules for the
+ * entries it carries, one whose lookups return the wrong types, and one that defines none of them.
  *
  * @command  php vendor/bin/pest tests/Integration/FormBlueprintCreatorTraitTest.php
  */
