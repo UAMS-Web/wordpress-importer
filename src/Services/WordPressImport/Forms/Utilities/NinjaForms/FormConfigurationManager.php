@@ -371,8 +371,9 @@ class FormConfigurationManager
 
             $key = $field['key'] ?? null;
 
-            // A handle filed under the empty key could never be read, because a merge tag
-            // names at least one character, so admitting '' changes no translation.
+            // The mutant admits '' and shuts out its own placeholder string. A merge tag
+            // names at least one character from [A-Za-z0-9_-], so it can read neither, and
+            // the check changes no translation.
             // @pest-mutate-ignore: EmptyStringToNotEmpty
             if (\is_string($key) && $key !== '') {
                 // ---
@@ -385,12 +386,13 @@ class FormConfigurationManager
                 $handles[$key] = $this->ninjaFieldHandle($key);
             }
 
-            // A repeater nests its own fields, and merge tags can name them.
+            // A repeater nests its own fields, and merge tags can name them. Added key by
+            // key rather than with array_merge(), which renumbers the int keys PHP makes
+            // of all-digit field keys such as '10'.
             if (($field['type'] ?? null) === 'repeater' && \is_array($field['fields'] ?? null)) {
-                $handles = \array_merge(
-                    $handles,
-                    $this->fieldHandlesByKey($field['fields'])
-                );
+                foreach ($this->fieldHandlesByKey($field['fields']) as $nestedKey => $nestedHandle) {
+                    $handles[$nestedKey] = $nestedHandle;
+                }
             }
         }
 
@@ -789,9 +791,9 @@ class FormConfigurationManager
 
             $key = $field['key'] ?? null;
 
-            // A reference names at least one character and is compared strictly as a
-            // string, so an empty or non-string key admitted here could never match one.
-            // @pest-mutate-ignore: BooleanAndToBooleanOr, EmptyStringToNotEmpty
+            // A reference is compared strictly as a string, so a key that is not a string
+            // and is admitted here could never match one.
+            // @pest-mutate-ignore: BooleanAndToBooleanOr
             if (\is_string($key) && $key !== '') {
                 $keys[] = $key;
             }

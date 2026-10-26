@@ -160,7 +160,7 @@ it('builds one email configuration per action, with or without a usable field li
 it('resolves merge tags only from real field keys and from repeater children', function (): void {
     $fields = [
         'not a field',
-        // A numeric key is not a Ninja field key, and no tag can name it.
+        // A key that is not a string is skipped.
         ['key' => 5, 'type' => 'textbox'],
         // A field that is not a repeater does not lend its nested fields.
         ['key' => 'notes_1', 'type' => 'textbox', 'fields' => [['key' => 'hidden_1', 'type' => 'textbox']]],
@@ -382,4 +382,32 @@ it('finds no action at all when `actions` is not a list', function (): void {
     expect($form->store())->toBe($default)
         ->and($form->get('confirmation_type'))->toBeNull()
         ->and($form->get('wordpress_payment_import'))->toBeNull();
+});
+
+it('keeps an all-digit field key resolvable when a repeater follows it', function (): void {
+    // PHP stores the key '10' as the int 10, which array_merge() would renumber to 0.
+    $fields = [
+        ['key' => '10', 'type' => 'textbox'],
+        ['key' => 'people_1', 'type' => 'repeater', 'fields' => [['key' => 'guest_1', 'type' => 'textbox']]],
+    ];
+
+    expect(ncmCall('processFieldMergeTags', '{field:10} {field:0} {field:guest_1}', $fields))->toBe('{{ 10 }} {field:0} {{ guest_1 }}');
+});
+
+it('records a field-map reference to any key the form carries', function (): void {
+    // The empty-key check must exclude only ''. This key is the mutation tool's own
+    // placeholder for '', which the field-map pattern can reference because it accepts
+    // spaces and punctuation.
+    $form = ncmForm('ninja_payment_probe_4');
+
+    ncmCall('carryPaymentConfiguration', $form, [
+        'fields' => [['key' => 'PEST Mutator was here!', 'type' => 'textbox']],
+        'actions' => [['type' => 'collectpayment', 'nfelavon_field_map' => [['field_map' => 'note', 'form_field' => '{field:PEST Mutator was here!}']]]],
+    ]);
+
+    $record = $form->get('wordpress_payment_import');
+
+    expect(\is_array($record) ? $record['observed_field_map'] : null)->toBe([
+        ['gateway_field' => 'note', 'source' => '{field:PEST Mutator was here!}', 'unresolved_references' => []],
+    ]);
 });
