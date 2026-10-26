@@ -191,11 +191,7 @@ class FileProcessor
             'file'
         );
 
-        // Return null if no attachment found
-        if ($attachmentData === null || $attachmentData === []) {
-            return null;
-        }
-
+        // Return null if no attachment was found
         $attachment = $attachmentData['attachment'] ?? null;
 
         if (! $attachment instanceof SimpleXMLElement) {
@@ -216,7 +212,10 @@ class FileProcessor
         $title = $attachmentDataExtracted['title'] ?? null;
         $title = \is_string($title) ? $title : null;
 
+        // extractAttachmentData() reads the url with getStringValue() and the fallback is
+        // cast, so the url is always a string; the check narrows the payload's mixed type
         if (! \is_string($fileUrl)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 

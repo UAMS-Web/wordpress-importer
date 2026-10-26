@@ -173,7 +173,11 @@ it('narrows each hop timeout to what is left of the chain budget', function (): 
     //
     // The first hop must burn more than a whole second, or `(int) ceil()` rounds
     // both hops to the same number and the assertion below passes whether the
-    // narrowing happens or not.
+    // narrowing happens or not. It burns 1.51s, so the second hop has just under
+    // 28.5s left: rounded up that is 29, where rounding to nearest would give 28.
+    // The two differ only while the fraction left is under one half, so 1.51s is
+    // as close to that edge as the test can sit, and it tolerates up to 0.49s of
+    // overhead before the second hop is sent.
     $timeouts = [];
 
     Http::globalMiddleware(
@@ -185,7 +189,7 @@ it('narrows each hop timeout to what is left of the chain budget', function (): 
                 $timeouts[] = $options['timeout'] ?? null;
 
                 if ((string) $request->getUri() === 'https://93.184.216.34/a') {
-                    usleep(1_200_000);
+                    usleep(1_510_000);
 
                     return Create::promiseFor(
                         new Psr7Response(302, ['Location' => 'https://93.184.216.34/b'])
@@ -204,9 +208,66 @@ it('narrows each hop timeout to what is left of the chain budget', function (): 
 
     expect($timeouts)->toHaveCount(2);
 
-    // The first hop gets the whole budget; the second gets what the first left
+    // The first hop gets the whole budget; the second gets what the first left,
+    // rounded up to whole seconds
     expect($timeouts[0])->toBe(30);
-    expect($timeouts[1])->toBeLessThan(30);
+    expect($timeouts[1])->toBe(29);
+});
+
+it('passes the HTTP client zero, its own "no timeout", for an unbounded walk', function (): void {
+    $captured = [];
+    captureRequestOptions([], $captured, 'timeout');
+
+    (new GuardedRedirectWalk(timeoutSeconds: 0, wantsBody: false))->follow(WALK_START_URL);
+
+    expect($captured)->toBe([0]);
+});
+
+it('streams the body to the sink only when one is given', function (): void {
+    $captured = [];
+    captureRequestOptions([], $captured, 'sink');
+
+    (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: true, sink: '/tmp/wpimport-97-sink'))->follow(WALK_START_URL);
+    (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: true))->follow(WALK_START_URL);
+
+    expect($captured)->toBe(['/tmp/wpimport-97-sink', null]);
+});
+
+it('refuses nothing and sends nothing for a blank URL', function (): void {
+    Http::fake();
+
+    $cases = [];
+
+    $result = (new GuardedRedirectWalk(
+        timeoutSeconds: 10,
+        wantsBody: false,
+        onRefusal: collectRefusals($cases),
+    ))->follow('');
+
+    expect($result)->toBeNull()
+        ->and($cases)->toBe([]);
+
+    Http::assertNothingSent();
+});
+
+it('does not follow a Location header on a response that is not a redirect', function (): void {
+    // A 201 Created carries a Location naming what it created; it is a final
+    // response, not a hop
+    Http::fake([
+        WALK_START_URL => Http::response('created', 201, ['Location' => WALK_SECOND_URL]),
+        '*' => Http::response('SHOULD NEVER BE REACHED', 200),
+    ]);
+
+    $result = (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: true))->follow(WALK_START_URL);
+
+    if ($result === null) {
+        throw new RuntimeException('The walk returned no terminal hop for a 201.');
+    }
+
+    expect($result['url'])->toBe(WALK_START_URL)
+        ->and($result['response']->status())->toBe(201);
+
+    Http::assertSentCount(1);
 });
 
 it('reports an unparseable Location as a refusal instead of throwing', function (
@@ -454,4 +515,39 @@ it('reports nothing when the caller supplied no reporter', function (): void {
     expect($result)->toBeNull();
 
     Http::assertNothingSent();
+});
+
+it('swallows a transport failure by default', function (): void {
+    // The link-resolution and existence-check callers construct the walk without
+    // naming the policy, and rely on a failure ending the walk rather than throwing
+    Http::fake(function (): void {
+        throw new ConnectionException('cURL error 28: timeout');
+    });
+
+    $cases = [];
+
+    $result = (new GuardedRedirectWalk(
+        timeoutSeconds: 10,
+        wantsBody: false,
+        onRefusal: collectRefusals($cases),
+    ))->follow(WALK_START_URL);
+
+    expect($result)->toBeNull()
+        ->and($cases)->toBe([GuardedFetchRefusal::TransportFailure]);
+});
+
+it('sends the given User-Agent, and does not send it when none is given', function (): void {
+    Http::fake(['*' => Http::response('', 200)]);
+
+    (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: false, userAgent: 'UAMS-Importer/97'))->follow(WALK_START_URL);
+    (new GuardedRedirectWalk(timeoutSeconds: 10, wantsBody: false))->follow(WALK_SECOND_URL);
+
+    Http::assertSent(
+        static fn (Request $request): bool => $request->url() === WALK_START_URL
+            && $request->header('User-Agent') === ['UAMS-Importer/97']
+    );
+    Http::assertSent(
+        static fn (Request $request): bool => $request->url() === WALK_SECOND_URL
+            && $request->header('User-Agent') !== ['UAMS-Importer/97']
+    );
 });
