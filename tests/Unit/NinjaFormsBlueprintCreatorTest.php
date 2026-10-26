@@ -6,15 +6,20 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForm
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FormBlueprintCreator;
 
 /**
- * Ninja-specific readers on the blueprint creator (#10).
+ * Ninja-specific readers on the blueprint creator (#10, extended for #98).
  *
- * The shared FormBlueprintCreatorTrait assembles the blueprint; this class supplies four
- * readers, and each of the four differs from the Gravity Forms equivalent in a way that
- * would fail silently if inherited:
+ * The shared FormBlueprintCreatorTrait assembles the blueprint; this class supplies the
+ * readers that differ from the Gravity Forms equivalents in a way that would fail silently
+ * if inherited:
  *
- * - handles derive from `label`, because `key` carries a creation-timestamp suffix;
+ * - the field name derives from `label`, while the field handle derives from `key`,
+ *   normalized to snake case, with the trait's generated handle as the fallback;
  * - `required` is lowercase, where Gravity Forms uses `isRequired`;
- * - a repeater's children live under `fields`, where Gravity Forms uses `inputs`.
+ * - a repeater's children live under `fields`, where Gravity Forms uses `inputs`;
+ * - choice options are rebuilt from Ninja's `options` list in its own `order`.
+ *
+ * Ninja Forms ships no subfield mapping, so two tests set one on
+ * `FieldtypeMapping::$subfieldMapping` to show the merge, and restore it afterwards.
  *
  * @command  vendor/bin/pest --testsuite=Unit tests/Unit/NinjaFormsBlueprintCreatorTest.php
  */
@@ -147,6 +152,16 @@ it('maps choice options in their export order, keeping the first of any repeated
         'q' => 'Arr order',
         'l' => 'Letters',
     ]);
+});
+
+it('reads a boolean order as the digit it casts to', function (): void {
+    // `true` casts to '1', which passes the digit check and sorts as 1, ahead of 2.
+    $attributes = nfCreator('getMappedFieldAttributes', ['type' => 'listselect', 'label' => 'Pick', 'key' => 'pick_1', 'options' => [
+        ['label' => 'A', 'value' => 'a', 'order' => 2],
+        ['label' => 'B', 'value' => 'b', 'order' => true],
+    ]], 'ninja-forms');
+
+    expect(\is_array($attributes) ? ($attributes['options'] ?? null) : null)->toBe(['b' => 'B', 'a' => 'A']);
 });
 
 it('adds no options for a field with no choice list', function (mixed $options): void {

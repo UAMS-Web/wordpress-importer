@@ -439,6 +439,9 @@ class FormBlueprintCreator
                 $formId
             );
 
+            // The loop below over no fields builds no sets and returns the same empty
+            // array, so this return only saves the walk.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -451,6 +454,9 @@ class FormBlueprintCreator
                 continue;
             }
 
+            // Only the comparison with 'form' reads this, and any default but 'form' skips
+            // nothing, so the empty default is one choice among equivalent ones.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $childFieldType = $childField['type'] ?? '';
 
             // Skip certain field types that shouldn't be in replicator sets
@@ -508,6 +514,9 @@ class FormBlueprintCreator
         $childFormId = $formField['gpnfForm'] ?? null;
 
         if (\is_string($childFormId) && $childFormId !== '') {
+            // The scalar branch below returns the same string, so this return is a
+            // shortcut that changes no result.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $childFormId;
         }
 
