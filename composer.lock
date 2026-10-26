@@ -8831,16 +8831,16 @@
         },
         {
             "name": "uams-web/wordpress-wxr-cleanup",
-            "version": "v1.0.0",
+            "version": "v1.1.0",
             "source": {
                 "type": "git",
                 "url": "git@github.com:UAMS-Web/wordpress-wxr-cleanup.git",
-                "reference": "a7671113268cd84a3991d4ec68d73f92f3bb972e"
+                "reference": "c353ba753372dfc0991f9b20f6a317d6e563d8a9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/UAMS-Web/wordpress-wxr-cleanup/zipball/a7671113268cd84a3991d4ec68d73f92f3bb972e",
-                "reference": "a7671113268cd84a3991d4ec68d73f92f3bb972e",
+                "url": "https://api.github.com/repos/UAMS-Web/wordpress-wxr-cleanup/zipball/c353ba753372dfc0991f9b20f6a317d6e563d8a9",
+                "reference": "c353ba753372dfc0991f9b20f6a317d6e563d8a9",
                 "shasum": ""
             },
             "require": {
@@ -8855,7 +8855,8 @@
                 "pestphp/pest-plugin-drift": "^4.1",
                 "phpstan/extension-installer": "^1.4",
                 "phpstan/phpstan": "^2.0",
-                "phpstan/phpstan-strict-rules": "^2.0"
+                "phpstan/phpstan-strict-rules": "^2.0",
+                "rector/rector": "^2.6"
             },
             "bin": [
                 "bin/wxr-cleanup"
@@ -8874,17 +8875,38 @@
             "scripts": {
                 "test": [
                     "pest"
+                ],
+                "refactor": [
+                    "rector"
+                ],
+                "refactor:sweep": [
+                    "rector --clear-cache --config=rector-sweep.php"
+                ],
+                "test:refactor": [
+                    "rector --dry-run"
+                ],
+                "test:refactor:sweep": [
+                    "rector --dry-run --clear-cache --config=rector-sweep.php"
+                ],
+                "pint": [
+                    "pint"
+                ],
+                "test:pint": [
+                    "pint --test"
+                ],
+                "stan": [
+                    "phpstan analyse"
                 ]
             },
             "license": [
-                "proprietary"
+                "MIT"
             ],
             "description": "Deterministic CLI tool to transform WordPress WXR exports — strips legacy <table> markup for Statamic import.",
             "support": {
-                "source": "https://github.com/UAMS-Web/wordpress-wxr-cleanup/tree/v1.0.0",
+                "source": "https://github.com/UAMS-Web/wordpress-wxr-cleanup/tree/v1.1.0",
                 "issues": "https://github.com/UAMS-Web/wordpress-wxr-cleanup/issues"
             },
-            "time": "2026-10-02T18:04:20+00:00"
+            "time": "2026-10-26T19:27:04+00:00"
         },
         {
             "name": "ueberdosis/tiptap-php",
