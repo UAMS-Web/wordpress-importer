@@ -166,3 +166,28 @@ it('routes each streaming creator through the factory', function (string $creato
     'TablePressEntryCreator',
     'LogoListItemEntryCreator',
 ]);
+
+it('explains the refusal in full, after the caller', function (): void {
+    // The message is what an operator reads when an import stops here, so its whole
+    // text is pinned rather than only the caller prefix.
+    $empty = new class implements ContentSource
+    {
+        /**
+         * Serve nothing.
+         *
+         * @return list<string> Always empty
+         */
+        public function getFilePaths(): array
+        {
+            return [];
+        }
+    };
+
+    expect(fn () => ContentStreamFactory::open($empty, 'ProbeCreator::createEntries'))
+        ->toThrow(
+            EmptyContentSourceException::class,
+            'ProbeCreator::createEntries: the content source served no export parts, so nothing could be '
+            .'streamed. A source that yields no paths would import zero items and report '
+            .'success, which is what this guard exists to prevent.'
+        );
+});
