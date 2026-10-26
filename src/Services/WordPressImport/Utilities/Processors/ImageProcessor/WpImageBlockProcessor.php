@@ -302,7 +302,10 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             $attrs
         );
 
-        // Determine number of nodes to skip based on DOM structure
+        // Determine number of nodes to skip based on DOM structure. A figure found
+        // through a following-sibling query always has a parent, so the nullsafe
+        // operator only satisfies the nullable parentNode type.
+        // @pest-mutate-ignore: RemoveNullSafeOperator
         $skipCount = $figureNode->parentNode?->nodeName === 'div'
             ? 3
             : 2;
