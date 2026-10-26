@@ -167,7 +167,7 @@ it('summarizes unsupported embeds with up to three examples each', function (): 
     );
 });
 
-it('stops the embed examples at three, and adds no remainder line for exactly three', function (): void {
+it('adds no remainder line for exactly three embeds', function (): void {
     $warnings = [];
 
     foreach ([1, 2, 3] as $n) {
@@ -335,3 +335,11 @@ it('shows three of four malformed shortcodes, naming one with no text by its sho
         ."     - ... and 1 more\n"
     );
 });
+
+it('prints an all-digit form title with no ID rather than failing on it', function (Closure $method, string $expected): void {
+    // PHP stores the key '2024' as the int 2024, which the form-key parsing must accept.
+    expect(formWarningText($method, [['field_type' => 'text', 'attribute_name' => 'mask', 'form_title' => '2024']]))->toContain($expected);
+})->with([
+    'unsupported attributes' => [FormWarningFormatter::displayUnsupportedFormAttributeWarnings(...), "             - '2024'\n"],
+    'unmapped fieldtypes' => [FormWarningFormatter::displayUnmappedFieldtypeWarnings(...), "         - '2024'\n"],
+]);

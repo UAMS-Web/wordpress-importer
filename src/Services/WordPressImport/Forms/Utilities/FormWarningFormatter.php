@@ -76,10 +76,10 @@ class FormWarningFormatter
 
             $grouped[$fieldtype][$attributeName] ??= [];
 
-            // Use associative array for deduplication
-            // Only the keys are read, so the stored value changes no output.
-            // @pest-mutate-ignore: TrueToFalse
-            $grouped[$fieldtype][$attributeName][$formKey] = true;
+            // Keyed for deduplication, and the key is stored as the value too: PHP turns
+            // an all-digit key such as '2024' into an int, and preg_match() below takes
+            // only a string under strict types.
+            $grouped[$fieldtype][$attributeName][$formKey] = $formKey;
         }
 
         ksort($grouped);
@@ -94,7 +94,7 @@ class FormWarningFormatter
             foreach ($attributes as $attributeName => $forms) {
                 $output->writeln("     - Attribute: '".$attributeName."'");
                 $output->writeln('         - Form(s):');
-                foreach (\array_keys($forms) as $formKey) {
+                foreach ($forms as $formKey) {
                     // Extract form name and ID from the form key
                     $formName = $formKey;
                     $formId = null;
@@ -284,10 +284,10 @@ class FormWarningFormatter
 
             $grouped[$fieldtype] ??= [];
 
-            // Add this form to the fieldtype group (using associative array for deduplication)
-            // Only the keys are read, so the stored value changes no output.
-            // @pest-mutate-ignore: TrueToFalse
-            $grouped[$fieldtype][$formKey] = true; // Use associative array to deduplicate
+            // Add this form to the fieldtype group, keyed for deduplication. The key is
+            // stored as the value too, because PHP turns an all-digit key into an int and
+            // preg_match() below takes only a string under strict types.
+            $grouped[$fieldtype][$formKey] = $formKey;
         }
 
         // Sort the grouped warnings alphabetically by fieldtype
@@ -306,7 +306,8 @@ class FormWarningFormatter
             $output->writeln('     - Form(s):');
 
             // Sort forms alphabetically for consistent output
-            $sortedForms = \array_keys($forms);
+            // sort() re-indexes the copy, so the form keys become a sorted list.
+            $sortedForms = $forms;
             sort($sortedForms);
 
             // Iterate through each form for this fieldtype
