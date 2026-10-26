@@ -114,12 +114,13 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             'following-sibling::figure | following-sibling::div/figure[1]',
             $node
         );
-        if ($figureNodes === false) {
-            return null;
-        }
+
+        // Select the first <figure> node found; a constant expression against a
+        // node of this document cannot fail, so false reads as no figure
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 
         // Check if no <figure> element is found
-        if ($figureNodes->length === 0) {
+        if (! $figureNode instanceof DOMElement) {
             // Capture the next sibling's HTML for logging, if it exists
             $nextSibling = $node->nextSibling instanceof DOMNode
                 ? $this->normalizeSavedHtml($doc->saveHTML($node->nextSibling))
@@ -144,13 +145,6 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             );
 
             // Return null to indicate processing failure
-            return null;
-        }
-
-        // Select the first <figure> node found
-        $figureNode = $figureNodes->item(0);
-
-        if (! $figureNode instanceof DOMElement) {
             return null;
         }
 
@@ -200,19 +194,16 @@ class WpImageBlockProcessor implements BlockProcessorInterface
 
             // Get the <figure> node to insert the <img> into
             $figureParent = $aNode->parentNode;
-            if ($figureParent === null) {
-                return null;
+
+            // An <a> found inside the <figure> always has a parent
+            if ($figureParent !== null) {
+                // Move the <img> out of the <a> tag and into the <figure>
+                $figureParent->insertBefore($img, $aNode);
+
+                // Remove the now-empty <a> tag
+                $figureParent->removeChild($aNode);
             }
-
-            // Move the <img> out of the <a> tag and into the <figure>
-            $figureParent->insertBefore($img, $aNode);
-
-            // Remove the now-empty <a> tag
-            $figureParent->removeChild($aNode);
         }
-
-        // Extract attachment ID from block attributes, if available
-        $attachmentId = $attributes['id'] ?? null;
 
         // Extract the image source URL from the img element
         $imgSrc = $img->getAttribute('src');
@@ -225,12 +216,6 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             $imgSrc,
             $baseBlogUrl
         );
-
-        // Clear attachment ID if image is not on the same site
-        if (! $isSameSite) {
-            // Disregard asset ID for different-site images
-            $attachmentId = null;
-        }
 
         // Extract the <figure> element's HTML for processing
         $html = $this->normalizeSavedHtml($doc->saveHTML($figureNode));
