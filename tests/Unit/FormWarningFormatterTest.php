@@ -20,16 +20,19 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormWarni
 /**
  * Run one formatter method and return what it printed.
  *
+ * BufferedOutput ends each line with PHP_EOL, which is "\r\n" on Windows, so the text is
+ * normalized to "\n" and the expectations below hold on every platform (#114).
+ *
  * @param  Closure(BufferedOutput, array<int|string, mixed>): void  $method  The formatter method
  * @param  array<int|string, mixed>  $warnings  The warnings to format
- * @return string The printed text, without console markup
+ * @return string The printed text, without console markup, with "\n" line endings
  */
 function formWarningText(Closure $method, array $warnings): string
 {
     $output = new BufferedOutput;
     $method($output, $warnings);
 
-    return $output->fetch();
+    return \str_replace(\PHP_EOL, "\n", $output->fetch());
 }
 
 it('groups unsupported attributes by fieldtype, attribute and form', function (): void {
