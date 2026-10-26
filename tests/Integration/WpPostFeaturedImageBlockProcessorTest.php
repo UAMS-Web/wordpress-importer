@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -26,6 +30,36 @@ afterEach(function (): void {
 });
 
 /**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function featuredImageExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
+
+/**
  * Builds a WXR attachment item carrying a post id and an attachment URL.
  */
 function featuredImageAttachment(string $postId, string $url): SimpleXMLElement
@@ -43,8 +77,9 @@ function featuredImageAttachment(string $postId, string $url): SimpleXMLElement
  */
 function featuredImageImporter(?string $baseBlogUrl = 'https://example.org'): AssetImporter&MockInterface
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getBaseBlogUrl')->andReturn($baseBlogUrl);
+    featuredImageExpects($importer, 'getBaseBlogUrl')->andReturn($baseBlogUrl);
 
     return $importer;
 }
@@ -57,10 +92,11 @@ function featuredImageImporter(?string $baseBlogUrl = 'https://example.org'): As
  */
 function featuredImageProcessorMock(?array $set, ArrayObject $calls): ImageProcessor&MockInterface
 {
+    /** @var ImageProcessor&MockInterface $processor */
     $processor = Mockery::mock(ImageProcessor::class);
-    $processor->shouldReceive('processImage')->andReturnUsing(
+    featuredImageExpects($processor, 'processImage')->andReturnUsing(
         function (mixed ...$args) use ($set, $calls): ?array {
-            $calls[] = $args;
+            $calls->append(array_values($args));
 
             return $set;
         }
@@ -80,7 +116,7 @@ function featuredImageWarnings(): ArrayObject
 
     Log::shouldReceive('warning')->andReturnUsing(
         function (string $message, array $context = []) use ($warnings): void {
-            $warnings[] = ['message' => $message, 'context' => $context];
+            $warnings->append(['message' => $message, 'context' => $context]);
         }
     );
 
@@ -92,7 +128,7 @@ function featuredImageWarnings(): ArrayObject
  *
  * @param  array<int|string, mixed>  $attributes
  * @param  array<int|string, mixed>  $attachments
- * @return array<string, mixed>|null
+ * @return array<int|string, mixed>|null
  */
 function featuredImageProcess(
     ImageProcessor $imageProcessor,
@@ -144,8 +180,8 @@ describe('process without a thumbnail id', function (): void {
         expect($result)->toBeNull()
             ->and($calls)->toHaveCount(0)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpPostFeaturedImageBlockProcessor::process: No _thumbnail_id found in entry data')
-            ->and($warnings[0]['context'])->toBe(['site' => 'default', 'pageSlug' => 'about']);
+            ->and(data_get($warnings, '0.message'))->toBe('WpPostFeaturedImageBlockProcessor::process: No _thumbnail_id found in entry data')
+            ->and(data_get($warnings, '0.context'))->toBe(['site' => 'default', 'pageSlug' => 'about']);
     })->with([
         'no entry data' => [null],
         'no thumbnail key' => [['title' => 'T']],
@@ -159,7 +195,7 @@ describe('process without a thumbnail id', function (): void {
 
         featuredImageProcess(featuredImageProcessorMock(null, new ArrayObject), pageSlug: null);
 
-        expect($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 });
 
@@ -174,8 +210,8 @@ describe('process without featured image data', function (): void {
         expect($result)->toBeNull()
             ->and($calls)->toHaveCount(0)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpPostFeaturedImageBlockProcessor::process: No featured image data found for thumbnail ID')
-            ->and($warnings[0]['context'])->toBe(['site' => 'default', 'pageSlug' => 'about', 'thumbnailId' => '5']);
+            ->and(data_get($warnings, '0.message'))->toBe('WpPostFeaturedImageBlockProcessor::process: No featured image data found for thumbnail ID')
+            ->and(data_get($warnings, '0.context'))->toBe(['site' => 'default', 'pageSlug' => 'about', 'thumbnailId' => '5']);
     })->with([
         'no attachments' => [[]],
         'no matching attachment' => [[featuredImageAttachment('6', 'https://example.org/a.jpg')]],
@@ -188,7 +224,7 @@ describe('process without featured image data', function (): void {
 
         featuredImageProcess(featuredImageProcessorMock(null, new ArrayObject), pageSlug: null);
 
-        expect($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 });
 
@@ -210,13 +246,13 @@ describe('process with a featured image', function (): void {
         );
 
         expect($calls)->toHaveCount(1)
-            ->and($calls[0][0])->toBe('<figure class="wp-block-post-featured-image aligncenter"><img src="https://example.org/a.jpg?w=1&amp;h=2" /></figure>')
-            ->and($calls[0][1])->toBe('default')
-            ->and($calls[0][2])->toBe($importer)
-            ->and($calls[0][3])->toBeInstanceOf(BufferedOutput::class)
-            ->and($calls[0][4])->toBe($attachments)
-            ->and($calls[0][5])->toBe('about')
-            ->and($calls[0][6])->toBe(['sizeSlug' => 'large', 'id' => '5']);
+            ->and(data_get($calls, '0.0'))->toBe('<figure class="wp-block-post-featured-image aligncenter"><img src="https://example.org/a.jpg?w=1&amp;h=2" /></figure>')
+            ->and(data_get($calls, '0.1'))->toBe('default')
+            ->and(data_get($calls, '0.2'))->toBe($importer)
+            ->and(data_get($calls, '0.3'))->toBeInstanceOf(BufferedOutput::class)
+            ->and(data_get($calls, '0.4'))->toBe($attachments)
+            ->and(data_get($calls, '0.5'))->toBe('about')
+            ->and(data_get($calls, '0.6'))->toBe(['sizeSlug' => 'large', 'id' => '5']);
     });
 
     it('accepts a zero thumbnail id', function (): void {
@@ -228,7 +264,7 @@ describe('process with a featured image', function (): void {
             [featuredImageAttachment('0', 'https://example.org/a.jpg')]
         );
 
-        expect($calls[0][6])->toBe(['id' => '0']);
+        expect(data_get($calls, '0.6'))->toBe(['id' => '0']);
     });
 
     it('maps the block alignment onto the figure class', function (mixed $align, string $class): void {
@@ -241,7 +277,7 @@ describe('process with a featured image', function (): void {
             ['align' => $align]
         );
 
-        expect($calls[0][0])->toBe('<figure class="wp-block-post-featured-image '.$class.'"><img src="https://example.org/a.jpg" /></figure>');
+        expect(data_get($calls, '0.0'))->toBe('<figure class="wp-block-post-featured-image '.$class.'"><img src="https://example.org/a.jpg" /></figure>');
     })->with([
         'left' => ['left', 'alignleft'],
         'right' => ['right', 'alignright'],
@@ -259,7 +295,7 @@ describe('process with a featured image', function (): void {
             ['align' => 'left', 'id' => 9]
         );
 
-        expect($calls[0][6])->toBe(['align' => 'left', 'id' => 9]);
+        expect(data_get($calls, '0.6'))->toBe(['align' => 'left', 'id' => 9]);
     });
 
     it('treats every image as same-site when there is no base URL', function (): void {
@@ -272,7 +308,7 @@ describe('process with a featured image', function (): void {
             importer: featuredImageImporter(null)
         );
 
-        expect($calls[0][6])->toBe(['id' => '5']);
+        expect(data_get($calls, '0.6'))->toBe(['id' => '5']);
     });
 });
 
@@ -288,8 +324,8 @@ describe('process when the image processor fails', function (): void {
 
         expect($result)->toBeNull()
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpPostFeaturedImageBlockProcessor::process: ImageProcessor failed to generate image set')
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.message'))->toBe('WpPostFeaturedImageBlockProcessor::process: ImageProcessor failed to generate image set')
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'default',
                 'pageSlug' => 'about',
                 'featured_image_data' => ['url' => 'https://example.org/a.jpg'],
@@ -309,7 +345,7 @@ describe('process when the image processor fails', function (): void {
             pageSlug: null
         );
 
-        expect($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 
     it('appends the entry URL when a WordPress page link is set', function (): void {
@@ -318,10 +354,10 @@ describe('process when the image processor fails', function (): void {
 
         featuredImageProcess(featuredImageProcessorMock(null, new ArrayObject));
 
-        expect($warnings[0]['message'])->toBe(
+        expect(data_get($warnings, '0.message'))->toBe(
             'WpPostFeaturedImageBlockProcessor::process: No _thumbnail_id found in entry data (from entry: https://example.org/about/)'
         )
-            ->and($warnings[0]['context']['entry_url'])->toBe('https://example.org/about/');
+            ->and(data_get($warnings, '0.context.entry_url'))->toBe('https://example.org/about/');
     });
 });
 
@@ -349,7 +385,7 @@ describe('process result', function (): void {
             [featuredImageAttachment('5', 'https://example.org/a.jpg')]
         );
 
-        expect($result['html'])->toBe(
+        expect(data_get($result, 'html'))->toBe(
             '<div data-set-type="image"'.SetMarkupNonce::attribute()
             .' data-set-attr-image="images/a.jpg"'
             .' data-set-attr-alt="Tom &amp; &quot;Jerry&quot; &lt;3"'
@@ -370,7 +406,7 @@ describe('process result', function (): void {
             [featuredImageAttachment('5', 'https://example.org/a.jpg')]
         );
 
-        expect($result['html'])->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().'></div>');
+        expect(data_get($result, 'html'))->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().'></div>');
     })->with([
         'no attrs' => [['type' => 'set']],
         'attrs not an array' => [['type' => 'set', 'attrs' => 'x']],
@@ -391,7 +427,7 @@ describe('process result', function (): void {
         );
 
         expect($result)->toHaveKeys(['html', 'processedNode', 'skipCount'])
-            ->and($result['processedNode'])->toBe($node)
-            ->and($result['skipCount'])->toBe(0);
+            ->and(data_get($result, 'processedNode'))->toBe($node)
+            ->and(data_get($result, 'skipCount'))->toBe(0);
     });
 });

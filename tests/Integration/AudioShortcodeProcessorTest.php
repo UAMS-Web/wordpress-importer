@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Statamic\Assets\Asset as StatamicAsset;
 use Statamic\Facades\Asset;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -43,6 +48,36 @@ afterEach(function (): void {
     ProcessingContext::clearAudioAssetExcerpt();
     ProcessingContext::clearAudioAssetTranscript();
 });
+
+/**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function audioShortcodeExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
 
 /**
  * The empty audio set `parse()` returns when no file is produced.
@@ -111,16 +146,17 @@ function audioShortcodeLogs(): ArrayObject
 function audioShortcodeAsset(string $reference): ArrayObject
 {
     $written = new ArrayObject;
+    /** @var StatamicAsset&MockInterface $asset */
     $asset = Mockery::mock(StatamicAsset::class);
-    $asset->shouldReceive('data')->withNoArgs()->andReturn(collect(['alt' => 'kept']));
-    $asset->shouldReceive('data')->with(Mockery::type('array'))->andReturnUsing(
+    audioShortcodeExpects($asset, 'data')->withNoArgs()->andReturn(collect(['alt' => 'kept']));
+    audioShortcodeExpects($asset, 'data')->with(Mockery::type('array'))->andReturnUsing(
         function (array $data) use ($written, $asset): StatamicAsset {
             $written->exchangeArray($data);
 
             return $asset;
         }
     );
-    $asset->shouldReceive('save')->once()->andReturnTrue();
+    audioShortcodeExpects($asset, 'save')->once()->andReturnTrue();
 
     Asset::shouldReceive('find')->once()->with($reference)->andReturn($asset);
 
@@ -128,6 +164,7 @@ function audioShortcodeAsset(string $reference): ArrayObject
 }
 
 it('returns the empty audio set without importing when the mp3 attribute is missing or unusable', function (array $attributes): void {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
     $importer->shouldNotReceive('getUploadFiles');
     $importer->shouldNotReceive('importFile');
@@ -142,8 +179,9 @@ it('returns the empty audio set without importing when the mp3 attribute is miss
 ]);
 
 it('rewrites a legacy URL and keeps it when file uploads are disabled', function (string $url, string $expected): void {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnFalse();
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnFalse();
     $importer->shouldNotReceive('importFile');
     $output = new BufferedOutput;
 
@@ -175,10 +213,11 @@ it('rewrites a legacy URL and keeps it when file uploads are disabled', function
 it('imports a non-series file into the audio container with the audio defaults', function (): void {
     $output = new BufferedOutput;
     $calls = new ArrayObject;
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
     $importer->shouldNotReceive('getBaseBlogUrl');
-    $importer->shouldReceive('importFile')->once()->andReturnUsing(
+    audioShortcodeExpects($importer, 'importFile')->once()->andReturnUsing(
         function (mixed ...$args) use ($calls): string {
             $calls->exchangeArray($args);
 
@@ -209,9 +248,10 @@ it('writes the shortcode title, series, excerpt and transcript to the imported a
     ProcessingContext::setAudioAssetSeries('season-1');
     ProcessingContext::setAudioAssetExcerpt([['type' => 'paragraph']]);
     ProcessingContext::setAudioAssetTranscript([['type' => 'text']]);
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
-    $importer->shouldReceive('importFile')->once()->andReturn('episode.mp3');
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'importFile')->once()->andReturn('episode.mp3');
     $written = audioShortcodeAsset('audio::episode.mp3');
 
     (new AudioShortcodeProcessor)->parse(['mp3' => 'https://example.com/a.mp3'], 'default', $importer, new BufferedOutput);
@@ -224,9 +264,10 @@ it('writes the shortcode title, series, excerpt and transcript to the imported a
 
 it('logs an error and returns the empty set when the import fails', function (?string $imported): void {
     $logs = audioShortcodeLogs();
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
-    $importer->shouldReceive('importFile')->once()->andReturn($imported);
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'importFile')->once()->andReturn($imported);
     Asset::shouldReceive('find')->never();
 
     $result = (new AudioShortcodeProcessor)->parse(['mp3' => 'https://example.com/a.mp3'], 'site-a', $importer, new BufferedOutput);
@@ -249,10 +290,11 @@ it('imports through the series manager into the series container when the post c
     ProcessingContext::setWordPressPostTitle('Title');
     ProcessingContext::setSegmentTitle('Part A');
     $url = 'https://example.com/a.mp3';
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
-    $importer->shouldReceive('getBaseBlogUrl')->andReturnNull();
-    $importer->shouldReceive('getFileCache')->andReturn([$url.'|Part A|42|Title' => 'cached.mp3']);
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'getBaseBlogUrl')->andReturnNull();
+    audioShortcodeExpects($importer, 'getFileCache')->andReturn([$url.'|Part A|42|Title' => 'cached.mp3']);
     $importer->shouldNotReceive('importFile');
     $written = audioShortcodeAsset('podcasts::cached.mp3');
 
@@ -273,10 +315,11 @@ it('falls back to a plain import into the series container when the post context
     if ($title !== null) {
         ProcessingContext::setWordPressPostTitle($title);
     }
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
     $importer->shouldNotReceive('getBaseBlogUrl');
-    $importer->shouldReceive('importFile')->once()->andReturn('plain.mp3');
+    audioShortcodeExpects($importer, 'importFile')->once()->andReturn('plain.mp3');
     audioShortcodeAsset('podcasts::plain.mp3');
 
     expect((new AudioShortcodeProcessor)->parse(['mp3' => 'https://example.com/a.mp3'], 'default', $importer, new BufferedOutput))
@@ -294,10 +337,11 @@ it('uses the plain import when no series is configured, even with a complete pos
     ProcessingContext::setWordPressPostDate('2024-01-02');
     ProcessingContext::setWordPressPostId('42');
     ProcessingContext::setWordPressPostTitle('Title');
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
+    audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
     $importer->shouldNotReceive('getBaseBlogUrl');
-    $importer->shouldReceive('importFile')->once()->andReturn('plain.mp3');
+    audioShortcodeExpects($importer, 'importFile')->once()->andReturn('plain.mp3');
     audioShortcodeAsset('audio::plain.mp3');
 
     expect((new AudioShortcodeProcessor)->parse(['mp3' => 'https://example.com/a.mp3'], 'default', $importer, new BufferedOutput))

@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
@@ -36,6 +41,36 @@ beforeEach(function (): void {
 afterEach(function (): void {
     ProcessingContext::clearWordPressPageLink();
 });
+
+/**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function postAudioExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
 
 /**
  * An asset importer for TextProcessor, which reads only the blog URL.
@@ -80,8 +115,9 @@ function postAudioProcessor(
  */
 function postAudioRecordingProcessor(ArrayObject $calls): AudioShortcodeProcessor
 {
+    /** @var AudioShortcodeProcessor&MockInterface $audio */
     $audio = Mockery::mock(AudioShortcodeProcessor::class);
-    $audio->shouldReceive('parse')->andReturnUsing(
+    postAudioExpects($audio, 'parse')->andReturnUsing(
         function (array $attributes, string $site, AssetImporter $importer, BufferedOutput $output, array $terms, ?string $pageSlug) use ($calls): array {
             $calls->append([
                 'attributes' => $attributes,
@@ -116,8 +152,9 @@ function postAudioRecordingProcessor(ArrayObject $calls): AudioShortcodeProcesso
  */
 function postAudioAccordion(ArrayObject $segments): AccordionShortcodeProcessor
 {
+    /** @var AccordionShortcodeProcessor&MockInterface $accordion */
     $accordion = Mockery::mock(AccordionShortcodeProcessor::class);
-    $accordion->shouldReceive('parseFromSegment')->andReturnUsing(
+    postAudioExpects($accordion, 'parseFromSegment')->andReturnUsing(
         function (string $segment) use ($segments): array {
             $segments->append($segment);
 
@@ -147,7 +184,7 @@ function postAudioParagraph(string $text): array
  * The segment rows without their generated ids, after checking each has one.
  *
  * @param  mixed  $segments  The `segments` value
- * @return list<array<string, mixed>> The rows without `id`
+ * @return list<array<array-key, mixed>> The rows without `id`
  */
 function postAudioRows(mixed $segments): array
 {
@@ -156,6 +193,9 @@ function postAudioRows(mixed $segments): array
     $rows = [];
 
     foreach ((array) $segments as $segment) {
+        expect($segment)->toBeArray();
+        $segment = is_array($segment) ? $segment : [];
+
         expect($segment['id'] ?? null)->toBeString()->not->toBe('')
             ->and(array_key_first($segment))->toBe('id');
 
@@ -315,8 +355,9 @@ it('drops a segment with no title, and warns', function (): void {
         $warnings[] = [$message, $context];
     });
 
+    /** @var AudioShortcodeProcessor&MockInterface $audio */
     $audio = Mockery::mock(AudioShortcodeProcessor::class);
-    $audio->shouldReceive('parse')->once()->andReturn(['file' => 'audio/2.mp3']);
+    postAudioExpects($audio, 'parse')->once()->andReturn(['file' => 'audio/2.mp3']);
 
     $result = postAudioRun(
         postAudioProcessor($audio, postAudioAccordion(new ArrayObject)),
@@ -347,6 +388,7 @@ it('names the page slug as none in the warning when there is no slug', function 
 });
 
 it('treats content with neither an h3 nor an audio shortcode as all intro', function (string $content, array $intro): void {
+    /** @var AudioShortcodeProcessor&MockInterface $audio */
     $audio = Mockery::mock(AudioShortcodeProcessor::class);
     $audio->shouldNotReceive('parse');
 
@@ -416,16 +458,17 @@ it('titles a single segment with nothing when the post has no title', function (
     postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)), '[audio mp3="https://example.test/s.mp3"][/audio]', $postTitle);
 
     expect($calls[0]['asset_title'] ?? 'missing')->toBe('')
-        ->and(array_key_exists('post_title', $calls[0]))->toBeTrue()
-        ->and($calls[0]['post_title'])->toBe($postTitle);
+        ->and($calls[0] ?? null)->toHaveKey('post_title')
+        ->and(data_get($calls, '0.post_title'))->toBe($postTitle);
 })->with([
     'null' => [null],
     'empty' => [''],
 ]);
 
 it('imports only the first usable audio shortcode in a segment', function (): void {
+    /** @var ShortcodeProcessor&MockInterface $shortcodes */
     $shortcodes = Mockery::mock(ShortcodeProcessor::class);
-    $shortcodes->shouldReceive('extract')->andReturn([
+    postAudioExpects($shortcodes, 'extract')->andReturn([
         'not a shortcode',
         ['name' => 'video', 'attributes' => ['mp3' => 'https://example.test/video.mp3']],
         ['attributes' => ['mp3' => 'https://example.test/nameless.mp3']],
@@ -448,8 +491,9 @@ it('imports only the first usable audio shortcode in a segment', function (): vo
 });
 
 it('leaves the file empty when the segment has no audio shortcode or the import gives no path', function (string $content, mixed $file): void {
+    /** @var AudioShortcodeProcessor&MockInterface $audio */
     $audio = Mockery::mock(AudioShortcodeProcessor::class);
-    $audio->shouldReceive('parse')->andReturn(['file' => $file]);
+    postAudioExpects($audio, 'parse')->andReturn(['file' => $file]);
 
     $result = postAudioRun(postAudioProcessor($audio, postAudioAccordion(new ArrayObject)), $content);
 
@@ -461,8 +505,9 @@ it('leaves the file empty when the segment has no audio shortcode or the import 
 ]);
 
 it('takes the first Transcript section with list content as the transcript', function (array $sections, ?array $transcript): void {
+    /** @var AccordionShortcodeProcessor&MockInterface $accordion */
     $accordion = Mockery::mock(AccordionShortcodeProcessor::class);
-    $accordion->shouldReceive('parseFromSegment')->andReturn($sections);
+    postAudioExpects($accordion, 'parseFromSegment')->andReturn($sections);
 
     /** @var ArrayObject<int, array<string, mixed>> $calls */
     $calls = new ArrayObject;
@@ -470,7 +515,7 @@ it('takes the first Transcript section with list content as the transcript', fun
     postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), $accordion), '<h3>One</h3>[audio mp3="x"][/audio][accordion][/accordion]');
 
     expect($calls[0] ?? null)->toHaveKey('asset_transcript')
-        ->and($calls[0]['asset_transcript'])->toBe($transcript);
+        ->and(data_get($calls, '0.asset_transcript'))->toBe($transcript);
 })->with([
     'sections that are not arrays, then a transcript' => [['type' => 'accordion', 'x', ['title' => 'Transcript', 'content' => [postAudioParagraph('T')]]], [postAudioParagraph('T')]],
     'another section first' => [[['title' => 'Notes', 'content' => [postAudioParagraph('N')]], ['title' => 'Transcript', 'content' => [postAudioParagraph('T')]]], [postAudioParagraph('T')]],
@@ -514,13 +559,14 @@ it('gives a segment no excerpt when nothing sits between the download link and t
     postAudioRun(postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)), $content);
 
     expect($calls[0] ?? null)->toHaveKey('asset_excerpt')
-        ->and($calls[0]['asset_excerpt'])->toBeNull();
+        ->and(data_get($calls, '0.asset_excerpt', 'missing'))->toBeNull();
 })->with([
     'whitespace only' => ['<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> <img src="i.jpg"> [accordion][/accordion]'],
     'no download link' => ['<h3>One</h3>[audio mp3="x"][/audio] Some text [accordion][/accordion]'],
 ]);
 
 it('returns nothing when the only audio shortcode sits inside an image tag the second image pass removes', function (): void {
+    /** @var AudioShortcodeProcessor&MockInterface $audio */
     $audio = Mockery::mock(AudioShortcodeProcessor::class);
     $audio->shouldNotReceive('parse');
 

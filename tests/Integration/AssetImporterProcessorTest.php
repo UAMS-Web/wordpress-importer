@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -36,13 +40,44 @@ function assetImporterAttachment(string $postId, string $url): SimpleXMLElement
 }
 
 /**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function assetImporterExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
+
+/**
  * Builds an AssetImporter mock with uploads enabled and the given base URL.
  */
 function assetImporterMock(?string $baseBlogUrl = 'https://example.org'): AssetImporter&MockInterface
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadImages')->andReturn(true);
-    $importer->shouldReceive('getBaseBlogUrl')->andReturn($baseBlogUrl);
+    assetImporterExpects($importer, 'getUploadImages')->andReturn(true);
+    assetImporterExpects($importer, 'getBaseBlogUrl')->andReturn($baseBlogUrl);
 
     return $importer;
 }
@@ -58,7 +93,7 @@ function assetImporterWarnings(): ArrayObject
 
     Log::shouldReceive('warning')->andReturnUsing(
         function (string $message, array $context = []) use ($warnings): void {
-            $warnings[] = ['message' => $message, 'context' => $context];
+            $warnings->append(['message' => $message, 'context' => $context]);
         }
     );
 
@@ -68,6 +103,7 @@ function assetImporterWarnings(): ArrayObject
 describe('a missing src', function (): void {
     it('warns and returns the context unchanged', function (array $context): void {
         $warnings = assetImporterWarnings();
+        /** @var AssetImporter&MockInterface $importer */
         $importer = Mockery::mock(AssetImporter::class);
         $importer->shouldNotReceive('getUploadImages');
 
@@ -82,8 +118,8 @@ describe('a missing src', function (): void {
 
         expect($result)->toBe($context)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('AssetImporterProcessor::process: Missing src in context')
-            ->and($warnings[0]['context'])->toBe(['page_slug' => 'about']);
+            ->and(data_get($warnings, '0.message'))->toBe('AssetImporterProcessor::process: Missing src in context')
+            ->and(data_get($warnings, '0.context'))->toBe(['page_slug' => 'about']);
     })->with([
         'absent' => [['alt' => 'x']],
         'not a string' => [['src' => 42]],
@@ -92,22 +128,25 @@ describe('a missing src', function (): void {
 
     it('logs a null page slug when none is given', function (): void {
         $warnings = assetImporterWarnings();
+        /** @var AssetImporter&MockInterface $importer */
+        $importer = Mockery::mock(AssetImporter::class);
 
         (new AssetImporterProcessor)->process(
             [],
             'default',
-            Mockery::mock(AssetImporter::class),
+            $importer,
             new BufferedOutput
         );
 
-        expect($warnings[0]['context'])->toBe(['page_slug' => null]);
+        expect(data_get($warnings, '0.context'))->toBe(['page_slug' => null]);
     });
 });
 
 describe('uploads disabled', function (): void {
     it('uses the original URL and keeps the block attachment id', function (mixed $blockAttributes, mixed $expectedId): void {
+        /** @var AssetImporter&MockInterface $importer */
         $importer = Mockery::mock(AssetImporter::class);
-        $importer->shouldReceive('getUploadImages')->andReturn(false);
+        assetImporterExpects($importer, 'getUploadImages')->andReturn(false);
         $importer->shouldNotReceive('importImage');
         $importer->shouldNotReceive('importFile');
         $output = new BufferedOutput;
@@ -137,7 +176,7 @@ describe('import by attachment id', function (): void {
         $attachments = [assetImporterAttachment('900', 'https://example.org/other.png')];
         $output = new BufferedOutput;
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')
+        assetImporterExpects($importer, 'importImage')
             ->once()
             ->with('562', 'default', $attachments, $output, SameSitePolicy::ALWAYS_IMPORT, null, 'images', true)
             ->andReturn('images/a.jpg');
@@ -166,7 +205,7 @@ describe('import by attachment id', function (): void {
             assetImporterAttachment('777', 'https://example.org/a.jpg'),
         ];
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')
+        assetImporterExpects($importer, 'importImage')
             ->once()
             ->withSomeOfArgs('777')
             ->andReturn('images/a.jpg');
@@ -186,7 +225,7 @@ describe('import by attachment id', function (): void {
     it('resolves the attachment by URL when the block carries no id', function (): void {
         $attachments = [assetImporterAttachment('777', 'https://example.org/a.jpg')];
         $importer = assetImporterMock(null);
-        $importer->shouldReceive('importImage')->once()->withSomeOfArgs('777')->andReturn('images/a.jpg');
+        assetImporterExpects($importer, 'importImage')->once()->withSomeOfArgs('777')->andReturn('images/a.jpg');
 
         $result = (new AssetImporterProcessor)->process(
             ['src' => 'https://example.org/a.jpg'],
@@ -202,7 +241,7 @@ describe('import by attachment id', function (): void {
     it('skips the id import for an empty or non-scalar id', function (mixed $id): void {
         $importer = assetImporterMock();
         $importer->shouldNotReceive('importImage');
-        $importer->shouldReceive('importFile')->once()->andReturn('images/a.jpg');
+        assetImporterExpects($importer, 'importFile')->once()->andReturn('images/a.jpg');
 
         $result = (new AssetImporterProcessor)->process(
             ['src' => 'https://example.org/a.jpg', 'blockAttributes' => ['id' => $id]],
@@ -221,7 +260,7 @@ describe('import by attachment id', function (): void {
 
     it('imports a zero id, which is scalar and non-empty as a string', function (): void {
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')->once()->withSomeOfArgs('0')->andReturn('images/a.jpg');
+        assetImporterExpects($importer, 'importImage')->once()->withSomeOfArgs('0')->andReturn('images/a.jpg');
 
         $result = (new AssetImporterProcessor)->process(
             ['src' => 'https://example.org/a.jpg', 'blockAttributes' => ['id' => 0]],
@@ -240,7 +279,7 @@ describe('a cross-site src', function (): void {
         $output = new BufferedOutput;
         $importer = assetImporterMock('https://example.org');
         $importer->shouldNotReceive('importImage');
-        $importer->shouldReceive('importFile')
+        assetImporterExpects($importer, 'importFile')
             ->once()
             ->with('https://other.org/a.jpg', 'default', $output, 'images', SameSitePolicy::ALWAYS_IMPORT)
             ->andReturn('images/a.jpg');
@@ -271,8 +310,8 @@ describe('the basename fallback', function (): void {
             assetImporterAttachment('400', 'https://example.org/uploads/photo-300.jpg'),
         ];
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')->once()->ordered()->withSomeOfArgs('562')->andReturn(null);
-        $importer->shouldReceive('importImage')
+        assetImporterExpects($importer, 'importImage')->once()->ordered()->withSomeOfArgs('562')->andReturn(null);
+        assetImporterExpects($importer, 'importImage')
             ->once()
             ->ordered()
             ->with('300', 'default', $attachments, Mockery::any(), SameSitePolicy::ALWAYS_IMPORT, null, 'images', true)
@@ -296,8 +335,8 @@ describe('the basename fallback', function (): void {
         $attachments = [assetImporterAttachment('300', 'https://example.org/uploads/photo.jpg')];
         $output = new BufferedOutput;
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')->once()->withSomeOfArgs('300')->andReturn($failure === 'null' ? null : '');
-        $importer->shouldReceive('importFile')
+        assetImporterExpects($importer, 'importImage')->once()->withSomeOfArgs('300')->andReturn($failure === 'null' ? null : '');
+        assetImporterExpects($importer, 'importFile')
             ->once()
             ->with('https://example.org/uploads/photo.jpg', 'default', $output, 'images', SameSitePolicy::ALWAYS_IMPORT)
             ->andReturn('images/photo.jpg');
@@ -319,8 +358,8 @@ describe('the basename fallback', function (): void {
 
     it('falls back to the id import result being empty rather than null', function (): void {
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')->once()->withSomeOfArgs('562')->andReturn('');
-        $importer->shouldReceive('importFile')->once()->andReturn('images/a.jpg');
+        assetImporterExpects($importer, 'importImage')->once()->withSomeOfArgs('562')->andReturn('');
+        assetImporterExpects($importer, 'importFile')->once()->andReturn('images/a.jpg');
 
         $result = (new AssetImporterProcessor)->process(
             ['src' => 'https://example.org/a.jpg', 'blockAttributes' => ['id' => 562]],
@@ -339,8 +378,8 @@ describe('a failed fallback', function (): void {
         $warnings = assetImporterWarnings();
         $attachments = [assetImporterAttachment('300', 'https://example.org/uploads/photo.jpg')];
         $importer = assetImporterMock();
-        $importer->shouldReceive('importImage')->andReturn(null);
-        $importer->shouldReceive('importFile')->once()->andReturn(null);
+        assetImporterExpects($importer, 'importImage')->andReturn(null);
+        assetImporterExpects($importer, 'importFile')->once()->andReturn(null);
 
         $context = ['src' => 'https://example.org/cdn/photo-300x200.jpg', 'blockAttributes' => ['id' => 562]];
 
@@ -348,8 +387,8 @@ describe('a failed fallback', function (): void {
 
         expect($result)->toBe($context)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('AssetImporterProcessor::process: Failed to import image using fallback URL (both with and without size suffix)')
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.message'))->toBe('AssetImporterProcessor::process: Failed to import image using fallback URL (both with and without size suffix)')
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'default',
                 'pageSlug' => 'about',
                 'src' => 'https://example.org/cdn/photo-300x200.jpg',
@@ -363,7 +402,7 @@ describe('a failed fallback', function (): void {
         $warnings = assetImporterWarnings();
         $importer = assetImporterMock('https://example.org');
         $importer->shouldNotReceive('importImage');
-        $importer->shouldReceive('importFile')->once()->andReturn($failure === 'null' ? null : '');
+        assetImporterExpects($importer, 'importFile')->once()->andReturn($failure === 'null' ? null : '');
 
         $context = ['src' => 'https://other.org/a.jpg'];
 
@@ -374,7 +413,7 @@ describe('a failed fallback', function (): void {
         $result = (new AssetImporterProcessor)->process($context, 'blog', $importer, new BufferedOutput);
 
         expect($result)->toBe($context)
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'blog',
                 'pageSlug' => 'none',
                 'src' => 'https://other.org/a.jpg',
@@ -388,13 +427,13 @@ describe('a failed fallback', function (): void {
         $warnings = assetImporterWarnings();
         ProcessingContext::setWordPressPageLink('https://example.org/about/');
         $importer = assetImporterMock('https://example.org');
-        $importer->shouldReceive('importFile')->andReturn(null);
+        assetImporterExpects($importer, 'importFile')->andReturn(null);
 
         (new AssetImporterProcessor)->process(['src' => 'https://other.org/a.jpg'], 'default', $importer, new BufferedOutput);
 
-        expect($warnings[0]['message'])->toBe(
+        expect(data_get($warnings, '0.message'))->toBe(
             'AssetImporterProcessor::process: Failed to import image using fallback URL (both with and without size suffix) (from entry: https://example.org/about/)'
         )
-            ->and($warnings[0]['context']['entry_url'])->toBe('https://example.org/about/');
+            ->and(data_get($warnings, '0.context.entry_url'))->toBe('https://example.org/about/');
     });
 });

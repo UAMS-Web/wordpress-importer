@@ -2,7 +2,13 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
@@ -52,6 +58,36 @@ afterEach(function (): void {
 });
 
 /**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function wpBlockBlockExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
+
+/**
  * Run the processor over a wp:block comment.
  *
  * @param  array<int|string, mixed>  $attributes  The block's attributes
@@ -76,7 +112,7 @@ function processWpBlock(array $attributes, ?string $pageSlug = null): array|stri
  * A Bard reusable_content placeholder set.
  *
  * @param  mixed  $notes  The import_wordpress_notes value
- * @return array<string, mixed> The set node
+ * @return array{type: string, attrs: array{id: string, values: array<string, mixed>}} The set node
  */
 function wpBlockBardPlaceholder(mixed $notes): array
 {
@@ -153,13 +189,25 @@ function wpBlockEntry(string $collection, string $slug, array $data): Entry
  */
 function wpBlockStoredData(Entry $entry): array
 {
-    $found = EntryFacade::find((string) $entry->id());
+    $id = $entry->id();
+
+    if (! is_string($id)) {
+        throw new RuntimeException('Entry has no id.');
+    }
+
+    $found = EntryFacade::find($id);
 
     if (! $found instanceof Entry) {
         throw new RuntimeException('Entry was not found.');
     }
 
-    return $found->data()->all();
+    $data = $found->data();
+
+    if (! $data instanceof Collection) {
+        throw new RuntimeException('Entry data is not a collection.');
+    }
+
+    return $data->all();
 }
 
 it('accepts only a wp:block comment that carries a JSON object', function (string $comment, bool $expected): void {
@@ -359,8 +407,8 @@ it('gives a replaced Bard placeholder a new id when it had none', function (): v
 
     $result = WpBlockBlockProcessor::updateBardSetsInArray([$set], ['12']);
 
-    expect($result[0]['attrs']['id'] ?? null)->toBeString()->not->toBe('')
-        ->and($result[0]['attrs']['values'] ?? null)->toBe(['type' => 'reusable_content', 'content' => 'entry-1']);
+    expect(data_get($result, '0.attrs.id'))->toBeString()->not->toBe('')
+        ->and(data_get($result, '0.attrs.values'))->toBe(['type' => 'reusable_content', 'content' => 'entry-1']);
 });
 
 it('replaces a page-builder placeholder with the imported entry', function (): void {
@@ -484,20 +532,20 @@ it('rewrites placeholders in every collection it reads and saves the changed ent
         ."  - Updated 1 entry in 'post' collection.".PHP_EOL
         .'Updated 3 total entries with wp_block placeholder Bard sets and replicator sets.'.PHP_EOL
     )
-        ->and(wpBlockStoredData($first)['content'] ?? null)->toBe([[
+        ->and(data_get(wpBlockStoredData($first), 'content'))->toBe([[
             'type' => 'set',
             'attrs' => ['id' => 'set-1', 'values' => ['type' => 'reusable_content', 'content' => 'entry-12']],
         ]])
-        ->and(wpBlockStoredData($first)['page_builder'] ?? null)->toBe([[
+        ->and(data_get(wpBlockStoredData($first), 'page_builder'))->toBe([[
             'id' => 'row-1',
             'type' => 'uamsweb_block_reusable_content_landing_page',
             'enabled' => true,
             'content' => ['entry-13'],
         ]])
-        ->and(wpBlockStoredData($second)['page_builder'][0]['content'] ?? null)->toBe(['entry-12'])
-        ->and(wpBlockStoredData($unresolved)['content'] ?? null)->toBe([wpBlockBardPlaceholder('wp_block post ID 99')])
-        ->and(wpBlockStoredData($plain)['content'] ?? null)->toBe('not an array')
-        ->and(wpBlockStoredData($post)['content'][0]['attrs']['values']['content'] ?? null)->toBe('entry-13');
+        ->and(data_get(wpBlockStoredData($second), 'page_builder.0.content'))->toBe(['entry-12'])
+        ->and(data_get(wpBlockStoredData($unresolved), 'content'))->toBe([wpBlockBardPlaceholder('wp_block post ID 99')])
+        ->and(data_get(wpBlockStoredData($plain), 'content'))->toBe('not an array')
+        ->and(data_get(wpBlockStoredData($post), 'content.0.attrs.values.content'))->toBe('entry-13');
 });
 
 it('reports one updated entry in the singular', function (): void {
@@ -543,7 +591,7 @@ it('reads only the given site', function (): void {
     WpBlockBlockProcessor::updateBardSetsWithEntryIds('default', $output);
 
     expect($output->fetch())->toBe('  - Updating wp_block placeholder Bard sets and replicator sets...'.PHP_EOL)
-        ->and(wpBlockStoredData($entry)['content'] ?? null)->toBe([wpBlockBardPlaceholder('wp_block post ID 12')]);
+        ->and(data_get(wpBlockStoredData($entry), 'content'))->toBe([wpBlockBardPlaceholder('wp_block post ID 12')]);
 });
 
 it('does nothing when no reusable blocks were imported', function (): void {
@@ -558,16 +606,19 @@ it('does nothing when no reusable blocks were imported', function (): void {
 it('skips query results it cannot read', function (): void {
     WpBlockRegistry::registerMapping('12', 'entry-12');
 
+    /** @var Entry&MockInterface $noData */
     $noData = Mockery::mock(Entry::class);
-    $noData->shouldReceive('data')->andReturn('not an object');
+    wpBlockBlockExpects($noData, 'data')->andReturn('not an object');
     $noData->shouldNotReceive('save');
 
+    /** @var Entry&MockInterface $noArray */
     $noArray = Mockery::mock(Entry::class);
-    $noArray->shouldReceive('data')->andReturn(new stdClass);
+    wpBlockBlockExpects($noArray, 'data')->andReturn(new stdClass);
     $noArray->shouldNotReceive('save');
 
+    /** @var Entry&MockInterface $notArray */
     $notArray = Mockery::mock(Entry::class);
-    $notArray->shouldReceive('data')->andReturn(new class
+    wpBlockBlockExpects($notArray, 'data')->andReturn(new class
     {
         /**
          * Return something that is not an array.
@@ -579,10 +630,11 @@ it('skips query results it cannot read', function (): void {
     });
     $notArray->shouldNotReceive('save');
 
+    /** @var EntryQueryBuilder&MockInterface $query */
     $query = Mockery::mock(EntryQueryBuilder::class);
-    $query->shouldReceive('where')->with('collection', Mockery::type('string'))->times(3)->andReturnSelf();
-    $query->shouldReceive('where')->with('site', 'default')->times(3)->andReturnSelf();
-    $query->shouldReceive('get')->times(3)->andReturn(
+    wpBlockBlockExpects($query, 'where')->with('collection', Mockery::type('string'))->times(3)->andReturnSelf();
+    wpBlockBlockExpects($query, 'where')->with('site', 'default')->times(3)->andReturnSelf();
+    wpBlockBlockExpects($query, 'get')->times(3)->andReturn(
         'not iterable',
         collect(['not an entry', $noData, $noArray, $notArray]),
         collect([])
@@ -601,16 +653,17 @@ it('queries the pages, post and people collections of the site', function (): vo
 
     $collections = [];
 
+    /** @var EntryQueryBuilder&MockInterface $query */
     $query = Mockery::mock(EntryQueryBuilder::class);
-    $query->shouldReceive('where')->with('collection', Mockery::type('string'))->andReturnUsing(
+    wpBlockBlockExpects($query, 'where')->with('collection', Mockery::type('string'))->andReturnUsing(
         function (string $column, string $handle) use (&$collections, $query): EntryQueryBuilder {
             $collections[] = $handle;
 
             return $query;
         }
     );
-    $query->shouldReceive('where')->with('site', 'main')->times(3)->andReturnSelf();
-    $query->shouldReceive('get')->andReturn(collect([]));
+    wpBlockBlockExpects($query, 'where')->with('site', 'main')->times(3)->andReturnSelf();
+    wpBlockBlockExpects($query, 'get')->andReturn(collect([]));
 
     EntryFacade::shouldReceive('query')->andReturn($query);
 
@@ -635,7 +688,7 @@ it('resolves the deferred references and then forgets them', function (): void {
 
     expect(WpBlockBlockProcessor::getDeferredWpBlockReferences())->toBe([])
         ->and($output->fetch())->toContain("Updated 1 entry in 'pages' collection.")
-        ->and(wpBlockStoredData($entry)['content'][0]['attrs']['values']['content'] ?? null)->toBe('entry-12');
+        ->and(data_get(wpBlockStoredData($entry), 'content.0.attrs.values.content'))->toBe('entry-12');
 });
 
 it('forgets the deferred references even when nothing was imported', function (): void {

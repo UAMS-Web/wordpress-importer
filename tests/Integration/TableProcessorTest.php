@@ -88,7 +88,6 @@ function processTable(DOMNode $node, array $attributes = [], ?string $pageSlug =
  */
 function tableWarnings(): ArrayObject
 {
-    /** @var ArrayObject<int, array{0: string, 1: array<string, mixed>}> $warnings */
     $warnings = new ArrayObject;
 
     Log::shouldReceive('warning')->andReturnUsing(function (string $message, array $context) use ($warnings): void {
@@ -143,7 +142,7 @@ it('maps every section, flag and the caption into a table set', function (): voi
         )
         ->and($result['skipCount'] ?? null)->toBe(3)
         ->and($result['processedNode'] ?? null)->toBeInstanceOf(DOMElement::class)
-        ->and(($result['processedNode'] ?? null)?->getAttribute('class'))->toBe('wp-block-table is-style-stripes');
+        ->and(($result['processedNode'] ?? null) instanceof DOMElement ? $result['processedNode']->getAttribute('class') : null)->toBe('wp-block-table is-style-stripes');
 });
 
 it('reads alignment from the figure class and leaves every flag off for a plain body', function (): void {

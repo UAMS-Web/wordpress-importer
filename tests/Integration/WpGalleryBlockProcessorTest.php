@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
@@ -63,24 +68,55 @@ function galleryOpeningNode(string $html): DOMNode
  * Every importImage() call must carry the gallery's site, attachments, output and
  * import settings.
  *
- * @param  array<string, ?string>  $paths  What importImage() returns, keyed by image id
+ * @param  array<int|string, mixed>  $paths  What importImage() returns, keyed by image id
  * @param  array<int|string, mixed>  $attachments  The attachments the processor must pass on
  * @param  BufferedOutput  $output  The output the processor must pass on
  * @return AssetImporter The mocked importer
  */
 function galleryImporter(array $paths, array $attachments, BufferedOutput $output): AssetImporter
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadImages')->andReturnTrue();
+    galleryExpects($importer, 'getUploadImages')->andReturnTrue();
 
     foreach ($paths as $id => $path) {
-        $importer->shouldReceive('importImage')
+        galleryExpects($importer, 'importImage')
             ->once()
             ->with((string) $id, 'default', $attachments, $output, SameSitePolicy::ALWAYS_IMPORT, null, 'images', false)
             ->andReturn($path);
     }
 
     return $importer;
+}
+
+/**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function galleryExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
 }
 
 /**
@@ -106,7 +142,6 @@ function processGallery(DOMNode $node, array $attributes, AssetImporter $importe
  */
 function galleryWarnings(): ArrayObject
 {
-    /** @var ArrayObject<int, array{0: string, 1: array<string, mixed>}> $warnings */
     $warnings = new ArrayObject;
 
     Log::shouldReceive('warning')->andReturnUsing(function (string $message, array $context) use ($warnings): void {
@@ -164,7 +199,7 @@ it('imports the ids from the attributes and writes a gallery set', function (): 
         ->and($result['html'] ?? null)->toBe(gallerySet('[&quot;images\/a.jpg&quot;,&quot;images\/o&#039;b.jpg&quot;]'))
         ->and($result['skipCount'] ?? null)->toBe(2)
         ->and($result['processedNode'] ?? null)->toBeInstanceOf(DOMElement::class)
-        ->and(($result['processedNode'] ?? null)?->getAttribute('class'))->toBe('wp-block-gallery first');
+        ->and(($result['processedNode'] ?? null) instanceof DOMElement ? $result['processedNode']->getAttribute('class') : null)->toBe('wp-block-gallery first');
 });
 
 it('finds the figure inside a following div', function (): void {
@@ -177,7 +212,7 @@ it('finds the figure inside a following div', function (): void {
 
     $result = processGallery($node, ['ids' => [1, 2]], galleryImporter(['1' => 'a.jpg', '2' => 'b.jpg'], [], $output), $output);
 
-    expect(($result['processedNode'] ?? null)?->getAttribute('class'))->toBe('wrapped');
+    expect(($result['processedNode'] ?? null) instanceof DOMElement ? $result['processedNode']->getAttribute('class') : null)->toBe('wrapped');
 });
 
 it('reads the ids from the figure images when the attributes have none', function (array $attributes): void {
@@ -248,6 +283,7 @@ it('warns and returns null when fewer than two images import', function (array $
 it('warns and returns null when no image ids can be found', function (): void {
     ProcessingContext::setWordPressPageLink('https://example.test/about/');
     $warnings = galleryWarnings();
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
     $importer->shouldNotReceive('importImage');
 
@@ -272,6 +308,7 @@ it('warns and returns null when no image ids can be found', function (): void {
 
 it('warns with a snippet of the next sibling when no figure follows the comment', function (string $next, string $snippet): void {
     $warnings = galleryWarnings();
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
     $importer->shouldNotReceive('importImage');
 
@@ -298,6 +335,9 @@ it('warns with a snippet of the next sibling when no figure follows the comment'
 it('returns null for a comment that belongs to no document', function (): void {
     $warnings = galleryWarnings();
 
-    expect(processGallery(new DOMComment(' wp:gallery {} '), ['ids' => [1, 2]], Mockery::mock(AssetImporter::class), new BufferedOutput))->toBeNull()
+    /** @var AssetImporter&MockInterface $importer */
+    $importer = Mockery::mock(AssetImporter::class);
+
+    expect(processGallery(new DOMComment(' wp:gallery {} '), ['ids' => [1, 2]], $importer, new BufferedOutput))->toBeNull()
         ->and($warnings->getArrayCopy())->toBe([]);
 });

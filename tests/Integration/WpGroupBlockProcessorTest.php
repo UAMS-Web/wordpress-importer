@@ -89,7 +89,7 @@ function groupBardContent(array $attributes, array $bardContent, string $innerCo
  * A Bard set of the given type, aligned center.
  *
  * @param  string  $type  The set type
- * @return array<string, mixed> The set node
+ * @return array{type: string, attrs: array{id: string, values: array{type: string, align: string}}} The set node
  */
 function groupSet(string $type): array
 {
@@ -99,9 +99,9 @@ function groupSet(string $type): array
 /**
  * The same set node with its alignment changed.
  *
- * @param  array<string, mixed>  $set  The set node from groupSet()
+ * @param  array{type: string, attrs: array{id: string, values: array{type: string, align: string}}}  $set  The set node from groupSet()
  * @param  string  $align  The new alignment
- * @return array<string, mixed> The changed node
+ * @return array{type: string, attrs: array{id: string, values: array{type: string, align: string}}} The changed node
  */
 function groupSetAligned(array $set, string $align): array
 {
@@ -168,11 +168,11 @@ it('widens a table shortcode in a wide or full group, and only there', function 
         $attributes
     );
 
-    $set = $result['bardContent'][0] ?? null;
+    $set = data_get($result, 'bardContent.0');
 
-    expect($set['type'] ?? null)->toBe('set')
-        ->and($set['attrs']['values']['type'] ?? null)->toBe('table')
-        ->and($set['attrs']['values']['align'] ?? null)->toBe($align);
+    expect(data_get($set, 'type'))->toBe('set')
+        ->and(data_get($set, 'attrs.values.type'))->toBe('table')
+        ->and(data_get($set, 'attrs.values.align'))->toBe($align);
 })->with([
     'wide' => [['align' => 'wide'], 'alignwide'],
     'full' => [['align' => 'full'], 'alignwide'],

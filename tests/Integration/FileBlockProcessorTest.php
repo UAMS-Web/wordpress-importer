@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
@@ -71,6 +76,36 @@ function fileBlockImporter(bool $files): AssetImporter
 }
 
 /**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function fileBlockExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
+
+/**
  * An asset importer whose uploads are on and whose importFile() returns the given path.
  *
  * @param  ?string  $path  What importFile() returns
@@ -80,9 +115,10 @@ function fileBlockImporter(bool $files): AssetImporter
  */
 function fileBlockImportingImporter(?string $path, string $url, BufferedOutput $output): AssetImporter
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadFiles')->andReturnTrue();
-    $importer->shouldReceive('importFile')
+    fileBlockExpects($importer, 'getUploadFiles')->andReturnTrue();
+    fileBlockExpects($importer, 'importFile')
         ->once()
         ->with($url, 'default', $output, 'files', SameSitePolicy::SKIP_DIFFERENT_SITE, null, null, null, null)
         ->andReturn($path);
@@ -140,7 +176,7 @@ it('keeps the original URL when file uploads are off and marks the block div pro
         ->and($result['html'] ?? null)->toBe(fileBlockSet('https://example.test/uploads/report.pdf', 'report.pdf'))
         ->and($result['skipCount'] ?? null)->toBe(2)
         ->and($result['processedNode'] ?? null)->toBeInstanceOf(DOMElement::class)
-        ->and($result['processedNode']->textContent ?? null)->toBe('first')
+        ->and(($result['processedNode'] ?? null) instanceof DOMElement ? $result['processedNode']->textContent : null)->toBe('first')
         ->and($output->fetch())->toBe('  - File uploads disabled. Using original URL for wp:file block.'.PHP_EOL);
 });
 
@@ -203,6 +239,7 @@ it('warns and returns null when the block has no usable href', function (array $
         $warnings[] = [$message, $context];
     });
 
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
     $importer->shouldNotReceive('importFile');
 

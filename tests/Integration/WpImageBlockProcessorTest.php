@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -24,6 +28,36 @@ afterEach(function (): void {
 });
 
 /**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function wpImageExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
+}
+
+/**
  * Parses an HTML body and returns its document and first comment node.
  *
  * @return array{0: DOMDocument, 1: DOMNode}
@@ -36,8 +70,12 @@ function wpImageCommentNode(string $body): array
     libxml_clear_errors();
     libxml_use_internal_errors($previous);
 
-    $comment = (new DOMXPath($doc))->query('//comment()')->item(0);
-    assert($comment instanceof DOMNode);
+    $comments = (new DOMXPath($doc))->query('//comment()');
+    $comment = $comments === false ? null : $comments->item(0);
+
+    if (! $comment instanceof DOMNode) {
+        throw new RuntimeException('The fragment holds no comment.');
+    }
 
     return [$doc, $comment];
 }
@@ -47,8 +85,9 @@ function wpImageCommentNode(string $body): array
  */
 function wpImageImporter(?string $baseBlogUrl = 'https://example.org'): AssetImporter&MockInterface
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getBaseBlogUrl')->andReturn($baseBlogUrl);
+    wpImageExpects($importer, 'getBaseBlogUrl')->andReturn($baseBlogUrl);
 
     return $importer;
 }
@@ -61,10 +100,11 @@ function wpImageImporter(?string $baseBlogUrl = 'https://example.org'): AssetImp
  */
 function wpImageProcessorMock(?array $set, ArrayObject $calls): ImageProcessor&MockInterface
 {
+    /** @var ImageProcessor&MockInterface $processor */
     $processor = Mockery::mock(ImageProcessor::class);
-    $processor->shouldReceive('processImage')->andReturnUsing(
+    wpImageExpects($processor, 'processImage')->andReturnUsing(
         function (mixed ...$args) use ($set, $calls): ?array {
-            $calls[] = $args;
+            $calls->append(array_values($args));
 
             return $set;
         }
@@ -84,7 +124,7 @@ function wpImageWarnings(): ArrayObject
 
     Log::shouldReceive('warning')->andReturnUsing(
         function (string $message, array $context = []) use ($warnings): void {
-            $warnings[] = ['message' => $message, 'context' => $context];
+            $warnings->append(['message' => $message, 'context' => $context]);
         }
     );
 
@@ -146,8 +186,8 @@ describe('process without a figure', function (): void {
         expect($result)->toBeNull()
             ->and($calls)->toHaveCount(0)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpImageBlockProcessor::process: No valid wp:image figure found after comment')
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.message'))->toBe('WpImageBlockProcessor::process: No valid wp:image figure found after comment')
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'default',
                 'pageSlug' => 'about',
                 'attributes' => ['id' => 5],
@@ -172,8 +212,8 @@ describe('process without a figure', function (): void {
             new BufferedOutput
         );
 
-        expect($warnings[0]['context']['site'])->toBe('blog')
-            ->and($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.site'))->toBe('blog')
+            ->and(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 
     it('ignores a figure nested deeper than one wrapping div', function (): void {
@@ -189,7 +229,7 @@ describe('process without a figure', function (): void {
         );
 
         expect($result)->toBeNull()
-            ->and($warnings[0]['message'])->toBe('WpImageBlockProcessor::process: No valid wp:image figure found after comment');
+            ->and(data_get($warnings, '0.message'))->toBe('WpImageBlockProcessor::process: No valid wp:image figure found after comment');
     });
 });
 
@@ -213,8 +253,8 @@ describe('process with a figure but no image', function (): void {
         expect($result)->toBeNull()
             ->and($calls)->toHaveCount(0)
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpImageBlockProcessor::process: No img tag found in wp:image block')
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.message'))->toBe('WpImageBlockProcessor::process: No img tag found in wp:image block')
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'default',
                 'pageSlug' => 'about',
                 'html_snippet' => $snippet,
@@ -236,7 +276,7 @@ describe('process with a figure but no image', function (): void {
             new BufferedOutput
         );
 
-        expect($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 });
 
@@ -283,7 +323,7 @@ describe('process with an image', function (): void {
             new BufferedOutput
         );
 
-        expect($calls[0][0])->toBe('<figure><img src="https://example.org/a.jpg"><figcaption>c</figcaption></figure>');
+        expect(data_get($calls, '0.0'))->toBe('<figure><img src="https://example.org/a.jpg"><figcaption>c</figcaption></figure>');
     });
 
     it('leaves an image inside another element in place', function (): void {
@@ -298,7 +338,7 @@ describe('process with an image', function (): void {
             new BufferedOutput
         );
 
-        expect($calls[0][0])->toBe('<figure><span><img src="https://example.org/a.jpg"></span></figure>');
+        expect(data_get($calls, '0.0'))->toBe('<figure><span><img src="https://example.org/a.jpg"></span></figure>');
     });
 
     it('drops the attachment id for an image hosted on another site', function (?string $baseBlogUrl, string $src, array $expected): void {
@@ -313,7 +353,7 @@ describe('process with an image', function (): void {
             new BufferedOutput
         );
 
-        expect($calls[0][6])->toBe($expected);
+        expect(data_get($calls, '0.6'))->toBe($expected);
     })->with([
         'same site' => ['https://example.org', 'https://example.org/a.jpg', ['id' => 5, 'align' => 'left']],
         'no base URL' => [null, 'https://other.org/a.jpg', ['id' => 5, 'align' => 'left']],
@@ -332,7 +372,7 @@ describe('process with an image', function (): void {
             new BufferedOutput
         );
 
-        expect($calls[0][0])->toBe('<figure class="aligncenter"><img src="https://example.org/a.jpg"></figure>');
+        expect(data_get($calls, '0.0'))->toBe('<figure class="aligncenter"><img src="https://example.org/a.jpg"></figure>');
     });
 });
 
@@ -354,8 +394,8 @@ describe('process when the image processor fails', function (): void {
 
         expect($result)->toBeNull()
             ->and($warnings)->toHaveCount(1)
-            ->and($warnings[0]['message'])->toBe('WpImageBlockProcessor::process: ImageProcessor failed to generate image set')
-            ->and($warnings[0]['context'])->toBe([
+            ->and(data_get($warnings, '0.message'))->toBe('WpImageBlockProcessor::process: ImageProcessor failed to generate image set')
+            ->and(data_get($warnings, '0.context'))->toBe([
                 'site' => 'default',
                 'pageSlug' => 'about',
                 'html_snippet' => '<figure><img src="https://example.org/'.str_repeat('c', 62).'...',
@@ -377,7 +417,7 @@ describe('process when the image processor fails', function (): void {
             new BufferedOutput
         );
 
-        expect($warnings[0]['context']['pageSlug'])->toBe('none');
+        expect(data_get($warnings, '0.context.pageSlug'))->toBe('none');
     });
 });
 
@@ -410,7 +450,7 @@ describe('process result', function (): void {
         );
 
         expect($result)->not->toBeNull()
-            ->and($result['html'])->toBe(
+            ->and(data_get($result, 'html'))->toBe(
                 '<div data-set-type="image"'.SetMarkupNonce::attribute()
                 .' data-set-attr-image="images/a.jpg"'
                 .' data-set-attr-alt="Tom &amp; &quot;Jerry&quot; &lt;3"'
@@ -433,7 +473,7 @@ describe('process result', function (): void {
             new BufferedOutput
         );
 
-        expect($result['html'])->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().'></div>');
+        expect(data_get($result, 'html'))->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().'></div>');
     })->with([
         'no attrs' => [['type' => 'set']],
         'attrs not an array' => [['type' => 'set', 'attrs' => 'x']],
@@ -454,7 +494,7 @@ describe('process result', function (): void {
             new BufferedOutput
         );
 
-        expect($result['html'])->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().' data-set-attr-image="images/a.jpg"></div>');
+        expect(data_get($result, 'html'))->toBe('<div data-set-type="image"'.SetMarkupNonce::attribute().' data-set-attr-image="images/a.jpg"></div>');
     });
 
     it('returns the figure and the nodes to skip', function (string $body, int $skipCount): void {
@@ -471,8 +511,8 @@ describe('process result', function (): void {
         $figure = $doc->getElementsByTagName('figure')->item(0);
 
         expect($result)->toHaveKeys(['html', 'processedNode', 'skipCount'])
-            ->and($result['processedNode'])->toBe($figure)
-            ->and($result['skipCount'])->toBe($skipCount);
+            ->and(data_get($result, 'processedNode'))->toBe($figure)
+            ->and(data_get($result, 'skipCount'))->toBe($skipCount);
     })->with([
         'figure after the comment' => ['<figure><img src="https://example.org/a.jpg"></figure>', 2],
         'figure inside a div' => ['<div><figure><img src="https://example.org/a.jpg"></figure></div>', 3],

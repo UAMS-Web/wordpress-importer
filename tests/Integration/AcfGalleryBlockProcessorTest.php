@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
+use Mockery\CompositeExpectation;
+use Mockery\Expectation;
+use Mockery\ExpectationInterface;
+use Mockery\LegacyMockInterface;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
@@ -36,24 +41,55 @@ afterEach(function (): void {
 /**
  * An asset importer with image uploads on that imports the given ids to the given paths.
  *
- * @param  array<string, ?string>  $paths  What importImage() returns, keyed by image id
+ * @param  array<int|string, mixed>  $paths  What importImage() returns, keyed by image id
  * @param  array<int|string, mixed>  $attachments  The attachments the processor must pass on
  * @param  BufferedOutput  $output  The output the processor must pass on
  * @return AssetImporter The mocked importer
  */
 function acfGalleryImporter(array $paths, array $attachments, BufferedOutput $output): AssetImporter
 {
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadImages')->andReturnTrue();
+    acfGalleryExpects($importer, 'getUploadImages')->andReturnTrue();
 
     foreach ($paths as $id => $path) {
-        $importer->shouldReceive('importImage')
+        acfGalleryExpects($importer, 'importImage')
             ->once()
             ->with((string) $id, 'default', $attachments, $output, SameSitePolicy::ALWAYS_IMPORT, null, 'images', false)
             ->andReturn($path);
     }
 
     return $importer;
+}
+
+/**
+ * Return the sole concrete Expectation held inside a CompositeExpectation so its
+ * fluent methods are visible to PHPStan; the CompositeExpectation only proxies
+ * them through `__call`.
+ *
+ * File-local for the reason `tests/Integration/TreeBuilderBranchTest.php` gives
+ * for its own copy: a shared trait would read to the analyser as unused.
+ *
+ * @param  LegacyMockInterface|MockInterface  $mock  The mock to expect a call on
+ * @param  string  $method  The method expected to be called
+ * @return Expectation The unwrapped expectation, ready to chain
+ */
+function acfGalleryExpects(LegacyMockInterface|MockInterface $mock, string $method): Expectation
+{
+    $composite = $mock->shouldReceive($method);
+
+    if (! $composite instanceof CompositeExpectation) {
+        throw new RuntimeException('Expected a Mockery CompositeExpectation.');
+    }
+
+    /** @var list<ExpectationInterface> $expectations */
+    $expectations = new ReflectionClass(CompositeExpectation::class)->getProperty('_expectations')->getValue($composite);
+
+    if (count($expectations) !== 1 || ! $expectations[0] instanceof Expectation) {
+        throw new RuntimeException('Expected exactly one Mockery Expectation.');
+    }
+
+    return $expectations[0];
 }
 
 /**
@@ -87,7 +123,6 @@ function processAcfGallery(array $attributes, AssetImporter $importer, BufferedO
  */
 function acfGalleryWarnings(): ArrayObject
 {
-    /** @var ArrayObject<int, array{0: string, 1: array<string, mixed>}> $warnings */
     $warnings = new ArrayObject;
 
     Log::shouldReceive('warning')->andReturnUsing(function (string $message, array $context) use ($warnings): void {
@@ -248,6 +283,7 @@ it('reads comma-separated image ids', function (): void {
 it('warns and returns an empty gallery when there are no image ids', function (array $attributes): void {
     ProcessingContext::setWordPressPageLink('https://example.test/about/');
     $warnings = acfGalleryWarnings();
+    /** @var AssetImporter&MockInterface $importer */
     $importer = Mockery::mock(AssetImporter::class);
     $importer->shouldNotReceive('importImage');
     $node = new DOMComment(' wp:acf/uams-gallery {} /');
