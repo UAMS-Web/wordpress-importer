@@ -64,22 +64,15 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        // Check if the node is a comment node
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            // Only process comment nodes
+        // Only comment nodes can carry a wp:post-featured-image marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
-        // Return whether this node can be processed
-        if (! ($node instanceof DOMComment)) {
-            return false;
-        }
-
-        $commentValue = $node->nodeValue;
-
+        // Return whether the comment is the featured image block marker
         return \preg_match(
             '/^wp:post-featured-image\s*\/?$/',
-            \is_string($commentValue) ? \trim($commentValue) : ''
+            \trim($node->data)
         ) === 1;
     }
 
