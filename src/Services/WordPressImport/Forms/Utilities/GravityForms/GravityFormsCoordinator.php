@@ -10,7 +10,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinatorTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginFormCreationCoordinatorContract;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 
 /**
@@ -138,12 +137,9 @@ class GravityFormsCoordinator
         string $siteHandle,
         AssetImporter $assetImporter
     ): ?Form {
-        if (! $this->formCreationCoordinator instanceof FormPluginFormCreationCoordinatorContract) {
-            return null;
-        }
-
         $formCreationCoordinator = $this->formCreationCoordinator;
 
+        // Nothing can be created without a Gravity Forms creation coordinator
         if (! $formCreationCoordinator instanceof FormCreationCoordinator) {
             return null;
         }
