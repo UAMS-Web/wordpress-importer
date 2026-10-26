@@ -61,14 +61,14 @@ it('reads the title from the key the coordinator names', function (): void {
     $form = (new FormCreator(null, $coordinator))->createForm(['id' => 7, 'title' => 'Ignored', 'name' => 'Apply Now'], 'Main Site', 'default', 'formidable-forms');
 
     expect($form?->handle())->toBe('default_formidable-forms_7_apply-now')
-        ->and($form?->title())->toBe('Main Site — Apply Now');
+        ->and($form?->title())->toBe("Main Site \u{2014} Apply Now");
 });
 
 it('strips markup from the title and builds the handle from the site, plugin, ID and title', function (): void {
     $form = (new FormCreator(null, $this->titleCoordinator))->createForm(['id' => '7', 'title' => '<strong>Contact</strong> Us'], 'Main Site', 'default', 'gravity-forms');
 
     expect($form?->handle())->toBe('default_gravity-forms_7_contact-us')
-        ->and($form?->title())->toBe('Main Site — Contact Us')
+        ->and($form?->title())->toBe("Main Site \u{2014} Contact Us")
         // The form is saved, so it can be found again.
         ->and(FormFacade::find('default_gravity-forms_7_contact-us'))->toBeInstanceOf(Form::class);
 });
@@ -88,7 +88,7 @@ it('gives a form with fields a blueprint built from them', function (): void {
     $sourceForms = [['id' => 7], ['id' => 8]];
 
     $blueprints->expects($this->once())->method('blueprintExists')->with('default_gravity-forms_7_contact-us')->willReturn(false);
-    $blueprints->expects($this->once())->method('createBlueprintWithFields')->with('default_gravity-forms_7_contact-us', 'Main Site — Contact Us', $fields, 'gravity-forms', '7', 'default', $sourceForms);
+    $blueprints->expects($this->once())->method('createBlueprintWithFields')->with('default_gravity-forms_7_contact-us', "Main Site \u{2014} Contact Us", $fields, 'gravity-forms', '7', 'default', $sourceForms);
     $blueprints->expects($this->never())->method('createBasicBlueprint');
 
     (new FormCreator($blueprints, $this->titleCoordinator))->createForm(['id' => 7, 'title' => 'Contact Us', 'fields' => $fields], 'Main Site', 'default', 'gravity-forms', null, $sourceForms);
@@ -99,7 +99,7 @@ it('passes no form ID to the blueprint when the export carries none it can use',
     $fields = [['id' => 1, 'type' => 'text', 'label' => 'Name']];
 
     $blueprints->method('blueprintExists')->willReturn(false);
-    $blueprints->expects($this->once())->method('createBlueprintWithFields')->with('default_gravity-forms__contact-us', 'Main Site — Contact Us', $fields, 'gravity-forms', null, 'default', null);
+    $blueprints->expects($this->once())->method('createBlueprintWithFields')->with('default_gravity-forms__contact-us', "Main Site \u{2014} Contact Us", $fields, 'gravity-forms', null, 'default', null);
 
     (new FormCreator($blueprints, $this->titleCoordinator))->createForm(['id' => [7], 'title' => 'Contact Us', 'fields' => $fields], 'Main Site', 'default', 'gravity-forms');
 });
@@ -113,7 +113,7 @@ it('gives a form with no usable fields a basic blueprint', function (mixed $fiel
     }
 
     $blueprints->expects($this->once())->method('blueprintExists')->willReturn(false);
-    $blueprints->expects($this->once())->method('createBasicBlueprint')->with('default_gravity-forms_7_contact-us', 'Main Site — Contact Us');
+    $blueprints->expects($this->once())->method('createBasicBlueprint')->with('default_gravity-forms_7_contact-us', "Main Site \u{2014} Contact Us");
     $blueprints->expects($this->never())->method('createBlueprintWithFields');
 
     (new FormCreator($blueprints, $this->titleCoordinator))->createForm($formData, 'Main Site', 'default', 'gravity-forms');
