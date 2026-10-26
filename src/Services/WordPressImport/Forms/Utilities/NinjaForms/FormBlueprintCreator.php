@@ -227,6 +227,9 @@ class FormBlueprintCreator
             // `order` is authoritative and is a string in some exports; fall back to the
             // array position so an export missing it keeps its natural order.
             $order = $rawOption['order'] ?? null;
+            // `order` is read only by the sort below, and `<=>` compares a digit string
+            // with an int numerically, so the cast changes no ordering.
+            // @pest-mutate-ignore: RemoveIntegerCast
             $order = \is_scalar($order) && \ctype_digit((string) $order)
                 ? (int) $order
                 : $index;
