@@ -55,6 +55,10 @@ class DatalessEntrySweeper
      *
      * @var list<string>
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no test
+    // against a mutant here. Removing either key fails the `blueprint alone` and `id alone`
+    // cases of the isDataless() dataset when the mutant is applied by hand.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array INERT_KEYS = ['id', 'blueprint'];
 
     /**

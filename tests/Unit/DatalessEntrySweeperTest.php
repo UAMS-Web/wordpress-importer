@@ -391,6 +391,59 @@ it('keeps sweeping past a file that predates the run', function (): void {
     }
 });
 
+it('keeps sweeping past a file that carries a body', function (): void {
+    $root = datalessSweeperRoot();
+    \mkdir($root.'/posts/default', 0o777, true);
+
+    // Five kept files and five stubs. Where listing is alphabetical (NTFS) every kept file
+    // comes first; elsewhere a sweep that stops at the first kept file goes unseen only if
+    // all five happen to list after all five stubs.
+    $kept = [];
+
+    foreach (['a', 'b', 'c', 'd', 'e'] as $letter) {
+        $kept[] = $path = $root.'/posts/default/'.$letter.'-body.md';
+        \file_put_contents($path, "---\nid: {$letter}\nblueprint: post\n---\nProse.\n");
+    }
+
+    $stubs = [];
+
+    foreach (['f', 'g', 'h', 'i', 'j'] as $letter) {
+        $stubs[] = $path = $root.'/posts/default/'.$letter.'-stub.md';
+        \file_put_contents($path, "---\nid: {$letter}\nblueprint: post\n---\n");
+    }
+
+    try {
+        expect(DatalessEntrySweeper::sweep($root, 0.0))->toHaveCount(5)
+            ->and(\array_filter($kept, 'file_exists'))->toBe($kept)
+            ->and(\array_filter($stubs, 'file_exists'))->toBe([]);
+    } finally {
+        datalessSweeperRemove($root);
+    }
+});
+
+it('describes a Windows path with forward slashes and its own segments', function (): void {
+    // On Windows the iterator hands back backslash-separated paths, which the description
+    // splits into collection and site. No POSIX path carries one, so this calls the method
+    // directly with the shape Windows produces.
+    $describe = new ReflectionMethod(DatalessEntrySweeper::class, 'describe');
+
+    $description = $describe->invoke(
+        null,
+        'C:\\site\\content\\collections',
+        'C:\\site\\content\\collections\\posts\\default\\stub.md',
+        ['id' => 'abc']
+    );
+
+    // The slug comes from basename(), which splits on a backslash only on Windows, so it is
+    // left out here; the other fields are built from the normalized path on every platform.
+    expect($description)->toMatchArray([
+        'path' => 'posts/default/stub.md',
+        'collection' => 'posts',
+        'site' => 'default',
+        'id' => 'abc',
+    ]);
+});
+
 it('describes a file that sits directly beneath its collection as belonging to no site', function (): void {
     $root = datalessSweeperRoot();
     \mkdir($root.'/pages', 0o777, true);

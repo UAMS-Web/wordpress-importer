@@ -40,6 +40,10 @@ class ContentRoot
      *
      * @var array<string, string>
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no test
+    // against a mutant here. Removing any entry by hand fails its row of the
+    // "re-roots each content subdirectory" dataset in ContentRootTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array STORE_BY_SUBDIRECTORY = [
         'trees/collections' => 'collection-trees',
         'trees/navigation' => 'nav-trees',

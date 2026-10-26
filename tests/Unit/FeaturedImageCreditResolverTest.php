@@ -129,6 +129,28 @@ it('reports no credit for an absent or blank thumbnail id', function (string $th
     'whitespace' => ['   '],
 ])->group('featured-image-credit');
 
+it('does not match a blank thumbnail id to an attachment with a blank post id', function (string $thumbnailId): void {
+    // XpathHelper::findAttachmentById() compares the raw `wp:post_id`, and an
+    // absent node reads as ''. Without the blank-id guard, a blank thumbnail id
+    // would match such an attachment and report its credit.
+    $postId = $thumbnailId === '' ? '' : "<wp:post_id>{$thumbnailId}</wp:post_id>";
+    $xml = '<item xmlns:wp="http://wordpress.org/export/1.2/">'
+        .$postId
+        .creditPostmeta('_media_credit', 'Bryan Clifton')
+        .'</item>';
+
+    $attachment = simplexml_load_string($xml);
+
+    if (! $attachment instanceof SimpleXMLElement) {
+        throw new RuntimeException('Failed to parse attachment <item> fixture.');
+    }
+
+    expect(FeaturedImageCreditResolver::resolve($thumbnailId, [$attachment]))->toBe('');
+})->with([
+    'empty id, no post id node' => [''],
+    'whitespace id, whitespace post id' => ['   '],
+])->group('featured-image-credit');
+
 it('reads the credit of the matching attachment, not a neighbour', function (): void {
     // A post's export carries every attachment on the site, so picking the wrong
     // one would set the toggle from an unrelated image's credit.

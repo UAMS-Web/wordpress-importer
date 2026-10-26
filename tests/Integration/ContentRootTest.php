@@ -122,6 +122,24 @@ it('re-roots a content-relative path under the owning store', function (): void 
     });
 });
 
+it('re-roots each content subdirectory under the store that owns it', function (string $subdirectory, string $storeKey): void {
+    // One row per entry in ContentRoot::STORE_BY_SUBDIRECTORY, so dropping an entry
+    // fails its row rather than resolving through a neighbour or throwing unseen.
+    $mirror = contentRootTempBase().'/wpimport-97-'.\str_replace('/', '-', $subdirectory);
+
+    withStoreDirectory($storeKey, $mirror, function () use ($mirror, $subdirectory): void {
+        expect(ContentRoot::resolve('content/'.$subdirectory.'/inner'))->toBe(contentRootPath($mirror).'/inner');
+    });
+})->with([
+    'collection trees' => ['trees/collections', 'collection-trees'],
+    'navigation trees' => ['trees/navigation', 'nav-trees'],
+    'collections' => ['collections', 'entries'],
+    'taxonomies' => ['taxonomies', 'taxonomies'],
+    'navigation' => ['navigation', 'navigation'],
+    'globals' => ['globals', 'globals'],
+    'asset containers' => ['assets', 'asset-containers'],
+]);
+
 it('matches the longest owning subdirectory so trees do not resolve as collections', function (): void {
     $collections = contentRootTempBase().'/wpimport-622-c';
     $trees = contentRootTempBase().'/wpimport-622-t';
