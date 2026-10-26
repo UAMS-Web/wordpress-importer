@@ -18,6 +18,7 @@ declare(strict_types=1);
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\MockObject\MockObject;
 use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
@@ -221,7 +222,11 @@ it('creates the form through its creation coordinator once the export is loaded'
     $form = FormFacade::make('contact');
 
     $data->expects($this->once())->method('getFormsData')->willReturn($forms);
-    $creation?->expects($this->once())->method($ops['createFrom'])->with(7, $forms, 'Main Site', 'default', $this->assetImporter)->willReturn($form);
+    if ($creation === null) {
+        throw new LogicException('fpcBuild() injects a creation coordinator by default.');
+    }
+
+    $creation->expects($this->once())->method($ops['createFrom'])->with(7, $forms, 'Main Site', 'default', $this->assetImporter)->willReturn($form);
 
     expect($ops['createIfNeeded']($coordinator, 7, $this->assetImporter))->toBe($form);
 })->with('form plugins');
@@ -232,7 +237,11 @@ it('logs an error and creates nothing when the export is not loaded', function (
     $log = Log::spy();
 
     $data->expects($this->once())->method('getFormsData')->willReturn(null);
-    $creation?->expects($this->never())->method($ops['createFrom']);
+    if ($creation === null) {
+        throw new LogicException('fpcBuild() injects a creation coordinator by default.');
+    }
+
+    $creation->expects($this->never())->method($ops['createFrom']);
 
     expect($ops['createIfNeeded']($coordinator, 7, $this->assetImporter))->toBeNull();
 
@@ -278,7 +287,11 @@ it('reports the created form handle its creation coordinator holds', function (s
         throw new LogicException('Only the Formidable Forms and Gravity Forms coordinators report handles.');
     }
 
-    $creation?->expects($this->once())->method('getCreatedFormHandle')->with(7)->willReturn('default_contact');
+    if ($creation === null) {
+        throw new LogicException('fpcBuild() injects a creation coordinator by default.');
+    }
+
+    $creation->expects($this->once())->method('getCreatedFormHandle')->with(7)->willReturn('default_contact');
 
     expect($coordinator->getCreatedFormHandle(7))->toBe('default_contact');
 
@@ -309,15 +322,15 @@ it('keeps the creation coordinator it was given, and links it back', function (s
     // Built here rather than through fpcBuild(), so the constructor's call can be expected.
     if ($plugin === 'formidable') {
         $creation = $this->createMock(FormidableForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(PHPUnit\Framework\Assert::isInstanceOf(FormidableForms\FormidableFormsCoordinator::class));
+        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(FormidableForms\FormidableFormsCoordinator::class));
         $coordinator = new FormidableForms\FormidableFormsCoordinator($this->createMock(FormidableForms\ContentDetector::class), $this->createMock(FormidableForms\FormIdExtractor::class), $this->createMock(FormidableForms\DataManager::class), $this->createMock(FormidableForms\UserInteractionHandler::class), $creation);
     } elseif ($plugin === 'gravity') {
         $creation = $this->createMock(GravityForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(PHPUnit\Framework\Assert::isInstanceOf(GravityForms\GravityFormsCoordinator::class));
+        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(GravityForms\GravityFormsCoordinator::class));
         $coordinator = new GravityForms\GravityFormsCoordinator($this->createMock(GravityForms\ContentDetector::class), $this->createMock(GravityForms\FormIdExtractor::class), $this->createMock(GravityForms\DataManager::class), $this->createMock(GravityForms\UserInteractionHandler::class), $creation);
     } else {
         $creation = $this->createMock(NinjaForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(PHPUnit\Framework\Assert::isInstanceOf(NinjaForms\NinjaFormsCoordinator::class));
+        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(NinjaForms\NinjaFormsCoordinator::class));
         $coordinator = new NinjaForms\NinjaFormsCoordinator($this->createMock(NinjaForms\ContentDetector::class), $this->createMock(NinjaForms\FormIdExtractor::class), $this->createMock(NinjaForms\DataManager::class), $this->createMock(NinjaForms\UserInteractionHandler::class), $creation);
     }
 
