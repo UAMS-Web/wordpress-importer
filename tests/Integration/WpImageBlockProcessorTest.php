@@ -390,13 +390,13 @@ describe('process result', function (): void {
                 'id' => 'abc',
                 'values' => [
                     'type' => 'image',
+                    0 => 'numeric key',
                     'image' => 'images/a.jpg',
                     'alt' => 'Tom & "Jerry" <3',
                     'k<ey' => 'v',
                     'width' => 300,
                     'link' => null,
                     'sizes' => ['large'],
-                    0 => 'numeric key',
                 ],
             ],
         ];

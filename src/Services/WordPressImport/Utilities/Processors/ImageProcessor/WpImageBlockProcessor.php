@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor;
 
+use DOMComment;
 use DOMElement;
 use DOMNode;
 use DOMXPath;
@@ -60,16 +61,14 @@ class WpImageBlockProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        if ($node->nodeType !== XML_COMMENT_NODE) {
+        // Only comment nodes can carry a wp:image marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
-        // Normalize comment text before matching a wp:image marker.
-        $commentText = is_string($node->nodeValue) ? $node->nodeValue : '';
-
         return \preg_match(
             '/^wp:image\s*({.*?})\s*$/',
-            \trim($commentText)
+            \trim($node->data)
         ) === 1;
     }
 
@@ -117,6 +116,9 @@ class WpImageBlockProcessor implements BlockProcessorInterface
 
         // Select the first <figure> node found; a constant expression against a
         // node of this document cannot fail, so false reads as no figure
+        // query() returns false only for a malformed expression or context node,
+        // which this constant expression and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
         $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 
         // Check if no <figure> element is found
@@ -301,11 +303,9 @@ class WpImageBlockProcessor implements BlockProcessorInterface
         );
 
         // Determine number of nodes to skip based on DOM structure
-        $figureParentNode = $figureNode->parentNode;
-        $skipCount = $figureParentNode instanceof DOMNode
-            && $figureParentNode->nodeName === 'div'
-                ? 3
-                : 2;
+        $skipCount = $figureNode->parentNode?->nodeName === 'div'
+            ? 3
+            : 2;
         // If <figure> is inside a <div>, skip 3 nodes (comment, div, closing comment)
         // Otherwise, skip 2 nodes (comment, figure)
 
@@ -326,7 +326,9 @@ class WpImageBlockProcessor implements BlockProcessorInterface
     private function normalizeSavedHtml(
         string|false $html
     ): string {
-        // Return an empty string for failed saveHTML calls.
+        // Return an empty string for failed saveHTML calls. saveHTML() of a node
+        // in its own document does not fail, so neither mutant can be observed.
+        // @pest-mutate-ignore: FalseToTrue,EmptyStringToNotEmpty
         return $html === false ? '' : $html;
     }
 }
