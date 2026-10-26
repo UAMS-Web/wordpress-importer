@@ -38,6 +38,20 @@ beforeEach(function (): void {
 });
 
 /**
+ * The text a handler printed, with "\n" line endings.
+ *
+ * BufferedOutput ends each line with PHP_EOL, which is "\r\n" on Windows, so the text is
+ * normalized and the expectations below hold on every platform (#114).
+ *
+ * @param  BufferedOutput  $output  The output the handler wrote to
+ * @return string The printed text
+ */
+function ninjaHandlerText(BufferedOutput $output): string
+{
+    return \str_replace(\PHP_EOL, "\n", $output->fetch());
+}
+
+/**
  * A `.nff`-shaped export, optionally advertising a form ID through `settings.embed_form`.
  *
  * @param  string  $title  The form title
@@ -54,7 +68,7 @@ it('does nothing when the content holds no Ninja Forms reference', function (): 
     $this->extractor->expects($this->never())->method('getFormIdsUsedWithPageSlugs');
 
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeFalse()
-        ->and($this->output->fetch())->toBe('');
+        ->and(ninjaHandlerText($this->output))->toBe('');
 });
 
 it('skips with a note when no form ID can be read from the references', function (): void {
@@ -66,7 +80,7 @@ it('skips with a note when no form ID can be read from the references', function
     $this->selector->expects($this->never())->method('select');
 
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeFalse()
-        ->and($this->output->fetch())->toBe(
+        ->and(ninjaHandlerText($this->output))->toBe(
             "Ninja Forms blocks or shortcodes detected in the XML.\n"
             ."No Ninja Forms form ID could be read from the detected references; skipping.\n"
         );
@@ -82,7 +96,7 @@ it('prompts once per distinct form ID and binds each supplied export', function 
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeTrue()
         ->and(\array_keys($this->store->getNinjaFormsData() ?? []))->toBe([7, 9])
         ->and($this->store->getNinjaForm(9)['title'] ?? null)->toBe('Apply')
-        ->and($this->output->fetch())->toBe(
+        ->and(ninjaHandlerText($this->output))->toBe(
             "Ninja Forms blocks or shortcodes detected in the XML.\n"
             ."Supply the Ninja Forms .nff export for form ID 7.\n"
             ."Supply the Ninja Forms .nff export for form ID 9.\n"
@@ -97,7 +111,7 @@ it('reports a declined export and carries on to the next form ID', function (): 
 
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeTrue()
         ->and(\array_keys($this->store->getNinjaFormsData() ?? []))->toBe([9])
-        ->and($this->output->fetch())->toContain("No export supplied for Ninja Forms form ID 7; it will not be imported.\nSupply the Ninja Forms .nff export for form ID 9.\n");
+        ->and(ninjaHandlerText($this->output))->toContain("No export supplied for Ninja Forms form ID 7; it will not be imported.\nSupply the Ninja Forms .nff export for form ID 9.\n");
 });
 
 it('reports nothing loaded when every export is declined', function (): void {
@@ -119,7 +133,7 @@ it('warns only when an export advertises a different form ID', function (?int $a
     $this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command);
 
     $warning = "Warning: the export supplied for Ninja Forms form ID 7 advertises form ID 3. Importing it as form ID 7 as supplied.\n";
-    $printed = $this->output->fetch();
+    $printed = ninjaHandlerText($this->output);
 
     expect($warns ? \str_contains($printed, $warning) : ! \str_contains($printed, 'Warning:'))->toBeTrue()
         // The export is bound to the ID it was supplied for either way.
@@ -149,7 +163,7 @@ it('binds served forms from the migration API without a per-form prompt', functi
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeTrue()
         ->and(\array_keys($this->store->getNinjaFormsData() ?? []))->toBe([7, 12, 40])
         ->and($this->store->getNinjaForm(12)['title'] ?? null)->toBe('Apply')
-        ->and($this->output->fetch())->toBe(
+        ->and(ninjaHandlerText($this->output))->toBe(
             "Ninja Forms blocks or shortcodes detected in the XML.\n"
             ."Ninja Forms form ID 30 is referenced by the content but the migration API does not serve it; it will not be imported.\n"
         );
@@ -164,7 +178,7 @@ it('reports nothing loaded when the migration API serves none of the referenced 
     expect($this->handler->handleFormPluginDetection($this->parser, $this->input, $this->output, $this->command))->toBeFalse()
         ->and($this->store->getNinjaFormsData())->toBeNull()
         // A failed read reports nothing per form; only an unserved form is named.
-        ->and(\str_contains($this->output->fetch(), 'does not serve it'))->toBe($served !== null);
+        ->and(\str_contains(ninjaHandlerText($this->output), 'does not serve it'))->toBe($served !== null);
 })->with([
     'nothing read' => [null],
     'other forms only' => [[['id' => 3, 'title' => 'Other']]],
