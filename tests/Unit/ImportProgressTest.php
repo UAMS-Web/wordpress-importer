@@ -231,3 +231,39 @@ it('still refuses a streamed source without a total when the output is quiet', f
         // Consume the loop
     }
 })->throws(InvalidArgumentException::class, 'A total is required');
+
+it('reports after a quiet stretch of ten seconds, and not of less', function (float $stretch, bool $reported): void {
+    $now = 0.0;
+
+    $run = importProgressRun(
+        \range(1, 100),
+        body: function (int|string $key) use (&$now, $stretch): bool {
+            if ($key === 4) {
+                $now += $stretch;
+            }
+
+            return true;
+        },
+        clock: function () use (&$now): float {
+            return $now;
+        }
+    );
+
+    expect(\in_array('Progress: page 5 of 100 (5%)', $run['lines'], true))->toBe($reported);
+})->with([
+    'ten seconds' => [10.0, true],
+    'nine and a half' => [9.5, false],
+    'eleven seconds' => [11.0, true],
+]);
+
+it('reads seconds from the system clock when given none', function (): void {
+    $output = new BufferedOutput;
+
+    foreach (ImportProgress::track($output, 'page', \range(1, 20)) as $item) {
+        // Each item takes no time to speak of
+    }
+
+    // Only the start and the ten tenths; a clock a billion times too fast would
+    // report every item
+    expect(\substr_count($output->fetch(), 'Progress:'))->toBe(11);
+});
