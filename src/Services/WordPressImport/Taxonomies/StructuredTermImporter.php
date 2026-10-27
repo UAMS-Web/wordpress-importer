@@ -15,6 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
@@ -142,7 +143,7 @@ class StructuredTermImporter
 
         $treeData = [];
 
-        foreach ($parsedTerms as $termId => $parsedTerm) {
+        foreach (ImportProgress::track($output, "{$collectionHandle} terms saved", $parsedTerms) as $termId => $parsedTerm) {
             $entryId = $this->createOrUpdateEntry(
                 $parsedTerm['slug'],
                 $parsedTerm['name'],

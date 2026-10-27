@@ -26,6 +26,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcesso
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -181,8 +182,12 @@ class TablePressEntryCreator extends BaseEntryCreator
             $tablesToProcess = $xmlStreamParser->streamItems('tablepress_table');
         }
 
+        $tableCount = $xmlStreamParser instanceof XmlStreamParser
+            ? $xmlStreamParser->countItems('tablepress_table')
+            : null;
+
         // Loop through each table item to process and create entries
-        foreach ($tablesToProcess as $table) {
+        foreach (ImportProgress::track($output, 'tablepress_table', $tablesToProcess, $tableCount) as $table) {
             // Decode HTML entities and strip HTML tags from title
             $title = HtmlTagStripper::strip(
                 html_entity_decode(

@@ -18,6 +18,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinatio
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -229,7 +230,7 @@ class AdvertEntryCreator extends BaseEntryCreator
         }
 
         // Import each listing
-        foreach ($xmlStreamParser->streamItems(self::POST_TYPE) as $advert) {
+        foreach (ImportProgress::track($output, self::POST_TYPE, $xmlStreamParser->streamItems(self::POST_TYPE), $xmlStreamParser->countItems(self::POST_TYPE)) as $advert) {
             $this->importAdvert(
                 $advert,
                 $site,
@@ -650,7 +651,7 @@ class AdvertEntryCreator extends BaseEntryCreator
         // ---
         $this->rebuildTermStoreFromDisk('classified_categories');
 
-        foreach ($xmlParser->getTerms() as $wpTerm) {
+        foreach (ImportProgress::track($output, 'advert category terms finished', $xmlParser->getTerms()) as $wpTerm) {
             // Consider only WP Adverts categories. `getTerms()` returns only elements, so
             // the type test is for the analyser, and WordPress term ids are unique across
             // taxonomies, so another taxonomy's term never resolves as an advert category.
