@@ -603,7 +603,7 @@ it('does nothing when no reusable blocks were imported', function (): void {
     expect($output->fetch())->toBe('');
 });
 
-it('skips query results it cannot read', function (): void {
+it('skips query results it cannot read and saves the readable entry after them', function (): void {
     WpBlockRegistry::registerMapping('12', 'entry-12');
 
     /** @var Entry&MockInterface $noData */
@@ -630,13 +630,26 @@ it('skips query results it cannot read', function (): void {
     });
     $notArray->shouldNotReceive('save');
 
+    // A readable entry after the unreadable ones shows the loop carries on past them
+    /** @var Entry&MockInterface $readable */
+    $readable = Mockery::mock(Entry::class);
+    wpBlockBlockExpects($readable, 'data')->withNoArgs()->andReturn(collect(['content' => [wpBlockBardPlaceholder('wp_block post ID 12')]]));
+    wpBlockBlockExpects($readable, 'initialPath')->with(null)->once()->andReturnSelf();
+    wpBlockBlockExpects($readable, 'data')->with([
+        'content' => [[
+            'type' => 'set',
+            'attrs' => ['id' => 'set-1', 'values' => ['type' => 'reusable_content', 'content' => 'entry-12']],
+        ]],
+    ])->once()->andReturnSelf();
+    wpBlockBlockExpects($readable, 'save')->once()->andReturnTrue();
+
     /** @var EntryQueryBuilder&MockInterface $query */
     $query = Mockery::mock(EntryQueryBuilder::class);
     wpBlockBlockExpects($query, 'where')->with('collection', Mockery::type('string'))->times(3)->andReturnSelf();
     wpBlockBlockExpects($query, 'where')->with('site', 'default')->times(3)->andReturnSelf();
     wpBlockBlockExpects($query, 'get')->times(3)->andReturn(
         'not iterable',
-        collect(['not an entry', $noData, $noArray, $notArray]),
+        collect(['not an entry', $noData, $noArray, $notArray, $readable]),
         collect([])
     );
 
@@ -645,7 +658,11 @@ it('skips query results it cannot read', function (): void {
     $output = new BufferedOutput;
     WpBlockBlockProcessor::updateBardSetsWithEntryIds('default', $output);
 
-    expect($output->fetch())->toBe('  - Updating wp_block placeholder Bard sets and replicator sets...'.PHP_EOL);
+    expect($output->fetch())->toBe(
+        '  - Updating wp_block placeholder Bard sets and replicator sets...'.PHP_EOL
+        ."  - Updated 1 entry in 'post' collection.".PHP_EOL
+        .'Updated 1 total entry with wp_block placeholder Bard sets and replicator sets.'.PHP_EOL
+    );
 });
 
 it('queries the pages, post and people collections of the site', function (): void {
