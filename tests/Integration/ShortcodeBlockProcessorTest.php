@@ -8,6 +8,7 @@ use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
@@ -742,6 +743,11 @@ it('process returns a plain string for a lone shortcode with no page builder blo
 });
 
 it('process keeps the rendered shortcodes and warns about one that renders nothing among several', function (): void {
+    // Start from no entry context, which an earlier test in the process can leave set
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearEntryData();
+    ProcessingContext::clearFormConfigContext();
+
     // Collect every warning logged during the call
     /** @var ArrayObject<int, array{message: string, context: array<int|string, mixed>}> $warnings */
     $warnings = new ArrayObject;
