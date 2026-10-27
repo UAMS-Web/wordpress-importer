@@ -128,3 +128,25 @@ it('returns null rather than INF or NAN', function (): void {
     // 1e308 * 10 overflows to INF; a blueprint field must not receive it
     expect(SafeMathEvaluator::evaluate('1e308 * 10'))->toBeNull();
 });
+
+it('accepts an expression of exactly the maximum length', function (): void {
+    // 1 followed by 127 copies of "+1" is 255 characters
+    $expression = '1'.str_repeat('+1', 127);
+
+    expect(strlen($expression))->toBe(SafeMathEvaluator::MAX_EXPRESSION_LENGTH)
+        ->and(SafeMathEvaluator::evaluate($expression))->toBe(128.0);
+});
+
+it('refuses an expression one character too long', function (): void {
+    expect(SafeMathEvaluator::evaluate(' 1'.str_repeat('+1', 127)))->toBeNull();
+});
+
+it('reads a function name case-insensitively', function (): void {
+    expect(SafeMathEvaluator::evaluate('ROUND(1.5)'))->toBe(2.0)
+        ->and(SafeMathEvaluator::evaluate('Round(2.5, 0)'))->toBe(3.0);
+});
+
+it('folds a run of multiplications and divisions', function (): void {
+    expect(SafeMathEvaluator::evaluate('2 * 3 * 4'))->toBe(24.0)
+        ->and(SafeMathEvaluator::evaluate('2 * 3 / 4'))->toBe(1.5);
+});
