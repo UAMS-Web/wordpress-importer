@@ -235,6 +235,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle SEO robots boolean fields
@@ -271,6 +273,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page title options field
@@ -282,6 +286,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page subsection field
@@ -296,6 +302,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page navigation alt name field
@@ -307,6 +315,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page hide from menu field
@@ -324,6 +334,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle parent meta: when 'on', hide page from menu (WordPress “parent” page)
@@ -340,6 +352,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page hide child menu field
@@ -354,6 +368,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page hide breadcrumbs field
@@ -370,6 +386,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle breadcrumb meta: when 'on', hide breadcrumbs in Statamic
@@ -386,6 +404,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle include boilerplate field
@@ -400,6 +420,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle media contact field
@@ -435,6 +457,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle news release PDF URL field
@@ -451,6 +475,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page description field
@@ -471,6 +497,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle page cover image field
@@ -498,6 +526,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle WordPress page template field
@@ -534,6 +564,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle WordPress thumbnail ID field
@@ -606,6 +638,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle landing page heading field
@@ -626,6 +660,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle landing page description field
@@ -646,6 +682,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle landing page cover image field
@@ -673,6 +711,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle landing page mobile cover image field
@@ -707,6 +747,8 @@ class FieldMapper
                     $mappedKeys[] = $key;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
         }
@@ -795,6 +837,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['heading'] = HtmlTagStripper::strip($valueString);
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle body field
@@ -803,6 +847,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['body'] = HtmlTagStripper::strip($valueString);
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle button text field
@@ -811,6 +857,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['button_text'] = HtmlTagStripper::strip($valueString);
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle button URL field
@@ -832,6 +880,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['button_target'] = LinkHelper::getTarget($value);
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle button description field
@@ -840,6 +890,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['button_link_description'] = HtmlTagStripper::strip($valueString);
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle enabled field (inverted from source disable for replicator sets)
@@ -848,6 +900,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['enabled'] = $value !== '1';
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle background color field
@@ -856,6 +910,8 @@ class FieldMapper
                     $data['header_hero'][$heroIndex]['background_color'] = $valueString;
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle desktop image field
@@ -872,6 +928,8 @@ class FieldMapper
                     );
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle tablet image field
@@ -891,6 +949,8 @@ class FieldMapper
                     }
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle mobile image field
@@ -910,6 +970,8 @@ class FieldMapper
                     }
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                     // Handle image alt text field
@@ -921,6 +983,8 @@ class FieldMapper
                     }
 
                     // Exit this case
+                    // A continue here targets the switch, so it is this break
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
         }

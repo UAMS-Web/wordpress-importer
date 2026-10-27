@@ -126,8 +126,11 @@ class CounterListParser
         array $data
     ): array {
         $sections = [];
-        // Read and validate the section count before iterating.
+        // Read and validate the section count before iterating. A count of -1
+        // runs the loop below as many times as 0 does.
+        // @pest-mutate-ignore: DecrementInteger
         $sectionCountValue = $data['counter_list_section'] ?? 0;
+        // @pest-mutate-ignore: DecrementInteger
         $sectionCount = is_numeric($sectionCountValue) ? (int) $sectionCountValue : 0;
 
         for ($i = 0; $i < $sectionCount; $i++) {
