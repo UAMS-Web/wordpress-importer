@@ -10,6 +10,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Materializat
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
@@ -526,6 +527,23 @@ it('reads only the rules on a vanity redirect domain, and a failing page read ca
         ->and(scopedManifestScope($this->workingDirectory)['post_types'] ?? null)->toBe(['redirect_rule'])
         ->and(scopedManifestScope($this->workingDirectory)['link_target_post_types'] ?? null)->toBe([]);
 });
+
+it('records a vanity domain with the scope, so its unresolved links are reported as such', function (string $baseBlogUrl, bool $vanity): void {
+    // The scope report reads the flag; a site keeps the general wording (#171)
+    ImportWarningManager::clearWarnings();
+    fakeScopedSite($baseBlogUrl);
+
+    scopedMaterializer($this->workingDirectory)->materialize(1, null, [], 'redirect_rule');
+    MaterializationScope::reportUnresolvedLink('https://example.test/unread/');
+
+    $warnings = ImportWarningManager::getWarningsByCategory('migration_api')['scope_unresolved_links'] ?? [];
+    $consequence = \is_array($warnings) && \is_array($warnings[0] ?? null) ? ($warnings[0]['consequence'] ?? '') : '';
+
+    expect(\is_string($consequence) && \str_contains($consequence, 'vanity redirect domain'))->toBe($vanity);
+})->with([
+    'a vanity domain' => ['https://gouams.com', true],
+    'a site' => ['https://example.test', false],
+]);
 
 it('does not let a failing endpoint outside the declaration stop a scoped run', function (): void {
     // `provider` is exposed and served badly. A `post` run does not declare it, so it never
