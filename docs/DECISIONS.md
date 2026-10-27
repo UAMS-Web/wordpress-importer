@@ -1450,6 +1450,7 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 **Rejected: build the caption block with its content.** It would still not render.
 
 **Rejected: build it and define `uamsweb_block_caption` in the host app.** It renders only after a host change, and a page builder caption would then differ from the same caption in Bard content.
+
 ## `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
 
 **Decided 2026-10-27, on #163, by the project owner.** A ruleset that reaches this repository alone requires three status check contexts on `main`: `CI`, `Attribution footer` and `Closing keywords`. These are the three that the shared `required-checks-ruleset.json` template in the `code-quality` skill requires, and that the Statamic add-ons and `UAMS-Web/uamswp-migration-api` already require. The ruleset carries only the `required_status_checks` rule and layers on the two organization rulesets, `main: no deletion or force push` and `main: pull request required`. The builder applies it with `apply-required-checks-ruleset.mjs` once the workflows are on `main`, so no open pull request waits on a check its branch cannot report.
