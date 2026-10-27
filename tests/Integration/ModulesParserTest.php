@@ -9,6 +9,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\ModulesParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\FakeAssetImporter;
 
 /**
  * Tests that `ModulesParser` reads each module's fields out of the page's
@@ -102,6 +103,8 @@ it('parses modules in order, reading each one from its own postmeta', function (
             'uamswp_modules_1_section_background_color' => 'bg-gray',
         ]
     );
+
+    \assert(\is_array($sets[0] ?? null) && \is_array($sets[1] ?? null));
 
     expect(modulesHeadings($sets))->toBe(['First', 'Second'])
         ->and(array_keys($sets))->toBe([0, 1])
@@ -198,10 +201,7 @@ it('logs and drops a module whose parser throws, and keeps parsing', function ()
     /** @var MockInterface $logSpy */
     $logSpy = Log::spy();
 
-    /** @var AssetImporter&MockInterface $assetImporter */
-    $assetImporter = Mockery::mock(AssetImporter::class);
-    $assetImporter->allows('getUploadImages')->andReturn(true);
-    $assetImporter->allows('importImage')->andThrow(new RuntimeException('disk full'));
+    $assetImporter = new FakeAssetImporter(true, new RuntimeException('disk full'));
 
     $sets = modulesParse(
         [0 => 'modules_call_out', 1 => 'modules_uams_section'],

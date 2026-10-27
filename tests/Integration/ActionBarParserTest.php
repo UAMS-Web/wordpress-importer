@@ -73,6 +73,23 @@ function actionBarSet(string $entry, array $data): array
     return $set;
 }
 
+/**
+ * The section items of a replicator set.
+ *
+ * @param  array<int|string, mixed>  $set  The replicator set
+ * @return list<array<int|string, mixed>> Its items, each an array
+ */
+function actionBarItems(array $set): array
+{
+    $items = [];
+
+    foreach (\is_array($set['items'] ?? null) ? $set['items'] : [] as $item) {
+        $items[] = \is_array($item) ? $item : [];
+    }
+
+    return $items;
+}
+
 dataset('actionBarEntries', ['block', 'module']);
 
 it('fills every default when the block sets nothing', function (string $entry): void {
@@ -137,7 +154,7 @@ it('reads the section count as an integer, a numeric string, or nothing', functi
         $data["action_bar_section_{$i}_action_bar_section_heading"] = "Section $i";
     }
 
-    expect(array_column(actionBarSet($entry, $data)['items'], 'heading'))
+    expect(array_column(actionBarItems(actionBarSet($entry, $data)), 'heading'))
         ->toBe(array_slice(['Section 0', 'Section 1', 'Section 2'], 0, $expected));
 })->with('actionBarEntries')->with([
     'an integer' => [3, 3],
@@ -159,13 +176,15 @@ it('casts numbers in text fields and falls back for other types', function (stri
         'action_bar_section_0_action_bar_section_button_description' => 7,
     ]);
 
+    $item = actionBarItems($set)[0] ?? [];
+
     expect($set['block_heading'])->toBe('2026')
         ->and($set['background_color'])->toBe('bg-auto')
-        ->and($set['items'][0]['heading'] ?? null)->toBe('1.5')
-        ->and($set['items'][0]['body'] ?? null)->toBe('')
-        ->and($set['items'][0]['button_text'] ?? null)->toBe('')
-        ->and($set['items'][0]['button_url'] ?? null)->toBe('')
-        ->and($set['items'][0]['button_link_description'] ?? null)->toBe('7');
+        ->and($item['heading'] ?? null)->toBe('1.5')
+        ->and($item['body'] ?? null)->toBe('')
+        ->and($item['button_text'] ?? null)->toBe('')
+        ->and($item['button_url'] ?? null)->toBe('')
+        ->and($item['button_link_description'] ?? null)->toBe('7');
 })->with('actionBarEntries');
 
 it('keeps the default heading when the heading is not text', function (string $entry): void {
@@ -190,9 +209,12 @@ it('gives each set and each item its own row id', function (string $entry): void
         : (array) $parser->parseModule($data, 'default', actionBarAssetImporter(), new NullOutput);
 
     $first = $parse();
-    $items = \is_array($first['items'] ?? null) ? $first['items'] : [];
+    $ids = array_map(
+        fn (array $item): string => \is_string($item['id'] ?? null) ? $item['id'] : '',
+        actionBarItems($first)
+    );
 
     expect($first['id'] ?? null)->not->toBe($parse()['id'] ?? null)
-        ->and(array_column($items, 'id'))->toHaveCount(2)
-        ->and(array_unique(array_column($items, 'id')))->toHaveCount(2);
+        ->and($ids)->toHaveCount(2)
+        ->and(array_unique($ids))->toHaveCount(2);
 })->with('actionBarEntries');

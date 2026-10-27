@@ -219,7 +219,10 @@ it('skips a block whose data key is not an array', function (): void {
         new NullOutput
     ))->toBe([]);
 
-    $logSpy->shouldHaveReceived('warning')->once();
+    $logSpy->shouldHaveReceived('warning', [
+        'LiveWhaleParser::parse: Skipping wp:acf/livewhale-calendar block due to missing required fields',
+        ['site' => 'default', 'heading' => '', 'widget_id' => 0],
+    ]);
 });
 
 it('gives each set its own row id', function (string $entry): void {

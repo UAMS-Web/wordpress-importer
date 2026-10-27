@@ -9,6 +9,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CallOutParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\FakeAssetImporter;
 
 /**
  * Tests that `CallOutParser` maps an ACF Call Out block, and a modules-template
@@ -36,16 +37,11 @@ afterEach(function (): void {
  *
  * @param  bool  $uploadImages  Whether image uploads are enabled
  * @param  ?string  $imported  What `importImage()` returns when called
- * @return AssetImporter&MockInterface The mocked importer
+ * @return FakeAssetImporter The fake importer
  */
-function callOutAssetImporter(bool $uploadImages = true, ?string $imported = null): AssetImporter
+function callOutAssetImporter(bool $uploadImages = true, ?string $imported = null): FakeAssetImporter
 {
-    /** @var AssetImporter&MockInterface $assetImporter */
-    $assetImporter = Mockery::mock(AssetImporter::class);
-    $assetImporter->allows('getUploadImages')->andReturn($uploadImages);
-    $assetImporter->allows('importImage')->andReturn($imported);
-
-    return $assetImporter;
+    return new FakeAssetImporter($uploadImages, $imported);
 }
 
 /**
@@ -120,30 +116,25 @@ it('imports the background image when the toggle is on', function (string $entry
     /** @var MockInterface $logSpy */
     $logSpy = Log::spy();
 
-    /** @var AssetImporter&MockInterface $assetImporter */
-    $assetImporter = Mockery::mock(AssetImporter::class);
-    $assetImporter->allows('getUploadImages')->andReturn(true);
-    $assetImporter->expects('importImage')
-        ->withArgs(fn (string $imageId, string $site): bool => $imageId === '55' && $site === 'default')
-        ->andReturn('images/call-out.jpg');
+    $assetImporter = callOutAssetImporter(true, 'images/call-out.jpg');
 
     $set = callOutSet($entry, ['call_out_use_image' => '1', 'call_out_image' => 55], $assetImporter);
 
     expect($set['background_image_query'])->toBeTrue()
-        ->and($set['background_image'] ?? null)->toBe('images/call-out.jpg');
+        ->and($set['background_image'] ?? null)->toBe('images/call-out.jpg')
+        ->and($assetImporter->importedImages)->toBe([['55', 'default']]);
 
     $logSpy->shouldNotHaveReceived('warning');
 })->with('callOutEntries');
 
 it('leaves the image alone when the toggle is off', function (string $entry, mixed $toggle): void {
-    /** @var AssetImporter&MockInterface $assetImporter */
-    $assetImporter = Mockery::mock(AssetImporter::class);
-    $assetImporter->shouldNotReceive('importImage');
+    $assetImporter = callOutAssetImporter();
 
     $set = callOutSet($entry, ['call_out_use_image' => $toggle, 'call_out_image' => '55'], $assetImporter);
 
     expect($set['background_image_query'])->toBeFalse()
-        ->and($set)->not->toHaveKey('background_image');
+        ->and($set)->not->toHaveKey('background_image')
+        ->and($assetImporter->importedImages)->toBe([]);
 })->with('callOutEntries')->with([
     'a zero string' => ['0'],
     'an empty string' => [''],
@@ -154,15 +145,13 @@ it('sets the toggle but imports nothing without a usable image id', function (st
     /** @var MockInterface $logSpy */
     $logSpy = Log::spy();
 
-    /** @var AssetImporter&MockInterface $assetImporter */
-    $assetImporter = Mockery::mock(AssetImporter::class);
-    $assetImporter->allows('getUploadImages')->andReturn(true);
-    $assetImporter->shouldNotReceive('importImage');
+    $assetImporter = callOutAssetImporter();
 
     $set = callOutSet($entry, ['call_out_use_image' => '1', 'call_out_image' => $imageId], $assetImporter);
 
     expect($set['background_image_query'])->toBeTrue()
-        ->and($set)->not->toHaveKey('background_image');
+        ->and($set)->not->toHaveKey('background_image')
+        ->and($assetImporter->importedImages)->toBe([]);
 
     // No id means nothing to import, so there is no failure to warn about
     $logSpy->shouldNotHaveReceived('warning');
@@ -173,7 +162,7 @@ it('sets the toggle but imports nothing without a usable image id', function (st
     'missing' => [null],
 ]);
 
-it('warns when an image fails to import while uploads are enabled', function (string $entry, mixed $imported, string $method): void {
+it('warns when an image fails to import while uploads are enabled', function (string $entry, ?string $imported, string $method): void {
     ProcessingContext::setWordPressPageLink('https://example.org/clinic/');
 
     /** @var MockInterface $logSpy */
