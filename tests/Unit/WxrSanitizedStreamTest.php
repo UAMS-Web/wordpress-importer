@@ -14,6 +14,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/WxrSanitizedStreamTest.php
  */
 
+use PHPUnit\Framework\Assert;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
 
 /**
@@ -170,7 +171,7 @@ it('serves a directory as empty', function (): void {
     // fopen() opens a directory on macOS and Linux and fread() then fails; Windows
     // refuses the fopen() itself, which another path already covers
     if (PHP_OS_FAMILY === 'Windows') {
-        test()->markTestSkipped('fopen() refuses a directory on Windows.');
+        Assert::markTestSkipped('fopen() refuses a directory on Windows.');
     }
 
     $directory = sys_get_temp_dir().'/wxs-dir-'.bin2hex(random_bytes(4));
