@@ -231,15 +231,12 @@ class EntryFinder
                 // Extract entry identifier for Stache invalidation
                 $entryIdentifier = $entry->id();
 
-                // Skip cache invalidation when identifiers are not strings. A queried
-                // entry always has a string collection handle and id, so neither half
-                // is ever true and the skip is never taken.
-                // @pest-mutate-ignore: BooleanOrToBooleanAnd
+                // Skip cache invalidation when identifiers are not strings (an entry
+                // file whose YAML reads `id: 123` loads with an integer id)
                 if (
                     ! \is_string($entryCollectionHandle)
                     || ! \is_string($entryIdentifier)
                 ) {
-                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -252,9 +249,8 @@ class EntryFinder
             // Extract WordPress ID from entry ID for pattern matching
             $entryId = $entry->id();
 
-            // Skip entries with non-string IDs; a queried entry's id is always a string
+            // Skip entries with non-string IDs
             if (! \is_string($entryId)) {
-                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 

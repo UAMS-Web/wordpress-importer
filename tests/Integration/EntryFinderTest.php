@@ -5,11 +5,13 @@ declare(strict_types=1);
 /**
  * Tests that `EntryFinder` finds an entry by id, slug or embedded WordPress id within
  * one collection, narrows to a site only when one is named, and, when asked for a
- * fresh read, forgets the cached Stache item it is about to look up.
+ * fresh read by id or WordPress id, forgets the cached Stache item it reads. A fresh
+ * slug read forgets a key that holds no item, which is pinned here as it stands (#127).
  *
  * Real entries in two collections and two sites, so each filter is shown to exclude
- * something. The cache forgetting is observed through the Stache cache store: a
- * sentinel is written under the item key `forgetItem()` clears, and read back.
+ * something. The cache forgetting is observed by replacing an entry's cached item
+ * with a copy titled "stale" and checking which title a lookup returns afterwards.
+ * The slug case also writes a sentinel under the key the slug names.
  *
  * @command  php vendor/bin/pest tests/Integration/EntryFinderTest.php
  */
@@ -229,6 +231,34 @@ it('forgets the cached item of each entry a fresh WordPress id lookup reads', fu
         ->and(entryFinderTitle('contact-112-mno'))->toBe('contact')
         ->and(entryFinderTitle('story-12-qrs'))->toBe('stale');
 });
+
+it('passes over an entry whose id is not a string, and keeps looking', function (bool $fresh): void {
+    // An entry file whose YAML reads `id: 123` loads with an integer id; saved first,
+    // it is read before the entry that matches
+    $legacy = CollectionFacade::make('legacy');
+    $legacy->sites(['default']);
+    $legacy->save();
+
+    $numbered = EntryFacade::make();
+
+    if (! $numbered instanceof Entry) {
+        throw new RuntimeException('Could not make an entry.');
+    }
+
+    $numbered->collection('legacy');
+    $numbered->locale('default');
+    $numbered->id(123);
+    $numbered->slug('numbered');
+    $numbered->data(['title' => 'numbered']);
+    $numbered->save();
+
+    entryFinderEntry('legacy', 'default', 'kept-12-abc', 'kept');
+
+    expect(entryFinderId(EntryFinder::findEntryByWordPressId('legacy', '12', forceFresh: $fresh)))->toBe('kept-12-abc');
+})->with([
+    'a plain read' => [false],
+    'a fresh read' => [true],
+]);
 
 it('keeps the cached items in a WordPress id lookup that is not fresh', function (): void {
     entryFinderCacheStale('pages', 'about-12-abc');
