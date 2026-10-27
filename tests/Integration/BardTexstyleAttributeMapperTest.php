@@ -265,6 +265,11 @@ it('reads the attributes of a Gutenberg block comment onto the element after it'
         '<!-- wp:heading {"className":"clear-both"} --><h2>T</h2><!-- /wp:heading -->',
         ['level' => 2, 'clearboth' => 'clearboth', 'id' => null],
     ],
+    'a heading className with a NUL before it' => [
+        texstyleNode('heading', ['level' => 2], [texstyleText('T')]),
+        '<!-- wp:heading {"className":"\\u0000clear"} --><h2>T</h2><!-- /wp:heading -->',
+        ['level' => 2, 'clearboth' => 'clearboth', 'id' => null],
+    ],
     'a separator className' => [
         texstyleNode('horizontalRule', []),
         '<!-- wp:separator {"className":"clearboth"} --><hr><!-- /wp:separator -->',

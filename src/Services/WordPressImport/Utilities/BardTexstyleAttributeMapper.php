@@ -50,11 +50,11 @@ class BardTexstyleAttributeMapper
      */
     private static function splitWhitespaceClasses(string $classNames): array
     {
-        // Split the class string on whitespace boundaries. Leading or trailing
-        // whitespace leaves an empty token, which matches no class.
+        // Split the class string on whitespace boundaries. The trim also strips the
+        // NUL a block comment's JSON className can carry, which `\s` does not match.
         $classes = \preg_split(
             '/\s+/',
-            $classNames
+            \trim($classNames)
         );
 
         // Return an empty list when preg_split fails
