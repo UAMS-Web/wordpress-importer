@@ -102,7 +102,7 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
      * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects (unused)
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML (unused)
      * @param  ?string  $pageSlug  The page slug (optional)
-     * @return array<int|string, mixed>|string|null Array with 'html', 'skipCount', and 'entryId' keys, Tiptap HTML string, or null if invalid
+     * @return array{html: string, skipCount: int, entryId: string}|array{html: string, skipCount: int, entryId: null, wpBlockPostId: string}|null The Bard set HTML, the comment node to skip, and the entry ID, or when the entry is not imported yet a placeholder and the wp_block post ID; null if the block has no ref
      */
     public function process(
         DOMNode $node,
@@ -113,7 +113,7 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
         array $attachments = [],
         array $terms = [],
         ?string $pageSlug = null
-    ): string|array|null {
+    ): ?array {
         // Get the wp_block post ID from attributes
         $wpBlockPostId = self::extractScalarString(
             $attributes['ref'] ?? null
