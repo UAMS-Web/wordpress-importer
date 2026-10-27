@@ -216,14 +216,12 @@ trait FormBlueprintCreatorTrait
                 // *and* a real `inputType` map, so `survey + likert` is a `likert_scale`
                 // and `multi_choice + radio` is a `radio`. Only the five attribute-less
                 // null-default types are unsupported.
+                //
+                // An absent type and a null entry both leave `$mappingEntry` not an array,
+                // so the array test below covers them as well.
                 // ---
                 if (
-                    ! \array_key_exists(
-                        $fieldType,
-                        $mapping
-                    )
-                    || $mappingEntry === null
-                    || ! \is_array($mappingEntry)
+                    ! \is_array($mappingEntry)
                     || ! $this->getMappingClass()::isFieldtypeMapped($mappingEntry)
                 ) {
                     // ---
@@ -237,9 +235,9 @@ trait FormBlueprintCreatorTrait
                         \is_array($mappingEntry)
                         && $this->getMappingClass()::tracesWhenSkipped($mappingEntry)
                     ) {
-                        $tracedSkips[] = $fieldLabel !== ''
-                            ? \sprintf('%s (%s)', $fieldLabel, $fieldType)
-                            : $fieldType;
+                        // generateDisplayName() falls back to a "Type (ID: n)" name, so the
+                        // label is never empty here.
+                        $tracedSkips[] = \sprintf('%s (%s)', $fieldLabel, $fieldType);
                     }
 
                     continue;
@@ -336,6 +334,8 @@ trait FormBlueprintCreatorTrait
 
         // `$first` cannot be null: the guard above returns on an empty `tabs` array.
         if (! \is_array($tabs[$first])) {
+            // isset() on a string offset is false, so the guard below returns as well.
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return;
         }
 
@@ -407,24 +407,20 @@ trait FormBlueprintCreatorTrait
     ): string {
         // Always require a field ID for uniqueness
         $rawFieldId = $field['id'] ?? null;
+        // The ID is only concatenated, which casts a scalar the same way.
+        // @pest-mutate-ignore: RemoveStringCast
         $id = \is_scalar($rawFieldId) ? (string) $rawFieldId : null;
 
-        // Use the snake_case field name as the base handle if it exists and is not empty
-        $fieldName = $this->getFieldNameForHandle($field);
-        if (\trim($fieldName) !== '' && $id !== null) {
+        // Use the snake_case field name as the base handle when it slugs to something,
+        // otherwise the field ID alone. An empty or blank name slugs to ''.
+        if ($id !== null) {
             $base = \str_replace(
                 '-',
                 '_',
-                Str::slug($fieldName)
+                Str::slug($this->getFieldNameForHandle($field))
             );
-            if ($base !== '') {
-                return $base.'_'.$id;
-            }
-        }
 
-        // Fallback to using the field ID if available
-        if ($id !== null) {
-            return 'field_'.$id;
+            return $base !== '' ? $base.'_'.$id : 'field_'.$id;
         }
 
         // Fallback to using field type if available
@@ -595,21 +591,12 @@ trait FormBlueprintCreatorTrait
 
         // Filter out null values from field configuration before returning
         if ($linkedField !== null) {
-            // For linked fields, filter both the main config and the nested config array
-            $fieldConfig = \array_filter(
-                $fieldConfig,
+            // A linked field holds only `field` and `config` at the top level, and every
+            // attribute is merged into `config`, so only that is filtered.
+            $fieldConfig['config'] = \array_filter(
+                $this->normalizeBlueprintConfigSection($fieldConfig['config'] ?? null),
                 fn ($value): bool => $value !== null
             );
-            if (isset($fieldConfig['config'])) {
-                if (! \is_array($fieldConfig['config'])) {
-                    $fieldConfig['config'] = [];
-                }
-
-                $fieldConfig['config'] = \array_filter(
-                    $fieldConfig['config'],
-                    fn ($value): bool => $value !== null
-                );
-            }
         } else {
             // For regular fields, filter normally
             $fieldConfig = \array_filter(
@@ -655,6 +642,8 @@ trait FormBlueprintCreatorTrait
             ? (string) $rawFieldType
             : 'unknown';
         $rawFieldId = $field['id'] ?? 'unknown';
+        // sprintf('%s') below casts a scalar the same way.
+        // @pest-mutate-ignore: RemoveStringCast
         $fieldId = \is_scalar($rawFieldId)
             ? (string) $rawFieldId
             : 'unknown';
