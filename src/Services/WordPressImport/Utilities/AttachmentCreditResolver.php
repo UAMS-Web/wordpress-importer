@@ -56,12 +56,7 @@ class AttachmentCreditResolver
     public static function parseExifCredit(
         string $serialized
     ): string {
-        // Treat empty meta as no credit
-        if ($serialized === '') {
-            return '';
-        }
-
-        // Unserialize WordPress meta (arrays and scalars only)
+        // Unserialize WordPress meta (arrays and scalars only); empty meta yields false
         $meta = @\unserialize(
             $serialized,
             ['allowed_classes' => false]
