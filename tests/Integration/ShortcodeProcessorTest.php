@@ -205,7 +205,7 @@ describe('extract', function (): void {
 
         expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
             ->and(array_column($result, 'original'))->toBe(['[probe]', '[gallery ids="1"]'])
-            ->and($result[0]['attributes'] ?? null)->toBe([]);
+            ->and(array_column($result, 'attributes'))->toBe([[], ['ids' => '1']]);
     });
 
     it('captures the content of a bare enclosing shortcode', function (): void {
@@ -223,7 +223,7 @@ describe('extract', function (): void {
         $result = shortcodeProcessor()->extract('[probe/] then [gallery ids="1"]', new BufferedOutput);
 
         expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
-            ->and($result[0]['attributes'] ?? null)->toBe([]);
+            ->and(array_column($result, 'attributes'))->toBe([[], ['ids' => '1']]);
     });
 
     it('parses flags, quoted, escaped and unquoted attributes', function (): void {
