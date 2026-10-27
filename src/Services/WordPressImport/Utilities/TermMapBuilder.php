@@ -22,7 +22,8 @@ class TermMapBuilder
      *
      * Creates a standardized term map structure that includes:
      *   - Basic term data (ID, taxonomy, slug, name, parent)
-     *   - Resolved parent IDs (converted from parent slugs)
+     *   - Resolved parent IDs (converted from parent slugs, within the child's
+     *     taxonomy)
      *   - Pre-computed full hierarchical slugs
      *   - Optional taxonomy filtering
      *
@@ -99,7 +100,12 @@ class TermMapBuilder
 
             // Convert parent slug to parent ID if parent exists
             if ($termParent !== '') {
-                // Search through all terms to find parent by slug
+                // ---
+                // Search the terms for the parent by slug. WordPress slugs are unique
+                // only within a taxonomy, and a parent always shares its child's
+                // taxonomy, so a term in another taxonomy is never the parent, even
+                // when it carries the same slug and comes first in the export.
+                // ---
                 foreach ($terms as $parentTerm) {
                     if (! ($parentTerm instanceof SimpleXMLElement)) {
                         continue;
@@ -111,8 +117,17 @@ class TermMapBuilder
                         'wp:term_slug'
                     );
 
-                    // Check if this term matches the parent slug
-                    if ($parentTermSlug === $termParent) {
+                    // Extract parent term taxonomy from XML
+                    $parentTermTaxonomy = XpathHelper::getStringValue(
+                        $parentTerm,
+                        'wp:term_taxonomy'
+                    );
+
+                    // Check if this term matches the parent slug in the child's taxonomy
+                    if (
+                        $parentTermSlug === $termParent
+                        && $parentTermTaxonomy === $termTaxonomy
+                    ) {
                         // Extract parent term ID and break the loop
                         $parentId = XpathHelper::getStringValue(
                             $parentTerm,
