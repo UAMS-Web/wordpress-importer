@@ -273,12 +273,18 @@ it('reads a post category only from a category element, not a tag', function ():
     expect(urlStructureFind('https://example.com/site/research/news', [$item]))->toBeNull();
 });
 
-it('falls back to the parent for a post whose date or category does not fit', function (): void {
-    // A post with a parent page named like the first segment
+it('finds nothing for a post outside the URL\'s category, even under a parent page named like it', function (): void {
+    // The category check decides alone: it does not fall back to the parent
     $items = [urlStructureItem('3', 'research'), urlStructureItem('7', 'news', '3', 'post')];
 
-    expect(urlStructureFind('https://example.com/site/research/news', $items))->toBeNull()
-        ->and(urlStructureFind('https://example.com/site/2024/01/02/news', [urlStructureItem('7', 'news', type: 'post', fields: ['wp:post_date' => '2023-05-05'])]))->toBeNull();
+    expect(urlStructureFind('https://example.com/site/research/news', $items))->toBeNull();
+});
+
+it('falls back to the parent for a post whose date does not fit', function (): void {
+    // The segment before the slug names the post's parent page
+    $items = [urlStructureItem('3', '02', '1'), urlStructureItem('7', 'news', '3', 'post', fields: ['wp:post_date' => '2023-05-05'])];
+
+    expect(urlStructureFind('https://example.com/site/2024/01/02/news', $items))->toBe(['post_id' => '7', 'post_name' => 'news', 'post_type' => 'post']);
 });
 
 it('finds a single-segment post at the root, without the date or category checks', function (): void {
@@ -365,3 +371,23 @@ it('finds nothing for a post matched by its category that has no post ID', funct
 
     expect(urlStructureFind('https://example.com/site/research/news', [$item]))->toBeNull();
 });
+
+it('does not take a page with no parent ID for the child of an item with an empty post ID', function (): void {
+    // An empty CDATA section keeps a text node, so the parent query for an empty
+    // ID would find this item
+    $parent = '<item><wp:post_id><![CDATA[]]></wp:post_id><wp:post_name>parent</wp:post_name><wp:post_parent>0</wp:post_parent><wp:post_type>page</wp:post_type><wp:status>draft</wp:status></item>';
+    $child = '<item><wp:post_id>8</wp:post_id><wp:post_name>team</wp:post_name><wp:post_type>page</wp:post_type><wp:status>draft</wp:status></item>';
+
+    expect(urlStructureFind('https://example.com/site/parent/team', [$parent, $child]))->toBeNull();
+});
+
+it('finds nothing for a match whose first post name is empty', function (string $url, string $type): void {
+    // The query matches any post name element, and the first one is read back
+    $item = "<item><wp:post_id>7</wp:post_id><wp:post_name></wp:post_name><wp:post_name>news</wp:post_name><wp:post_parent>0</wp:post_parent><wp:post_type>{$type}</wp:post_type><wp:status>draft</wp:status>"
+        .'<category domain="category" nicename="research"><![CDATA[research]]></category></item>';
+
+    expect(urlStructureFind($url, [$item]))->toBeNull();
+})->with([
+    'a post matched by its category' => ['https://example.com/site/research/news', 'post'],
+    'a root page' => ['https://example.com/site/news', 'page'],
+]);

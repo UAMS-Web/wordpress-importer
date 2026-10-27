@@ -3267,9 +3267,12 @@ class LinkProcessor
                     'wp:post_type'
                 );
 
-                // Return null if the post ID is missing (the name matched the last
-                // segment and the type is post, so neither can be empty)
-                if ($postId === '') {
+                // Return null if the post ID or name is missing (the type is post;
+                // the name can be empty when the item carries a second, matching one)
+                if (
+                    $postId === ''
+                    || $postName === ''
+                ) {
                     return null;
                 }
 
@@ -3300,9 +3303,12 @@ class LinkProcessor
                     'wp:post_parent'
                 );
 
-                // Skip a root-level item, which cannot be the child the path names
-                // (an item with no parent ID finds no parent below)
-                if ($parentPostId === '0') {
+                // Skip a root-level item or one with no parent ID, which cannot be
+                // the child the path names
+                if (
+                    $parentPostId === '0'
+                    || $parentPostId === ''
+                ) {
                     continue;
                 }
 
@@ -3423,10 +3429,11 @@ class LinkProcessor
             'wp:post_type'
         );
 
-        // Check if the post ID and type are present (the name matched the last
-        // segment, so it cannot be empty)
+        // Check if all required fields are present (the name can be empty when
+        // the item carries a second, matching one)
         if (
             $postId === ''
+            || $postName === ''
             || $postType === ''
         ) {
             // Return null if any required field is missing
