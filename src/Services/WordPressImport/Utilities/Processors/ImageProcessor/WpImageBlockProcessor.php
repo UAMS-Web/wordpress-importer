@@ -114,10 +114,9 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             $node
         );
 
-        // Select the first <figure> node found; a constant expression against a
-        // node of this document cannot fail, so false reads as no figure
-        // query() returns false only for a malformed expression or context node,
-        // which this constant expression and in-document node cannot be.
+        // Select the first <figure> node found. query() returns false only for a
+        // malformed expression or context node, which this constant expression
+        // and in-document node cannot be.
         // @pest-mutate-ignore: FalseToTrue
         $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 

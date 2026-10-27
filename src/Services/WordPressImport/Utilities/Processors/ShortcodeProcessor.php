@@ -104,19 +104,17 @@ class ShortcodeProcessor
         string $content,
         OutputInterface $output
     ): array {
-        return $this->extractShortcodes($content, $output);
+        return $this->extractShortcodes($content);
     }
 
     /**
      * Extracts shortcode data from text, typed for this class's own callers.
      *
      * @param  string  $content  The raw text containing shortcodes
-     * @param  OutputInterface  $output  Console output for logging errors
      * @return list<array{name: string, attributes: array<string, string|true>, content: string, original: string}> Registered and dropped shortcodes only
      */
     private function extractShortcodes(
-        string $content,
-        OutputInterface $output
+        string $content
     ): array {
         $shortcodes = [];
 
@@ -540,8 +538,9 @@ class ShortcodeProcessor
     /**
      * Processes shortcodes in content, converting supported ones to Tiptap HTML.
      *
-     * Shortcodes with no handler are left in place untouched; extract() does
-     * not return them, so they are not tracked as unaddressed here.
+     * Recognized-but-dropped shortcodes are stripped. Unregistered ones are left
+     * in place untouched; extract() does not return them, so they are not
+     * tracked as unaddressed here.
      *
      * @param  string  $content  HTML content containing shortcodes
      * @param  string  $site  Statamic site handle
@@ -564,8 +563,7 @@ class ShortcodeProcessor
         ?string $pageSlug = null
     ): string {
         $shortcodes = $this->extractShortcodes(
-            $content,
-            $output
+            $content
         );
 
         // A lone registered shortcode wrapped in <p> becomes the handler markup alone
