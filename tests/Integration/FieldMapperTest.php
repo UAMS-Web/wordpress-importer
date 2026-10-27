@@ -131,6 +131,7 @@ it('gathers each hero slide from its flat meta keys', function (): void {
 });
 
 it('maps a hero button link to its url and target', function (): void {
+    // Characterization of #150: a `_blank` target imports as false
     [$data] = fieldMapperRun($this, ['page_hero_hero_0_hero_button_url' => ['url' => 'https://example.com/apply', 'target' => '_blank']]);
 
     $slide = fieldMapperSlide($data, 0);
@@ -473,4 +474,44 @@ it('enables a hero slide that carries no disable key', function (): void {
     [$data] = fieldMapperRun($this, ['page_hero_hero_0_hero_heading' => 'Hi']);
 
     expect(fieldMapperSlide($data, 0)['enabled'] ?? null)->toBeTrue();
+});
+
+it('gathers a zero-padded hero index into the same slide', function (): void {
+    [$data] = fieldMapperRun($this, ['page_hero_hero_01_hero_heading' => 'A', 'page_hero_hero_1_hero_body' => 'B']);
+
+    $heroes = is_array($data['header_hero'] ?? null) ? $data['header_hero'] : [];
+
+    expect(array_keys($heroes))->toBe([1])
+        ->and(fieldMapperSlide($data, 1))->toBe(['type' => 'new_set', 'enabled' => true, 'heading' => 'A', 'body' => 'B']);
+});
+
+it('stores an empty media contact when the prefix replacement fails at a PCRE limit', function (): void {
+    $limit = ini_get('pcre.backtrack_limit');
+    ini_set('pcre.backtrack_limit', '0');
+
+    try {
+        [$data] = fieldMapperRun($this, ['media_contact' => 'Media   Team']);
+    } finally {
+        ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+    }
+
+    expect($data['media_contact'] ?? null)->toBe('');
+});
+
+it('skips a direct-map target that is not a field handle, and keeps reading', function (): void {
+    $mapper = new class extends FieldMapper
+    {
+        /**
+         * A map whose first two targets are not field handles.
+         *
+         * @var array<int|string, mixed>
+         */
+        protected $directMapMetaKeys = ['bad_int' => 5, 'bad_empty' => '', 'genesis_scripts_body_position' => 'scripts_body_position'];
+    };
+
+    $data = ['site' => 'default'];
+    $keys = $mapper->mapFields(['bad_int' => 'x', 'bad_empty' => 'y', 'genesis_scripts_body_position' => 'top'], $data, 'page', app(XmlParser::class), app(AssetImporter::class), [], new BufferedOutput);
+
+    expect($data)->toBe(['site' => 'default', 'scripts_body_position' => 'top'])
+        ->and($keys)->toBe(['genesis_scripts_body_position']);
 });

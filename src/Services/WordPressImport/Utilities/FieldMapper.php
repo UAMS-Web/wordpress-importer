@@ -85,9 +85,7 @@ class FieldMapper
                     $matches
                 ) === 1
             ) {
-                // Extract hero index from matched pattern. PHP stores a numeric-string
-                // array key as an integer, so the cast changes no slide's index.
-                // @pest-mutate-ignore: RemoveIntegerCast
+                // Extract hero index from matched pattern, so `01` and `1` are one slide
                 $index = (int) $matches[1];
 
                 // Extract hero field from matched pattern
@@ -195,11 +193,9 @@ class FieldMapper
             if (isset($this->directMapMetaKeys[$normalizedKey])) {
                 $targetField = $this->directMapMetaKeys[$normalizedKey];
 
-                // Every entry maps to a non-empty string, so no test reaches this; it
-                // narrows the property's loose type for PHPStan
-                // @pest-mutate-ignore: BooleanOrToBooleanAnd, EmptyStringToNotEmpty
+                // Skip a target that is not a field handle, which only a subclass
+                // overriding the map can supply
                 if (! \is_string($targetField) || $targetField === '') {
-                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -427,9 +423,8 @@ class FieldMapper
                             $normalizedValue
                         );
 
-                        // Lowercase the remainder. A fixed pattern without the `u` flag
-                        // cannot fail on a string, so the null fallback is never used.
-                        // @pest-mutate-ignore: EmptyStringToNotEmpty
+                        // Lowercase the remainder, or store an empty key when the
+                        // replacement fails at a PCRE limit
                         $mediaContactKey = \strtolower($strippedContact ?? '');
 
                         // Set the mapped media contact key in entry data
@@ -548,8 +543,8 @@ class FieldMapper
 
                     $siteHandle = self::extractScalarString($data['site'] ?? '');
 
-                    // Check if this is a page with a valid thumbnail value
-                    // An empty thumbnail imports nothing, so only pages are checked
+                    // Check if this is a page. An empty thumbnail imports nothing, so
+                    // the value is not checked here.
                     if ($postType === 'page') {
                         // Import image with disabled upload handling
                         $featuredImagePath = ImageProcessor::importImageWithDisabledUploadHandling(
