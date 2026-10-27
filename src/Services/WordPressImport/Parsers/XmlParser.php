@@ -204,10 +204,14 @@ class XmlParser implements ContentSource
         // Execute XPath query and get nodes
         $nodes = $this->xml->xpath($query);
 
-        if ($nodes === false || ! \is_array($nodes)) {
+        // An invalid query yields false (or null) rather than a list
+        if (! \is_array($nodes)) {
             return [];
         }
 
+        // xpath() already returns a list, but its declared type is a plain
+        // array, so the declared list return needs the reindex.
+        // @pest-mutate-ignore: UnwrapArrayValues
         return \array_values($nodes);
     }
 
@@ -262,11 +266,11 @@ class XmlParser implements ContentSource
             // Execute XPath query and cache the results
             $attachmentNodes = $this->xml->xpath($query);
 
-            if ($attachmentNodes === false || ! \is_array($attachmentNodes)) {
-                $this->cachedAttachments = [];
-            } else {
-                $this->cachedAttachments = \array_values($attachmentNodes);
-            }
+            // An invalid query yields false (or null) rather than a list.
+            // xpath() already returns a list, but its declared type is a plain
+            // array, so the declared list property needs the reindex.
+            // @pest-mutate-ignore: UnwrapArrayValues
+            $this->cachedAttachments = \is_array($attachmentNodes) ? \array_values($attachmentNodes) : [];
 
             // Return the found attachments
             return $this->cachedAttachments;
@@ -366,9 +370,7 @@ class XmlParser implements ContentSource
             }
         }
 
-        $reader->close();
-
-        // Clean up variables to free up memory
+        // Release the reader, which closes it
         unset($reader);
 
         // Cache the terms for future calls
@@ -419,9 +421,7 @@ class XmlParser implements ContentSource
             }
         }
 
-        $reader->close();
-
-        // Clean up variables to free up memory
+        // Release the reader, which closes it
         unset($reader);
 
         return $tags;
@@ -470,9 +470,7 @@ class XmlParser implements ContentSource
             }
         }
 
-        $reader->close();
-
-        // Clean up variables to free up memory
+        // Release the reader, which closes it
         unset($reader);
 
         return $categories;

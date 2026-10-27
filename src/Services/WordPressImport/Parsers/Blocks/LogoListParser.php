@@ -122,7 +122,12 @@ class LogoListParser
         // Handle attributes with or without 'data' key
         $data = $this->resolveDataAttributes($attributes);
 
-        // Build term map for category and label taxonomies using shared builder
+        // ---
+        // Build the term map over both logo list taxonomies, as the item
+        // creator does, so a category whose parent id resolves to a label term
+        // keeps the same full slug on both sides. The category filter below
+        // accepts only category terms from it.
+        // ---
         $termMap = TermMapBuilder::buildTermMap(
             $terms,
             [
@@ -251,7 +256,7 @@ class LogoListParser
             ProcessingContext::getStatamicEntryId(),
             ProcessingContext::getCollectionHandle()
         );
-        $moreButtonTarget = ($moreButtonUrlData['target'] ?? '') === '_blank';
+        $moreButtonTarget = ($moreButtonUrlData['target'] ?? null) === '_blank';
         $moreButtonDescription = HtmlTagStripper::strip(
             $this->getStringAttribute(
                 $data,
@@ -325,8 +330,11 @@ class LogoListParser
             // Normalize term ID to string for map lookups and deferred queues.
             $termId = (string) $id;
 
-            // Skip unknown term IDs that are not available in the prepared map.
-            if (! isset($termMap[$termId])) {
+            // Skip unknown term IDs, and label terms, which are not categories.
+            if (
+                ! isset($termMap[$termId])
+                || $termMap[$termId]['term_taxonomy'] !== 'logo-list-category'
+            ) {
                 continue;
             }
 
@@ -343,10 +351,10 @@ class LogoListParser
                 continue;
             }
 
-            // Get the full term slug from pre-computed term map
-            $fullSlug = $termMap[$termId]['full_slug'] !== ''
-                ? $termMap[$termId]['full_slug']
-                : $termMap[$termId]['term_slug'];
+            // Get the full term slug from the pre-computed term map. It is never
+            // empty: the builder drops a term without a slug, and the full slug
+            // always ends in the term's own.
+            $fullSlug = $termMap[$termId]['full_slug'];
 
             // Add the full term slug to the filter categories
             $filterCategories[] = $fullSlug;
@@ -364,22 +372,10 @@ class LogoListParser
             // Check if the page slug is set
             if ($pageSlug !== null && $pageSlug !== '') {
                 // Add site prefix to the full hierarchical slug for validation
-                $siteSpecificSlugs = TaxonomySlugProcessor::addSitePrefixToSlugs(
-                    [$fullSlug],
+                $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $fullSlug,
                     $site
                 );
-
-                // Skip unexpected taxonomy output values.
-                if (
-                    $siteSpecificSlugs === []
-                    || ! isset($siteSpecificSlugs[0])
-                    || ! \is_string($siteSpecificSlugs[0])
-                ) {
-                    continue;
-                }
-
-                // Extract the site-specific slug for validation tracking.
-                $siteSpecificSlug = $siteSpecificSlugs[0];
 
                 self::$termsUsed['logos_item_categories'][$siteSpecificSlug] ??= [];
 
@@ -432,7 +428,7 @@ class LogoListParser
 
             $labelReference = TermDestinationRegistry::referenceFor(
                 'logo-list-label',
-                (string) $id
+                $id
             );
 
             // ---

@@ -129,11 +129,12 @@ class XmlStreamParser
                     // Extract the complete XML for this item element
                     $xml = $reader->readOuterXml();
 
-                    // Check if the XML extraction failed or returned empty content
-                    if (
-                        (\trim($xml) === '')
-                    ) {
-                        // Skip this item and continue to the next one
+                    // An item the reader cannot expand comes back as an empty string
+                    if ($xml === '') {
+                        // Skip this item and continue to the next one. A fatal
+                        // error lies within reach, so no later item of the part
+                        // can be read and stopping here would end it the same way.
+                        // @pest-mutate-ignore: ContinueToBreak
                         continue;
                     }
 
@@ -154,14 +155,14 @@ class XmlStreamParser
                         // Get all XML namespaces from the item
                         $namespaces = $item->getNamespaces(true);
 
-                        // Extract the WordPress namespace for accessing WP-specific elements
-                        $wp = $namespaces['wp'] ?? null;
+                        // Read WordPress elements from the wp namespace, or unprefixed when it is absent
+                        $wpChildren = $item->children($namespaces['wp'] ?? null);
 
-                        // Extract post type using WordPress namespace if available, otherwise without namespace
-                        $postTypeNode = ($wp !== null && $wp !== '') ? $item->children($wp)->post_type : $item->post_type;
+                        // Extract the post type node
+                        $postTypeNode = $wpChildren->post_type;
 
-                        // Extract status using WordPress namespace if available, otherwise without namespace
-                        $statusNode = ($wp !== null && $wp !== '') ? $item->children($wp)->status : $item->status;
+                        // Extract the status node
+                        $statusNode = $wpChildren->status;
 
                         // Convert post type node to string
                         $type = (string) $postTypeNode;
@@ -212,15 +213,13 @@ class XmlStreamParser
                 }
             }
         } finally {
-            // Close the XML reader to free resources
-            $reader->close();
-
-            // Clean up variables to free up memory
+            // Release the reader, which closes it
             unset(
                 $reader
             );
 
-            // Force garbage collection to reclaim memory from circular references
+            // Reclaim circular references between parts; no output depends on it.
+            // @pest-mutate-ignore: RemoveFunctionCall
             gc_collect_cycles();
         }
     }
@@ -269,10 +268,12 @@ class XmlStreamParser
                 ) {
                     // Extract the complete XML for this item element
                     $xml = $reader->readOuterXml();
-                    if (
-                        (\trim($xml) === '')
-                    ) {
-                        // Skip this item and continue to the next one
+                    // An item the reader cannot expand comes back as an empty string
+                    if ($xml === '') {
+                        // Skip this item and continue to the next one. A fatal
+                        // error lies within reach, so no later item of the part
+                        // can be read and stopping here would end it the same way.
+                        // @pest-mutate-ignore: ContinueToBreak
                         continue;
                     }
 
@@ -291,14 +292,8 @@ class XmlStreamParser
                     // Get all XML namespaces from the item
                     $namespaces = $item->getNamespaces(true);
 
-                    // Extract the WordPress namespace for accessing WP-specific elements
-                    $wp = $namespaces['wp'] ?? null;
-
-                    // ---
-                    // Extract status using WordPress namespace if available, otherwise without
-                    // namespace
-                    // ---
-                    $statusNode = ($wp !== null && $wp !== '') ? $item->children($wp)->status : $item->status;
+                    // Read the status from the wp namespace, or unprefixed when it is absent
+                    $statusNode = $item->children($namespaces['wp'] ?? null)->status;
 
                     // Convert status node to string
                     $status = (string) $statusNode;
@@ -317,15 +312,13 @@ class XmlStreamParser
                 }
             }
         } finally {
-            // Close the XML reader to free resources
-            $reader->close();
-
-            // Clean up variables to free up memory
+            // Release the reader, which closes it
             unset(
                 $reader
             );
 
-            // Force garbage collection to reclaim memory from circular references
+            // Reclaim circular references between parts; no output depends on it.
+            // @pest-mutate-ignore: RemoveFunctionCall
             gc_collect_cycles();
         }
     }
