@@ -156,7 +156,7 @@ it('maps the block and each counted section with a link onto the set', function 
         ...linkListSection(0, [
             'title' => 'Apply <em>now</em>',
             'body' => '<p>Start here.</p>',
-            'url' => ['url' => 'https://example.com/apply', 'target' => '_self'],
+            'url' => ['url' => 'https://example.com/apply', 'target' => '_blank'],
             'description' => 'Apply <i>online</i>',
         ]),
         ...linkListSection(1, ['title' => 'Visit', 'url' => 'https://example.com/visit']),
@@ -301,7 +301,7 @@ it('makes an imported same-site file an asset file item', function (string $entr
         'link_list_section' => 1,
         ...linkListSection(0, [
             'title' => 'Report',
-            'url' => ['url' => 'https://wp.example.org/wp-content/uploads/report.pdf', 'target' => '_self'],
+            'url' => ['url' => 'https://wp.example.org/wp-content/uploads/report.pdf', 'target' => '_blank'],
         ]),
     ], $assetImporter);
 

@@ -112,7 +112,7 @@ it('maps each counted section onto an item, importing no image for a section wit
             'heading' => 'Our <b>care</b>',
             'body' => '<p>Close to home.</p>',
             'button_text' => '<span>Find us</span>',
-            'button_url' => ['url' => 'https://example.com/find', 'target' => '_self'],
+            'button_url' => ['url' => 'https://example.com/find', 'target' => '_blank'],
             'button_description' => 'Find a <i>clinic</i>',
             'background_color' => 'bg-red',
         ]),

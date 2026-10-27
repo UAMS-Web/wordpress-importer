@@ -44,11 +44,12 @@ class LinkHelper
     /**
      * Extract the target from a link value.
      *
-     * Returns false for `_blank` (a new tab) and for a missing or falsy target, and
-     * true for any other truthy target.
+     * Returns true for `_blank`, the target WordPress writes for a link that opens
+     * in a new window, and false for any other target or none. The host app reads
+     * true as "open in a new window" (#150).
      *
      * @param  mixed  $linkValue  The link value (array or serialized string)
-     * @return bool Whether the target is set and is not `_blank`
+     * @return bool Whether the link opens in a new window
      */
     public static function getTarget(
         mixed $linkValue
@@ -59,9 +60,8 @@ class LinkHelper
             'target'
         );
 
-        // Convert _blank to false, other values to boolean; a missing target is
-        // null, which converts to false
-        return $target === '_blank' ? false : (bool) $target;
+        // Only _blank opens a new window; a missing target is null
+        return $target === '_blank';
     }
 
     /**
