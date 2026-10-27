@@ -734,18 +734,35 @@ function stampHashOf(treePath) {
 }
 
 /**
+ * The environment every `git apply` in the patch probe runs under.
+ *
+ * Both calls run in a scratch directory made inside the OS temporary directory, and that directory
+ * can sit inside a repository (a home directory kept in git, say). git would then adopt that
+ * repository and read a patch's paths relative to it, skipping every one outside the directory it
+ * runs in: `--numstat` reports nothing and `--reverse` exits 0. The ceiling stops git climbing
+ * into the temporary directory, so both read the paths relative to the scratch directory. It
+ * protects only a directory strictly below it, which is why neither call runs in `tmpdir()`.
+ *
+ * @return object
+ */
+function outsideAnyRepository() {
+    return { GIT_CEILING_DIRECTORIES: tmpdir() };
+}
+
+/**
  * The paths a patch touches, relative to the package after its `-p` strip.
  *
- * Read with `git apply --numstat -z`, which parses the patch without applying it. A rename's two
- * paths arrive as their own NUL-separated fields, so every field that is not a counted line is a
- * path too.
+ * Read with `git apply --numstat -z`, which parses the patch without applying it. Every field
+ * that is not a counted line is taken as a path too, so a rename is covered whether git emits one
+ * path for it or two (git 2.39.5 emits only the new one).
  *
  * @param  string  file   The patch file
  * @param  number  depth
+ * @param  string  cwd    A scratch directory below the OS temporary directory
  * @return ?array  The paths, or null when git could not read the patch
  */
-function patchedPaths(file, depth) {
-    const result = spawn('git', ['apply', '--numstat', '-z', `-p${depth}`, file], tmpdir(), ['ignore', 'pipe', 'ignore']);
+function patchedPaths(file, depth, cwd) {
+    const result = spawn('git', ['apply', '--numstat', '-z', `-p${depth}`, file], cwd, ['ignore', 'pipe', 'ignore'], outsideAnyRepository());
 
     if (result.status !== 0 || typeof result.stdout !== 'string') {
         return null;
@@ -769,8 +786,8 @@ function patchedPaths(file, depth) {
  * order. Nothing in `vendor/` is touched.
  *
  * `missing` means a patch would not reverse (`git apply` exits 1). `unchecked` means the check
- * itself could not run: a patch file that is not there, or git failing to start or to read a
- * patch. The two are kept apart because a reinstall repairs the first and only hides the second.
+ * itself could not run: a patch file that is not there, a touched file that could not be copied,
+ * or git failing to start or to read a patch. The two are kept apart because a reinstall repairs the first and only hides the second.
  *
  * @param  string  treePath
  * @param  string  name      The package, as `vendor/name`
@@ -786,36 +803,40 @@ export function patchStackState(treePath, name, patches) {
         return { state: 'unchecked', reason: `patch file not found: ${absent}` };
     }
 
-    const touched = new Set();
-
-    for (const [index, patch] of patches.entries()) {
-        const paths = patchedPaths(files[index], patch.depth);
-
-        if (paths === null) {
-            return { state: 'unchecked', reason: `git could not read ${patch.url}` };
-        }
-
-        paths.forEach((path) => touched.add(path));
-    }
-
     const scratch = mkdtempSync(join(tmpdir(), 'wt-slots-patch-'));
 
     try {
+        const touched = new Set();
+
+        for (const [index, patch] of patches.entries()) {
+            const paths = patchedPaths(files[index], patch.depth, scratch);
+
+            if (paths === null) {
+                return { state: 'unchecked', reason: `git could not read ${patch.url}` };
+            }
+
+            paths.forEach((path) => touched.add(path));
+        }
+
         // A path the package does not have is left out, so a patch that creates a file reads as
         // missing when the file is not there.
         for (const path of touched) {
             const source = join(packageDir, path);
 
             if (existsSync(source)) {
-                mkdirSync(dirname(join(scratch, path)), { recursive: true });
-                copyFileSync(source, join(scratch, path));
+                // A file that cannot be read leaves the stack unjudged; thrown, it would end
+                // `status` for every tree, verdict line included.
+                try {
+                    mkdirSync(dirname(join(scratch, path)), { recursive: true });
+                    copyFileSync(source, join(scratch, path));
+                } catch (error) {
+                    return { state: 'unchecked', reason: `could not copy ${path}: ${error.code || error.message}` };
+                }
             }
         }
 
         for (let index = patches.length - 1; index >= 0; index--) {
-            // The ceiling stops git adopting a repository above the temporary directory, which would
-            // make it read the patch's paths relative to that repository and skip them silently.
-            const result = spawn('git', ['apply', '--reverse', `-p${patches[index].depth}`, files[index]], scratch, ['ignore', 'ignore', 'pipe'], { GIT_CEILING_DIRECTORIES: tmpdir() });
+            const result = spawn('git', ['apply', '--reverse', `-p${patches[index].depth}`, files[index]], scratch, ['ignore', 'ignore', 'pipe'], outsideAnyRepository());
 
             if (result.error) {
                 return { state: 'unchecked', reason: `git could not be started: ${result.error.message}` };

@@ -4,7 +4,7 @@
 // file is invoked directly, so this import never shells out to git or composer.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -1307,10 +1307,10 @@ describe('patchDrift and reapplyPatches, against real files (#113)', () => {
     };
 
     /** A one-line patch to `src/a.txt`, from `from` to `to`, with a context line on each side. */
-    const patch = (from, to) => [
-        'diff --git a/src/a.txt b/src/a.txt',
-        '--- a/src/a.txt',
-        '+++ b/src/a.txt',
+    const patch = (from, to, prefix = '') => [
+        `diff --git a/${prefix}src/a.txt b/${prefix}src/a.txt`,
+        `--- a/${prefix}src/a.txt`,
+        `+++ b/${prefix}src/a.txt`,
         '@@ -1,3 +1,3 @@',
         ' one',
         `-${from}`,
@@ -1325,7 +1325,7 @@ describe('patchDrift and reapplyPatches, against real files (#113)', () => {
      * A tree shaped like a slot: a git repo ignoring `vendor/`, the patch files, their lock entry,
      * and the patched package installed with `contents` in the file the patches change.
      */
-    const fixture = (contents, patches = { 'widget.patch': patch('old', 'new') }, extraLock = {}) => {
+    const fixture = (contents, patches = { 'widget.patch': patch('old', 'new') }, extraLock = {}, depth = 1) => {
         const root = mkdtempSync(join(tmpdir(), 'wt-patches-'));
         const tree = join(root, 'wordpress-importer');
 
@@ -1341,7 +1341,7 @@ describe('patchDrift and reapplyPatches, against real files (#113)', () => {
         writeFileSync(join(tree, 'vendor', 'acme', 'widget', 'src', 'a.txt'), contents);
         writeFileSync(join(tree, 'patches.lock.json'), JSON.stringify({
             _hash: 'x',
-            patches: { 'acme/widget': Object.keys(patches).map((name) => ({ url: `patches/${name}`, depth: 1 })), ...extraLock },
+            patches: { 'acme/widget': Object.keys(patches).map((name) => ({ url: `patches/${name}`, depth })), ...extraLock },
         }));
 
         return { root, tree };
@@ -1418,6 +1418,70 @@ describe('patchDrift and reapplyPatches, against real files (#113)', () => {
             assert.equal(drift.unchecked.length, 1);
             assert.match(drift.unchecked[0].reason, /patch file not found/);
         } finally {
+            discard(root);
+        }
+    });
+
+    it('strips the recorded depth, not a fixed one', () => {
+        // Read at -p1, an applied depth-2 patch names paths the package does not have, and reads
+        // as missing.
+        const { root, tree } = fixture(file('new'), { 'widget.patch': patch('old', 'new', 'pkg/') }, {}, 2);
+
+        try {
+            assert.deepEqual(patchDrift(tree), { unpatched: [], unchecked: [], patchesLockUnreadable: false });
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('reads paths correctly when the OS temporary directory sits inside a repository', () => {
+        // Without the ceiling on `--numstat`, the applied patch's path carries the temporary
+        // directory's own prefix, nothing is copied, and the tree reads as missing. Without it on
+        // `--reverse`, git skips the path, exits 0, and the unapplied tree reads as patched.
+        const patched = fixture(file('new'));
+        const unpatched = fixture(file('old'));
+        const outer = mkdtempSync(join(tmpdir(), 'wt-outer-'));
+        const saved = { TMPDIR: process.env.TMPDIR, TEMP: process.env.TEMP, TMP: process.env.TMP };
+
+        git(outer, 'init', '-q', '.');
+        mkdirSync(join(outer, 'tmpd'));
+
+        try {
+            for (const key of Object.keys(saved)) {
+                process.env[key] = join(outer, 'tmpd');
+            }
+
+            assert.equal(tmpdir(), join(outer, 'tmpd'), 'the probe must see the in-repository temporary directory');
+            assert.deepEqual(patchDrift(patched.tree).unpatched, []);
+            assert.deepEqual(patchDrift(unpatched.tree).unpatched, ['acme/widget']);
+        } finally {
+            for (const [key, value] of Object.entries(saved)) {
+                if (value === undefined) {
+                    delete process.env[key];
+                } else {
+                    process.env[key] = value;
+                }
+            }
+
+            discard(patched.root);
+            discard(unpatched.root);
+            discard(outer);
+        }
+    });
+
+    it('reports a touched file it cannot read as unchecked, rather than throwing', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, () => {
+        const { root, tree } = fixture(file('new'));
+
+        try {
+            chmodSync(vendorFile(tree), 0o000);
+
+            const drift = patchDrift(tree);
+
+            assert.deepEqual(drift.unpatched, []);
+            assert.equal(drift.unchecked.length, 1);
+            assert.match(drift.unchecked[0].reason, /could not copy src\/a\.txt/);
+        } finally {
+            chmodSync(vendorFile(tree), 0o644);
             discard(root);
         }
     });
