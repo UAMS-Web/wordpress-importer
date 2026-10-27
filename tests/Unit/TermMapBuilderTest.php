@@ -63,6 +63,30 @@ function termMapField(array $map, string $id, string $field): ?string
     return $map[$id][$field] ?? null;
 }
 
+/**
+ * A logo list label carrying the slug `research`.
+ */
+function termMapLabel(): SimpleXMLElement
+{
+    return termMapTerm('5', 'research', taxonomy: 'logo-list-label');
+}
+
+/**
+ * A logo list category carrying the same slug `research`.
+ */
+function termMapCategory(): SimpleXMLElement
+{
+    return termMapTerm('9', 'research', taxonomy: 'logo-list-category');
+}
+
+/**
+ * A logo list category whose parent slug is `research`.
+ */
+function termMapChild(): SimpleXMLElement
+{
+    return termMapTerm('12', 'partners', taxonomy: 'logo-list-category', parent: 'research');
+}
+
 it('maps each term to its full record', function (): void {
     $map = TermMapBuilder::buildTermMap([
         termMapTerm('5', 'news', name: 'News'),
@@ -126,14 +150,40 @@ it('finds a parent past non-elements in the input', function (): void {
         ->and(termMapField($map, '11', 'full_slug'))->toBe('parent_child');
 });
 
-it('resolves a parent slug to the first term that carries it', function (): void {
+it('resolves a parent slug to the term in the child\'s own taxonomy, whatever the export order', function (array $terms): void {
+    // WordPress slugs are unique only within a taxonomy, so a label and a category can
+    // share one; the category's child must find the category, never the label
+    $map = TermMapBuilder::buildTermMap($terms, ['logo-list-category']);
+
+    expect(termMapField($map, '12', 'parent_id'))->toBe('9')
+        ->and(termMapField($map, '12', 'full_slug'))->toBe('research_partners');
+})->with([
+    'the other taxonomy first' => [fn (): array => [termMapLabel(), termMapCategory(), termMapChild()]],
+    'the own taxonomy first' => [fn (): array => [termMapCategory(), termMapLabel(), termMapChild()]],
+    'the child first' => [fn (): array => [termMapChild(), termMapLabel(), termMapCategory()]],
+]);
+
+it('resolves a parent slug to the first term in the child\'s taxonomy that carries it', function (): void {
+    // WordPress keeps a slug unique within a taxonomy, so this only arises in a
+    // malformed export; the first match stays the parent, as before
     $map = TermMapBuilder::buildTermMap([
-        termMapTerm('13', 'child', parent: 'shared'),
-        termMapTerm('14', 'shared'),
-        termMapTerm('15', 'shared', taxonomy: 'post_tag'),
+        termMapTerm('16', 'child', parent: 'shared'),
+        termMapTerm('17', 'shared'),
+        termMapTerm('18', 'shared'),
     ]);
 
-    expect(termMapField($map, '13', 'parent_id'))->toBe('14');
+    expect(termMapField($map, '16', 'parent_id'))->toBe('17');
+});
+
+it('resolves a parent slug the same way with no taxonomy filter', function (): void {
+    $map = TermMapBuilder::buildTermMap([
+        termMapTerm('13', 'shared', taxonomy: 'post_tag'),
+        termMapTerm('14', 'child', parent: 'shared'),
+        termMapTerm('15', 'shared'),
+    ]);
+
+    expect(termMapField($map, '14', 'parent_id'))->toBe('15')
+        ->and(termMapField($map, '14', 'full_slug'))->toBe('shared_child');
 });
 
 it('keeps only the named taxonomies when given a filter, and keeps going past the rest', function (): void {
@@ -162,15 +212,18 @@ it('builds the full slug from every ancestor', function (): void {
     expect(termMapFullSlugs($map))->toBe([20 => 'trunk_branch_leaf', 21 => 'trunk_branch', 22 => 'trunk']);
 });
 
-it('stops a full slug at a parent the filter left out', function (): void {
+it('keeps an empty parent id when the parent slug names a term only in another taxonomy', function (array $filter): void {
     $map = TermMapBuilder::buildTermMap([
         termMapTerm('23', 'child', parent: 'tagged'),
         termMapTerm('24', 'tagged', taxonomy: 'post_tag'),
-    ], ['category']);
+    ], $filter);
 
-    expect(termMapField($map, '23', 'parent_id'))->toBe('24')
+    expect(termMapField($map, '23', 'parent_id'))->toBe('')
         ->and(termMapField($map, '23', 'full_slug'))->toBe('child');
-});
+})->with([
+    'with the child\'s taxonomy as the filter' => [['category']],
+    'with no filter' => [[]],
+]);
 
 it('stops a full slug at a parent cycle', function (): void {
     $map = TermMapBuilder::buildTermMap([

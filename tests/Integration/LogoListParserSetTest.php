@@ -630,9 +630,9 @@ it('does not treat a label term listed among the filter ids as a category', func
 })->group('blocks', 'logo-list');
 
 it('keeps the parent in a category slug when the parent slug is also a label slug', function (): void {
-    // The parent lookup matches by slug across taxonomies and takes the first
-    // match, here the label, so the label must be in the map for the parent to
-    // resolve; the item creator maps both taxonomies the same way.
+    // A label carrying the parent's slug comes first in the export; the parent
+    // lookup stays within the category taxonomy, so the slug keeps the category
+    // chain (#130).
     $xml = simplexml_load_string(<<<'XML'
         <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
             <wp:term>
