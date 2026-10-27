@@ -298,7 +298,7 @@ it('imports every expressible Redirection and Pretty Links rule as one entry for
         ],
     ])
         ->and(\array_keys($entries))->toEqualCanonicalizing(['/old', '^/news/(.*)$', '/flu', '/go/clinic'])
-        ->and($output)->toContain('Redirect domain go.uams.edu: 4 created, 0 updated, 0 disabled, 1 unpublished skipped.');
+        ->and($output)->toContain('Redirect domain go.uams.edu: 4 created, 0 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.');
 
     expect(redirectPluginData($entries['/old']))->toBe([
         'host' => 'go.uams.edu',
@@ -339,7 +339,7 @@ it('disables an imported plugin rule gone from the source on the next run', func
     $output = importRedirectPluginRules(materializeRedirectPlugins($this->workingDirectory)[1]);
     $entries = redirectPluginEntries('gouams.com');
 
-    expect($output)->toContain('Redirect domain gouams.com: 0 created, 1 updated, 1 disabled, 0 unpublished skipped.')
+    expect($output)->toContain('Redirect domain gouams.com: 0 created, 1 updated, 1 disabled, 0 unpublished skipped, 0 shadowed.')
         ->and($entries['/a']->get('target_url'))->toBe('https://uams.edu/a2/')
         ->and($entries['/a']->get('enabled'))->toBeTrue()
         ->and($entries['/b']->get('enabled'))->toBeFalse();
@@ -389,3 +389,121 @@ it('reads plugin rules for a run scoped to redirect rules, and not for one scope
     'pages' => ['page', 0],
     'every type' => [null, 1],
 ]);
+
+/**
+ * The redirect domains summary line's counts, by name.
+ *
+ * @return array<string, int>
+ */
+function redirectPluginSummary(string $output, string $host): array
+{
+    $pattern = '/Redirect domain '.\preg_quote($host, '/').': (\d+) created, (\d+) updated, (\d+) disabled, (\d+) unpublished skipped, (\d+) shadowed\./';
+
+    expect(\preg_match($pattern, $output, $matches))->toBe(1);
+
+    return [
+        'created' => (int) $matches[1],
+        'updated' => (int) $matches[2],
+        'disabled' => (int) $matches[3],
+        'skipped' => (int) $matches[4],
+        'shadowed' => (int) $matches[5],
+    ];
+}
+
+it('keeps the Pretty Links link when a Redirection rule shares its source, and reports the collapse (#108)', function (): void {
+    fakeRedirectPluginApi(
+        'https://go.uams.edu',
+        [
+            servedRedirectionRule(1, '/flu', 'https://uams.edu/redirection-flu/', ['position' => 0]),
+            servedRedirectionRule(2, '/old', 'https://uams.edu/new/'),
+        ],
+        [servedPrettyLink(10, 'flu', 'https://uamshealth.com/flu/')]
+    );
+
+    [, $parser] = materializeRedirectPlugins($this->workingDirectory);
+    $output = importRedirectPluginRules($parser);
+    $entries = redirectPluginEntries('go.uams.edu');
+    $counts = redirectPluginSummary($output, 'go.uams.edu');
+
+    // Pretty Links redirects on `init` at priority 1, ahead of Redirection's priority 10
+    expect(\array_keys($entries))->toEqualCanonicalizing(['/flu', '/old'])
+        ->and($entries['/flu']->get('wordpress_post_id'))->toBe('pretty-links-10')
+        ->and($entries['/flu']->get('target_url'))->toBe('https://uamshealth.com/flu/')
+        ->and($counts)->toBe(['created' => 2, 'updated' => 0, 'disabled' => 0, 'skipped' => 0, 'shadowed' => 1])
+        ->and($counts['created'] + $counts['updated'] + $counts['skipped'] + $counts['shadowed'])->toBe(\count($parser->getItems('redirect_rule')))
+        ->and($output)->toContain('go.uams.edu/flu: redirection-1 shares its source with pretty-links-10 (/flu), which WordPress serves; only pretty-links-10 was imported.')
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([
+            ['host' => 'go.uams.edu', 'source' => '/flu', 'served' => 'pretty-links-10', 'served_source' => '/flu', 'shadowed' => 'redirection-1'],
+        ]);
+});
+
+it('keeps the Redirection rule tried first when two share a source, whatever the export order (#108)', function (): void {
+    fakeRedirectPluginApi(
+        'https://go.uams.edu',
+        [
+            // Two groups; the lower position is tried first, and on a tie the lower id, compared as a number
+            servedRedirectionRule(3, '/give', 'https://uams.edu/third/', ['position' => 9]),
+            servedRedirectionRule(10, '/same', 'https://uams.edu/tenth/', ['position' => 2]),
+            servedRedirectionRule(7, '/give', 'https://uams.edu/seventh/', ['position' => 5, 'group_id' => 2, 'group' => ['id' => 2, 'name' => 'Campaigns', 'module_id' => 1, 'enabled' => true]]),
+            servedRedirectionRule(9, '/same', 'https://uams.edu/ninth/', ['position' => 2]),
+            servedRedirectionRule(12, '/give', 'https://uams.edu/disabled/', ['enabled' => false, 'position' => 0]),
+        ],
+        []
+    );
+
+    [, $parser] = materializeRedirectPlugins($this->workingDirectory);
+    $output = importRedirectPluginRules($parser);
+    $entries = redirectPluginEntries('go.uams.edu');
+
+    // The disabled rule serves nothing, so it does not shadow the rules after it
+    expect($entries)->toHaveCount(2)
+        ->and($entries['/give']->get('wordpress_post_id'))->toBe('redirection-7')
+        ->and($entries['/give']->get('target_url'))->toBe('https://uams.edu/seventh/')
+        ->and($entries['/same']->get('wordpress_post_id'))->toBe('redirection-9')
+        ->and(redirectPluginSummary($output, 'go.uams.edu'))->toBe(['created' => 2, 'updated' => 0, 'disabled' => 0, 'skipped' => 1, 'shadowed' => 2])
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toEqualCanonicalizing([
+            ['host' => 'go.uams.edu', 'source' => '/give', 'served' => 'redirection-7', 'served_source' => '/give', 'shadowed' => 'redirection-3'],
+            ['host' => 'go.uams.edu', 'source' => '/same', 'served' => 'redirection-9', 'served_source' => '/same', 'shadowed' => 'redirection-10'],
+        ]);
+});
+
+it('keeps the same rule and reports the same collapse on a second run (#108)', function (): void {
+    $rules = [
+        servedRedirectionRule(5, '/a', 'https://uams.edu/fifth/', ['position' => 1]),
+        servedRedirectionRule(6, '/a', 'https://uams.edu/sixth/', ['position' => 1]),
+    ];
+
+    fakeRedirectPluginApi('https://go.uams.edu', $rules, []);
+    importRedirectPluginRules(materializeRedirectPlugins($this->workingDirectory)[1]);
+    $first = redirectPluginEntries('go.uams.edu');
+    $firstWarnings = ImportWarningManager::getWarnings('redirects', 'shadowed_rules');
+
+    ImportWarningManager::clearWarnings();
+
+    fakeRedirectPluginApi('https://go.uams.edu', $rules, []);
+    $output = importRedirectPluginRules(materializeRedirectPlugins($this->workingDirectory)[1]);
+    $second = redirectPluginEntries('go.uams.edu');
+
+    expect(redirectPluginSummary($output, 'go.uams.edu'))->toBe(['created' => 0, 'updated' => 1, 'disabled' => 0, 'skipped' => 0, 'shadowed' => 1])
+        ->and($second)->toHaveCount(1)
+        ->and($second['/a']->id())->toBe($first['/a']->id())
+        ->and($second['/a']->get('wordpress_post_id'))->toBe('redirection-5')
+        ->and($second['/a']->get('enabled'))->toBeTrue()
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe($firstWarnings)
+        ->and($firstWarnings)->toBe([['host' => 'go.uams.edu', 'source' => '/a', 'served' => 'redirection-5', 'served_source' => '/a', 'shadowed' => 'redirection-6']]);
+});
+
+it('does not collapse the same source on two domains, or two sources on one (#108)', function (): void {
+    fakeRedirectPluginApi('https://go.uams.edu', [servedRedirectionRule(1, '/a', 'https://uams.edu/go-a/'), servedRedirectionRule(2, '/b', 'https://uams.edu/go-b/')], []);
+    $go = importRedirectPluginRules(materializeRedirectPlugins($this->workingDirectory)[1]);
+
+    fakeRedirectPluginApi('https://gouams.com', [servedRedirectionRule(1, '/a', 'https://uams.edu/gouams-a/')], []);
+    $gouams = importRedirectPluginRules(materializeRedirectPlugins($this->workingDirectory)[1]);
+
+    expect(redirectPluginSummary($go, 'go.uams.edu')['shadowed'])->toBe(0)
+        ->and(redirectPluginSummary($gouams, 'gouams.com'))->toBe(['created' => 1, 'updated' => 0, 'disabled' => 0, 'skipped' => 0, 'shadowed' => 0])
+        ->and(\array_keys(redirectPluginEntries('go.uams.edu')))->toEqualCanonicalizing(['/a', '/b'])
+        ->and(redirectPluginEntries('gouams.com')['/a']->get('target_url'))->toBe('https://uams.edu/gouams-a/')
+        ->and(redirectPluginEntries('go.uams.edu')['/a']->get('target_url'))->toBe('https://uams.edu/go-a/')
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([]);
+});

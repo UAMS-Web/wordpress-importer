@@ -19,6 +19,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcesso
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
@@ -57,6 +58,22 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * @var list<string>
      */
     private const array DOMAIN_RESPONSES = ['301', '302', '303', '307', '308'];
+
+    /**
+     * The order in which WordPress tries each plugin's rules, by the `wp:post_id` prefix (#108).
+     *
+     * Pretty Links redirects on `init` at priority 1, Redirection on `init` at priority 10, and
+     * Safe Redirect Manager on `parse_request` or `template_redirect`, which run after `init`.
+     * A rule whose id carries neither prefix is a Safe Redirect Manager post.
+     *
+     * @var array<string, int>
+     */
+    private const array PLUGIN_RANKS = ['pretty-links-' => 0, 'redirection-' => 1];
+
+    /**
+     * The rank of a rule whose id carries no plugin prefix.
+     */
+    private const int POST_RANK = 2;
 
     public function createGlobals(
         string $site,
@@ -305,6 +322,10 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * An imported entry whose rule is no longer published at the source is disabled, not deleted
      * (wordpress-importer-archive#1311).
      *
+     * Published rules that share a source are one entry, holding the rule WordPress serves for
+     * that path (#108). Every other rule with that source is shadowed: it is not written, and it
+     * is reported with the rule that serves the path, in the output and in the warnings summary.
+     *
      * @param  string  $host  The vanity domain
      * @param  list<SimpleXMLElement>  $redirectRules  The export's `redirect_rule` items
      * @param  string  $site  The Statamic site handle being imported into, for target resolution
@@ -334,15 +355,41 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $updated = 0;
         $skipped = 0;
         $disabled = 0;
+        $shadowed = 0;
 
         // The ids of the entries this run wrote, so every other imported entry for the host is stale
         $written = [];
         $unsupportedResponses = 0;
 
-        foreach (ImportProgress::track($output, "redirect_rule ({$host})", $redirectRules) as $rule) {
+        // The rule WordPress serves for each source, so a rule another one shadows is never written
+        $served = self::servedRules($redirectRules);
+
+        foreach (ImportProgress::track($output, "redirect_rule ({$host})", $redirectRules) as $index => $rule) {
             // Only published rules are live on the domain
             if (XpathHelper::getStringValue($rule, 'wp:status') !== 'publish') {
                 $skipped++;
+
+                continue;
+            }
+
+            // A rule sharing its source with the one WordPress serves never answers a request
+            $source = self::ruleSource($rule);
+            $ruleId = XpathHelper::getStringValue($rule, 'wp:post_id');
+
+            $winner = $served[\strtolower($source)] ?? null;
+
+            if ($winner !== null && $winner['index'] !== $index) {
+                $shadowed++;
+
+                $output->writeln("  - <comment>{$host}{$source}: {$ruleId} shares its source with {$winner['id']} ({$winner['source']}), which WordPress serves; only {$winner['id']} was imported.</comment>");
+
+                ImportWarningManager::addWarning('redirects', 'shadowed_rules', [
+                    'host' => $host,
+                    'source' => $source,
+                    'served' => $winner['id'],
+                    'served_source' => $winner['source'],
+                    'shadowed' => $ruleId,
+                ]);
 
                 continue;
             }
@@ -389,7 +436,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             $disabled++;
         }
 
-        $output->writeln("<info>Redirect domain {$host}: {$created} created, {$updated} updated, {$disabled} disabled, {$skipped} unpublished skipped.</info>");
+        $output->writeln("<info>Redirect domain {$host}: {$created} created, {$updated} updated, {$disabled} disabled, {$skipped} unpublished skipped, {$shadowed} shadowed.</info>");
 
         if ($unsupportedResponses > 0) {
             $output->writeln("  - <comment>{$unsupportedResponses} rule(s) for {$host} use a response code the redirect domains blueprint does not offer; it was kept as WordPress served it.</comment>");
@@ -414,9 +461,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         OutputInterface $output
     ): array {
         // Read the rule as the global-set path reads it
-        $source = HtmlTagStripper::strip(
-            XpathHelper::getStringValue($rule, 'wp:postmeta[wp:meta_key="_redirect_rule_from"]/wp:meta_value')
-        );
+        $source = self::ruleSource($rule);
         $useRegex = XpathHelper::getBoolValue(
             $rule,
             'wp:postmeta[wp:meta_key="_redirect_rule_from_regex"]/wp:meta_value',
@@ -462,6 +507,87 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         }
 
         return $fields;
+    }
+
+    /**
+     * The rule WordPress serves for each source, among the published rules (#108).
+     *
+     * WordPress answers a path with the first rule that matches it, so of the rules sharing a
+     * source, the one tried first is the one served. The plugins are tried in the order of
+     * PLUGIN_RANKS. Within one plugin, Redirection and Safe Redirect Manager both try their rules
+     * by ascending position (`wp:menu_order`) and then by ascending id. Pretty Links slugs are
+     * unique, so two of its links never share a source.
+     *
+     * Sources are compared ignoring case, because `findDomainEntry()` does: the Stache compares
+     * a `where()` value in lower case, so `/Flu` and `/flu` reach one entry. The served rule is
+     * identified by its position in the export, so two rules with the same `wp:post_id` still
+     * resolve to one served rule and one shadowed rule.
+     *
+     * @param  list<SimpleXMLElement>  $redirectRules  The export's `redirect_rule` items
+     * @return array<string, array{index: int, id: string, source: string}> The served rule's
+     *                                                                      position in the export, `wp:post_id` and source, keyed by the lower-cased source
+     */
+    private static function servedRules(array $redirectRules): array
+    {
+        $served = [];
+        $keys = [];
+
+        foreach ($redirectRules as $index => $rule) {
+            // An unpublished rule serves nothing, so it never shadows a published one
+            if (XpathHelper::getStringValue($rule, 'wp:status') !== 'publish') {
+                continue;
+            }
+
+            $source = self::ruleSource($rule);
+            $match = \strtolower($source);
+            $ruleId = XpathHelper::getStringValue($rule, 'wp:post_id');
+            $key = self::servingKey($ruleId, XpathHelper::getIntValue($rule, 'wp:menu_order', 0));
+
+            // Keep the rule tried earliest; export order decides only between identical keys
+            if (! isset($keys[$match]) || $key < $keys[$match]) {
+                $keys[$match] = $key;
+                $served[$match] = ['index' => $index, 'id' => $ruleId, 'source' => $source];
+            }
+        }
+
+        return $served;
+    }
+
+    /**
+     * Where a rule falls in the order WordPress tries rules, as a comparable list.
+     *
+     * @param  string  $ruleId  The rule's `wp:post_id`, with its plugin prefix if it has one
+     * @param  int  $order  The rule's position within its plugin
+     * @return array{int, int, int, string} The plugin's rank, the position, the numeric id, and the whole id
+     */
+    private static function servingKey(string $ruleId, int $order): array
+    {
+        $rank = self::POST_RANK;
+
+        foreach (self::PLUGIN_RANKS as $prefix => $pluginRank) {
+            if (\str_starts_with($ruleId, $prefix)) {
+                $rank = $pluginRank;
+
+                break;
+            }
+        }
+
+        // The numeric id breaks a tie in position, as both plugins that allow one do
+        $number = \preg_match('/(\d+)$/', $ruleId, $matches) === 1 ? (int) $matches[1] : \PHP_INT_MAX;
+
+        return [$rank, $order, $number, $ruleId];
+    }
+
+    /**
+     * A rule's source, read as the global-set path reads it.
+     *
+     * @param  SimpleXMLElement  $rule  The `redirect_rule` item
+     */
+    private static function ruleSource(SimpleXMLElement $rule): string
+    {
+        return HtmlTagStripper::strip(
+            XpathHelper::getStringValue($rule, 'wp:postmeta[wp:meta_key="_redirect_rule_from"]/wp:meta_value')
+        );
     }
 
     /**
