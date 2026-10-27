@@ -37,6 +37,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FieldDefaultHel
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -1215,7 +1216,7 @@ class KbEntryCreator extends BaseEntryCreator
         };
 
         // Process each topic term, starting the recursive creation process
-        foreach ($kbtopicTermMap as $termId => $termData) {
+        foreach (ImportProgress::track($output, 'kb topics', $kbtopicTermMap) as $termId => $termData) {
             $termIdString = self::mixedToString(
                 $termId,
                 ''
@@ -1537,7 +1538,7 @@ class KbEntryCreator extends BaseEntryCreator
         $articleCount = 0; // Initialize a counter to track the number of articles created
 
         // Process each kb item to create article entries
-        foreach ($items as $item) {
+        foreach (ImportProgress::track($output, 'kb', $items) as $item) {
             // Verify this is actually a kb post type to avoid processing other content types
             $postType = XpathHelper::getStringValue(
                 $item,
@@ -2965,7 +2966,7 @@ class KbEntryCreator extends BaseEntryCreator
         $entryCounter = 0; // Counter for processed entries
 
         // Iterate over each entry that has deferred related articles
-        foreach ($this->deferredRelatedArticles as $entryId => $relatedArticlesData) {
+        foreach (ImportProgress::track($output, 'kb related articles', $this->deferredRelatedArticles) as $entryId => $relatedArticlesData) {
             $entryCounter++; // Increment entry counter
 
             // Use EntryFinder to get the correct entry with proper path handling

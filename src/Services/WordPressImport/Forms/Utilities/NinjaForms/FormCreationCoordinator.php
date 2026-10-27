@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
 
+use ReflectionClass;
 use Statamic\Forms\Form;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
@@ -137,9 +138,19 @@ class FormCreationCoordinator implements FormPluginFormCreationCoordinatorContra
     public function setCoordinator(
         $coordinator
     ): void {
-        if ($coordinator instanceof NinjaFormsCoordinator) {
-            $this->coordinator = $coordinator;
+        if (! $coordinator instanceof NinjaFormsCoordinator) {
+            return;
         }
+
+        $this->coordinator = $coordinator;
+
+        // Hand the coordinator to the FormCreator too, which reads every form title through it
+        $reflection = new ReflectionClass($this->formCreator);
+        $coordinatorProperty = $reflection->getProperty('coordinator');
+        $coordinatorProperty->setValue(
+            $this->formCreator,
+            $coordinator
+        );
     }
 
     /**

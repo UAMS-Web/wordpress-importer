@@ -33,6 +33,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispos
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -1271,7 +1272,7 @@ abstract class BaseEntryCreator
         // slug that exists only in memory and has not been persisted yet.
         $reservedKeys = [];
 
-        foreach ($siteSpecificData as $index => $termData) {
+        foreach (ImportProgress::track($output, "{$statamicTaxonomyHandle} terms checked", $siteSpecificData) as $index => $termData) {
             if (! \is_array($termData)) {
                 continue;
             }
@@ -1542,7 +1543,7 @@ abstract class BaseEntryCreator
         }
 
         // Loop through each term that needs to be updated
-        foreach ($termsToUpdate as $index => $termData) {
+        foreach (ImportProgress::track($output, "{$statamicTaxonomyHandle} terms updated", $termsToUpdate) as $index => $termData) {
             if (
                 ! \is_array($termData)
                 || ! isset($termData['term'], $termData['slug'], $termData['title'], $termData['cacheKey'])
@@ -1626,7 +1627,7 @@ abstract class BaseEntryCreator
             return;
         }
 
-        foreach ($termsToCreate as $index => $termData) {
+        foreach (ImportProgress::track($output, "{$statamicTaxonomyHandle} terms created", $termsToCreate) as $index => $termData) {
             if (
                 ! \is_array($termData)
                 || ! isset($termData['slug'], $termData['title'], $termData['cacheKey'])

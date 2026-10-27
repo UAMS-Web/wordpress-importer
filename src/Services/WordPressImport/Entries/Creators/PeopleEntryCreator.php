@@ -18,6 +18,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\Peo
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
@@ -329,7 +330,7 @@ class PeopleEntryCreator extends BaseEntryCreator
         }
 
         // Loop through all items of this post type to process each person
-        foreach ($xmlStreamParser->streamItems($this->postType) as $person) {
+        foreach (ImportProgress::track($output, $this->postType, $xmlStreamParser->streamItems($this->postType), $xmlStreamParser->countItems($this->postType)) as $person) {
             // Decode HTML entities and strip HTML tags from the person's title
             $title = HtmlTagStripper::strip(
                 html_entity_decode(

@@ -118,8 +118,11 @@ class ShortcodeProcessor
     ): array {
         $shortcodes = [];
 
-        // Match shortcodes with optional content
-        $shortcodePattern = '/\[([^\s]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+        // Match shortcodes with optional content. The name stops at whitespace, "]"
+        // and "/", none of which WordPress's add_shortcode() accepts in a name, so a
+        // shortcode written with no attributes ends at its own bracket instead of
+        // running on to the next one in the text
+        $shortcodePattern = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
         preg_match_all(
             $shortcodePattern,
             $content,
@@ -475,32 +478,19 @@ class ShortcodeProcessor
         }
 
         if ($outputType === 'page_builder') {
+            // ---
             // For 'page_builder', delegate to the handler's toPageBuilderBlock() method.
-            $handlerClass = $this->handlers[$name]['class'];
-            // Check if handler is CaptionShortcodeProcessor which requires content parameter
-            if ($handlerClass === CaptionShortcodeProcessor::class) {
-                // Create caption handler instance
-                $captionHandler = new CaptionShortcodeProcessor;
-
-                // Caption requires content as an argument (content comes before pageSlug)
-                return $captionHandler->toPageBuilderBlock(
-                    $shortcodeAttributes,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $terms,
-                    $shortcodeContent,
-                    $pageSlug
-                );
-            }
-
-            // Handlers without a page builder block (audio, accordion) return null
+            // Handlers without a page builder block (audio, accordion, caption,
+            // ninja_form) return null, and the caller falls back to their Tiptap HTML:
+            // a caption lands as the same image set the Bard route makes, inside a
+            // content block, since the host app defines no caption block (#119).
+            // ---
             $handler = $this->instantiateHandler($name);
             if (! \method_exists($handler, 'toPageBuilderBlock')) {
                 return null;
             }
 
-            // Call toPageBuilderBlock on handler for non-caption shortcodes
+            // Call toPageBuilderBlock on the handler
             $pageBuilderBlock = $handler->toPageBuilderBlock(
                 $shortcodeAttributes,
                 $site,
@@ -596,7 +586,8 @@ class ShortcodeProcessor
         // ---
         $processedContent = $content;
         foreach ($shortcodes as $shortcode) {
-            $processedContent = \str_replace(
+            $processedContent = self::replaceShortcode(
+                $processedContent,
                 $shortcode['original'],
                 $this->toTiptapHtml(
                     $shortcode,
@@ -606,12 +597,41 @@ class ShortcodeProcessor
                     $attachments,
                     $terms,
                     $pageSlug
-                ),
-                $processedContent
+                )
             );
         }
 
         return $processedContent;
+    }
+
+    /**
+     * Replaces a shortcode's original text with its rendered HTML.
+     *
+     * HTML that closes the surrounding paragraph before it, or opens a new one
+     * after it (a flattened accordion does both), also takes the whitespace and
+     * line breaks wpautop left on that side of the shortcode. Left in place, a break would
+     * end the closed paragraph, or start the new one, as a blank line.
+     *
+     * @param  string  $content  The content holding the shortcode
+     * @param  string  $original  The shortcode's original text
+     * @param  string  $html  The HTML to put in its place
+     * @return string The content with every occurrence replaced
+     */
+    public static function replaceShortcode(
+        string $content,
+        string $original,
+        string $html
+    ): string {
+        // Take the breaks on the side where the HTML closes or opens a paragraph
+        $before = \str_starts_with($html, '</p>') ? '(?:\s|<br\s*\/?>)*' : '';
+        $after = \str_ends_with($html, '<p>') ? '(?:\s|<br\s*\/?>)*' : '';
+
+        // With neither this is a plain replacement; a failed pattern falls back to one
+        return \preg_replace_callback(
+            '/'.$before.\preg_quote($original, '/').$after.'/',
+            static fn (): string => $html,
+            $content
+        ) ?? \str_replace($original, $html, $content);
     }
 
     /**

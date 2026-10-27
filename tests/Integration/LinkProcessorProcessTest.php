@@ -274,6 +274,14 @@ it('points a file link at its imported asset', function (): void {
         ->and($importer->imports)->toBe([['https://example.com/site/wp-content/uploads/report.pdf', 'site_a', 'files', SameSitePolicy::LINK_DIFFERENT_SITE]]);
 });
 
+it('points a file link at a path on the site when no app URL is set', function (): void {
+    config(['app.url' => null]);
+
+    $result = processHtml('<a href="https://example.com/site/wp-content/uploads/report.pdf">r</a>', processImporter(importedPath: 'site_a/report.pdf'));
+
+    expect($result['html'])->toBe('<a href="/files/site_a/report.pdf">r</a>');
+});
+
 it('keeps a file link whose import fails', function (?string $importedPath): void {
     $result = processHtml('<a href="https://example.com/site/wp-content/uploads/report.pdf">r</a>', processImporter(importedPath: $importedPath));
 
@@ -484,3 +492,18 @@ it('recognizes an internal page link by the site and a slug without a dot', func
     'a path joined to the site\'s' => ['https://example.com/siteabout', false],
     'a host in other case, which has no slug' => ['https://EXAMPLE.com/site/about/', false],
 ]);
+
+it('lists unresolved links in alphabetical order, ignoring case', function (): void {
+    $probe = new LinkProcessorProcessProbe;
+    $probe->kbConvert('https://example.com/site/kb/b', 'https://example.com/site', new BufferedOutput);
+    $probe->kbConvert('https://example.com/site/kb/B', 'https://example.com/site', new BufferedOutput);
+    $probe->kbConvert('https://example.com/site/kb/a', 'https://example.com/site', new BufferedOutput);
+
+    expect(processUnresolved())->toBe(
+        'Reporting unresolved internal links...'.PHP_EOL
+        .'Unresolved internal links: 3'.PHP_EOL
+        .'  - https://example.com/site/kb/a'.PHP_EOL
+        .'  - https://example.com/site/kb/b'.PHP_EOL
+        .'  - https://example.com/site/kb/B'.PHP_EOL
+    );
+});

@@ -1430,3 +1430,39 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 **Rejected: keeping the gitlink gate and the `exports-gitlink` job, repointed at an absent gitlink.** A branch cut before the removal that still moves the gitlink meets a conflict on merge, since the path is deleted on `main`, and #1299 checks the published tree for any submodule entry. A job for a path that cannot reappear unnoticed checks nothing.
 
 **What is not settled.** The synced rules and skills still describe the submodule; they are edited in `UAMS-Web/uams-claude-skills`.
+
+## An `[accordion]` imports into Bard as headings and paragraphs (#118)
+
+**Decided 2026-10-27, on #118.** In Bard content, a WordPress `[accordion]` is flattened by the importer: each `[section title="..."]` becomes an `<h3>` holding its title, followed by its content. Bare and attributed accordions are treated the same, and the host app needs no change. `AccordionShortcodeProcessor::parse()` is unchanged, because the audio post importer reads transcripts from the section data it returns.
+
+**Why.** The host app defines no `accordion` Bard set, so the set the importer used to emit for an attributed accordion did not display. Fixing #118 sends the bare form down the same path. The news exports carry roughly 1,810 bare `[accordion]` blocks, most of them in audio posts, whose transcripts are read through `parse()` and never reach Bard; across the export corpus, 14 distinct non-audio posts carry an accordion that reaches Bard (19 counting the posts two ortho exports share), 6 of them in the news exports, where `main` left it as raw shortcode text. Flattening keeps the text visible, with the section titles as headings.
+
+**Rejected: keep emitting the `accordion` set and define the set in the host app.** It keeps the accordion's structure, but the content stays hidden until a host change ships, and the change would cover only an accordion set, not the importer.
+
+**Rejected: hold the bare form at `main`'s behavior and decide accordions on a ticket of their own.** It keeps #118 small, but it leaves the bare form as raw shortcode text and the attributed form as an undisplayed set, both of them wrong today.
+
+## A page builder `[caption]` imports as an image set inside a content block (#119)
+
+**Decided 2026-10-27, on #119.** The importer builds no caption page builder block. `ShortcodeProcessor::process(..., 'page_builder')` returns none for a caption, as for accordion and audio, so a `wp:shortcode` block holding one `[caption]` gives its Tiptap HTML, the same `image` set the Bard route makes, and on a page builder page that set lands inside a `uamsweb_block_content` set.
+
+**Why.** The host app defines no `uamsweb_block_caption` set, so the block the importer built for this path could not render, and it was also built without the caption's content. The content block's body already accepts the `image` set.
+
+**Rejected: build the caption block with its content.** It would still not render.
+
+**Rejected: build it and define `uamsweb_block_caption` in the host app.** It renders only after a host change, and a page builder caption would then differ from the same caption in Bard content.
+
+## `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
+
+**Decided 2026-10-27, on #163, by the project owner.** A ruleset that reaches this repository alone requires three status check contexts on `main`: `CI`, `Attribution footer` and `Closing keywords`. These are the three that the shared `required-checks-ruleset.json` template in the `code-quality` skill requires, and that the Statamic add-ons and `UAMS-Web/uamswp-migration-api` already require. The ruleset carries only the `required_status_checks` rule and layers on the two organization rulesets, `main: no deletion or force push` and `main: pull request required`. The builder applies it with `apply-required-checks-ruleset.mjs` once the workflows are on `main`, so no open pull request waits on a check its branch cannot report.
+
+**`CI` is an aggregate.** It is the last job in `.github/workflows/ci.yml`. It `needs:` the other eight jobs, runs `if: always()`, and fails unless every needed job reports `success`. `scripts/ci-local.test.mjs` fails when a job is missing from that list or when `CI` carries the `RUN_REMOTE_CI` gate. The other two contexts are the jobs of `check-attribution-footer.yml` and `check-closing-keyword-across-lines.yml`, copied from the current `writing-pull-requests` templates in `UAMS-Web/uams-claude-skills`.
+
+**The `RUN_REMOTE_CI` gate stays** on every job but `CI`. The organization variable is scoped to private repositories and does not reach this one. On 2026-10-27, `GET repos/UAMS-Web/wordpress-importer/actions/organization-variables` returned `total_count` 0, while the same call on `wordpress-importer-archive` returned `RUN_REMOTE_CI`. Only a repository variable switches the jobs off here, and `CI` then fails rather than passing.
+
+**Not changed: whether the local chain gates a merge.** That stays as it was.
+
+**Rejected: requiring the eight jobs by name.** A renamed job silently drops out of the ruleset, and a job skipped by its `if:` reports success to a required check.
+
+**Rejected: leaving `main` with no required check.** A pull request could then merge with a red or missing remote run, though the chain runs on every pull request here.
+
+**Rejected: removing the `RUN_REMOTE_CI` gate.** It changes every job for no gain once `CI` fails when the switch skips them.

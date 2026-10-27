@@ -1,5 +1,5 @@
 {
-  "_note": "The shared local CI runner's job list for this repository (wordpress-importer-archive#1319). Run it through scripts/ci-local.mjs, which places the --branch slot. Every job is always selected, as the private runner this replaces ran every job on every run, and chain is off so one run reports every failure. The eight jobs from validate to python-test mirror .github/workflows/ci.yml; dependencies, synced-files and handed-back-workflow are local only.",
+  "_note": "The shared local CI runner's job list for this repository (wordpress-importer-archive#1319). Run it through scripts/ci-local.mjs, which places the --branch slot. Every job is always selected, as the private runner this replaces ran every job on every run, and chain is off so one run reports every failure. The eight jobs from validate to python-test mirror .github/workflows/ci.yml; dependencies, synced-files and handed-back-workflow are local only. ci.yml's last job, ci, has no counterpart here: it aggregates the remote jobs into the CI check the ruleset requires (#163).",
   "base": "main",
   "php": "8.4",
   "jobs": [

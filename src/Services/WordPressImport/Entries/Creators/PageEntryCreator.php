@@ -21,6 +21,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelpe
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ExcerptResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FieldMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -150,7 +151,7 @@ class PageEntryCreator extends BaseEntryCreator
 
         $terms = $xmlParser->getTerms(); // Now always uses streaming
 
-        foreach ($xmlStreamParser->streamItems('page') as $page) {
+        foreach (ImportProgress::track($output, 'page', $xmlStreamParser->streamItems('page'), $xmlStreamParser->countItems('page')) as $page) {
             $hasAcfBlocks = false;
 
             // Decode HTML entities and strip HTML tags from title

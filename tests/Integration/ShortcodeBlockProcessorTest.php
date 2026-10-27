@@ -8,8 +8,10 @@ use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -26,6 +28,41 @@ uses(StatamicTestCase::class);
  *
  * @command  php vendor/bin/pest tests/Integration/ShortcodeBlockProcessorTest.php
  */
+/**
+ * A shortcode processor that counts its toTiptapHtml() calls by shortcode name.
+ */
+class ShortcodeBlockCountingShortcodeProcessor extends ShortcodeProcessor
+{
+    /**
+     * The number of toTiptapHtml() calls for each shortcode name.
+     *
+     * @var array<string, int>
+     */
+    public array $renders = [];
+
+    /**
+     * Count the call and render as the real processor does.
+     *
+     * @param  array<int|string, mixed>  $shortcode
+     * @param  array<int|string, mixed>  $attachments
+     * @param  array<int|string, mixed>  $terms
+     */
+    public function toTiptapHtml(
+        array $shortcode,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null
+    ): string {
+        $name = \is_string($shortcode['name'] ?? null) ? $shortcode['name'] : '';
+        $this->renders[$name] = ($this->renders[$name] ?? 0) + 1;
+
+        return parent::toTiptapHtml($shortcode, $site, $assetImporter, $output, $attachments, $terms, $pageSlug);
+    }
+}
+
 beforeEach(function (): void {
     // Real ShortcodeBlockProcessor under test
     $this->processor = new ShortcodeBlockProcessor;
@@ -239,12 +276,14 @@ it('process returns an array for a formidable shortcode', function (): void {
     expect($result['page_builder_set']['type'])->toBe('uamsweb_block_formidable');
 });
 
-it('process returns an array for a caption shortcode', function (): void {
+it('process returns the image set html, with no page builder set, for a caption shortcode', function (): void {
+    // The host app defines no caption block, so a caption reaches page builder content
+    // as the same image set the Bard route makes, inside a content block (#119)
     $html = '<!-- wp:shortcode --><div>[caption id="attachment_1" align="alignright" width="300"]<img src="https://example.com/img.jpg" />My caption[/caption]</div><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
-    $result = shortcodeBlockRequireArrayResult(
+    $result = shortcodeBlockRequireHtmlOnlyResult(
         $this->processor->process(
             $comment,
             [],
@@ -257,8 +296,9 @@ it('process returns an array for a caption shortcode', function (): void {
         )
     );
 
-    expect($result['html'])->toContain('data-set-type="image"');
-    expect($result['page_builder_set']['type'])->toBe('uamsweb_block_caption');
+    expect($result)->toContain('data-set-type="image"')
+        ->toContain('data-set-attr-caption="My caption"')
+        ->not->toContain('[caption');
 });
 
 it('process returns an array for a blogroll shortcode', function (): void {
@@ -371,7 +411,7 @@ it('process returns a Tiptap html string for an audio shortcode', function (): v
     expect($result)->toContain('data-set-type="audio"');
 });
 
-it('process returns a string for an accordion shortcode', function (): void {
+it('process flattens an accordion shortcode into a heading and its content', function (): void {
     $html = '<!-- wp:shortcode --><div>[accordion][section title="Section A"]Content A[/section][/accordion]</div><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
@@ -389,12 +429,11 @@ it('process returns a string for an accordion shortcode', function (): void {
         )
     );
 
-    // Extract may match only [accordion] (empty content) for nested markup, so the
-    // result may be the replaced div or the original shortcode text.
-    expect(
-        str_contains($result, 'data-set-type="accordion"')
-        || str_contains($result, '[accordion]')
-    )->toBeTrue();
+    // The host app defines no accordion set, so the section becomes a heading
+    // and a paragraph in place of the shortcode
+    expect($result)->toContain('<h3>Section A</h3><p>Content A</p>')
+        ->not->toContain('[accordion]')
+        ->not->toContain('data-set-type');
 });
 
 it('process handles a wp:shortcode block within mixed block types', function (): void {
@@ -679,3 +718,121 @@ function shortcodeBlockRequireStringResult(mixed $result): string
 
     return $result;
 }
+
+/**
+ * Assert process() returned html and a skip count over the whole block, with no
+ * page builder set, and return the html.
+ *
+ * A lone registered shortcode whose handler builds no page builder block returns
+ * this shape, so the caller does not read the block's inner nodes again.
+ */
+function shortcodeBlockRequireHtmlOnlyResult(mixed $result): string
+{
+    expect($result)->toBeArray();
+
+    if (! is_array($result)) {
+        throw new RuntimeException('Expected process() to return an array.');
+    }
+
+    expect($result)->not->toHaveKey('page_builder_set')
+        ->and($result['skipCount'] ?? null)->toBe(3);
+
+    $html = $result['html'] ?? null;
+
+    if (! is_string($html)) {
+        throw new RuntimeException('Expected process() to return html.');
+    }
+
+    return $html;
+}
+
+it('process counts every remaining sibling when a caption block has no closing comment', function (): void {
+    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption]</div><p>After</p>';
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    // The opening comment, the div and the paragraph; no closing comment to add
+    expect(is_array($result) ? ($result['skipCount'] ?? null) : null)->toBe(3);
+});
+
+it('process returns empty html and a skip count for a lone caption that renders nothing', function (): void {
+    // A caption with no image renders as nothing (#164); the block is still skipped
+    // whole, as it was when the caption built a page builder block
+    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]No image here[/caption]</div><!-- /wp:shortcode -->';
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBe(['html' => '', 'skipCount' => 3]);
+});
+
+it('process returns a plain string for a lone shortcode with no page builder block other than a caption', function (): void {
+    // Audio builds no page builder block and is not a caption, so it keeps the loop's string
+    $html = '<!-- wp:shortcode --><div>[audio mp3="https://example.com/a.mp3"]</div><!-- /wp:shortcode -->';
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page'))->toBeString();
+});
+
+it('process keeps the rendered shortcodes and warns about one that renders nothing among several', function (): void {
+    // Start from no entry context, which an earlier test in the process can leave set
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearEntryData();
+    ProcessingContext::clearFormConfigContext();
+
+    // Collect every warning logged during the call
+    /** @var ArrayObject<int, array{message: string, context: array<int|string, mixed>}> $warnings */
+    $warnings = new ArrayObject;
+    Log::shouldReceive('warning')->andReturnUsing(
+        function (string $message, array $context = []) use ($warnings): void {
+            $warnings->append(['message' => $message, 'context' => $context]);
+        }
+    );
+    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />With image[/caption] [caption id="attachment_2"]No image[/caption]</div><!-- /wp:shortcode -->';
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    // The rendered caption is replaced; the empty one stays as its shortcode text
+    expect($result)->toBeString()
+        ->toContain('data-set-attr-caption="With image"')
+        ->toContain('[caption id="attachment_2"]No image[/caption]');
+
+    // The caption's own missing-image warning comes first; the block processor's follows
+    $blockWarnings = \array_values(\array_filter(
+        $warnings->getArrayCopy(),
+        static fn (array $warning): bool => \str_contains($warning['message'], 'ShortcodeBlockProcessor::process')
+    ));
+
+    expect($blockWarnings)->toHaveCount(1)
+        ->and($blockWarnings[0]['message'] ?? '')->toContain("toTiptapHtml returned empty string for shortcode 'caption'")
+        ->and($blockWarnings[0]['context'] ?? [])->toBe([
+            'site' => 'default',
+            'pageSlug' => 'test-page',
+            'shortcode_name' => 'caption',
+            'shortcode_original' => '[caption id="attachment_2"]No image[/caption]',
+        ]);
+});
+
+it('process renders a lone shortcode once, with or without a page builder block', function (string $inner, string $name): void {
+    // A lone shortcode is rendered either by the single-shortcode branch or by the
+    // loop, never by both, so its side effects (an audio import, a log line) run once
+    $counting = new ShortcodeBlockCountingShortcodeProcessor;
+    $processor = new ShortcodeBlockProcessor($counting);
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<!-- wp:shortcode --><div>'.$inner.'</div><!-- /wp:shortcode -->');
+
+    $processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($counting->renders)->toBe([$name => 1]);
+})->with([
+    'audio, no page builder block' => ['[audio mp3="https://example.com/a.mp3"]', 'audio'],
+    'accordion, no page builder block' => ['[accordion][section title="A"]x[/section][/accordion]', 'accordion'],
+    'table, a page builder block' => ['[table id=1 /]', 'table'],
+    'caption, html alone' => ['[caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption]', 'caption'],
+]);

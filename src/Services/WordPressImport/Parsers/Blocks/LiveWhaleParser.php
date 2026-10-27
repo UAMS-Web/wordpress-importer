@@ -60,9 +60,6 @@ class LiveWhaleParser
             'field_livewhale_id_b' => 'livewhale_id',
             'field_livewhale_background_color_b' => 'livewhale_background_color',
             'field_livewhale_description_b' => 'livewhale_description',
-            'field_livewhale_geo_valid_b' => 'livewhale_geo_valid',
-            'field_livewhale_geo_b' => 'livewhale_geo',
-            'field_livewhale_geo_region_b' => 'livewhale_geo_region',
         ];
     }
 

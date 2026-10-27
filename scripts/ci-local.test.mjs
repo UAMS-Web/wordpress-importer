@@ -106,6 +106,10 @@ describe('local-ci.json against ci.yml', () => {
     const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
     const ciJobs = ci.slice(ci.indexOf('\njobs:')).split('\n').map((line) => /^ {2}([a-z][\w-]*):$/.exec(line)?.[1]).filter(Boolean)
     const LOCAL_ONLY = ['dependencies', 'synced-files', 'handed-back-workflow']
+    // The aggregate the ruleset requires as `CI` (#163). It runs no command of its own, so it
+    // has no local counterpart.
+    const AGGREGATE = 'ci'
+    const chained = ciJobs.filter((job) => job !== AGGREGATE)
 
     it('reads ci.yml\'s jobs, so an empty comparison cannot pass', () => {
         assert.ok(ciJobs.length >= 8, `read ${ciJobs.length} ci.yml jobs`)
@@ -114,7 +118,7 @@ describe('local-ci.json against ci.yml', () => {
     it('runs every job ci.yml gates, and nothing else but the declared local-only jobs', () => {
         const names = config.jobs.map((job) => job.name)
 
-        assert.deepEqual(names.filter((name) => !LOCAL_ONLY.includes(name)).sort(), [...ciJobs].sort())
+        assert.deepEqual(names.filter((name) => !LOCAL_ONLY.includes(name)).sort(), [...chained].sort())
         assert.deepEqual(names.filter((name) => LOCAL_ONLY.includes(name)).sort(), [...LOCAL_ONLY].sort())
     })
 
@@ -137,6 +141,54 @@ describe('local-ci.json against ci.yml', () => {
             // A whole line, not a substring: `--testsuite=Unit` is a prefix of ci.yml's
             // `--testsuite=Unit,Integration`, so `includes` would pass a narrowed command.
             assert.ok(ciLines.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
+        }
+    })
+
+    describe('the CI aggregate the ruleset requires', () => {
+        // The job's own text, from its `ci:` line to the next job or the end of the file.
+        const start = ci.indexOf(`\n  ${AGGREGATE}:\n`)
+        const rest = ci.slice(start + 1)
+        const next = rest.slice(1).search(/\n {2}[a-z][\w-]*:\n/)
+        const body = next === -1 ? rest : rest.slice(0, next + 1)
+        const needs = (/^ {4}needs:\n((?: {6}- \S+\n?)+)/m.exec(body)?.[1] ?? '').match(/(?<=^ {6}- )\S+/gm) ?? []
+
+        it('is the last job, named CI, so the ruleset context does not move', () => {
+            assert.notEqual(start, -1, `ci.yml has no \`${AGGREGATE}\` job`)
+            assert.equal(ciJobs.at(-1), AGGREGATE)
+            assert.match(body, /^ {4}name: CI$/m)
+        })
+
+        it('needs every other job, so a job left off the list is required by nothing', () => {
+            assert.ok(chained.length >= 8, `read ${chained.length} chained jobs`)
+            assert.deepEqual([...needs].sort(), [...chained].sort())
+        })
+
+        it('runs whatever the others did, and is not gated on RUN_REMOTE_CI, which would let it skip and pass', () => {
+            assert.match(body, /^ {4}if: always\(\)$/m)
+            assert.doesNotMatch(body, /RUN_REMOTE_CI/)
+
+            for (const job of chained) {
+                const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
+                assert.match(own, /^ {4}if: vars\.RUN_REMOTE_CI != 'false'$/m, `${job} is not gated`)
+            }
+        })
+
+        // The step's script, run as the runner would with RESULTS set as `join(needs.*.result, ' ')` sets it.
+        const script = (/^ {8}run: \|\n((?: {10}.*\n?)+)/m.exec(body)?.[1] ?? '').replace(/^ {10}/gm, '')
+        const run = (results) => spawnSync('bash', ['-e', '-c', script], { encoding: 'utf8', env: { ...process.env, RESULTS: results } })
+
+        it('passes only when every needed job succeeded', () => {
+            assert.ok(script.includes('RESULTS'), 'read no script from the CI step')
+            assert.equal(run('success success success').status, 0)
+        })
+
+        for (const result of ['failure', 'skipped', 'cancelled']) {
+            it(`fails when a needed job reports ${result}`, () => {
+                const r = run(`success ${result} success`)
+
+                assert.equal(r.status, 1)
+                assert.match(r.stdout, new RegExp(`A needed job reported ${result}`))
+            })
         }
     })
 })

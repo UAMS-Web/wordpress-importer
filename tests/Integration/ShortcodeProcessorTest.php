@@ -198,11 +198,32 @@ describe('extract', function (): void {
         expect(array_column($result, 'name'))->toBe(['probe', 'subpage-list', 'gallery']);
     });
 
-    it('swallows a bare shortcode followed later by another closing bracket', function (): void {
-        // Current behavior, recorded so a parser fix shows up here: the name group
-        // runs past the bare shortcode's "]", so both shortcodes are lost.
-        expect(shortcodeProcessor()->extract('[probe] then [gallery ids="1"]', new BufferedOutput))->toBe([])
-            ->and(shortcodeProcessor()->extract('[probe]', new BufferedOutput))->toHaveCount(1);
+    it('ends a bare shortcode name at its own closing bracket', function (): void {
+        // A later "]" in the text must not extend the name of a shortcode written
+        // with no attributes, or that shortcode and the next one are both lost (#118)
+        $result = shortcodeProcessor()->extract('[probe] then [gallery ids="1"]', new BufferedOutput);
+
+        expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
+            ->and(array_column($result, 'original'))->toBe(['[probe]', '[gallery ids="1"]'])
+            ->and(array_column($result, 'attributes'))->toBe([[], ['ids' => '1']]);
+    });
+
+    it('captures the content of a bare enclosing shortcode', function (): void {
+        $result = shortcodeProcessor()->extract('[probe]some text[/probe]', new BufferedOutput);
+
+        expect($result)->toBe([[
+            'name' => 'probe',
+            'attributes' => [],
+            'content' => 'some text',
+            'original' => '[probe]some text[/probe]',
+        ]]);
+    });
+
+    it('ends a shortcode name at a self-closing slash', function (): void {
+        $result = shortcodeProcessor()->extract('[probe/] then [gallery ids="1"]', new BufferedOutput);
+
+        expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
+            ->and(array_column($result, 'attributes'))->toBe([[], ['ids' => '1']]);
     });
 
     it('parses flags, quoted, escaped and unquoted attributes', function (): void {
@@ -485,9 +506,9 @@ describe('process', function (): void {
         'show-team' => ['show-team', []],
     ]);
 
-    it('builds a page builder caption block without the shortcode content', function (): void {
-        // Current behavior: this path never puts the shortcode content where the
-        // caption handler reads it, so the caption is lost
+    it('returns no page builder block for a caption, so the caller uses its image set', function (): void {
+        // The host app defines no caption block, so a caption lands as the image set
+        // the Bard route makes, inside a content block (#119)
         $warnings = shortcodeWarnings();
 
         $block = shortcodeProcessor()->process(
@@ -501,11 +522,8 @@ describe('process', function (): void {
             'about'
         );
 
-        expect($block)->toBeArray()
-            ->and(array_column($warnings->getArrayCopy(), 'context'))->toBe([['site' => 'site-a', 'pageSlug' => 'about']])
-            ->and($block['id'] ?? null)->toBeString()
-            ->and(array_diff_key($block ?? [], ['id' => true]))->toBe(['type' => 'uamsweb_block_caption', 'enabled' => true, 'caption' => null, 'align' => null])
-            ->and(array_column($warnings->getArrayCopy(), 'message'))->toBe(['CaptionShortcodeProcessor::parse: No content provided for [caption] shortcode']);
+        expect($block)->toBeNull()
+            ->and($warnings->getArrayCopy())->toBe([]);
     });
 });
 
@@ -542,5 +560,44 @@ describe('processShortcodesInContent', function (): void {
         expect($processor->processShortcodesInContent('<p>Text [mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], ['tablepress/table']))
             ->toBe('<p>Text [mystery a=1]</p>')
             ->and($processor->getUnaddressedNodes())->toBe([]);
+    });
+});
+
+describe('replaceShortcode', function (): void {
+    it('replaces every occurrence plainly when the HTML opens and closes no paragraph', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("a<br />\n[x]<br />\nb [x]", '[x]', '<i>y</i>'))
+            ->toBe("a<br />\n<i>y</i><br />\nb <i>y</i>");
+    });
+
+    it('takes the breaks before the shortcode when the HTML closes a paragraph first', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x]<br />\nb</p>", '[x]', '</p><h3>y</h3>'))
+            ->toBe("<p>a</p><h3>y</h3><br />\nb</p>");
+    });
+
+    it('takes the breaks after the shortcode when the HTML opens a paragraph last', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x]<br>\n <br/>b</p>", '[x]', '<h3>y</h3><p>'))
+            ->toBe("<p>a<br />\n<h3>y</h3><p>b</p>");
+    });
+
+    it('takes both sides, for every occurrence, with regex characters in the shortcode', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x a=\"(1)*\"]<br />\nb [x a=\"(1)*\"]\nc</p>", '[x a="(1)*"]', '</p><h3>y</h3><p>'))
+            ->toBe('<p>a</p><h3>y</h3><p>b</p><h3>y</h3><p>c</p>');
+    });
+
+    it('falls back to the plain replacement when the pattern fails', function (): void {
+        // A one-step backtrack limit with the JIT off fails the pattern
+        $limit = \ini_get('pcre.backtrack_limit');
+        $jit = \ini_get('pcre.jit');
+        \ini_set('pcre.backtrack_limit', '1');
+        \ini_set('pcre.jit', '0');
+
+        try {
+            $result = ShortcodeProcessor::replaceShortcode("a <br />\n[x] <br />\nb", '[x]', '</p><h3>y</h3><p>');
+        } finally {
+            \ini_set('pcre.backtrack_limit', (string) $limit);
+            \ini_set('pcre.jit', (string) $jit);
+        }
+
+        expect($result)->toBe("a <br />\n</p><h3>y</h3><p> <br />\nb");
     });
 });

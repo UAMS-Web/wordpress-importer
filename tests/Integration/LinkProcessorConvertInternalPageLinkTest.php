@@ -428,12 +428,25 @@ it('points a link to an attachment at its imported file', function (): void {
         ->and($converted['output'])->toBe('  - Converted attachment link to file: http://93.184.216.34/site/wp-content/uploads/brochure.pdf -> https://statamic.test/files/default/brochure.pdf'.PHP_EOL);
 });
 
-it('keeps an attachment\'s file URL when file uploads are off', function (): void {
-    ProcessingContext::setXmlPath(internalExport($this, internalItem('30', 'brochure', 'http://93.184.216.34/site/brochure/', 'attachment', '<wp:attachment_url>http://93.184.216.34/site/wp-content/uploads/brochure.pdf</wp:attachment_url>')));
+it('keeps an attachment\'s file URL when it imports no file', function (string $kind, string $attachmentUrl, string $output): void {
+    ProcessingContext::setXmlPath(internalExport($this, internalItem('30', 'brochure', 'http://93.184.216.34/site/brochure/', 'attachment', "<wp:attachment_url>{$attachmentUrl}</wp:attachment_url>")));
+    $importer = match ($kind) {
+        'uploads off' => new LinkProcessorInternalImporter(false),
+        'failing' => new LinkProcessorInternalImporter(importedPath: null),
+        'empty path' => new LinkProcessorInternalImporter(importedPath: ''),
+        default => new LinkProcessorInternalImporter,
+    };
 
-    expect(internalConvert('http://93.184.216.34/site/brochure/', importer: new LinkProcessorInternalImporter(false))['result'])
-        ->toBe('http://93.184.216.34/site/wp-content/uploads/brochure.pdf');
-});
+    $converted = internalConvert('http://93.184.216.34/site/brochure/', importer: $importer);
+
+    expect($converted['result'])->toBe($attachmentUrl)
+        ->and($converted['output'])->toBe($output);
+})->with([
+    'uploads off' => ['uploads off', 'http://93.184.216.34/site/wp-content/uploads/brochure.pdf', '  - File uploads disabled. Using original URL for linked attachment: brochure.pdf.'.PHP_EOL],
+    'not a file URL' => ['importing', 'http://93.184.216.34/site/brochure-page/', ''],
+    'an import that fails' => ['failing', 'http://93.184.216.34/site/wp-content/uploads/brochure.pdf', ''],
+    'an import with an empty path' => ['empty path', 'http://93.184.216.34/site/wp-content/uploads/brochure.pdf', ''],
+]);
 
 it('converts nothing for an attachment with no file URL', function (): void {
     ProcessingContext::setXmlPath(internalExport($this, internalItem('30', 'brochure', 'http://93.184.216.34/site/brochure/', 'attachment')));
@@ -486,8 +499,18 @@ it('defers a redirected link to a post not imported yet', function (): void {
         '*' => Http::response(''),
     ]);
 
-    expect(internalConvert('http://93.184.216.34/site/old/', 'source-1')['result'])->toBeNull()
-        ->and(LinkProcessor::getDeferredInternalLinks())->toHaveKey('source-1');
+    expect(internalConvert('http://93.184.216.34/site/old/#team', 'source-1')['result'])->toBeNull()
+        ->and(LinkProcessor::getDeferredInternalLinks())->toBe(['source-1' => [[
+            'url' => 'http://93.184.216.34/site/old/#team',
+            'post_name' => 'about',
+            'post_id' => '12',
+            'post_type' => 'page',
+            'collection_handle' => 'pages',
+            'source_collection_handle' => 'pages',
+            'site' => 'default',
+            'fragment' => '#team',
+            'query' => null,
+        ]]]);
 });
 
 it('fetches the link once for its page ID and once for its redirect when neither finds it', function (int $status): void {
