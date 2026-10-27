@@ -129,6 +129,22 @@ it('returns null rather than INF or NAN', function (): void {
     expect(SafeMathEvaluator::evaluate('1e308 * 10'))->toBeNull();
 });
 
+it('reads no byte past the end of the expression', function (): void {
+    // A read one past the end raises a warning, which the host app turns into an
+    // exception that evaluate() does not catch, aborting the import
+    set_error_handler(static function (int $level, string $message): never {
+        throw new ErrorException($message, 0, $level);
+    });
+
+    try {
+        $result = SafeMathEvaluator::evaluate('1+1');
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($result)->toBe(2.0);
+});
+
 it('accepts an expression of exactly the maximum length', function (): void {
     // 1 followed by 127 copies of "+1" is 255 characters
     $expression = '1'.str_repeat('+1', 127);

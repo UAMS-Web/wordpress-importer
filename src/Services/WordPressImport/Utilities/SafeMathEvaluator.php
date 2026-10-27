@@ -125,9 +125,6 @@ class SafeMathEvaluator
         $offset = 0;
         $length = \strlen($expression);
 
-        // Reading one past the end yields an empty string, which the whitespace
-        // branch skips, so `<=` would only add a warning
-        // @pest-mutate-ignore: SmallerToSmallerOrEqual
         while ($offset < $length) {
             $character = $expression[$offset];
 
