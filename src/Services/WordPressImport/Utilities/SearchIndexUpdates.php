@@ -161,10 +161,10 @@ class SearchIndexUpdates
     /**
      * Forget the `UpdateItemIndexes` handlers on every event it subscribes to.
      *
-     * Uses the `forgetListener` macro Statamic registers on the dispatcher (the
-     * same mechanism `Statamic\Events\Subscriber::disable()` relies on). Wrapped
-     * per-event so a dispatcher without the macro, or an event with no listeners,
-     * fails safe — {@see self::withDisabled()} detects whether anything was
+     * Uses {@see self::forgetListener()}, which mirrors the macro Statamic registers
+     * on the dispatcher (the mechanism `Statamic\Events\Subscriber::disable()` relies
+     * on) by filtering the listener table directly. Wrapped per-event so an
+     * unrecognized dispatcher, or an event with no listeners, fails safe — {@see self::withDisabled()} detects whether anything was
      * actually removed via the listener count.
      */
     private static function disable(): void
@@ -207,6 +207,10 @@ class SearchIndexUpdates
 
         $listenersRaw = $property->getValue($events);
 
+        // An event with no listeners has nothing to forget. Without this return the
+        // read below raises an undefined-key error, which disable() catches per event,
+        // so the outcome is the same and these mutants cannot be told apart.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (! \is_array($listenersRaw) || ! isset($listenersRaw[$event])) {
             return;
         }
@@ -252,6 +256,9 @@ class SearchIndexUpdates
             return $handler[0].'@'.$handler[1];
         }
 
+        // Any value that is not a `Class@method` id keeps the handler bound, so a
+        // different non-empty string behaves the same
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return '';
     }
 

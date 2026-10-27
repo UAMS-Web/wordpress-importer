@@ -18,6 +18,10 @@ final class EntryQueryHelper
     public static function query(): EntryQueryBuilder
     {
         $query = EntryFacade::query();
+
+        // The facade always returns an EntryQueryBuilder here, so neither mutant
+        // changes behavior; the assert exists to narrow the type for PHPStan.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         \assert($query instanceof EntryQueryBuilder);
 
         return $query;
