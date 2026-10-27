@@ -171,6 +171,19 @@ it('centers a table whose align attribute is not a string', function (): void {
     expect($result['html'] ?? null)->toContain(' data-set-attr-align="aligncenter" ');
 });
 
+it('centers a left-aligned table and escapes its caption', function (): void {
+    $result = processTable(
+        tableOpeningNode(
+            '<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>A</td></tr></tbody></table>'
+            .'<figcaption>"A" &amp; B</figcaption></figure>'
+        ),
+        ['align' => 'left']
+    );
+
+    expect($result['html'] ?? null)->toContain(' data-set-attr-align="aligncenter" ')
+        ->toContain(' data-set-attr-caption="&quot;A&quot; &amp; B" ');
+});
+
 it('keeps rows that have cells and drops the ones that do not', function (): void {
     $result = processTable(tableOpeningNode(
         '<!-- wp:table --><figure class="wp-block-table"><table>'
@@ -182,7 +195,7 @@ it('keeps rows that have cells and drops the ones that do not', function (): voi
 
     expect($result['html'] ?? null)->toContain(
         " data-set-attr-table_data='[{&quot;cells&quot;:[&quot;H&quot;]},{&quot;cells&quot;:[&quot;B&quot;]},{&quot;cells&quot;:[&quot;F&quot;]}]'"
-    );
+    )->not->toContain('data-set-attr-caption');
 });
 
 it('warns and returns null when no rows have cells', function (): void {
@@ -216,6 +229,32 @@ it('warns and returns null when the figure holds no table', function (): void {
                 'node_html' => '<figure class="wp-block-table"><p>no table</p></figure>...',
                 'entry_url' => 'https://example.test/about/',
             ],
+        ]]);
+});
+
+it('cuts the snippet of a figure with no table to 100 characters and names the page', function (): void {
+    $warnings = tableWarnings();
+    $node = tableOpeningNode(
+        '<!-- wp:table --><figure class="wp-block-table"><p>no table here, only a paragraph long enough to pass the snippet limit</p></figure>'
+    );
+    $figure = $node->nextSibling;
+    $snippet = $figure instanceof DOMNode ? (string) $node->ownerDocument?->saveHTML($figure) : '';
+
+    expect(processTable($node, [], 'about'))->toBeNull()
+        ->and(strlen($snippet))->toBeGreaterThan(100)
+        ->and($warnings->getArrayCopy())->toBe([[
+            'TableProcessor::process: No table found in wp:table block',
+            ['site' => 'default', 'pageSlug' => 'about', 'node_html' => substr($snippet, 0, 100).'...'],
+        ]]);
+});
+
+it('names the page when no wp-block-table figure follows the comment', function (): void {
+    $warnings = tableWarnings();
+
+    expect(processTable(tableOpeningNode('<!-- wp:table -->'), [], 'about'))->toBeNull()
+        ->and($warnings->getArrayCopy())->toBe([[
+            'TableProcessor::process: No valid wp:table figure found',
+            ['site' => 'default', 'pageSlug' => 'about', 'attributes' => []],
         ]]);
 });
 
