@@ -58,12 +58,14 @@ class BardSetBuilder implements ImageProcessingStepInterface
             $values['caption'] = $caption;
         }
 
+        // Write the override under the handle the host image set declares. The
+        // top-level path carries values through `data-set-attr-*` attributes, whose
+        // names the DOM lowercases, so a camelCase key would not survive it (#141)
         if (
             isset($context['altOverride'])
-
             && $context['altOverride'] !== ''
         ) {
-            $values['altOverride'] = $context['altOverride'];
+            $values['alt_override'] = $context['altOverride'];
         }
 
         $set = [
