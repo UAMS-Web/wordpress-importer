@@ -21,6 +21,14 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelpe
 class ShortcodeBlockProcessor implements BlockProcessorInterface
 {
     /**
+     * Shortcodes whose lone block returns html and a skip count with no page
+     * builder set, the shape it had when the handler built one.
+     *
+     * @var list<string>
+     */
+    private const array HTML_ONLY_SHORTCODES = ['caption'];
+
+    /**
      * The shortcode processor instance.
      */
     private ShortcodeProcessor $shortcodeProcessor;
@@ -72,8 +80,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @param  array<int|string, mixed>  $attachments  Media attachments (unused)
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
      * @param  ?string  $pageSlug  The page slug for shortcode processing (optional)
-     * @return array<int|string, mixed>|string|null Tiptap HTML string, or array with 'page_builder_set' and 'skipCount' when a
-     *                                              single shortcode returns a replicator block, or null if no valid content
+     * @return array<int|string, mixed>|string|null Tiptap HTML string; or an array with 'html', 'skipCount' and 'page_builder_set'
+     *                                              when a single shortcode returns a replicator block, and with 'html' and 'skipCount'
+     *                                              alone for a single [caption]; or null if no valid content
      */
     public function process(
         DOMNode $node,
@@ -278,11 +287,16 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 // ---
                 // Return the html with a skip count over the whole block, so the
                 // caller does not read the block's inner nodes a second time. A
-                // handler with no page builder block (caption, accordion, audio)
-                // returns its html this way too, unless it rendered nothing, which
-                // the loop below logs.
+                // caption builds no page builder block (#119) but keeps the shape it
+                // had when it did, so the Bard route still adds its image once. The
+                // name and the list are strings, so in_array()'s strict flag, which
+                // phpstan-strict-rules requires, changes no result.
                 // ---
-                if ($hasPageBuilderSet || $tiptapHtmlForBard !== '') {
+                // @pest-mutate-ignore: TrueToFalse
+                if (
+                    $hasPageBuilderSet
+                    || \in_array($name, self::HTML_ONLY_SHORTCODES, true)
+                ) {
                     $result = [
                         'html' => $tiptapHtmlForBard,
                         'skipCount' => self::blockSkipCount($node),

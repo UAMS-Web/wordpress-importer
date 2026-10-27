@@ -353,12 +353,12 @@ it('PeopleShortcodeProcessor trims attribute values before processing', function
     expect($block['layout'])->toBe('grid');
 });
 
-it('process returns Tiptap html and a skip count over the block for an audio shortcode', function (): void {
+it('process returns a Tiptap html string for an audio shortcode', function (): void {
     $html = '<!-- wp:shortcode --><p>[audio mp3="https://example.com/audio.mp3"]</p><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
-    $result = shortcodeBlockRequireHtmlOnlyResult(
+    $result = shortcodeBlockRequireStringResult(
         $this->processor->process(
             $comment,
             [],
@@ -379,7 +379,7 @@ it('process flattens an accordion shortcode into a heading and its content', fun
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
-    $result = shortcodeBlockRequireHtmlOnlyResult(
+    $result = shortcodeBlockRequireStringResult(
         $this->processor->process(
             $comment,
             [],
@@ -709,7 +709,7 @@ function shortcodeBlockRequireHtmlOnlyResult(mixed $result): string
     return $html;
 }
 
-it('process counts every remaining sibling when the block has no closing comment', function (): void {
+it('process counts every remaining sibling when a caption block has no closing comment', function (): void {
     $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption]</div><p>After</p>';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
@@ -720,15 +720,25 @@ it('process counts every remaining sibling when the block has no closing comment
     expect(is_array($result) ? ($result['skipCount'] ?? null) : null)->toBe(3);
 });
 
-it('process falls back to the block content when a lone handler renders nothing', function (): void {
-    // A caption with no image renders as nothing (#164), so there is no html to return
+it('process returns empty html and a skip count for a lone caption that renders nothing', function (): void {
+    // A caption with no image renders as nothing (#164); the block is still skipped
+    // whole, as it was when the caption built a page builder block
     $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]No image here[/caption]</div><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    expect($result)->not->toBeArray();
+    expect($result)->toBe(['html' => '', 'skipCount' => 3]);
+});
+
+it('process returns a plain string for a lone shortcode with no page builder block other than a caption', function (): void {
+    // Audio builds no page builder block and is not a caption, so it keeps the loop's string
+    $html = '<!-- wp:shortcode --><div>[audio mp3="https://example.com/a.mp3"]</div><!-- /wp:shortcode -->';
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page'))->toBeString();
 });
 
 it('process keeps the rendered shortcodes and warns about one that renders nothing among several', function (): void {
