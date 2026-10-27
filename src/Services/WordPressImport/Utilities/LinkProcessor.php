@@ -198,13 +198,8 @@ class LinkProcessor
     public static function isFileUrl(
         string $wordPressUrl
     ): bool {
-        // Check if URL is empty or null
-        if ($wordPressUrl === '') {
-            // Return false for empty URLs
-            return false;
-        }
-
-        // Use regex pattern to match URLs with file extensions
+        // Use regex pattern to match URLs with file extensions (an empty URL
+        // matches nothing)
         return (bool) \preg_match(
             '/^(?:https?|ftp):\/\/[^\s\/$.?#][^\s\/]*\.[a-zA-Z0-9]{2,5}(?:\/[-._a-zA-Z0-9\/]*\.(?!aspx|asp|cfm|htm|html)[-\.a-zA-z0-9]{2,25})$/',
             $wordPressUrl
@@ -415,8 +410,9 @@ class LinkProcessor
             $wordPressBaseBlogUrl
         );
 
-        // Check if slug extraction was successful
-        if ($wordPressPostName === null || $wordPressPostName === '') {
+        // Check if slug extraction was successful (a slug is never empty: a path
+        // left empty after trimming has none)
+        if ($wordPressPostName === null) {
             // Return false if no slug could be extracted
             return false;
         }
@@ -472,8 +468,9 @@ class LinkProcessor
             $wordPressBaseBlogUrl
         );
 
-        // Check if path extraction was successful
-        if ($path === null || $path === '') {
+        // Check if path extraction was successful (an empty path matches neither
+        // prefix below)
+        if ($path === null) {
             // Return false if no path could be extracted
             return false;
         }
@@ -652,7 +649,10 @@ class LinkProcessor
 
         // Check if an entry ID was found
         if ($entryId === null || $entryId === '') {
-            // Cache the unresolved link for later reporting
+            // Cache the unresolved link for later reporting. Only the cache's keys
+            // are read (processUnresolvedLinksForPostType() counts and lists them),
+            // so the value stored is never seen.
+            // @pest-mutate-ignore: TrueToFalse
             self::$unresolvedLinksCache[$searchUrl] = true;
 
             // Return null if no entry ID was found
@@ -783,26 +783,19 @@ class LinkProcessor
             \strlen($wordPressBaseBlogUrl)
         );
 
-        // Remove query parameters from the path
-        $path = strtok(
+        // Remove query parameters from the path (strtok() gives false for an
+        // empty path or one of nothing but question marks, both of which are no
+        // path, and likewise for the fragment below)
+        $path = (string) strtok(
             $path,
             '?'
         );
-        if ($path === false) {
-            $path = '';
-        }
 
-        // Remove URL fragments from the path
-        $path = strtok(
+        // Remove URL fragments from the path, and return it
+        return (string) strtok(
             $path,
             '#'
         );
-        if ($path === false) {
-            return '';
-        }
-
-        // Return the extracted path
-        return $path;
     }
 
     /**
@@ -2998,8 +2991,9 @@ class LinkProcessor
             '/'
         );
 
-        // Remove query parameters (strtok() gives false for a path of nothing
-        // but question marks, which is no path)
+        // Remove query parameters (strtok() gives false for an empty path or
+        // one of nothing but question marks, both of which are no path, and
+        // likewise for the fragment below)
         $path = (string) strtok(
             $path,
             '?'

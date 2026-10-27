@@ -21,6 +21,8 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
+    // A link that falls through to fetching its page must not reach the network
+    Http::preventStrayRequests();
     LinkProcessor::clearDeferredData();
 
     $this->exportDirectory = sys_get_temp_dir().'/link-processor-find-'.bin2hex(random_bytes(6));
