@@ -21,8 +21,8 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingConte
  * parsing (Bard sets) or page builder replicator sets. Handles malformed
  * shortcodes by logging errors and skipping. Supports extensible handlers for
  * specific shortcodes and integrates with term tracking for validation. Tracks
- * unhandled shortcodes as unaddressed nodes, suppressing those within specific
- * unaddressed blocks (e.g., [table] in wp:tablepress/table).
+ * unhandled shortcodes as unaddressed nodes, except the recognized-but-dropped
+ * ones, which emit nothing.
  */
 class ShortcodeProcessor
 {
