@@ -133,7 +133,11 @@ class TermMapBuilder
                 'term_name' => $termName,
                 'term_parent' => $termParent,
                 'parent_id' => $parentId,
-                'full_slug' => $termSlug, // Initialize with base slug
+                // The second pass overwrites full_slug for every term, and the key is
+                // last either way, so dropping this initial value changes nothing; it
+                // keeps the record's shape complete.
+                // @pest-mutate-ignore: RemoveArrayItem
+                'full_slug' => $termSlug,
             ];
         }
 
@@ -230,22 +234,16 @@ class TermMapBuilder
         // Normalize an integer array key back to the string id
         $termId = (string) $termId;
 
-        // Validate term ID and check if term exists in map
-        if (
-            $termId === ''
-            || ! isset($termMap[$termId])
-        ) {
-            // Return fallback slug if term not found
-            return "term-$termId";
-        }
-
-        // Get term data from the term map
+        // Get term data from the term map. Every id passed here is a key of the map
+        // (the build pass iterates the map, and a parent is followed only when it is
+        // one), so no test reaches the fallback; it narrows the type for PHPStan.
         $term = self::extractTermRecord(
             $termId,
             $termMap
         );
 
         if ($term === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return "term-$termId";
         }
 
@@ -270,8 +268,9 @@ class TermMapBuilder
         // Get the parent term ID for hierarchy traversal
         $parentId = $term['parent_id'];
 
-        // Check if parent exists and build hierarchical slug
-        if ($parentId !== '' && isset($termMap[$parentId])) {
+        // Check if parent exists and build hierarchical slug. No term with an empty id
+        // reaches the map, so an empty parent id is never a key of it.
+        if (isset($termMap[$parentId])) {
             // Recursively get the full slug for the parent term
             $ancestorSlug = self::getFullTermSlug(
                 $parentId,
@@ -279,11 +278,8 @@ class TermMapBuilder
                 $visited
             );
 
-            // Combine ancestor slug with current term slug
-            $result = $ancestorSlug !== '' ? "{$ancestorSlug}_{$slug}" : $slug;
-
-            // Return the hierarchical slug result
-            return $result;
+            // Combine ancestor slug with current term slug; no slug in the map is empty
+            return "{$ancestorSlug}_{$slug}";
         }
 
         // Store result before clearing memory
@@ -338,6 +334,7 @@ class TermMapBuilder
         array $termMap
     ): ?array {
         if (! isset($termMap[$termId])) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 

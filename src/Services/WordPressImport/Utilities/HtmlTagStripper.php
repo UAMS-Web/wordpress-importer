@@ -22,6 +22,10 @@ class HtmlTagStripper
      *
      * @var array<string>
      */
+    // A property initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Removing any entry by hand fails its row of the
+    // "reads each block-level tag as a space" dataset in HtmlTagStripperTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     private static array $blockLevelElements = [
         'p',
         'h1',
