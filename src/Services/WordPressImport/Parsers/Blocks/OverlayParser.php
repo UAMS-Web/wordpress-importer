@@ -44,7 +44,9 @@ class OverlayParser
     ): array {
         $sections = [];
         // Resolve the section count only when the source value is numeric.
-        $sectionCountRaw = $data['overlay_section'] ?? 0;
+        $sectionCountRaw = $data['overlay_section'] ?? null;
+        // A count of -1 runs the loop below as many times as 0 does.
+        // @pest-mutate-ignore: DecrementInteger
         $sectionCount = 0;
         if (
             is_int($sectionCountRaw)
@@ -126,27 +128,23 @@ class OverlayParser
                     'overlay_section_button_text'
                 )
             );
-            $buttonUrl = '';
-            $buttonTarget = false;
             $buttonDescription = $this->getSectionStringValue(
                 $section,
                 'overlay_section_button_description'
             );
-            $buttonUrlField = $section['overlay_section_button_url'] ?? null;
-            if ($buttonUrlField !== null) {
-                $originalUrl = LinkHelper::getUrl($buttonUrlField);
+            $buttonUrlField = $section['overlay_section_button_url'] ?? [];
+            $originalUrl = LinkHelper::getUrl($buttonUrlField);
 
-                // Process URL through LinkProcessor to handle internal links and file imports
-                $buttonUrl = LinkProcessor::processUrlString(
-                    $originalUrl,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    ProcessingContext::getStatamicEntryId(),
-                    ProcessingContext::getCollectionHandle()
-                );
-                $buttonTarget = LinkHelper::getTarget($buttonUrlField);
-            }
+            // Process URL through LinkProcessor to handle internal links and file imports
+            $buttonUrl = LinkProcessor::processUrlString(
+                $originalUrl,
+                $site,
+                $assetImporter,
+                $output,
+                ProcessingContext::getStatamicEntryId(),
+                ProcessingContext::getCollectionHandle()
+            );
+            $buttonTarget = LinkHelper::getTarget($buttonUrlField);
 
             // Import image
             $image = null;
@@ -349,29 +347,8 @@ class OverlayParser
         ?XmlStreamParser $xmlParser = null,
         array $terms = []
     ): ?array {
-        // Process sections
-        $sections = [];
-        $sectionCountRaw = $moduleData['overlay_section'] ?? 0;
-        $sectionCount = 0;
-        if (
-            is_int($sectionCountRaw)
-            || (is_string($sectionCountRaw) && is_numeric($sectionCountRaw))
-        ) {
-            $sectionCount = (int) $sectionCountRaw;
-        }
-
-        for ($i = 0; $i < $sectionCount; $i++) {
-            $section = [
-                'overlay_section_heading' => $moduleData["overlay_section_{$i}_overlay_section_heading"] ?? '',
-                'overlay_section_body' => $moduleData["overlay_section_{$i}_overlay_section_body"] ?? '',
-                'overlay_section_button_text' => $moduleData["overlay_section_{$i}_overlay_section_button_text"] ?? '',
-                'overlay_section_button_url' => $moduleData["overlay_section_{$i}_overlay_section_button_url"] ?? '',
-                'overlay_section_button_description' => $moduleData["overlay_section_{$i}_overlay_section_button_description"] ?? '',
-                'overlay_section_background_color' => $moduleData["overlay_section_{$i}_overlay_section_background_color"] ?? 'bg-black',
-                'overlay_section_image' => $moduleData["overlay_section_{$i}_overlay_section_image"] ?? '',
-            ];
-            $sections[] = $section;
-        }
+        // Normalize the overlay_section repeater, which shares the block's field names
+        $sections = $this->normalizeSections($moduleData);
 
         // Process items
         $items = [];
