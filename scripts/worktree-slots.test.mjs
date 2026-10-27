@@ -30,6 +30,10 @@ import {
     judgeTree,
     normalizePath,
     parseWorktreeList,
+    patchApplied,
+    patchDrift,
+    recordedPatches,
+    unpatchedPackages,
     BASE_UNMEASURED,
     releaseRefusalReason,
     resolveSlot,
@@ -1189,5 +1193,238 @@ describe('slotClaimability — a claim makes a detached slot held (wordpress-imp
         assert.equal(roleFor('slot', detachedClean, '', { owner: 'x', at: '' }), 'held');
         assert.equal(roleFor('primary', detachedClean, '', { owner: 'x', at: '' }), 'primary');
         assert.equal(roleFor('ephemeral', detachedClean, '', { owner: 'x', at: '' }), 'ephemeral');
+    });
+});
+
+describe('recordedPatches (#113)', () => {
+    // The shape `cweagans/composer-patches` 2.0.0 writes, trimmed to the fields read here.
+    const lock = (patches) => JSON.stringify({ _hash: 'x', patches });
+
+    it('groups the recorded patches by package, keeping the url and depth', () => {
+        assert.deepEqual(
+            recordedPatches(lock({
+                'acme/widget': [{ package: 'acme/widget', url: 'patches/one.patch', depth: 1 }, { url: 'patches/two.patch', depth: 2 }],
+                'acme/gadget': [{ url: 'patches/three.patch', depth: 1 }],
+            })),
+            [
+                { package: 'acme/widget', patches: [{ url: 'patches/one.patch', depth: 1 }, { url: 'patches/two.patch', depth: 2 }] },
+                { package: 'acme/gadget', patches: [{ url: 'patches/three.patch', depth: 1 }] },
+            ],
+        );
+    });
+
+    it('defaults a missing depth to the plugin default of 1', () => {
+        assert.deepEqual(recordedPatches(lock({ 'acme/widget': [{ url: 'p.patch' }] })), [{ package: 'acme/widget', patches: [{ url: 'p.patch', depth: 1 }] }]);
+    });
+
+    it('leaves out a package whose list is empty', () => {
+        assert.deepEqual(recordedPatches(lock({ 'acme/widget': [] })), []);
+    });
+
+    it('returns null, not an empty list, for a lock it cannot read', () => {
+        // An empty list would certify every package as patched, so each malformed shape must be
+        // distinguishable from "no patches".
+        assert.equal(recordedPatches('{not json'), null);
+        assert.equal(recordedPatches('null'), null);
+        assert.equal(recordedPatches(JSON.stringify({ _hash: 'x' })), null);
+        assert.equal(recordedPatches(lock({ 'acme/widget': 'patches/one.patch' })), null);
+        assert.equal(recordedPatches(lock({ 'acme/widget': [{ depth: 1 }] })), null);
+    });
+});
+
+describe('unpatchedPackages (#113)', () => {
+    const groups = [
+        { package: 'acme/widget', patches: [{ url: 'one.patch', depth: 1 }, { url: 'two.patch', depth: 1 }] },
+        { package: 'acme/gadget', patches: [{ url: 'three.patch', depth: 1 }] },
+    ];
+
+    it('names a package when any one of its patches is missing', () => {
+        assert.deepEqual(unpatchedPackages(groups, (name, patch) => patch.url !== 'two.patch'), ['acme/widget']);
+    });
+
+    it('names nothing when every patch is applied', () => {
+        assert.deepEqual(unpatchedPackages(groups, () => true), []);
+    });
+
+    it('names every drifted package, in the lock order', () => {
+        assert.deepEqual(unpatchedPackages(groups, () => false), ['acme/widget', 'acme/gadget']);
+    });
+});
+
+describe('driftReasons — recorded patches (#113)', () => {
+    const current = { composerHash: 'lock', stampComposerHash: 'lock' };
+
+    it('names each package missing a recorded patch', () => {
+        assert.deepEqual(
+            driftReasons({ ...current, unpatched: ['acme/widget', 'acme/gadget'] }),
+            ['vendor: recorded patches not applied to acme/widget, acme/gadget'],
+        );
+    });
+
+    it('reports an unreadable patches.lock.json', () => {
+        assert.deepEqual(driftReasons({ ...current, patchesLockUnreadable: true }), ['vendor: patches.lock.json could not be read']);
+    });
+
+    it('is not judged for a tree whose install is not this script to keep', () => {
+        assert.deepEqual(judgeTree(`${ROOT}-ci`, ROOT, { ...current, unpatched: ['acme/widget'], patchesLockUnreadable: true }).drift, []);
+    });
+});
+
+describe('patchDrift, against real files (#113)', () => {
+    const git = (cwd, ...args) => {
+        const out = spawnSync('git', args, { cwd, encoding: 'utf8' });
+
+        assert.equal(out.status, 0, `git ${args.join(' ')} failed: ${out.stderr}`);
+
+        return out.stdout;
+    };
+
+    const PATCH = [
+        'diff --git a/src/a.txt b/src/a.txt',
+        '--- a/src/a.txt',
+        '+++ b/src/a.txt',
+        '@@ -1 +1 @@',
+        '-old',
+        '+new',
+        '',
+    ].join('\n');
+
+    /**
+     * A tree shaped like a slot: a git repo ignoring `vendor/`, one patch file, its lock entry,
+     * and the patched package installed with `contents` in the file the patch changes.
+     */
+    const fixture = (contents, extraLock = {}) => {
+        const root = mkdtempSync(join(tmpdir(), 'wt-patches-'));
+        const tree = join(root, 'wordpress-importer');
+
+        mkdirSync(join(tree, 'patches'), { recursive: true });
+        mkdirSync(join(tree, 'vendor', 'acme', 'widget', 'src'), { recursive: true });
+        git(tree, 'init', '-q', '.');
+        writeFileSync(join(tree, '.gitignore'), '/vendor\n');
+        writeFileSync(join(tree, 'patches', 'widget.patch'), PATCH);
+        writeFileSync(join(tree, 'vendor', 'acme', 'widget', 'src', 'a.txt'), contents);
+        writeFileSync(join(tree, 'patches.lock.json'), JSON.stringify({
+            _hash: 'x',
+            patches: { 'acme/widget': [{ url: 'patches/widget.patch', depth: 1 }], ...extraLock },
+        }));
+
+        return { root, tree };
+    };
+
+    const discard = (root) => {
+        try {
+            rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+        } catch {
+            // left in the OS temp directory
+        }
+    };
+
+    it('names a package installed without its recorded patch', () => {
+        const { root, tree } = fixture('old\n');
+
+        try {
+            assert.deepEqual(patchDrift(tree), { unpatched: ['acme/widget'], patchesLockUnreadable: false });
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('names nothing for a package that already carries it', () => {
+        const { root, tree } = fixture('new\n');
+
+        try {
+            assert.equal(patchApplied(tree, 'acme/widget', { url: 'patches/widget.patch', depth: 1 }), true);
+            assert.deepEqual(patchDrift(tree), { unpatched: [], patchesLockUnreadable: false });
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('reads a package changed in some other way as unpatched, not as patched', () => {
+        // The reverse check must fail on contents that are neither the original nor the patched
+        // file, or a hand-edited vendor copy would be certified.
+        const { root, tree } = fixture('something else\n');
+
+        try {
+            assert.deepEqual(patchDrift(tree).unpatched, ['acme/widget']);
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('does not report a recorded package that is not installed', () => {
+        const { root, tree } = fixture('new\n', { 'acme/absent': [{ url: 'patches/widget.patch', depth: 1 }] });
+
+        try {
+            assert.deepEqual(patchDrift(tree).unpatched, []);
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('does not report a patch recorded by URL, which has no file to compare against', () => {
+        const { root, tree } = fixture('new\n', { 'acme/widget': [{ url: 'https://example.invalid/widget.patch', depth: 1 }] });
+
+        try {
+            assert.deepEqual(patchDrift(tree).unpatched, []);
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('reports nothing for a tree with no patches.lock.json', () => {
+        const { root, tree } = fixture('old\n');
+
+        try {
+            rmSync(join(tree, 'patches.lock.json'));
+            assert.deepEqual(patchDrift(tree), { unpatched: [], patchesLockUnreadable: false });
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('flags a patches.lock.json it cannot parse', () => {
+        const { root, tree } = fixture('new\n');
+
+        try {
+            writeFileSync(join(tree, 'patches.lock.json'), '{not json');
+            assert.deepEqual(patchDrift(tree), { unpatched: [], patchesLockUnreadable: true });
+        } finally {
+            discard(root);
+        }
+    });
+
+    // `inspect()` is not exported, so these are the only tests that fail when the probe is unwired
+    // from `status`: every test above still passes with that line removed.
+    const status = (cwd) => spawnSync(
+        process.execPath,
+        [fileURLToPath(new URL('worktree-slots.mjs', import.meta.url)), 'status', '--check'],
+        { cwd, encoding: 'utf8' },
+    );
+
+    it('makes status --check exit 1 naming the package when the patch is missing', () => {
+        const { root, tree } = fixture('old\n');
+
+        try {
+            const out = status(tree);
+
+            assert.equal(out.status, 1, out.stdout + out.stderr);
+            assert.match(out.stdout, /recorded patches not applied to acme\/widget/);
+        } finally {
+            discard(root);
+        }
+    });
+
+    it('lets status --check exit 0 when the patch is applied, so the exit above is not unconditional', () => {
+        const { root, tree } = fixture('new\n');
+
+        try {
+            const out = status(tree);
+
+            assert.equal(out.status, 0, out.stdout + out.stderr);
+            assert.doesNotMatch(out.stdout, /recorded patches/);
+        } finally {
+            discard(root);
+        }
     });
 });

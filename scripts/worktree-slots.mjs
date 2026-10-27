@@ -14,7 +14,7 @@
  *
  * Subcommands:
  *   status              every tree, its branch, whether it is free, and any detected drift
- *   refresh <target>    reconcile vendor/ and node_modules/
+ *   refresh <target>    reconcile vendor/ (re-applying recorded patches) and node_modules/
  *   release <slot>      assert a clean tree, then detach to origin/main so the branch is free
  *   provision <slot>    create and bootstrap a slot from scratch
  *
@@ -29,6 +29,12 @@
  * carries why. `composer.lock` remains the only install *stamp*: `status` judges drift against it
  * alone, so a tree whose `node_modules/` is absent reports clean and then fails the `spell` job.
  * The stamp exists for `status` to judge drift, not to gate the install.
+ *
+ * **The patches `patches.lock.json` records are judged from the files, not from the stamp (#113).**
+ * `composer install` treats a package already at its locked version as satisfied and does not
+ * re-apply a patch added since, and `cweagans/composer-patches` keeps no record in `vendor/` of what
+ * it applied. So `status` asks each patch whether it reverse-applies to the installed package, and
+ * `refresh` and `provision` reinstall exactly the packages where one does not.
  *
  * Exit codes make it usable as a shell guard:
  *   0  the operation completed, or `status` found no drift
@@ -256,7 +262,7 @@ export function expectationsFor(kind, atRest = true) {
  * composition is what gets tested.
  *
  * `probe` carries the measurements `driftReasons` reads — `composerHash`, `stampComposerHash`,
- * `behind` — plus `atRest`, which is not a measurement but the occupancy that
+ * `unpatched`, `patchesLockUnreadable`, `behind` — plus `atRest`, which is not a measurement but the occupancy that
  * decides whether base position is judged at all.
  *
  * @param  string  treePath
@@ -424,6 +430,62 @@ export function installStaleReason(lockHash, stampHash) {
 }
 
 /**
+ * The patches a tree's `patches.lock.json` records, grouped by package.
+ *
+ * Returns null when the text is not a lock this script can read, so a corrupt file is reported
+ * rather than read as "no patches", which would certify every package as patched.
+ *
+ * @param  string  text  The contents of `patches.lock.json`
+ * @return ?array  `[{ package, patches: [{ url, depth }] }]`, in the lock's order
+ */
+export function recordedPatches(text) {
+    let lock;
+
+    try {
+        lock = JSON.parse(text);
+    } catch {
+        return null;
+    }
+
+    if (lock === null || typeof lock !== 'object' || lock.patches === null || typeof lock.patches !== 'object') {
+        return null;
+    }
+
+    const groups = [];
+
+    for (const [name, list] of Object.entries(lock.patches)) {
+        if (!Array.isArray(list) || list.some((patch) => typeof patch?.url !== 'string')) {
+            return null;
+        }
+
+        // The plugin records the `-p` depth it applied with; 1 is its own default.
+        const patches = list.map((patch) => ({ url: patch.url, depth: Number.isInteger(patch.depth) ? patch.depth : 1 }));
+
+        if (patches.length) {
+            groups.push({ package: name, patches });
+        }
+    }
+
+    return groups;
+}
+
+/**
+ * The packages carrying at least one recorded patch that is not applied.
+ *
+ * `isApplied` is passed in so the decision is testable without a `vendor/`; `patchDrift` supplies
+ * the real probe.
+ *
+ * @param  array     groups     What `recordedPatches` returned
+ * @param  function  isApplied  `(package, patch) => bool`
+ * @return array  Package names, in the lock's order
+ */
+export function unpatchedPackages(groups, isApplied) {
+    return groups
+        .filter((group) => group.patches.some((patch) => !isApplied(group.package, patch)))
+        .map((group) => group.package);
+}
+
+/**
  * Summarize every drift a tree is carrying, as human-readable reasons.
  *
  * Returns an empty array when the tree is current, so the caller can treat "no reasons" as the
@@ -444,6 +506,8 @@ export function installStaleReason(lockHash, stampHash) {
 export function driftReasons({
     composerHash = null,
     stampComposerHash = null,
+    unpatched = [],
+    patchesLockUnreadable = false,
     behind = null,
     expected = null,
 }) {
@@ -468,6 +532,15 @@ export function driftReasons({
 
         if (vendor) {
             reasons.push(`vendor: ${vendor}`);
+        }
+
+        // Named per package, because the remedy is a reinstall of exactly those packages.
+        if (unpatched.length) {
+            reasons.push(`vendor: recorded patches not applied to ${unpatched.join(', ')}`);
+        }
+
+        if (patchesLockUnreadable) {
+            reasons.push('vendor: patches.lock.json could not be read');
         }
     }
 
@@ -638,6 +711,98 @@ function stampHashOf(treePath) {
         return JSON.parse(readFileSync(stamp, 'utf8')).composerHash || null;
     } catch {
         return null;
+    }
+}
+
+/**
+ * Whether one recorded patch is applied to the package installed in a tree.
+ *
+ * A patch that reverse-applies cleanly is present in the files, which is the only evidence there
+ * is: the plugin writes no record of what it applied. `--check` makes it a dry run, so nothing in
+ * `vendor/` is touched.
+ *
+ * @param  string  treePath
+ * @param  string  name      The package, as `vendor/name`
+ * @param  object  patch     `{ url, depth }` from `recordedPatches`
+ * @return bool
+ */
+export function patchApplied(treePath, name, patch) {
+    const result = spawn(
+        'git',
+        ['-C', treePath, 'apply', '--check', '--reverse', `--directory=vendor/${name}`, `-p${patch.depth}`, join(treePath, patch.url)],
+        undefined,
+        'ignore',
+    );
+
+    return result.status === 0;
+}
+
+/**
+ * Which packages in a tree are missing a patch its `patches.lock.json` records.
+ *
+ * Two cases are not drift, each for a reason:
+ *
+ *   - a package absent from `vendor/` has nothing to patch, and a tree with no install is
+ *     already reported by the install stamp;
+ *   - a patch recorded by URL rather than by path is not on disk to compare against. This
+ *     repository records none; one added later would go unjudged here rather than pin `--check`
+ *     at 1.
+ *
+ * @param  string  treePath
+ * @return object  `{ unpatched, patchesLockUnreadable }`
+ */
+export function patchDrift(treePath) {
+    const lockFile = join(treePath, 'patches.lock.json');
+
+    if (!existsSync(lockFile)) {
+        return { unpatched: [], patchesLockUnreadable: false };
+    }
+
+    const groups = recordedPatches(readFileSync(lockFile, 'utf8'));
+
+    if (groups === null) {
+        return { unpatched: [], patchesLockUnreadable: true };
+    }
+
+    const unpatched = unpatchedPackages(groups, (name, patch) => !existsSync(join(treePath, 'vendor', ...name.split('/')))
+        || patch.url.includes('://')
+        || patchApplied(treePath, name, patch));
+
+    return { unpatched, patchesLockUnreadable: false };
+}
+
+/**
+ * Reinstall every package whose recorded patches are not applied, then confirm they are.
+ *
+ * Only the drifted packages are reinstalled: a reinstall deletes and re-extracts the package, which
+ * is wasted work on one already patched. `composer reinstall` runs the plugin's install hook, which
+ * is what `composer install` skips for a package at its locked version (#113).
+ *
+ * @param  string  path
+ * @return void
+ */
+function reapplyPatches(path) {
+    const before = patchDrift(path);
+
+    if (before.patchesLockUnreadable) {
+        throw new Error('patches.lock.json could not be read; run `composer patches-relock` and retry');
+    }
+
+    if (!before.unpatched.length) {
+        process.stdout.write('every patch in patches.lock.json is applied\n');
+
+        return;
+    }
+
+    for (const name of before.unpatched) {
+        process.stdout.write(`${name}: recorded patches not applied; reinstalling\n`);
+        run('composer', ['reinstall', name, '--no-interaction'], path);
+    }
+
+    const after = patchDrift(path);
+
+    if (after.unpatched.length) {
+        throw new Error(`recorded patches still not applied after reinstalling: ${after.unpatched.join(', ')}`);
     }
 }
 
@@ -954,6 +1119,7 @@ function inspect(repoRoot) {
         const { kind, drift } = judgeTree(tree.path, repoRoot, {
             composerHash: composerHashOf(tree.path),
             stampComposerHash: stampHashOf(tree.path),
+            ...patchDrift(tree.path),
             behind,
             atRest,
         });
@@ -1339,6 +1505,7 @@ function commandRefresh(repoRoot, name) {
         // Idempotent and cheap — it reports "Nothing to install, update or remove" when the tree
         // is already current, so there is nothing to reason about before running it.
         run('composer', ['install', '--no-interaction'], path);
+        reapplyPatches(path);
         installNodeModules(path);
         writeInstallStamp(path);
     } else {
@@ -1456,6 +1623,7 @@ function commandProvision(repoRoot, name) {
     run('git', ['-C', repoRoot, 'worktree', 'add', '--detach', path, 'origin/main'], repoRoot);
 
     run('composer', ['install', '--no-interaction'], path);
+    reapplyPatches(path);
     installNodeModules(path);
     writeInstallStamp(path);
 
