@@ -308,9 +308,9 @@ it('maps an additional confirmation with its view fields, settings and condition
     ])->and($mapped['conditional_logic'] ?? null)->not->toBeEmpty();
 });
 
-it('names an action only from a title, not from the post title an XML export carries', function (): void {
+it('names an action only from its title, never from a post title', function (): void {
     $configs = ffcmTable(ffcmCall($this->manager, 'mapNotificationsToEmailConfigurations', ['views' => [
-        ffcmEmailView(['email_to' => 'a@uams.edu'], ['title' => null, 'post_title' => 'From XML']),
+        ffcmEmailView(['email_to' => 'a@uams.edu'], ['title' => null, 'post_title' => 'A post title']),
     ]], 'default'));
     $config = ffcmTable($configs[0] ?? null);
 
