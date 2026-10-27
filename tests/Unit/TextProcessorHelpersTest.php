@@ -167,3 +167,30 @@ it('wraps the content in its own root even when the content starts with a div', 
 
     expect(textProcessorHelpersRoot($doc))->toBe("<div class=\"a\">x</div>\n<p>y</p>");
 });
+
+it('cuts an attribute value at its first escaped quote', function (): void {
+    // Characterization of #157: the quote is decoded before parsing, so it ends
+    // the value
+    $doc = TextProcessor::loadHtml('<p title="a &quot;b&quot; c">x</p>');
+
+    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe('a ');
+});
+
+it('clears the libxml errors recorded before it loads', function (): void {
+    $internal = libxml_use_internal_errors(true);
+
+    try {
+        // A malformed XML document records an error
+        @simplexml_load_string('<a>');
+        $before = count(libxml_get_errors());
+
+        TextProcessor::loadHtml('<p>x');
+        $after = count(libxml_get_errors());
+    } finally {
+        libxml_clear_errors();
+        libxml_use_internal_errors($internal);
+    }
+
+    expect($before)->toBeGreaterThan(0)
+        ->and($after)->toBe(0);
+});

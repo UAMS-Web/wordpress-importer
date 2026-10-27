@@ -173,10 +173,7 @@ class TextProcessor
         // this document, so whitespace preservation is set on the one below.
         $doc->formatOutput = true;
 
-        // Convert HTML entities to UTF-8 equivalents. The HTML parser decodes the
-        // same entities itself, so with no flags at all this step changes nothing it
-        // builds: measured on libxml 2.15.4 for quotes, &apos; and HTML5-only names.
-        // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
+        // Convert HTML entities to UTF-8 equivalents
         $html = html_entity_decode(
             $html,
             ENT_QUOTES | ENT_HTML5,
@@ -292,9 +289,7 @@ class TextProcessor
             }
         }
 
-        // Clear libxml errors. NOERROR and NOWARNING keep libxml from recording any,
-        // so there is nothing to clear in practice.
-        // @pest-mutate-ignore: RemoveFunctionCall
+        // Clear libxml errors, including any recorded before this load
         libxml_clear_errors();
 
         // Clean up variables to free up memory
@@ -1006,9 +1001,10 @@ class TextProcessor
                                     }
                                 }
 
-                                // Track the processed node's HTML; every processor returns a
-                                // node of this document. Without the check a null node would
-                                // add an empty string, which no node's HTML equals.
+                                // Track the processed node's HTML. Every processor that returns
+                                // a node returns one of this document (FileBlockProcessor can
+                                // return null). Without the check a null node would add an
+                                // empty string, which no node's HTML equals.
                                 // @pest-mutate-ignore: InstanceOfToTrue
                                 if ($processedNode instanceof DOMNode) {
                                     $processedNodes[] = self::nodeHtml(
@@ -1572,11 +1568,10 @@ class TextProcessor
         ?DOMNode $node
     ): string {
         // Read the node's HTML; there is none for no node
-        $html = $node === null ? false : $doc->saveHTML($node);
+        $html = $node instanceof DOMNode ? $doc->saveHTML($node) : false;
 
-        // Return the HTML, or '' for no node. saveHTML() fails only for a node from
-        // another document, and every caller passes $doc's own, so the fallback's
-        // value matters only for no node, where '' is checked.
+        // Return the HTML, or '' for no node. saveHTML() throws for a node from another
+        // document rather than returning false, and every caller passes $doc's own.
         return $html === false ? '' : $html;
     }
 
@@ -1625,9 +1620,7 @@ class TextProcessor
 
         // Check each block for the position
         foreach ($blocks as [$blockStart, $blockEnd]) {
-            // A block starts with its opening comment, so no shortcode position equals
-            // its start and `>` would answer the same
-            // @pest-mutate-ignore: GreaterOrEqualToGreater
+            // Check whether the position falls inside this block
             if ($position >= $blockStart && $position < $blockEnd) {
                 return true;
             }

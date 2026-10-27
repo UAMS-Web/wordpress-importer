@@ -829,8 +829,9 @@ it('strips link targets in every excluded block, wherever the earlier ones chang
 it('turns double-encoded entities above 127 into the wrong bytes when it applies WpAutoP', function (): void {
     textProcessorForBardFakes();
 
-    // Characterization of #154: chr() wraps 8212 to a control character and turns
-    // 233 into one byte of invalid UTF-8; without WpAutoP both decode correctly
+    // Characterization of #154: chr() wraps 8212 to the control character U+0014
+    // and turns 233 into a lone byte that comes out as `?`; without WpAutoP both
+    // decode correctly
     $withAutoP = textProcessorForBard('<p>A &amp;#8212; B &amp;#233; C</p>', autoP: true);
     $without = textProcessorForBard('<p>A &amp;#8212; B &amp;#233; C</p>');
 
@@ -1002,4 +1003,26 @@ it('parses an image inside a paragraph as content, not as a figure', function ()
     textProcessorForBard('<p>Text <img src="p.jpg"></p>');
 
     expect($fakes['image']->calls)->toBe([]);
+});
+
+it('measures a shortcode that lands on a block\'s recorded start as inside it', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->extracted = [
+        ['name' => 'gone', 'original' => '[gone aaaaaaaaaaaaaa]'],
+        ['name' => 'b', 'original' => '[b]'],
+    ];
+    $fakes['shortcode']->replacements = ['gone' => ''];
+
+    // Removing the 21-character shortcode moves [b] onto the offset recorded for
+    // the block's start (#155), and a position at the start counts as inside
+    textProcessorForBard('[gone aaaaaaaaaaaaaa]<!-- wp:shortcode -->[b]<!-- /wp:shortcode -->');
+
+    expect($fakes['shortcode']->converted)->toBe(['gone']);
+});
+
+it('imports an attribute value only up to its first escaped quote', function (): void {
+    textProcessorForBardFakes();
+
+    // Characterization of #157
+    expect(textProcessorForBard('<p id="say &quot;hi&quot; now">x</p>'))->toBe([textProcessorForBardParagraph('x', 'say ')]);
 });
