@@ -1466,3 +1466,21 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 **Rejected: leaving `main` with no required check.** A pull request could then merge with a red or missing remote run, though the chain runs on every pull request here.
 
 **Rejected: removing the `RUN_REMOTE_CI` gate.** It changes every job for no gain once `CI` fails when the switch skips them.
+
+## Redirect rules sharing a source keep the rule WordPress serves (#108)
+
+**Decided 2026-10-27, on #108.** When published rules on one vanity domain share a source, the `redirect_domains` entry holds the rule WordPress tries first for that path. Every other rule with that source is shadowed. It is not written, and it is reported with the rule that serves the path, in the run's output and in the warnings summary under `redirects` / `shadowed_rules`. Before this change, the entry held whichever rule came last in the export, and the collapse showed only as an `updated` count.
+
+**The order, and the evidence for it.** WordPress answers a path with the first rule that matches it:
+
+- **Pretty Links** dispatches on `init` at priority 1: `src/Bootstrap.php` in 4.0.15 (the local `uamshealthmu` install), and the plugin's application controller (`app/controllers/`, line 35) in 3.6.18 (plugins.svn.wordpress.org).
+- **Redirection** runs its loop on `init` at the default priority 10: `modules/wordpress.php` in 5.0 and 5.10.1 (the plugin's GitHub repository). Its `Red_Item::get_for_matched_url()` reads the enabled rules matching the URL and sorts them by `position`, then by id (`sort_urls()`), and the first match redirects.
+- **Safe Redirect Manager** matches on `parse_request` or `template_redirect`, both after `init`, and orders its rules by `menu_order ID`, ascending: `inc/classes/class-srm-redirect.php` and `inc/functions.php` in 1.9.3 (the local install).
+
+So Pretty Links answers before Redirection, and within one plugin the lowest position wins, then the lowest id. Sources are compared ignoring case, because the importer finds an entry through a Stache `where()`, which compares in lower case (`Statamic\Query\Builder::filterTestEquals()`), so case variants of a source can only ever be one entry. Pretty Links slugs are unique, so two of its links never share a source. The plugin versions go.uams.edu and gouams.com run were not read; the order above held in every version read.
+
+**Rejected: keep the last rule, as before.** Export order is not the order WordPress tries rules, so the entry could redirect somewhere the domain does not.
+
+**Rejected: write every rule and let the host app choose.** The collection has one entry per host and source, and the importer finds an entry by that pair, so a second entry for a source would be matched by neither the re-run nor the host's lookup in a defined order.
+
+**Rejected: refuse the run.** The shadowed rule never answers a request, so dropping it loses nothing the domain serves. The report keeps it visible.

@@ -971,7 +971,7 @@ The following classes in `src/Services/WordPressImport/Globals/Creators` extend 
   - Handles redirect-specific fields and metadata.
   - Manages overwrite behavior for existing redirect rules.
   - Appends new redirects to the global set's replicator field.
-  - For a vanity domain listed in `wordpress-import.redirect_domains.hosts`, writes one `redirect_domains` entry per published rule instead (wordpress-importer-archive#1306). See *Vanity redirect domains* below.
+  - For a vanity domain listed in `wordpress-import.redirect_domains.hosts`, writes one `redirect_domains` entry per published rule instead (wordpress-importer-archive#1306), keeping the rule WordPress serves when several share a source (#108). See *Vanity redirect domains* below.
 - **Methods**:
   - `createGlobals()`: Implements the creation of redirect rules in the global set, or routes a vanity domain's rules to the collection.
   - `redirectDomainHost()`: The listed vanity domain an export's `base_blog_url` belongs to, if any.
@@ -2023,6 +2023,7 @@ Each entry carries the domain as `host`, the rule's WordPress post id as `wordpr
 
 - **Unpublished rules are skipped**, because the collection holds what the domain serves. The run reports how many.
 - **A re-run updates the entry with the same host and source** rather than adding another. The redirect overwrite prompt does not apply to this path.
+- **Published rules that share a source become one entry, holding the rule WordPress serves** (#108). WordPress answers a path with the first rule that matches it. Pretty Links redirects on `init` at priority 1, Redirection on `init` at priority 10, and Safe Redirect Manager on `parse_request` or `template_redirect`, so they are tried in that order. Within Redirection or Safe Redirect Manager, the rule with the lowest position (`order`) is tried first, then the lowest id. Every other rule with that source is shadowed: it is not written, and the run prints it with the rule that serves the path. Sources are compared ignoring case, as the entry lookup is: Statamic's Stache compares a `where()` value in lower case, so `/Flu` and `/flu` reach one entry. The same pairs are in the end-of-import warnings summary, under `redirects` / `shadowed_rules`, as `host`, `source`, `served`, `served_source` and `shadowed`. The summary line counts them, so on a first run the rules read equal `created`, `updated`, `unpublished skipped` and `shadowed` together. A re-run picks the same rule.
 - **A rule unpublished or deleted since an earlier run is disabled, not deleted** (wordpress-importer-archive#1311). Its entry gets `enabled` off and stays in the collection, so the redirect stops and the change can be undone. It is re-enabled if the rule is published again. Only entries the import wrote are considered: each carries the rule's `wordpress_post_id`, and an entry an editor authored in the control panel has none. The run's summary counts the entries it disabled.
 - **A response the collection's blueprint does not offer** (anything but 301, 302, 303, 307 or 308) is kept as WordPress served it, and counted in the run's output.
 - **The collection is the host application's.** If it does not exist, the run says so and writes nothing.
