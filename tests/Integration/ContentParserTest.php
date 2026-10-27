@@ -364,6 +364,11 @@ it('converts every iframe', function (): void {
 '.contentVideoDiv('vimeo', 'https://vimeo.com/7'));
 });
 
+it('replaces an embed-responsive container holding two supported iframes with the last one', function (): void {
+    expect(contentConvert('<div class="embed-responsive"><iframe src="https://www.youtube.com/embed/a"></iframe><iframe src="https://vimeo.com/7"></iframe></div>'))
+        ->toBe(contentVideoDiv('vimeo', 'https://vimeo.com/7'));
+});
+
 it('routes each supported iframe URL', function (string $src, string $type, string $url): void {
     expect(contentConvert("<iframe src=\"{$src}\"></iframe>"))->toBe(contentVideoDiv($type, $url));
 })->with([

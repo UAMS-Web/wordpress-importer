@@ -288,8 +288,10 @@ class ContentParser
         // Load HTML into DOMDocument for parsing
         $doc = TextProcessor::loadHtml($html);
 
-        // Copy the live list, since replacing an iframe removes it from the document
-        foreach (\iterator_to_array($doc->getElementsByTagName('iframe')) as $iframe) {
+        // Copy the live list, since replacing an iframe removes it from the document,
+        // and walk it from the last iframe, so that of two iframes sharing an
+        // embed-responsive container the last is the one that replaces it
+        foreach (\array_reverse(\iterator_to_array($doc->getElementsByTagName('iframe'))) as $iframe) {
             // Extract the watch URL, skipping an iframe from an unsupported provider
             $videoUrl = $this->extractVideoUrlFromIframeSrc($iframe->getAttribute('src'));
             if ($videoUrl === null) {
