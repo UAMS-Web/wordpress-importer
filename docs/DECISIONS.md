@@ -1430,3 +1430,13 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 **Rejected: keeping the gitlink gate and the `exports-gitlink` job, repointed at an absent gitlink.** A branch cut before the removal that still moves the gitlink meets a conflict on merge, since the path is deleted on `main`, and #1299 checks the published tree for any submodule entry. A job for a path that cannot reappear unnoticed checks nothing.
 
 **What is not settled.** The synced rules and skills still describe the submodule; they are edited in `UAMS-Web/uams-claude-skills`.
+
+## An `[accordion]` imports into Bard as headings and paragraphs (#118)
+
+**Decided 2026-10-27, on #118.** In Bard content, a WordPress `[accordion]` is flattened by the importer: each `[section title="..."]` becomes an `<h3>` holding its title, followed by its content. Bare and attributed accordions are treated the same, and the host app needs no change. `AccordionShortcodeProcessor::parse()` is unchanged, because the audio post importer reads transcripts from the section data it returns.
+
+**Why.** The host app defines no `accordion` Bard set, so the set the importer used to emit for an attributed accordion did not display. Fixing #118 sends the bare form down the same path: roughly 1,810 bare `[accordion]` blocks in the news exports, which `main` had left in the post as raw shortcode text. Flattening keeps the text visible, with the section titles as headings.
+
+**Rejected: keep emitting the `accordion` set and define the set in the host app.** It keeps the accordion's structure, but the content stays hidden until a host change ships, and the change would cover only an accordion set, not the importer.
+
+**Rejected: hold the bare form at `main`'s behavior and decide accordions on a ticket of their own.** It keeps #118 small, but it leaves the bare form as raw shortcode text and the attributed form as an undisplayed set, both of them wrong today.
