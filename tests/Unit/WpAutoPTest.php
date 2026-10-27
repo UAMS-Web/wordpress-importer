@@ -91,6 +91,13 @@ it('protects a large element whose first protection pass fails, the second way',
         ->and($html)->not->toContain('<WPPreserveNewline');
 });
 
+it('restores a placeholder name already in the text as the pre it names', function (): void {
+    // Characterization: the placeholders are `<pre wp-pre-tag-N></pre>`, numbered from
+    // zero, and the restore replaces every occurrence, so text that already holds one
+    // gets that pre's content too. WordPress's wpautop() does the same.
+    expect((new WpAutoP)->process("<pre wp-pre-tag-1></pre>\n\n<pre>B</pre>"))->toBe("<pre>B</pre>\n\n<pre>B</pre>");
+});
+
 it('leaves a bare block tag after text inside the paragraph', function (string $text, bool $br, string $html): void {
     // Characterization: the opening-tag pattern needs a character before `>`, so a
     // tag without attributes is not split from the text before it (#145)

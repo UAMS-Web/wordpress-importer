@@ -79,10 +79,6 @@ class WpAutoP
             );
             $last_part = array_pop($text_parts);
             $text = '';
-
-            // The counter only has to give each placeholder a distinct name, which
-            // any start or direction does
-            // @pest-mutate-ignore: DecrementInteger, IncrementInteger
             $i = 0;
 
             foreach ($text_parts as $text_part) {
@@ -106,8 +102,6 @@ class WpAutoP
                     0,
                     $start
                 ).$name;
-
-                // @pest-mutate-ignore: PostIncrementToPostDecrement
                 $i++;
             }
 
