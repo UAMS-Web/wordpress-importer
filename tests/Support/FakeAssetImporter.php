@@ -10,11 +10,11 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 
 /**
- * An `AssetImporter` whose upload setting and image import result are fixed,
- * recording each image it is asked to import.
+ * An `AssetImporter` whose upload setting and image and file import results
+ * are fixed, recording each image and file it is asked to import.
  *
  * A typed stand-in for the Mockery mocks a parser test would otherwise build:
- * every other method is the real one, so only the two overridden here are
+ * every other method is the real one, so only the three overridden here are
  * fixed by the test.
  */
 final class FakeAssetImporter extends AssetImporter
@@ -27,16 +27,27 @@ final class FakeAssetImporter extends AssetImporter
     public array $importedImages = [];
 
     /**
-     * Fix the upload setting and what `importImage()` does.
+     * The `[url, site, container]` triple of each `importFile()` call, in order.
+     *
+     * @var list<array{string, string, string}>
+     */
+    public array $importedFiles = [];
+
+    /**
+     * Fix the upload setting and what `importImage()` and `importFile()` do.
      *
      * @param  bool  $uploads  What `getUploadImages()` returns
      * @param  string|Throwable|null  $imported  What `importImage()` returns, or throws
+     * @param  ?string  $importedFile  What `importFile()` returns
+     * @param  ?string  $baseBlogUrl  The WordPress base blog URL
      */
     public function __construct(
         private readonly bool $uploads = true,
-        private readonly string|Throwable|null $imported = null
+        private readonly string|Throwable|null $imported = null,
+        private readonly ?string $importedFile = null,
+        ?string $baseBlogUrl = null
     ) {
-        parent::__construct();
+        parent::__construct($baseBlogUrl);
     }
 
     /**
@@ -81,5 +92,36 @@ final class FakeAssetImporter extends AssetImporter
         }
 
         return $this->imported;
+    }
+
+    /**
+     * Record the call, then return the fixed file path.
+     *
+     * @param  string  $url  The file URL to import
+     * @param  string  $site  The site handle
+     * @param  OutputInterface  $output  The console output (ignored)
+     * @param  string  $container  The asset container
+     * @param  SameSitePolicy  $sameSitePolicy  The same-site policy (ignored)
+     * @param  ?string  $pageUrl  The page URL (ignored)
+     * @param  ?string  $title  The file title (ignored)
+     * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra metadata (ignored)
+     * @param  ?string  $attachmentPageUrl  The attachment-page URL (ignored)
+     * @return ?string The fixed file path
+     */
+    #[\Override]
+    public function importFile(
+        string $url,
+        string $site,
+        OutputInterface $output,
+        string $container = 'files',
+        SameSitePolicy $sameSitePolicy = SameSitePolicy::SKIP_DIFFERENT_SITE,
+        ?string $pageUrl = null,
+        ?string $title = null,
+        ?array $additionalFileMetadata = null,
+        ?string $attachmentPageUrl = null
+    ): ?string {
+        $this->importedFiles[] = [$url, $site, $container];
+
+        return $this->importedFile;
     }
 }

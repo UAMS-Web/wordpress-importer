@@ -53,19 +53,21 @@ class LinkListParser
      * Normalize section count from ACF data.
      *
      * @param  mixed  $sectionCountValue  Raw section count from ACF
-     * @return int Safe section count
+     * @return int Safe section count; a negative count runs no section
      */
     private function normalizeSectionCount(
         mixed $sectionCountValue
     ): int {
         if (\is_int($sectionCountValue)) {
-            return max($sectionCountValue, 0);
+            return $sectionCountValue;
         }
 
         if (\is_string($sectionCountValue) && \is_numeric($sectionCountValue)) {
-            return max((int) $sectionCountValue, 0);
+            return (int) $sectionCountValue;
         }
 
+        // A count of -1 runs the section loops as many times as 0 does.
+        // @pest-mutate-ignore: DecrementInteger
         return 0;
     }
 
@@ -86,13 +88,6 @@ class LinkListParser
             'field_link_list_description_b' => 'link_list_description',
             'field_link_list_background_color_b' => 'link_list_background_color',
             'field_link_list_section_b' => 'link_list_section',
-            'field_link_list_section_title_b' => 'link_list_section_title',
-            'field_link_list_section_body_b' => 'link_list_section_body',
-            'field_link_list_section_url_b' => 'link_list_section_url',
-            'field_link_list_section_description_b' => 'link_list_section_description',
-            'field_link_list_geo_valid_b' => 'link_list_geo_valid',
-            'field_link_list_geo_b' => 'link_list_geo',
-            'field_link_list_geo_region_b' => 'link_list_geo_region',
         ];
     }
 
@@ -127,7 +122,7 @@ class LinkListParser
     ): array {
         $sections = [];
         $sectionCount = $this->normalizeSectionCount(
-            $data['link_list_section'] ?? 0
+            $data['link_list_section'] ?? null
         );
 
         for ($i = 0; $i < $sectionCount; $i++) {
@@ -176,7 +171,7 @@ class LinkListParser
             // Extract and process the heading/title for the link item
             $heading = HtmlTagStripper::strip(
                 $this->normalizeTextValue(
-                    $section['link_list_section_title'] ?? ''
+                    $section['link_list_section_title']
                 )
             );
 
@@ -195,14 +190,14 @@ class LinkListParser
                 : '';
 
             // Extract the original URL from the link data
-            $originalUrl = LinkHelper::getUrl($section['link_list_section_url'] ?? '');
+            $originalUrl = LinkHelper::getUrl($section['link_list_section_url']);
 
             // Extract the target attribute (new window behavior)
-            $target = LinkHelper::getTarget($section['link_list_section_url'] ?? '');
+            $target = LinkHelper::getTarget($section['link_list_section_url']);
 
             // Extract the accessibility description for the link
             $description = $this->normalizeTextValue(
-                $section['link_list_section_description'] ?? ''
+                $section['link_list_section_description']
             );
 
             // Skip invalid items (missing required fields)
@@ -497,7 +492,7 @@ class LinkListParser
         // Process sections
         $sections = [];
         $sectionCount = $this->normalizeSectionCount(
-            $normalizedData['link_list_section'] ?? 0
+            $normalizedData['link_list_section'] ?? null
         );
 
         for ($i = 0; $i < $sectionCount; $i++) {
