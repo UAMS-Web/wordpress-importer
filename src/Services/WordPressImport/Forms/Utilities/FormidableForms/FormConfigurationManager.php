@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use ReflectionClass;
 use Statamic\Forms\Form;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormConfigurationManagerTrait;
@@ -1397,7 +1397,7 @@ class FormConfigurationManager
      * become additional confirmations.
      *
      * @param  array<int|string, mixed>  &$currentFormData  The current form data (passed by reference)
-     * @param  array<int|string, mixed>  $confirmationViews  Array of confirmation view data
+     * @param  list<array<int|string, mixed>>  $confirmationViews  Array of confirmation view data
      * @param  array<int|string, mixed>  $formData  The complete form data for context
      * @param  string  $siteHandle  The Statamic site handle
      * @param  ?AssetImporter  $assetImporter  The asset importer instance
@@ -1409,28 +1409,13 @@ class FormConfigurationManager
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Check if confirmation mapping is defined
-        $reflection = new ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION')) {
-            return;
-        }
-
         // Initialize arrays for default and additional confirmations
         $defaultConfirmation = null;
         $additionalConfirmations = [];
 
         // Process each confirmation view
         foreach ($confirmationViews as $index => $view) {
-            if (! \is_array($view)) {
-                continue;
-            }
-
-            $formIdentifier = '?';
-            if (isset($formData['id']) && (\is_int($formData['id']) || \is_string($formData['id']))) {
-                $formIdentifier = $formData['id'];
-            } elseif (isset($formData['form_key']) && (\is_int($formData['form_key']) || \is_string($formData['form_key']))) {
-                $formIdentifier = $formData['form_key'];
-            }
+            $formIdentifier = $this->formIdentifierForLogging($formData);
 
             $viewTitle = self::resolveViewTitle($view, 'Default');
 
@@ -1438,7 +1423,7 @@ class FormConfigurationManager
             $this->setFormConfigContextForLogging([
                 'form_id' => $formIdentifier,
                 'source' => 'confirmation',
-                'source_name' => $index === 0 ? $viewTitle : $viewTitle,
+                'source_name' => $viewTitle,
                 'plugin' => 'Formidable Forms',
             ]);
 
@@ -1495,11 +1480,8 @@ class FormConfigurationManager
                         true
                     );
 
-                    // Append to additional confirmations when mapping succeeded
-                    if ($additionalConfirmation !== null && $additionalConfirmation !== []) {
-                        // Add mapped additional confirmation to the list
-                        $additionalConfirmations[] = $additionalConfirmation;
-                    }
+                    // Append it; an additional confirmation always carries at least its type
+                    $additionalConfirmations[] = $additionalConfirmation;
                 }
             } finally {
                 // Clear form config context so logs do not attribute later processing
@@ -1533,159 +1515,6 @@ class FormConfigurationManager
     }
 
     /**
-     * Process confirmation content mappings using
-     * FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION_CONTENT.
-     *
-     * @param  array<int|string, mixed>  &$mappedData  The mapped data (passed by reference)
-     * @param  array<int|string, mixed>  $processedViewData  The processed view data (including parsed content)
-     * @param  array<int|string, mixed>  $formData  The complete form data for context
-     * @param  string  $siteHandle  The Statamic site handle
-     * @param  ?AssetImporter  $assetImporter  The asset importer instance
-     * @param  bool  $isAdditional  Whether this is an additional confirmation (affects field structure)
-     */
-    private function processConfirmationContentMappingsForView(
-        array &$mappedData,
-        array $processedViewData,
-        array $formData,
-        string $siteHandle,
-        $assetImporter = null,
-        bool $isAdditional = false
-    ): void {
-        // Check if confirmation content mapping is defined
-        $reflection = new ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION_CONTENT')) {
-            return;
-        }
-
-        // Map confirmation content fields using FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION_CONTENT
-        $confirmationContentMappings = static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION_CONTENT;
-        if (! \is_array($confirmationContentMappings)) {
-            return;
-        }
-
-        foreach ($confirmationContentMappings as $pluginKey => $mappingConfig) {
-            if (! \is_string($pluginKey)) {
-                continue;
-            }
-
-            // Skip unmapped fields (null values in mapping)
-            if ($mappingConfig === null) {
-                continue;
-            }
-
-            // Handle complex mapping configurations (arrays) vs simple string mappings
-            if (\is_array($mappingConfig)) {
-                // Check if this is a simple complex mapping with just statamic_attribute
-                if (
-                    isset($mappingConfig['statamic_attribute'])
-                    && \is_string($mappingConfig['statamic_attribute'])
-                ) {
-                    $statamicKey = $mappingConfig['statamic_attribute'];
-                } else {
-                    // Skip complex mappings that need special handling
-                    continue;
-                }
-            } else {
-                // Simple string mapping
-                if (! \is_string($mappingConfig)) {
-                    continue;
-                }
-
-                $statamicKey = $mappingConfig;
-            }
-
-            // Extract the value using dot notation if needed
-            $value = $this->extractValueFromData(
-                $processedViewData,
-                $pluginKey
-            );
-
-            // Only include the field if the value exists and is not empty
-            if ($value !== null && $value !== '') {
-                // Process the value using the common configuration processing method
-                $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                    ? $formData['fields']
-                    : [];
-                $value = $this->processMappingConfiguration(
-                    $value,
-                    $mappingConfig,
-                    $formData,
-                    $siteHandle,
-                    $assetImporter,
-                    $formFields
-                );
-
-                // Check if this is a multiple mapping configuration
-                if ($this->hasMultipleMappings($mappingConfig)) {
-                    // Process multiple mappings
-                    $multipleResults = $this->processMultipleMappingsAndGetResults(
-                        $value,
-                        $mappingConfig,
-                        $formData,
-                        $siteHandle,
-                        $assetImporter
-                    );
-
-                    // Add all results to the mapped data
-                    foreach ($multipleResults as $targetAttribute => $processedValue) {
-                        if ($processedValue !== null) {
-                            $this->assignNestedFieldToMappedData(
-                                $mappedData,
-                                $targetAttribute,
-                                $processedValue,
-                                $isAdditional
-                            );
-
-                            // Process statamic_other_field_value if configured (for multiple mappings)
-                            $this->processStatamicOtherFieldValue(
-                                $mappingConfig,
-                                $processedValue,
-                                $mappedData,
-                                $isAdditional ? 'confirmation_settings' : null
-                            );
-                        }
-                    }
-                } else {
-                    // Set the value in the appropriate structure
-                    if ($isAdditional) {
-                        // For additional confirmations, add to confirmation_settings
-                        if (
-                            ! isset($mappedData['confirmation_settings'])
-                            || ! \is_array($mappedData['confirmation_settings'])
-                        ) {
-                            $mappedData['confirmation_settings'] = [];
-                        }
-
-                        $mappedData['confirmation_settings'][$statamicKey] = $value;
-                    } else {
-                        // For default confirmation, set directly
-                        $mappedData[$statamicKey] = $value;
-                    }
-
-                    // Process statamic_other_field_value if configured
-                    $this->processStatamicOtherFieldValue(
-                        $mappingConfig,
-                        $value,
-                        $mappedData,
-                        $isAdditional ? 'confirmation_settings' : null
-                    );
-                }
-            }
-        }
-
-        // Clean up variables to free up memory
-        unset(
-            $processedViewData,
-            $formData,
-            $siteHandle,
-            $assetImporter,
-            $pluginKey,
-            $statamicKey,
-            $value
-        );
-    }
-
-    /**
      * Process an email view and map it to Statamic email settings.
      *
      * @param  array<int|string, mixed>  &$currentFormData  The current form data (passed by reference)
@@ -1701,12 +1530,6 @@ class FormConfigurationManager
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Check if email mapping is defined
-        $reflection = new ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL')) {
-            return;
-        }
-
         $currentFormData['email'] ??= [];
 
         // Parse content JSON if it exists
@@ -1725,210 +1548,32 @@ class FormConfigurationManager
         // Create email configuration
         $emailConfig = [];
 
-        // Check if this is Formidable Forms (has content mapping) or Gravity Forms (direct mapping)
-        $hasContentMapping = $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL_CONTENT');
+        // Map the view-level fields (title, status, post_name)
+        $this->processMappingConfigurations(
+            'FORM_CONFIGURATION_ACTION_MAPPING_EMAIL',
+            $processedViewData,
+            $formData,
+            $siteHandle,
+            $assetImporter,
+            function (string $statamicKey, $value) use (&$emailConfig): void {
+                $emailConfig[$statamicKey] = $value;
+            }
+        );
 
-        if ($hasContentMapping) {
-            // Formidable Forms: Process both view-level and content mappings
-
-            // First, process view-level mappings (like title, status, post_name)
-            $this->processMappingConfigurations(
-                'FORM_CONFIGURATION_ACTION_MAPPING_EMAIL',
+        // Map the email content fields (recipients, subject, message), as notifications do
+        $formFields = isset($formData['fields']) && \is_array($formData['fields'])
+            ? $formData['fields']
+            : [];
+        $emailConfig = [
+            ...$emailConfig,
+            ...$this->processEmailContentMappings(
                 $processedViewData,
                 $formData,
                 $siteHandle,
                 $assetImporter,
-                function ($statamicKey, $value, $mappingConfig) use (&$emailConfig): void {
-                    if (! \is_int($statamicKey) && ! \is_string($statamicKey)) {
-                        return;
-                    }
-
-                    // For Formidable Forms, view-level mappings go to the top level
-                    $emailConfig[$statamicKey] = $value;
-                }
-            );
-
-            // Then, process content mappings (like email_message, email_subject, etc.)
-            $emailContentMappings = static::FORM_CONFIGURATION_ACTION_MAPPING_EMAIL_CONTENT;
-            if (! \is_array($emailContentMappings)) {
-                return;
-            }
-
-            foreach ($emailContentMappings as $pluginKey => $mappingConfig) {
-                if (! \is_string($pluginKey)) {
-                    continue;
-                }
-
-                // Skip unmapped fields (null values in mapping)
-                if ($mappingConfig === null) {
-                    continue;
-                }
-
-                // Handle complex mapping configurations (arrays) vs simple string mappings
-                if (\is_array($mappingConfig)) {
-                    // Check if this is a multiple mapping configuration
-                    if ($this->hasMultipleMappings($mappingConfig)) {
-                        // Extract the value using dot notation if needed
-                        $value = $this->extractValueFromData(
-                            $processedViewData,
-                            $pluginKey
-                        );
-                        // Only include the field if the value exists and is not empty
-                        if ($value !== null && $value !== '') {
-                            // Process the value using the common configuration processing method
-                            $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                                ? $formData['fields']
-                                : [];
-                            $value = $this->processMappingConfiguration(
-                                $value,
-                                $mappingConfig,
-                                $formData,
-                                $siteHandle,
-                                $assetImporter,
-                                $formFields
-                            );
-
-                            $multipleResults = $this->processMultipleMappingsAndGetResults(
-                                $value,
-                                $mappingConfig,
-                                $formData,
-                                $siteHandle,
-                                $assetImporter
-                            );
-
-                            // Add all results to the email configuration
-                            foreach ($multipleResults as $targetAttribute => $processedValue) {
-                                if ($processedValue !== null) {
-                                    // Process merge tags for string fields
-                                    if (\is_string($processedValue)) {
-                                        $processedValue = $this->processMergeTagsInString(
-                                            $processedValue,
-                                            $formFields
-                                        );
-                                    }
-
-                                    $emailConfig[$targetAttribute] = $processedValue;
-                                }
-                            }
-
-                            // Process statamic_other_field_value if configured
-                            $this->processStatamicOtherFieldValue(
-                                $mappingConfig,
-                                $value,
-                                $emailConfig
-                            );
-                        }
-
-                        // Skip the rest of the processing for this field since we've handled it with multiple mappings
-                        continue;
-                    }
-
-                    // Check if this is a multiple mapping configuration
-                    if (isset($mappingConfig['statamic_attribute'])
-                    && \is_string($mappingConfig['statamic_attribute'])) {
-                        // Simple complex mapping with just statamic_attribute
-                        $statamicKey = $mappingConfig['statamic_attribute'];
-                    } else {
-                        // Skip complex mappings that need special handling
-                        continue;
-                    }
-                } else {
-                    // Simple string mapping
-                    if (! \is_string($mappingConfig)) {
-                        continue;
-                    }
-
-                    $statamicKey = $mappingConfig;
-                }
-
-                // Extract the value using dot notation if needed
-                $value = $this->extractValueFromData(
-                    $processedViewData,
-                    $pluginKey
-                );
-
-                // Only include the field if the value exists and is not empty
-                if ($value !== null && $value !== '') {
-                    // Process the value using the common configuration processing method
-                    $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                        ? $formData['fields']
-                        : [];
-                    $value = $this->processMappingConfiguration(
-                        $value,
-                        $mappingConfig,
-                        $formData,
-                        $siteHandle,
-                        $assetImporter,
-                        $formFields
-                    );
-
-                    // Set the value in the email configuration
-                    $emailConfig[$statamicKey] = $value;
-
-                    // Process merge tags for string fields
-                    if (\is_string($value)) {
-                        $value = $this->processMergeTagsInString(
-                            $value,
-                            $formFields
-                        );
-                        $emailConfig[$statamicKey] = $value;
-                    }
-
-                    // Process statamic_other_field_value if configured
-                    $this->processStatamicOtherFieldValue(
-                        $mappingConfig,
-                        $value,
-                        $emailConfig
-                    );
-                }
-            }
-        } else {
-            // Gravity Forms: Use direct mapping
-            foreach (static::FORM_CONFIGURATION_ACTION_MAPPING_EMAIL as $pluginKey => $mappingConfig) {
-                // Handle complex mapping configurations (arrays) vs simple string mappings
-                if (
-                    isset($mappingConfig['statamic_attribute'])
-                    && \is_string($mappingConfig['statamic_attribute'])
-                ) {
-                    $statamicKey = $mappingConfig['statamic_attribute'];
-                } else { // Otherwise
-                    // Skip complex mappings that need special handling
-                    continue;
-                }
-
-                // Extract the value using dot notation if needed
-                $value = $this->extractValueFromData(
-                    $processedViewData,
-                    $pluginKey
-                );
-
-                // Only include the field if the value exists and is not empty
-                if ($value !== null && $value !== '') {
-                    // Process the value using the common configuration processing method
-                    $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                        ? $formData['fields']
-                        : [];
-                    $value = $this->processMappingConfiguration(
-                        $value,
-                        $mappingConfig,
-                        $formData,
-                        $siteHandle,
-                        $assetImporter,
-                        $formFields
-                    );
-
-                    // Set the value in the email configuration
-                    $emailConfig[$statamicKey] = $value;
-
-                    // Process statamic_other_field_value if configured
-                    $this->processStatamicOtherFieldValue(
-                        $mappingConfig,
-                        $value,
-                        $emailConfig
-                    );
-                }
-            }
-        }
+                $formFields
+            ),
+        ];
 
         $emailConfig['id'] ??= Str::random(8);
 
@@ -1968,10 +1613,6 @@ class FormConfigurationManager
             $content,
             $processedViewData,
             $emailConfig,
-            $pluginKey,
-            $mappingConfig,
-            $statamicKey,
-            $value,
             $formFields
         );
     }
@@ -2121,216 +1762,27 @@ class FormConfigurationManager
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Map options fields if FORM_CONFIGURATION_MAPPING_OPTIONS is defined
-        $reflection = new ReflectionClass(static::class);
-        if ($reflection->hasConstant('FORM_CONFIGURATION_MAPPING_OPTIONS')) {
-            // Use the already parsed form data from parseFormData()
-            $processedFormData = $this->parseFormData($formData);
-            $optionsMappings = static::FORM_CONFIGURATION_MAPPING_OPTIONS;
-            if (! \is_array($optionsMappings)) {
-                return;
-            }
-
-            foreach ($optionsMappings as $pluginKey => $mappingConfig) {
-                // Skip unmapped fields (null values in mapping)
-                if ($mappingConfig === null) {
-                    continue;
-                }
-
-                // Handle complex mapping configurations (arrays) vs simple string mappings
-                if (\is_array($mappingConfig)) {
-                    // Check if this is a multiple mapping configuration first
-                    if ($this->hasMultipleMappings($mappingConfig)) {
-                        // Extract the value using dot notation if needed
-                        $value = $this->extractValueFromData(
-                            $processedFormData,
-                            $pluginKey
-                        );
-
-                        // ---
-                        // Only include the field if the value exists and is not empty
-                        // ---
-
-                        // Check if the value is not null and not empty
-                        if (
-                            $value !== null
-                            && $value !== ''
-                        ) {
-                            // ---
-                            // Process the value using the common configuration processing method
-                            // ---
-
-                            // Get form fields array for field reference translation
-                            $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                                ? $formData['fields']
-                                : [];
-
-                            // Process the value using the mapping configuration
-                            $value = $this->processMappingConfiguration(
-                                $value,
-                                $mappingConfig,
-                                $formData,
-                                $siteHandle,
-                                $assetImporter,
-                                $formFields
-                            );
-
-                            // Process multiple mappings
-                            $multipleResults = $this->processMultipleMappingsAndGetResults(
-                                $value,
-                                $mappingConfig,
-                                $formData,
-                                $siteHandle,
-                                $assetImporter
-                            );
-
-                            // ---
-                            // Add all results to the current form data
-                            // ---
-
-                            // Loop through each target attribute and processed value
-                            foreach ($multipleResults as $targetAttribute => $processedValue) {
-                                // Check if the processed value is not null
-                                if ($processedValue !== null) {
-                                    // Handle nested fields (like schedule_form.start_datetime)
-                                    $this->assignNestedFieldToFormData(
-                                        $currentFormData,
-                                        $targetAttribute,
-                                        $processedValue
-                                    );
-                                }
-                            }
-                        }
-
-                        // ---
-                        // Skip the rest of the processing for this field since we've handled it with
-                        // multiple mappings
-                        // ---
-                        continue;
-                    }
-
-                    // Check if this is a simple complex mapping with just statamic_attribute
-                    if (isset($mappingConfig['statamic_attribute']) && \is_string($mappingConfig['statamic_attribute'])) {
-                        $statamicKey = $mappingConfig['statamic_attribute'];
-                    } else { // Otherwise
-                        // Skip complex mappings that need special handling
-                        continue;
-                    }
-                } else { // Otherwise
-                    // Simple string mapping
-                    if (! \is_string($mappingConfig)) {
-                        continue;
-                    }
-
-                    $statamicKey = $mappingConfig;
-                }
-
-                // Extract the value using dot notation if needed
-                $value = $this->extractValueFromData(
-                    $processedFormData,
-                    $pluginKey
-                );
-
-                // Only include the field if the value exists and is not empty
-                if ($value !== null && $value !== '') {
-                    // Skip setting default values for certain fields
-                    $skipDefaultValues = [
-                        'store' => true, // Default value for store is true
-                    ];
-
-                    // Process the value using the common configuration processing method
-                    $formFields = isset($formData['fields']) && \is_array($formData['fields'])
-                        ? $formData['fields']
-                        : [];
-                    $value = $this->processMappingConfiguration(
-                        $value,
-                        $mappingConfig,
-                        $formData,
-                        $siteHandle,
-                        $assetImporter,
-                        $formFields
-                    );
-
-                    // Skip setting default values for certain fields
-                    if (isset($skipDefaultValues[$statamicKey]) && $value === $skipDefaultValues[$statamicKey]) {
-                        continue;
-                    }
-
-                    // ---
-                    // Handle nested fields (like schedule_form.start_datetime)
-                    // ---
-
-                    // Check if the target attribute contains a dot (nested field)
-                    if (
-                        str_contains(
-                            $statamicKey,
-                            '.'
-                        )
-                    ) {
-                        // Split the target attribute by dot to get parent and child keys
-                        $parts = \explode(
-                            '.',
-                            $statamicKey
-                        );
-
-                        // Extract the parent key (first part)
-                        if (\count($parts) < 2) {
-                            continue;
-                        }
-
-                        $parentKey = $parts[0];
-
-                        // Extract the child key (second part)
-                        $childKey = $parts[1];
-
-                        // ---
-                        // Initialize the parent array if it doesn't exist
-                        // ---
-
-                        // Check if the parent key doesn't exist in current form data
-                        if (
-                            ! isset($currentFormData[$parentKey])
-                            || ! \is_array($currentFormData[$parentKey])
-                        ) {
-                            // Initialize the parent array
-                            $currentFormData[$parentKey] = [];
-                        }
-
-                        // Assign the processed value to the nested field
-                        $currentFormData[$parentKey][$childKey] = $value;
-                    } else { // Otherwise
-                        // For regular fields, always set the value
-                        $currentFormData[$statamicKey] = $value;
-
-                        // Process statamic_other_field_value if configured
-                        $this->processStatamicOtherFieldValue(
-                            $mappingConfig,
-                            $value,
-                            $currentFormData
-                        );
-                    }
-                }
-            }
-        }
-
-        // Clean up variables to free up memory
-        unset(
+        // Map the form options (Formidable Forms keeps them in a JSON `options` value, which
+        // parseFormData() spreads into the form data)
+        $this->processMappingConfigurations(
+            'FORM_CONFIGURATION_MAPPING_OPTIONS',
+            $this->parseFormData($formData),
             $formData,
             $siteHandle,
             $assetImporter,
-            $processedFormData,
-            $pluginKey,
-            $mappingConfig,
-            $statamicKey,
-            $value,
-            $formFields,
-            $skipDefaultValues,
-            $multipleResults,
-            $targetAttribute,
-            $processedValue,
-            $parts,
-            $parentKey,
-            $childKey
+            function (string $statamicKey, $value) use (&$currentFormData): void {
+                // Storing submissions is Statamic's default, so only a form that turns it off
+                // needs to say so
+                if ($statamicKey === 'store' && $value === true) {
+                    return;
+                }
+
+                $this->assignNestedFieldToFormData(
+                    $currentFormData,
+                    $statamicKey,
+                    $value
+                );
+            }
         );
     }
 
@@ -2352,30 +1804,18 @@ class FormConfigurationManager
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Check if view mapping is defined (Formidable Forms specific)
-        $reflection = new ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_VIEW_MAPPING')) {
-            return;
-        }
-
-        $viewMapping = static::FORM_CONFIGURATION_VIEW_MAPPING;
-        if (! \is_array($viewMapping)) {
-            return;
-        }
+        $viewMapping = self::FORM_CONFIGURATION_VIEW_MAPPING;
 
         // Check if views exist and have at least one item
         if (! isset($formData['views']) || ! \is_array($formData['views']) || $formData['views'] === []) {
             return;
         }
 
-        // Get the current form data
+        // Get the current form data. A Statamic form's data is always a collection; the check
+        // narrows the untyped accessor for PHPStan.
         $currentData = $form->data();
-        $currentFormData = \is_object($currentData) && \method_exists($currentData, 'all')
-            ? $currentData->all()
-            : [];
-        if (! \is_array($currentFormData)) {
-            $currentFormData = [];
-        }
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $currentFormData = $currentData instanceof Collection ? $currentData->all() : [];
 
         // Separate views by action type
         $confirmationViews = [];
@@ -2386,26 +1826,16 @@ class FormConfigurationManager
                 continue;
             }
 
-            // Get the excerpt value to determine the action type
+            // A view's excerpt names its action type in FORM_CONFIGURATION_VIEW_MAPPING; a view
+            // with any other excerpt is skipped
             $excerpt = $view['excerpt'] ?? null;
-            if (! \is_string($excerpt) || $excerpt === '') {
-                continue;
-            }
-
-            // Map the excerpt to the action type using FORM_CONFIGURATION_VIEW_MAPPING
-            $actionType = $viewMapping[$excerpt] ?? null;
-            if (! \is_string($actionType) || $actionType === '') {
-                continue;
-            }
+            $actionType = \is_string($excerpt) ? ($viewMapping[$excerpt] ?? null) : null;
 
             // Group views by action type
-            switch ($actionType) {
-                case 'confirmation':
-                    $confirmationViews[] = $view;
-                    break;
-                case 'email':
-                    $emailViews[] = $view;
-                    break;
+            if ($actionType === 'confirmation') {
+                $confirmationViews[] = $view;
+            } elseif ($actionType === 'email') {
+                $emailViews[] = $view;
             }
         }
 
@@ -2590,16 +2020,7 @@ class FormConfigurationManager
             : [];
         $emailConfigurations = [];
 
-        // Check if view mapping is defined
-        $reflection = new ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_VIEW_MAPPING')) {
-            return $emailConfigurations;
-        }
-
-        $viewMapping = static::FORM_CONFIGURATION_VIEW_MAPPING;
-        if (! \is_array($viewMapping)) {
-            return $emailConfigurations;
-        }
+        $viewMapping = self::FORM_CONFIGURATION_VIEW_MAPPING;
 
         // Filter views to only include email views
         $emailViews = [];
@@ -2609,19 +2030,14 @@ class FormConfigurationManager
             }
 
             $excerpt = $view['excerpt'] ?? null;
-            if (\is_string($excerpt) && $excerpt !== '' && ($viewMapping[$excerpt] ?? null) === 'email') {
+            if (\is_string($excerpt) && ($viewMapping[$excerpt] ?? null) === 'email') {
                 $emailViews[] = $view;
             }
         }
 
         // Process each email view and map it to Statamic format
         foreach ($emailViews as $view) {
-            $formIdentifier = '?';
-            if (isset($formData['id']) && (\is_int($formData['id']) || \is_string($formData['id']))) {
-                $formIdentifier = $formData['id'];
-            } elseif (isset($formData['form_key']) && (\is_int($formData['form_key']) || \is_string($formData['form_key']))) {
-                $formIdentifier = $formData['form_key'];
-            }
+            $formIdentifier = $this->formIdentifierForLogging($formData);
 
             $viewTitle = self::resolveViewTitle($view, 'Unnamed');
 
@@ -2738,10 +2154,6 @@ class FormConfigurationManager
         string $text,
         array $allFields
     ): string {
-        if (\stripos($text, '[if') === false) {
-            return $text;
-        }
-
         $result = \preg_replace_callback(
             '/\\[if\\s+([A-Za-z0-9_\\-]+)[^\\]]*\\](.*?)\\[\\/if\\s+\\1\\s*\\]/s',
             function (array $matches) use ($allFields): string {
@@ -2888,16 +2300,14 @@ class FormConfigurationManager
                             continue;
                         }
 
-                        $fieldName = isset($field['name']) && \is_scalar($field['name'])
-                            ? (string) $field['name']
-                            : null;
-                        if ($fieldName === $reference) {
+                        // Only a text name can equal a reference that is not a number
+                        if (($field['name'] ?? null) === $reference) {
                             // Convert to Statamic handle format
                             $fieldId = isset($field['id']) && \is_scalar($field['id'])
                                 ? (string) $field['id']
                                 : 'unknown';
                             $handle = $this->convertLabelToHandle(
-                                $fieldName,
+                                $reference,
                                 $fieldId
                             );
 
@@ -2915,10 +2325,8 @@ class FormConfigurationManager
                             continue;
                         }
 
-                        $fieldKey = isset($field['field_key']) && \is_scalar($field['field_key'])
-                            ? (string) $field['field_key']
-                            : null;
-                        if ($fieldKey === null || $fieldKey !== $reference) {
+                        // As with names, only a text key can equal the reference
+                        if (($field['field_key'] ?? null) !== $reference) {
                             continue;
                         }
 
@@ -2932,7 +2340,7 @@ class FormConfigurationManager
                         // Handles are built from the label, falling back to the key
                         // when the field carries no label.
                         $handle = $this->convertLabelToHandle(
-                            $fieldName !== null && $fieldName !== '' ? $fieldName : $fieldKey,
+                            $fieldName !== null && $fieldName !== '' ? $fieldName : $reference,
                             $fieldId
                         );
 
@@ -2972,18 +2380,14 @@ class FormConfigurationManager
 
         // For additional confirmations, process view-level mappings (like title, status, post_name)
         // For default confirmations, only process content mappings
-        if ($isAdditional && defined('static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION')) {
+        if ($isAdditional) {
             $this->processMappingConfigurations(
                 'FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION',
                 $processedViewData,
                 $formData,
                 $siteHandle,
                 $assetImporter,
-                function ($statamicKey, $value, $mappingConfig) use (&$mappedData): void {
-                    if (! \is_int($statamicKey) && ! \is_string($statamicKey)) {
-                        return;
-                    }
-
+                function (string $statamicKey, $value) use (&$mappedData): void {
                     // For additional confirmations, view-level mappings go to the top level
                     $mappedData[$statamicKey] = $value;
                 }
@@ -2997,58 +2401,25 @@ class FormConfigurationManager
             $formData,
             $siteHandle,
             $assetImporter,
-            function ($statamicKey, $value, $mappingConfig) use (&$mappedData, $isAdditional): void {
-                if (! \is_int($statamicKey) && ! \is_string($statamicKey)) {
-                    return;
-                }
-
-                // Set the value in the appropriate structure
+            function (string $statamicKey, $value) use (&$mappedData, $isAdditional): void {
+                // The content table sets no other field, and names neither `name` nor `enabled`,
+                // which only the view-level table above sets
                 if ($isAdditional) {
-                    // For additional confirmations, add required fields
-                    if ($statamicKey === 'name') {
-                        $mappedData['confirmation_name'] = $value;
-                    } elseif ($statamicKey === 'enabled') {
-                        $mappedData['enabled'] = $value;
-                    } else {
-                        // Other fields go into confirmation_settings
-                        if (
-                            ! isset($mappedData['confirmation_settings'])
-                            || ! \is_array($mappedData['confirmation_settings'])
-                        ) {
-                            $mappedData['confirmation_settings'] = [];
-                        }
-
-                        $mappedData['confirmation_settings'][$statamicKey] = $value;
+                    // Content fields of an additional confirmation go into confirmation_settings
+                    if (
+                        ! isset($mappedData['confirmation_settings'])
+                        || ! \is_array($mappedData['confirmation_settings'])
+                    ) {
+                        $mappedData['confirmation_settings'] = [];
                     }
+
+                    $mappedData['confirmation_settings'][$statamicKey] = $value;
                 } else {
                     // For default confirmation, set fields directly
                     $mappedData[$statamicKey] = $value;
                 }
-
-                // Process statamic_other_field_value if configured
-                if (\is_array($mappingConfig) || \is_string($mappingConfig)) {
-                    $this->processStatamicOtherFieldValue(
-                        $mappingConfig,
-                        $value,
-                        $mappedData,
-                        $isAdditional ? 'confirmation_settings' : null
-                    );
-                }
             }
         );
-
-        // Process content-specific mappings if they exist
-        $reflection = new ReflectionClass(static::class);
-        if ($reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION_CONTENT')) {
-            $this->processConfirmationContentMappingsForView(
-                $mappedData,
-                $processedViewData,
-                $formData,
-                $siteHandle,
-                $assetImporter,
-                $isAdditional
-            );
-        }
 
         // Add required fields for additional confirmations
         if ($isAdditional) {
@@ -3135,5 +2506,23 @@ class FormConfigurationManager
         }
 
         return $default;
+    }
+
+    /**
+     * Identify the form being configured, for the logging context.
+     *
+     * @param  array<int|string, mixed>  $formData  The Formidable Forms form data
+     * @return int|string The form ID, else its key, else "?"
+     */
+    private function formIdentifierForLogging(
+        array $formData
+    ): int|string {
+        foreach (['id', 'form_key'] as $key) {
+            if (isset($formData[$key]) && (\is_int($formData[$key]) || \is_string($formData[$key]))) {
+                return $formData[$key];
+            }
+        }
+
+        return '?';
     }
 }
