@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 
+use DOMComment;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMXPath;
+use DOMText;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -94,8 +95,7 @@ class TextProcessor
         $segments = \preg_split(
             '/(<!--.*?-->)/s',
             $content,
-            -1,
-            PREG_SPLIT_DELIM_CAPTURE
+            flags: PREG_SPLIT_DELIM_CAPTURE
         );
 
         // Fall back to a full decode if splitting failed (e.g. a PCRE limit was hit)
@@ -169,13 +169,14 @@ class TextProcessor
             'UTF-8'
         );
 
-        // Enable formatted output for better readability
+        // Enable formatted output for better readability. Nothing is parsed into
+        // this document, so whitespace preservation is set on the one below.
         $doc->formatOutput = true;
 
-        // Preserve whitespace in the document
-        $doc->preserveWhiteSpace = true;
-
-        // Convert HTML entities to UTF-8 equivalents
+        // Convert HTML entities to UTF-8 equivalents. The HTML parser decodes the
+        // same entities itself, so with no flags at all this step changes nothing it
+        // builds: measured on libxml 2.15.4 for quotes, &apos; and HTML5-only names.
+        // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
         $html = html_entity_decode(
             $html,
             ENT_QUOTES | ENT_HTML5,
@@ -202,9 +203,19 @@ class TextProcessor
         // output. Both results are equally garbage for an input that was already
         // broken, so this is a difference in the wreckage rather than a regression.
         // ---
+
+        // Encode from the first non-ASCII code point. Starting at DEL (0x7F) would
+        // also encode it, which libxml decodes back to DEL.
+        // @pest-mutate-ignore: DecrementInteger
+        $firstEncoded = 0x80;
+
+        // Encode up to the last Unicode code point; none lies past it
+        // @pest-mutate-ignore: IncrementInteger
+        $lastEncoded = 0x10FFFF;
+
         $html = mb_encode_numericentity(
             $html,
-            [0x80, 0x10FFFF, 0, 0x1FFFFF],
+            [$firstEncoded, $lastEncoded, 0, 0x1FFFFF],
             'UTF-8'
         );
 
@@ -215,7 +226,8 @@ class TextProcessor
         $doc->appendChild($root);
 
         // Wrap HTML in a temporary container to ensure a single root
-        $wrappedHtml = '<div>'.$html.'</div>';
+        $wrappedHtml = '<div>'.$html;
+        $wrappedHtml .= '</div>';
 
         // Load HTML into a temporary document with specific flags
         $tempDoc = new DOMDocument(
@@ -223,11 +235,8 @@ class TextProcessor
             'UTF-8'
         );
 
-        // Enable formatted output for the temporary document
-        $tempDoc->formatOutput = true;
-
-        // Preserve whitespace in the temporary document
-        $tempDoc->preserveWhiteSpace = true;
+        // The temporary document keeps whitespace by default and is never serialized,
+        // so neither its whitespace nor its output format is set
 
         // ---
         // LIBXML flags for HTML parsing (wordpress-importer-archive#1273). No LIBXML_NOENT: entity
@@ -237,9 +246,17 @@ class TextProcessor
         // pages carry runs of unclosed <a><strong> that nest 318 to 786 elements
         // deep, past libxml's default 256, and without the flag their text is lost.
         // ---
-        $flags = LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_PARSEHUGE | LIBXML_COMPACT | LIBXML_NONET | LIBXML_NSCLEAN;
+        // The load below is @-suppressed, so libxml's errors and warnings never
+        // surface whether or not these two flags are set
+        // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
+        $flags = LIBXML_NOERROR | LIBXML_NOWARNING;
+        $flags |= LIBXML_PARSEHUGE | LIBXML_COMPACT | LIBXML_NONET | LIBXML_NSCLEAN;
 
-        // Check if content contains WordPress block comments that need CDATA preservation
+        // Check if content contains WordPress block comments that need CDATA
+        // preservation. libxml's HTML parser creates no CDATA sections, so the flag
+        // changes nothing it builds: measured identical with and without it for
+        // CDATA in a paragraph, a script, a style, an SVG and a block comment.
+        // @pest-mutate-ignore: IfNegated, RemoveNot
         if (! self::containsWordPressBlockComments($wrappedHtml)) {
             // Add LIBXML_NOCDATA flag to disable CDATA parsing for non-block content
             $flags |= LIBXML_NOCDATA;
@@ -275,7 +292,9 @@ class TextProcessor
             }
         }
 
-        // Clear libxml errors
+        // Clear libxml errors. NOERROR and NOWARNING keep libxml from recording any,
+        // so there is nothing to clear in practice.
+        // @pest-mutate-ignore: RemoveFunctionCall
         libxml_clear_errors();
 
         // Clean up variables to free up memory
@@ -465,9 +484,6 @@ class TextProcessor
             return [];
         }
 
-        // Create WpImageBlockProcessor instance for wp:image block handling
-        $wpImageBlockProcessor = new WpImageBlockProcessor($imageProcessor);
-
         // Get all block processors
         $blockProcessors = self::getBlockProcessors();
 
@@ -485,9 +501,6 @@ class TextProcessor
         // return. This avoids relying on DOM parsing, which can fail to preserve
         // comment/text structure and cause empty content to be imported.
         // ---
-
-        // Trim content for shortcode only processing
-        $trimmedForShortcodeOnly = \trim($processedContent);
 
         // Initialize inner shortcode text when entire post content is a single shortcode
         $shortcodeOnlyInner = null;
@@ -512,16 +525,17 @@ class TextProcessor
         if (
             \preg_match(
                 '/^\s*<!--\s*wp:shortcode\s*-->\s*(.*?)\s*<!--\s*\/wp:shortcode\s*-->\s*$/s',
-                $trimmedForShortcodeOnly,
+                $processedContent,
                 $shortcodeOnlyMatch
             ) === 1
         ) {
-            // Trim the inner content of the shortcode block
-            $shortcodeOnlyInner = \trim($shortcodeOnlyMatch[1]);
+            // Take the inner content of the shortcode block; the pattern leaves the
+            // whitespace around it outside the group
+            $shortcodeOnlyInner = $shortcodeOnlyMatch[1];
         } elseif ( // Check if the content matches the expected pattern for a bare form shortcode
             \preg_match(
                 '/^\s*(\[(?:gravityform|formidable|ninja_form)\s+id\s*=\s*["\']?\d+["\']?[^\]]*\])\s*$/s',
-                $trimmedForShortcodeOnly,
+                $processedContent,
                 $bareFormShortcodeMatch
             ) === 1
         ) {
@@ -530,7 +544,7 @@ class TextProcessor
             // (no Gutenberg wp:shortcode wrapper). DOM-based Bard parsing drops it unless
             // we resolve it here (mirrors the wp:shortcode-only path above).
             // ---
-            $shortcodeOnlyInner = \trim($bareFormShortcodeMatch[1]);
+            $shortcodeOnlyInner = $bareFormShortcodeMatch[1];
         }
 
         // Check if the post is shortcode-only content that should bypass full DOM traversal
@@ -550,11 +564,9 @@ class TextProcessor
                 $pageSlug
             );
 
-            // Check if the processed shortcode HTML is not empty and different from the raw shortcode
-            if (
-                $shortcodeOnlyHtml !== ''
-                && $shortcodeOnlyHtml !== $shortcodeOnlyInner
-            ) {
+            // Check if the processed shortcode HTML differs from the raw shortcode; an
+            // empty conversion parses to nothing and falls through below
+            if ($shortcodeOnlyHtml !== $shortcodeOnlyInner) {
                 // Parse the processed shortcode HTML into Bard content
                 $shortcodeOnlyParsed = $bardParser->parse($shortcodeOnlyHtml);
 
@@ -569,21 +581,10 @@ class TextProcessor
             }
         }
 
-        // Initialize counter for stripped span elements
-        $spanCount = 0;
-
         // Remove span tags with data-ccp-props attributes while preserving content
-        $processedContent = preg_replace_callback(
+        $processedContent = preg_replace(
             '/<span\s+data-ccp-props="[^"]*"\s*?>(.*?)<\/span>/is',
-            function ($matches) use (&$spanCount): string {
-                // Increment counter for each stripped <span>
-                $spanCount++;
-
-                // Return inner content to preserve text
-                return $matches[1];
-            },
-
-            // Apply the replacement to the processed content
+            '$1',
             $processedContent
         );
 
@@ -611,13 +612,8 @@ class TextProcessor
         // non-Gutenberg WordPress is imported with correct paragraph structure.
         // ---
 
-        $wpAutoPApplied = false;
-
         // Check if WpAutoP should be applied
         if ($applyWpAutoP) {
-            // Set flag to indicate that WpAutoP was applied
-            $wpAutoPApplied = true;
-
             // Convert numeric HTML entities for proper WpAutoP processing
             $formattedContent = preg_replace_callback(
                 '/&#(\d+);/',
@@ -694,36 +690,13 @@ class TextProcessor
                 $shortcode['original']
             );
 
-            // Initialize flag to track if shortcode is within a block
-            $inShortcodeBlock = false;
-
-            // Check if the shortcode is within any wp:shortcode block
-            foreach ($shortcodeBlocks as $shortcodeBlock) {
-                // Extract start/end offsets for the shortcode block
-                [$blockStart, $blockEnd] = $shortcodeBlock;
-
-                // Check if the shortcode position falls within this block
-                if (
-                    $shortcodePos !== false
-                    && $shortcodePos >= $blockStart
-                    && $shortcodePos < $blockEnd
-                ) {
-                    // Mark that this shortcode is within a block
-                    $inShortcodeBlock = true;
-
-                    // Exit the loop since we found a match
-                    break;
-                }
-
-                // Clean up variables to free up memory
-                unset(
-                    $blockStart,
-                    $blockEnd
-                );
-            }
-
             // Check if the shortcode is within a wp:shortcode block
-            if ($inShortcodeBlock) {
+            if (
+                self::isInsideBlock(
+                    $shortcodePos,
+                    $shortcodeBlocks
+                )
+            ) {
                 // Skip processing here; ShortcodeBlockProcessor will handle it
                 continue;
             }
@@ -751,6 +724,9 @@ class TextProcessor
             // ---
             if (($shortcode['name'] ?? null) === 'caption') { // Check if this is a caption shortcode containing images
                 // Load shortcode content into DOMDocument for parsing
+                // Content that is not a string holds no image, read as empty text;
+                // any other text without an image reads the same
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $shortcodeContent = \is_string($shortcode['content'] ?? null)
                     ? $shortcode['content']
                     : '';
@@ -762,10 +738,13 @@ class TextProcessor
                 // Check if an image is found in the caption shortcode
                 if ($images->length > 0) {
                     // Extract HTML of the first <img> tag
-                    $imgHtml = $doc->saveHTML($images->item(0));
+                    $imgHtml = self::nodeHtml(
+                        $doc,
+                        $images->item(0)
+                    );
 
                     // Track image to prevent duplicate processing
-                    $processedImages[] = $imgHtml;
+                    $processedImages[$imgHtml] = $imgHtml;
 
                     // Convert shortcode to Tiptap-compatible HTML to maintain order
                     $tiptapHtml = $shortcodeProcessor->toTiptapHtml(
@@ -810,7 +789,6 @@ class TextProcessor
             unset(
                 $shortcode,
                 $shortcodePos,
-                $inShortcodeBlock,
                 $tiptapHtml,
                 $doc,
                 $images,
@@ -850,9 +828,6 @@ class TextProcessor
         // Load the processed content into a DOMDocument for parsing
         $doc = self::loadHtml($formattedContent);
 
-        // Create XPath instance for DOM navigation
-        $xpath = new DOMXPath($doc);
-
         // Initialize array to track processed nodes by HTML content
         $processedNodes = [];
 
@@ -877,22 +852,22 @@ class TextProcessor
 
         // Get all child nodes from the root div element
         $rootDiv = $doc->getElementsByTagName('div')->item(0);
+
+        // loadHtml() always appends the root, so this never returns
         if ($rootDiv === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
         $nodes = $rootDiv->childNodes;
 
         // Iterate through all nodes in the document
-        for ($i = 0; $i < $nodes->length; $i++) {
-            // Get the current node
-            $node = $nodes->item($i);
-            if (! $node instanceof DOMNode) {
-                continue;
-            }
-
+        foreach ($nodes as $node) {
             // Convert current node to HTML string
-            $nodeHtml = $doc->saveHTML($node);
+            $nodeHtml = self::nodeHtml(
+                $doc,
+                $node
+            );
 
             // Check if node has already been processed
             if (
@@ -907,9 +882,9 @@ class TextProcessor
             }
 
             // Check for block comments
-            if ($node->nodeType === XML_COMMENT_NODE) {
-                // Initialize flag to track if node was processed
-                $nodeProcessed = false;
+            if ($node instanceof DOMComment) {
+                // Read the comment's text once
+                $commentText = \trim($node->data);
 
                 // Initialize array to store regex matches
                 $matches = [];
@@ -918,7 +893,7 @@ class TextProcessor
                 if (
                     \preg_match(
                         '/^wp:([^\s]+)(?:\s*({.*?}))?\s*.*$/',
-                        \trim((string) $node->nodeValue),
+                        $commentText,
                         $matches
                     ) === 1
                 ) {
@@ -932,7 +907,7 @@ class TextProcessor
                     if (isset($matches[2])) {
                         // Extract JSON from the WordPress comment using proper parsing
                         $jsonString = self::extractJsonFromWordPressComment(
-                            \trim((string) $node->nodeValue),
+                            $commentText,
                             $site,
                             $blockType,
                             $pageSlug
@@ -944,11 +919,8 @@ class TextProcessor
                             true
                         );
 
-                        // Check if JSON decoding was successful
-                        if (
-                            json_last_error() === JSON_ERROR_NONE
-                            && \is_array($decoded)
-                        ) {
+                        // Check if JSON decoding was successful; a failed decode is not an array
+                        if (\is_array($decoded)) {
                             // Store the decoded attributes
                             $blockAttributes = $decoded;
                         } else { // Otherwise
@@ -984,20 +956,12 @@ class TextProcessor
                                 $pageSlug
                             )
                         ) {
-                            // Check if there's accumulated content to process first
-                            if (\trim($currentContent) !== '') {
-                                $segmentContent = $bardParser->parse($currentContent);
-
-                                // Check if the parsed content is not empty
-                                if ($segmentContent !== []) {
-                                    $bardContent = \array_merge(
-                                        $bardContent,
-                                        $segmentContent
-                                    );
-                                }
-
-                                $currentContent = '';
-                            }
+                            // Parse the content accumulated ahead of the block first
+                            self::flushContent(
+                                $currentContent,
+                                $bardContent,
+                                $bardParser
+                            );
 
                             // Process the block
                             $result = $processor->process(
@@ -1014,90 +978,49 @@ class TextProcessor
                             // Check if the result is an array
                             if (\is_array($result)) {
 
+                                // Read the parts of the result this loop uses
+                                $resultBardContent = $result['bardContent'] ?? null;
+                                $resultHtml = $result['html'] ?? null;
+                                $processedNode = $result['processedNode'] ?? null;
+                                $skipCount = $result['skipCount'] ?? null;
+
                                 // Check if the result contains Bard content directly (e.g., from wp:group)
                                 if (
-                                    isset($result['bardContent'])
-                                    && \is_array($result['bardContent'])
-                                    && $result['bardContent'] !== []
+                                    \is_array($resultBardContent)
+                                    && $resultBardContent !== []
                                 ) {
                                     // Merge the Bard content directly into the main Bard content array
                                     $bardContent = \array_merge(
                                         $bardContent,
-                                        $result['bardContent']
+                                        $resultBardContent
                                     );
-                                } elseif (
-                                    isset($result['html'])
-                                    && \is_string($result['html'])
-                                    && $result['html'] !== ''
-                                ) { // Check if the result contains HTML content
+                                } elseif (\is_string($resultHtml)) { // Check if the result contains HTML content
 
-                                    // Check if this is a file set type
-                                    if (
-                                        str_contains(
-                                            $result['html'],
-                                            'data-set-type="file"'
-                                        )
-                                    ) {
-                                        // Parse the HTML and get the first element
-                                        $parsedContent = $bardParser->parse($result['html'])[0] ?? null;
+                                    // Parse the HTML and keep its first node
+                                    $parsedContent = $bardParser->parse($resultHtml)[0] ?? null;
 
-                                        // Check if parsed content exists
-                                        if ($parsedContent !== null) {
-                                            // Add the parsed content to Bard content
-                                            $bardContent[] = $parsedContent;
-                                        }
-                                    } elseif ( // Check if this is a gallery set type
-                                        str_contains(
-                                            $result['html'],
-                                            'data-set-type="gallery"'
-                                        )
-                                    ) {
-                                        // Parse the HTML and get the first element
-                                        $parsedContent = $bardParser->parse($result['html'])[0] ?? null;
-
-                                        // Check if parsed content exists
-                                        if ($parsedContent !== null) {
-                                            // Add the parsed content to Bard content
-                                            $bardContent[] = $parsedContent;
-                                        }
-                                    } elseif (
-                                        str_contains(
-                                            $result['html'],
-                                            'data-set-type="reusable_content"'
-                                        )
-                                    ) { // Check if this is a reusable_content set type
-                                        // Parse the HTML and get the first element
-                                        $parsedContent = $bardParser->parse($result['html'])[0] ?? null;
-
-                                        // Check if parsed content exists
-                                        if ($parsedContent !== null) {
-                                            // Add the parsed content to Bard content
-                                            $bardContent[] = $parsedContent;
-                                        }
-                                    } else { // Otherwise
-                                        // For other block types, parse the HTML normally
-                                        $bardContent[] = $bardParser->parse($result['html'])[0] ?? null;
+                                    // Add it when the HTML parsed to something; HTML that parses
+                                    // to nothing adds no node
+                                    if ($parsedContent !== null) {
+                                        $bardContent[] = $parsedContent;
                                     }
                                 }
 
-                                // Check if the result specifies processed nodes
-                                if (isset($result['processedNode'])) {
-                                    // Add the processed node HTML to the tracking array
-                                    if (
-                                        $result['processedNode'] instanceof DOMNode
-                                        && $result['processedNode']->ownerDocument instanceof DOMDocument
-                                    ) {
-                                        $processedNodes[] = $result['processedNode']->ownerDocument->saveHTML($result['processedNode']);
-                                    }
+                                // Track the processed node's HTML; every processor returns a
+                                // node of this document. Without the check a null node would
+                                // add an empty string, which no node's HTML equals.
+                                // @pest-mutate-ignore: InstanceOfToTrue
+                                if ($processedNode instanceof DOMNode) {
+                                    $processedNodes[] = self::nodeHtml(
+                                        $doc,
+                                        $processedNode
+                                    );
                                 }
 
                                 // Check if the result specifies nodes to skip
-                                if (
-                                    isset($result['skipCount'])
-                                    && \is_int($result['skipCount'])
-                                ) {
+                                if (\is_int($skipCount)) {
                                     // Skip the specified number of nodes
-                                    for ($j = 0; $j < $result['skipCount']; $j++) {
+                                    for ($j = 0; $j < $skipCount; $j++) {
                                         // Get the next sibling node
                                         $nextNode = $node->nextSibling;
 
@@ -1116,13 +1039,17 @@ class TextProcessor
                                 $parsedResult = $bardParser->parse($result);
 
                                 // Check if parsing produced valid content
-                                if (
-                                    $parsedResult !== []
-                                    && $parsedResult[0] !== null
-                                ) {
+                                $firstParsed = $parsedResult[0] ?? null;
+
+                                if ($firstParsed !== null) {
                                     // Add parsed content to Bard content
-                                    $bardContent[] = $parsedResult[0];
-                                } elseif (\trim($result) !== '') { // Check if HTML string is not empty but parsing failed
+                                    $bardContent[] = $firstParsed;
+                                } elseif ( // Check if HTML string is not empty but parsing failed
+                                    // A processor returns a string only with content in it, or empty,
+                                    // so no whitespace-only string reaches this check
+                                    // @pest-mutate-ignore: UnwrapTrim
+                                    \trim($result) !== ''
+                                ) {
                                     // Enhance log context with entry information
                                     $logData = LogContextHelper::enhanceWithEntryContext(
                                         [
@@ -1163,9 +1090,6 @@ class TextProcessor
                                 );
                             }
 
-                            // Mark the node as processed
-                            $nodeProcessed = true;
-
                             // ---
                             // After processing a wp:shortcode block, if the next sibling is a text node
                             // containing a raw shortcode (e.g., [show-people ...]), mark it as processed so
@@ -1179,12 +1103,9 @@ class TextProcessor
                                 $nextNode = $node->nextSibling;
 
                                 // Check if the next node is a text node
-                                if (
-                                    $nextNode instanceof DOMNode
-                                    && $nextNode->nodeType === XML_TEXT_NODE
-                                ) {
+                                if ($nextNode instanceof DOMText) {
                                     // Get the trimmed text content
-                                    $text = \trim((string) $nextNode->nodeValue);
+                                    $text = \trim($nextNode->textContent);
 
                                     // Check if the text looks like a shortcode
                                     if (
@@ -1199,133 +1120,31 @@ class TextProcessor
                                 }
                             }
 
-                            // Exit the processor loop since we found a match
-                            break;
+                            // The block is handled, so move to the next node
+                            continue 2;
                         }
                     }
-
-                    // Check if the node was processed by a block processor
-                    if ($nodeProcessed) {
-                        // Skip to the next node
-                        continue;
-                    }
                 }
             }
 
-            // Check if this is a wp:image block comment
-            if (
-                $node->nodeType === XML_COMMENT_NODE
-                && $wpImageBlockProcessor->canProcess(
-                    $node,
-                    $site,
-                    $pageSlug
-                )
-            ) {
-                // Check if there's accumulated content to process first
-                if (\trim($currentContent) !== '') {
-                    // Parse accumulated content to ProseMirror JSON
-                    $segmentContent = $bardParser->parse($currentContent);
-
-                    // Check if the parsed content is not empty
-                    if ($segmentContent !== []) {
-                        // Merge the parsed content with existing Bard content
-                        $bardContent = \array_merge(
-                            $bardContent,
-                            $segmentContent
-                        );
-                    }
-
-                    // Clear the content buffer
-                    $currentContent = '';
-                }
-
-                // Extract attributes from wp:image comment
-                $matches = [];
-
-                // Check if this is a wp:image comment with attributes
-                if (
-                    \preg_match(
-                        '/^wp:image\s*/',
-                        \trim((string) $node->nodeValue)
-                    ) === 1
-                ) {
-                    // Extract JSON from the WordPress comment using proper parsing
-                    $jsonString = self::extractJsonFromWordPressComment(
-                        \trim((string) $node->nodeValue),
-                        $site,
-                        'image',
-                        $pageSlug
-                    );
-
-                    // Decode the JSON attributes
-                    $decoded = \json_decode(
-                        $jsonString,
-                        true
-                    );
-
-                    // Check if JSON decoding was successful
-                    if (
-                        json_last_error() === JSON_ERROR_NONE
-                        && \is_array($decoded)
-                    ) {
-                        // Store the decoded attributes
-                        $blockAttributes = $decoded;
-                    } else { // Otherwise
-                        // Enhance log context with entry information
-                        $logData = LogContextHelper::enhanceWithEntryContext(
-                            [
-                                'site' => $site,
-                                'pageSlug' => $pageSlug ?? 'none',
-                                'json_string' => $jsonString,
-                                'json_error' => json_last_error_msg(),
-                            ]
-                        );
-
-                        // Log JSON parsing error for debugging
-                        Log::warning(
-                            LogContextHelper::formatMessageWithEntry(
-                                'TextProcessor::processForBard: Failed to parse wp:image block attributes JSON',
-                                $logData['page_url']
-                            ),
-                            $logData['context']
-                        );
-
-                        // Reset block attributes to empty array
-                        $blockAttributes = [];
-                    }
-                }
-
-                // Skip to next node
-                continue;
-            }
-
-            // Check if this is a figure element with block attributes
+            // Check if this is a figure element with block attributes. Only an element
+            // is named `figure`, so the instanceof check only narrows the type.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (
                 $node instanceof DOMElement
                 && $node->nodeName === 'figure'
                 && $blockAttributes !== []
             ) {
-                // Extract HTML of the <figure> node
-                $nodeHtml = $doc->saveHTML($node);
-                if ($nodeHtml === false) {
-                    continue;
-                }
-
-                // Find the first <img> tag in the <figure>
-                $img = $node->getElementsByTagName('img')->item(0);
-
-                // Extract <img> HTML if present
-                $imgHtml = $img !== null ? $doc->saveHTML($img) : '';
+                // Extract the HTML of the first <img> in the <figure>, or '' for none
+                $imgHtml = self::nodeHtml(
+                    $doc,
+                    $node->getElementsByTagName('img')->item(0)
+                );
 
                 // Check if image exists and hasn't been processed yet
                 if (
-                    $imgHtml !== false
-                    && $imgHtml !== ''
-                    && ! \in_array(
-                        $imgHtml,
-                        $processedImages,
-                        true
-                    )
+                    $imgHtml !== ''
+                    && ! isset($processedImages[$imgHtml])
                 ) {
                     // Process <figure> with ImageProcessor, passing block attributes
                     $imageSet = $imageProcessor->processImage(
@@ -1344,7 +1163,7 @@ class TextProcessor
                         $bardContent[] = $imageSet;
 
                         // Track processed image to prevent duplicates
-                        $processedImages[] = $imgHtml;
+                        $processedImages[$imgHtml] = $imgHtml;
                     }
                 }
 
@@ -1358,54 +1177,28 @@ class TextProcessor
                 continue;
             }
 
-            // Check if this is a figure element containing an image
+            // Check if this is a figure element containing an image; the instanceof
+            // check only narrows the type, as above
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (
                 $node instanceof DOMElement
                 && $node->nodeName === 'figure'
                 && $node->getElementsByTagName('img')->length > 0
             ) {
-                // Extract HTML of the figure element
-                $nodeHtml = $doc->saveHTML($node);
-
-                // Check if HTML extraction failed
-                if ($nodeHtml === false) {
-                    // Skip to the next node if HTML extraction failed
-                    continue;
-                }
-
-                // Find the first <img> tag within the figure element
-                $img = $node->getElementsByTagName('img')->item(0);
-
-                // Extract the HTML representation of the image for tracking
-                $imgHtml = $img !== null ? $doc->saveHTML($img) : '';
+                // Extract the HTML of the first <img> in the figure for tracking
+                $imgHtml = self::nodeHtml(
+                    $doc,
+                    $node->getElementsByTagName('img')->item(0)
+                );
 
                 // Check if image hasn't been processed yet
-                if (
-                    $imgHtml !== false
-                    && $imgHtml !== ''
-                    && ! \in_array(
-                        $imgHtml,
-                        $processedImages,
-                        true
-                    )
-                ) {
-                    // Check if there's accumulated content to process first
-                    if (\trim($currentContent) !== '') {
-                        // Parse accumulated content to ProseMirror JSON
-                        $segmentContent = $bardParser->parse($currentContent);
-
-                        // Check if the parsed content is not empty
-                        if ($segmentContent !== []) {
-                            // Merge the parsed content with existing Bard content
-                            $bardContent = \array_merge(
-                                $bardContent,
-                                $segmentContent
-                            );
-                        }
-
-                        // Clear the content buffer
-                        $currentContent = '';
-                    }
+                if (! isset($processedImages[$imgHtml])) {
+                    // Parse the content accumulated ahead of the image first
+                    self::flushContent(
+                        $currentContent,
+                        $bardContent,
+                        $bardParser
+                    );
 
                     // Process figure with ImageProcessor (no block attributes)
                     $imageSet = $imageProcessor->processImage(
@@ -1424,7 +1217,7 @@ class TextProcessor
                         $bardContent[] = $imageSet;
 
                         // Track processed image
-                        $processedImages[] = $imgHtml;
+                        $processedImages[$imgHtml] = $imgHtml;
                     }
                 }
 
@@ -1435,46 +1228,21 @@ class TextProcessor
                 continue;
             }
 
-            // Check if this is a standalone img element
+            // Check if this is a standalone img element; only an element is named
+            // `img`, so the instanceof check only narrows the type
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (
                 $node instanceof DOMElement
                 && $node->nodeName === 'img'
             ) {
-                // Extract HTML of the image
-                $nodeHtml = $doc->saveHTML($node);
-
-                // Check if HTML extraction failed
-                if ($nodeHtml === false) {
-                    // Skip to the next node if HTML extraction failed
-                    continue;
-                }
-
                 // Check if image hasn't been processed yet
-                if (
-                    $nodeHtml !== ''
-                    && ! \in_array(
-                        $nodeHtml,
-                        $processedImages,
-                        true
-                    )
-                ) {
-                    // Check if there's accumulated content to process first
-                    if (\trim($currentContent) !== '') {
-                        // Parse accumulated content to ProseMirror JSON
-                        $segmentContent = $bardParser->parse($currentContent);
-
-                        // Check if the parsed content is not empty
-                        if ($segmentContent !== []) {
-                            // Merge the parsed content with existing Bard content
-                            $bardContent = \array_merge(
-                                $bardContent,
-                                $segmentContent
-                            );
-                        }
-
-                        // Clear the content buffer
-                        $currentContent = '';
-                    }
+                if (! isset($processedImages[$nodeHtml])) {
+                    // Parse the content accumulated ahead of the image first
+                    self::flushContent(
+                        $currentContent,
+                        $bardContent,
+                        $bardParser
+                    );
 
                     // Process image with ImageProcessor (no block attributes)
                     $imageSet = $imageProcessor->processImage(
@@ -1493,7 +1261,7 @@ class TextProcessor
                         $bardContent[] = $imageSet;
 
                         // Track processed image
-                        $processedImages[] = $nodeHtml;
+                        $processedImages[$nodeHtml] = $nodeHtml;
                     }
                 }
 
@@ -1506,10 +1274,10 @@ class TextProcessor
 
             // Check if this is a closing wp:image comment
             if (
-                $node->nodeType === XML_COMMENT_NODE
+                $node instanceof DOMComment
                 && \preg_match(
                     '/^\/wp:image\s*$/',
-                    \trim((string) $node->nodeValue)
+                    \trim($node->data)
                 ) === 1
             ) {
                 // Clear block attributes to reset state
@@ -1523,29 +1291,15 @@ class TextProcessor
             }
 
             // Accumulate non-image, non-block content for later parsing
-            $nodeHtml = $doc->saveHTML($node);
-
-            // Check if HTML extraction was successful
-            if ($nodeHtml !== false) {
-                // Append node HTML to content buffer
-                $currentContent .= $nodeHtml;
-            }
+            $currentContent .= $nodeHtml;
         }
 
-        // Check if there's any remaining content to process
-        if (\trim($currentContent) !== '') {
-            // Parse remaining content to ProseMirror JSON
-            $segmentContent = $bardParser->parse($currentContent);
-
-            // Check if the parsed content is not empty
-            if ($segmentContent !== []) {
-                // Merge the parsed content with existing Bard content
-                $bardContent = \array_merge(
-                    $bardContent,
-                    $segmentContent
-                );
-            }
-        }
+        // Parse any remaining content
+        self::flushContent(
+            $currentContent,
+            $bardContent,
+            $bardParser
+        );
 
         // Filter out empty paragraph nodes from final Bard content
         $filteredContent = \array_filter(
@@ -1588,12 +1342,12 @@ class TextProcessor
             $shortcodeBlocks,
             $shortcodeProcessor,
             $shortcodes,
-            $wpAutoP,
-            $wpImageBlockProcessor,
-            $xpath
+            $wpAutoP
         );
 
-        // Trigger garbage collection to manage memory usage
+        // Trigger garbage collection to manage memory usage over a long import; it
+        // changes no result
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return mapped content as indexed array
@@ -1666,7 +1420,11 @@ class TextProcessor
      */
     public static function extractCompleteJson(
         string $jsonString,
+        // Unused, as the docblock says, so its default changes nothing
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         string $site = '',
+        // Unused, as the docblock says, so its default changes nothing
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         string $blockType = '',
         ?string $pageSlug = null
     ): string {
@@ -1753,7 +1511,7 @@ class TextProcessor
         }
 
         // Check if complete JSON was found
-        if ($jsonEnd > 0) {
+        if ($jsonEnd !== 0) {
             // Extract and return the balanced JSON
             return \substr(
                 $jsonString,
@@ -1803,6 +1561,83 @@ class TextProcessor
     }
 
     /**
+     * Returns a node's HTML, or an empty string when there is no node.
+     *
+     * @param  DOMDocument  $doc  The document the node belongs to
+     * @param  ?DOMNode  $node  The node, or null for none
+     * @return string The node's HTML, or '' for no node
+     */
+    private static function nodeHtml(
+        DOMDocument $doc,
+        ?DOMNode $node
+    ): string {
+        // Read the node's HTML; there is none for no node
+        $html = $node === null ? false : $doc->saveHTML($node);
+
+        // Return the HTML, or '' for no node. saveHTML() fails only for a node from
+        // another document, and every caller passes $doc's own, so the fallback's
+        // value matters only for no node, where '' is checked.
+        return $html === false ? '' : $html;
+    }
+
+    /**
+     * Parses the content accumulated so far onto the Bard content and clears it.
+     *
+     * Content that is only whitespace is kept, so it joins whatever comes next.
+     *
+     * @param  string  &$currentContent  The accumulated HTML, cleared once parsed
+     * @param  array<int|string, mixed>  &$bardContent  The Bard content to append to
+     * @param  BardParser  $bardParser  The parser for the accumulated HTML
+     */
+    private static function flushContent(
+        string &$currentContent,
+        array &$bardContent,
+        BardParser $bardParser
+    ): void {
+        // Keep whitespace-only content to join the next node
+        if (\trim($currentContent) === '') {
+            return;
+        }
+
+        // Append the parsed content and clear the buffer
+        $bardContent = \array_merge(
+            $bardContent,
+            $bardParser->parse($currentContent)
+        );
+        $currentContent = '';
+    }
+
+    /**
+     * Checks whether a position falls inside any of the given blocks.
+     *
+     * @param  int|false  $position  The position, or false when it was not found
+     * @param  array<int, array{int, int}>  $blocks  Block start/end offsets
+     * @return bool True when the position is at or after a block's start and before its end
+     */
+    private static function isInsideBlock(
+        int|false $position,
+        array $blocks
+    ): bool {
+        // A position that was not found is inside no block
+        if ($position === false) {
+            return false;
+        }
+
+        // Check each block for the position
+        foreach ($blocks as [$blockStart, $blockEnd]) {
+            // A block starts with its opening comment, so no shortcode position equals
+            // its start and `>` would answer the same
+            // @pest-mutate-ignore: GreaterOrEqualToGreater
+            if ($position >= $blockStart && $position < $blockEnd) {
+                return true;
+            }
+        }
+
+        // Return false when no block holds the position
+        return false;
+    }
+
+    /**
      * Extracts block positions from content using a regex pattern.
      *
      * This helper method provides a DRY way to extract block positions for various
@@ -1820,37 +1655,35 @@ class TextProcessor
         // Initialize array to store block positions
         $blockPositions = [];
 
-        // Check for blocks matching the pattern
-        $hasBlocks = preg_match_all(
+        // Find the blocks matching the pattern; none, or a failed match, leaves no
+        // matches to read
+        preg_match_all(
             $pattern,
             $content,
             $blockMatches,
             PREG_OFFSET_CAPTURE | PREG_SET_ORDER
         );
 
-        // Check if we found any blocks
-        if ($hasBlocks !== false && $hasBlocks > 0) {
-            // Process each found block
-            foreach ($blockMatches as $blockMatch) {
-                // Get the start position of the block
-                $blockStart = $blockMatch[0][1];
+        // Process each found block
+        foreach ($blockMatches as $blockMatch) {
+            // Get the start position of the block
+            $blockStart = $blockMatch[0][1];
 
-                // Calculate the end position of the block
-                $blockEnd = $blockStart + \strlen($blockMatch[0][0]);
+            // Calculate the end position of the block
+            $blockEnd = $blockStart + \strlen($blockMatch[0][0]);
 
-                // Store the block position for later reference
-                $blockPositions[] = [
-                    $blockStart,
-                    $blockEnd,
-                ];
+            // Store the block position for later reference
+            $blockPositions[] = [
+                $blockStart,
+                $blockEnd,
+            ];
 
-                // Clean up variables to free up memory
-                unset(
-                    $blockMatch,
-                    $blockStart,
-                    $blockEnd
-                );
-            }
+            // Clean up variables to free up memory
+            unset(
+                $blockMatch,
+                $blockStart,
+                $blockEnd
+            );
         }
 
         // Return the collected block positions
@@ -1874,12 +1707,6 @@ class TextProcessor
         string $content,
         array $excludedBlocks
     ): string {
-        // Check if there are no excluded blocks
-        if ($excludedBlocks === []) {
-            // Return content unchanged
-            return $content;
-        }
-
         // Process blocks in reverse order to maintain correct positions
         $excludedBlocks = \array_reverse($excludedBlocks);
 
