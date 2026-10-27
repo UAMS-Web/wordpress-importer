@@ -24,14 +24,13 @@ uses(TestCase::class);
  * the end instead (a single pass rather than one rebuild per save).
  *
  * `UpdateItemIndexes` is not a `Statamic\Events\Subscriber`, so it has no
- * `disable()`/`enable()` of its own. The guard forgets its handlers via the
- * `forgetListener` macro Statamic registers on the dispatcher, then re-subscribes
- * the class to restore them. That macro is present under the console/artisan
- * kernel (the environment the import runs in) but not under every test harness
- * dispatcher, so the listener-state tests guard on
- * {@see searchIndexDispatcherSupportsListenerRemoval()} and skip rather than
- * report a false failure when the harness cannot exercise removal. The contract
- * tests (return value, exception propagation) always run.
+ * `disable()`/`enable()` of its own. The guard forgets its handlers by filtering
+ * the dispatcher's listener table the way the `forgetListener` macro Statamic
+ * registers does, then re-subscribes the class to restore them. The listener-state
+ * tests here guard on {@see searchIndexDispatcherSupportsListenerRemoval()} and skip
+ * where the harness cannot exercise removal; the package gate asserts removal and
+ * restore directly in `tests/Integration/SearchIndexUpdatesScopeTest.php`. The
+ * contract tests (return value, exception propagation) always run.
  *
  * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/SearchIndexUpdatesTest.php
  */
