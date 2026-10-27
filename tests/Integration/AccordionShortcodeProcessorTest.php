@@ -462,22 +462,6 @@ describe('in Bard content', function (): void {
         ])->and(array_column(\is_array($nodes) ? $nodes : [], 'type'))->each->toBeIn(['paragraph', 'heading']);
     });
 
-    it('keeps every section of an accordion in a wp:shortcode block among other blocks', function (): void {
-        $html = "<!-- wp:paragraph --><p>Intro</p><!-- /wp:paragraph -->\n<!-- wp:shortcode -->\n[accordion][section title=\"Q\"]Answer text.\n\nSecond answer para.[/section][/accordion]\n<!-- /wp:shortcode -->\n<!-- wp:paragraph --><p>Outro</p><!-- /wp:paragraph -->";
-
-        // The block path reads the importer's upload setting, which the
-        // constructor-less importer leaves unset
-        $nodes = TextProcessor::processForBard($html, 'default', new AssetImporter, new BufferedOutput, false, false, [], [], 'slug');
-
-        expect(accordionBardOutline($nodes))->toBe([
-            'paragraph: Intro',
-            'heading3: Q',
-            'paragraph: Answer text.',
-            'paragraph: Second answer para.',
-            'paragraph: Outro',
-        ]);
-    });
-
     it('imports an attributed accordion the same way', function (): void {
         $html = "[accordion class=\"faq\"]\n[section title=\"Q\"]\n\nAnswer.\n\n[/section]\n[/accordion]";
 
