@@ -291,7 +291,9 @@ it('warns and returns null when no image ids can be found', function (): void {
         galleryOpeningNode('<!-- wp:gallery {} --><figure><img src="x.jpg"></figure>'),
         ['linkTo' => 'none'],
         $importer,
-        new BufferedOutput
+        new BufferedOutput,
+        [],
+        'about'
     );
 
     expect($result)->toBeNull()
@@ -299,7 +301,7 @@ it('warns and returns null when no image ids can be found', function (): void {
             'WpGalleryBlockProcessor::process: No image IDs found in wp:gallery block (from entry: https://example.test/about/)',
             [
                 'site' => 'default',
-                'pageSlug' => 'none',
+                'pageSlug' => 'about',
                 'attributes' => ['linkTo' => 'none'],
                 'entry_url' => 'https://example.test/about/',
             ],
@@ -331,6 +333,20 @@ it('warns with a snippet of the next sibling when no figure follows the comment'
         '<p>'.str_repeat('x', 94).'</p...',
     ],
 ]);
+
+it('names the page when no figure follows the comment', function (): void {
+    $warnings = galleryWarnings();
+    /** @var AssetImporter&MockInterface $importer */
+    $importer = Mockery::mock(AssetImporter::class);
+
+    $result = processGallery(galleryOpeningNode('<!-- wp:gallery {"ids":[1]} -->'), ['ids' => [1]], $importer, new BufferedOutput, [], 'about');
+
+    expect($result)->toBeNull()
+        ->and($warnings->getArrayCopy())->toBe([[
+            'WpGalleryBlockProcessor::process: No valid wp:gallery figure found after comment',
+            ['site' => 'default', 'pageSlug' => 'about', 'attributes' => ['ids' => [1]], 'next_sibling_snippet' => 'none'],
+        ]]);
+});
 
 it('returns null for a comment that belongs to no document', function (): void {
     $warnings = galleryWarnings();
