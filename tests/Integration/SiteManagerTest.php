@@ -83,6 +83,20 @@ function siteManagerPrivate(string $method, mixed ...$arguments): mixed
     return (new ReflectionMethod(SiteManager::class, $method))->invoke(new SiteManager, ...$arguments);
 }
 
+/**
+ * The text SiteManager printed, with "\n" line endings.
+ *
+ * BufferedOutput ends each line with PHP_EOL, which is "\r\n" on Windows, so the text is
+ * normalized and the expectations below hold on every platform (#133).
+ *
+ * @param  BufferedOutput  $output  The output SiteManager wrote to
+ * @return string The printed text
+ */
+function siteManagerText(BufferedOutput $output): string
+{
+    return \str_replace(\PHP_EOL, "\n", $output->fetch());
+}
+
 beforeEach(function (): void {
     config()->set('statamic.system.multisite', true);
 
@@ -121,7 +135,7 @@ it('enables a collection for a new site, saves it, keeps its others, and says so
 
     expect($enabled)->toBeTrue()
         ->and(siteManagerSitesOf('pages'))->toBe(['default', 'other'])
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'pages' Statamic collection is enabled for the 'other' site...\n"
             ."  - Enabled the 'pages' Statamic collection for the 'other' site.\n"
         );
@@ -137,7 +151,7 @@ it('leaves a collection already enabled for the site as it is, and says so', fun
 
     expect($enabled)->toBeTrue()
         ->and(siteManagerSitesOf('pages'))->toBe(['default'])
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'pages' Statamic collection is enabled for the 'default' site...\n"
             ."  - The 'pages' Statamic collection is already enabled for the 'default' site.\n"
         );
@@ -147,7 +161,7 @@ it('refuses a missing collection, and says so', function (): void {
     $output = new BufferedOutput;
 
     expect((new SiteManager)->enableCollectionForSite('default', 'missing', $output))->toBeFalse()
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'missing' Statamic collection is enabled for the 'default' site...\n"
             ."  - The 'missing' collection does not exist in Statamic.\n"
         );
@@ -163,7 +177,7 @@ it('enables a taxonomy for a new site, saves it, keeps its others, and says so',
 
     expect($enabled)->toBeTrue()
         ->and(siteManagerSitesOf('topics'))->toBe(['default', 'other'])
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'topics' Statamic taxonomy is enabled for the 'other' site...\n"
             ."  - Enabled the 'topics' Statamic taxonomy for the 'other' site.\n"
         );
@@ -179,7 +193,7 @@ it('leaves a taxonomy already enabled for the site as it is, and says so', funct
 
     expect($enabled)->toBeTrue()
         ->and(siteManagerSitesOf('topics'))->toBe(['default'])
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'topics' Statamic taxonomy is enabled for the 'default' site...\n"
             ."  - The 'topics' Statamic taxonomy is already enabled for the 'default' site.\n"
         );
@@ -189,7 +203,7 @@ it('refuses a missing taxonomy, and says so', function (): void {
     $output = new BufferedOutput;
 
     expect((new SiteManager)->enableTaxonomyForSite('default', 'missing', $output))->toBeFalse()
-        ->and($output->fetch())->toBe(
+        ->and(siteManagerText($output))->toBe(
             "Checking if the 'missing' Statamic taxonomy is enabled for the 'default' site...\n"
             ."  - The 'missing' taxonomy does not exist in Statamic.\n"
         );
@@ -208,7 +222,7 @@ it('names a destination that exists in neither shape', function (): void {
     $output = new BufferedOutput;
 
     expect((new SiteManager)->enableDestinationForSite('default', 'missing', $output))->toBeFalse()
-        ->and($output->fetch())->toBe("  - 'missing' exists in Statamic as neither a taxonomy nor a collection.\n");
+        ->and(siteManagerText($output))->toBe("  - 'missing' exists in Statamic as neither a taxonomy nor a collection.\n");
 });
 
 it('works without an output to report to', function (): void {
