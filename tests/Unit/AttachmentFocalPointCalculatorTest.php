@@ -223,6 +223,7 @@ it('reads no points from empty or non-array metadata', function (string $seriali
 })->with([
     'empty' => [''],
     'a serialized string' => [serialize('not a list')],
+    'an object whose property is a row' => ['O:3:"Foo":1:{s:1:"a";a:2:{s:1:"x";i:1;s:1:"y";i:2;}}'],
 ]);
 
 it('skips unusable point rows and keeps reading', function (): void {
@@ -254,6 +255,17 @@ it('clamps a focus outside the image to its edges', function (): void {
     expect(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => 2000.0, 'y' => -50.0]]))->toBe('100-0-1')
         ->and(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => 0.0, 'y' => 1000.0]]))->toBe('0-100-1')
         ->and(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => -50.0, 'y' => 2000.0]]))->toBe('0-100-1');
+});
+
+it('reads a focus between infinite coordinates as zero', function (): void {
+    // Characterization: '1e999' and '-1e999' are numeric and read as INF and -INF,
+    // so the center is NAN, which the integer cast turns into 0 (#138)
+    $points = AttachmentFocalPointCalculator::parseSerializedPointList(serialize([
+        ['x' => '1e999', 'y' => '1e999'],
+        ['x' => '-1e999', 'y' => '-1e999'],
+    ]));
+
+    expect(AttachmentFocalPointCalculator::buildFocusString(['width' => 10, 'height' => 10], $points))->toBe('0-0-1');
 });
 
 it('rounds a focus to the nearest percent', function (): void {

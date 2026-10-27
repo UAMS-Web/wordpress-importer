@@ -133,11 +133,8 @@ class AttachmentFocalPointCalculator
             ['allowed_classes' => false]
         );
 
-        // Require a list/array to iterate. A scalar iterates nothing and an
-        // incomplete-class object iterates only string properties, which the row
-        // check below skips, so the early return changes no result.
+        // Require a list/array to iterate
         if (! \is_array($data)) {
-            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -192,8 +189,9 @@ class AttachmentFocalPointCalculator
         }
 
         // Use default focal when image dimensions are unusable for percent math;
-        // absent dimensions read as zero. The two defaults only ever apply together,
-        // so changing one alone leaves the other at zero and the result unchanged.
+        // absent dimensions read as zero. For any input the declared shape admits,
+        // the two defaults apply together or not at all, so changing one alone
+        // leaves the other at zero and the result unchanged.
         // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         $width = $dimensions['width'] ?? 0;
         // @pest-mutate-ignore: DecrementInteger, IncrementInteger
@@ -221,10 +219,8 @@ class AttachmentFocalPointCalculator
         // Compute vertical center of the axis-aligned bounding box
         $centerY = (\min($ys) + \max($ys)) / 2;
 
-        // Convert center x to a clamped integer percent (0 to 100). round() returns
-        // a whole float, which string interpolation prints with no decimal point,
-        // so the cast changes no output.
-        // @pest-mutate-ignore: RemoveIntegerCast
+        // Convert center x to a clamped integer percent (0 to 100); the cast also
+        // turns a NAN center (from opposite infinite coordinates) into 0
         $focusX = (int) \min(
             100,
             \max(
@@ -235,9 +231,7 @@ class AttachmentFocalPointCalculator
             )
         );
 
-        // Convert center y to a clamped integer percent (0 to 100); the cast is
-        // equivalent for the same reason
-        // @pest-mutate-ignore: RemoveIntegerCast
+        // Convert center y to a clamped integer percent (0 to 100)
         $focusY = (int) \min(
             100,
             \max(
