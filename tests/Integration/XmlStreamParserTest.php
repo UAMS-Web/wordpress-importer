@@ -347,6 +347,29 @@ it('names the entry being processed when it logs a skipped item', function (): v
     ]);
 });
 
+it('counts what the filtered stream yields, without logging the items it skips', function (): void {
+    // Only the stream logs the item it cannot parse, so one warning in all
+    Log::shouldReceive('warning')->once();
+    $path = xmlStreamWrite(
+        $this->streamDirectory,
+        'count.xml',
+        xmlStreamItem('Published')
+        .xmlStreamItem('Draft', 'post', 'draft')
+        .xmlStreamItem('Trashed', 'post', 'trash')
+        .xmlStreamItem('A page', 'page')
+        .xmlStreamItem('Bad &e;'),
+        '<!DOCTYPE rss [<!ENTITY e "x">]>'
+    );
+    $parser = new XmlStreamParser($path);
+
+    expect($parser->countItems('post'))->toBe(2)
+        ->and($parser->countItems('page'))->toBe(1);
+
+    [$titles] = xmlStreamTitles($parser->streamItems('post'));
+
+    expect($titles)->toBe(['Published', 'Draft']);
+});
+
 it('ends the unfiltered stream with an exception on an item that cannot be parsed', function (): void {
     // Pins current behavior: unlike the filtered stream, this one does not catch
     $path = xmlStreamWrite(

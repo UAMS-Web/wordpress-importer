@@ -36,7 +36,8 @@ function importProgressRun(
         }
     }
 
-    $text = $output->fetch();
+    // Console output ends lines with PHP_EOL, which is \r\n on Windows
+    $text = \str_replace(\PHP_EOL, "\n", $output->fetch());
 
     return [
         'yielded' => $yielded,
@@ -129,7 +130,7 @@ it('counts an item the loop skips, so a loop with skips still reaches its total'
     }
 
     expect($processed)->toBe(2)
-        ->and($output->fetch())->toEndWith("Progress: page 4 of 4 (100%)\n");
+        ->and($output->fetch())->toEndWith('Progress: page 4 of 4 (100%)'.\PHP_EOL);
 });
 
 it('writes no closing line for a loop that stops early', function (): void {
@@ -174,7 +175,8 @@ it('writes plain text with no control sequences, even to a decorated output', fu
         // Consume the loop
     }
 
-    $text = $output->fetch();
+    // Only the line ending may carry a carriage return, and only where PHP_EOL does
+    $text = \str_replace(\PHP_EOL, "\n", $output->fetch());
 
     expect($text)->not->toContain("\e")
         ->and($text)->not->toContain("\r")

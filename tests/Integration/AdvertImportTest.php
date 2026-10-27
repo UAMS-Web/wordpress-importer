@@ -920,7 +920,7 @@ it('reports progress through the listings, leaving the per-listing lines as they
     $run = advertImportRun();
 
     $progress = \array_values(\array_filter(
-        \explode("\n", $run['output']),
+        \explode(\PHP_EOL, $run['output']),
         static fn (string $line): bool => \preg_match('/^Progress: advert \d/', $line) === 1
     ));
 

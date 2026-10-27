@@ -22,8 +22,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     Progress: page 312 of 312 (100%)
  *
  * A line is written before the first item, each time another tenth of the items
- * completes, whenever INTERVAL_SECONDS pass without one, and when the last item
- * completes. An item counts as complete when the loop asks for the next one, so
+ * completes, when an item completes INTERVAL_SECONDS or more after the last line,
+ * and when the last item completes. Nothing is written while one item is still
+ * being processed, however long it takes. An item counts as complete when the loop asks for the next one, so
  * an item the loop skips with `continue` still counts, and the count reaches the
  * total whenever the loop runs to its end.
  */

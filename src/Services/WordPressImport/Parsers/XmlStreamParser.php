@@ -99,9 +99,11 @@ class XmlStreamParser
     /**
      * Count the <item> nodes with the given post_type across all parts.
      *
-     * Counts exactly what streamItems() yields, whatever their status, so a loop over
-     * that stream reaches the count. It reads the stream once more, which is what lets
-     * an import report how far through a streamed loop it is.
+     * Counts exactly what streamItems() yields (every status but `trash` and `virtual`,
+     * including items the importing loop later skips), so a loop over that stream
+     * reaches the count. It reads the export once more, which is what lets an import report how
+     * far through a streamed loop it is. An item that cannot be parsed is left out of
+     * the count without a log line, since the stream the loop reads logs it.
      *
      * @param  string  $postType  The desired post_type (e.g., 'page', 'post', 'attachment')
      * @return int The number of matching items
@@ -109,7 +111,18 @@ class XmlStreamParser
     public function countItems(
         string $postType
     ): int {
-        return iterator_count($this->streamItems($postType));
+        $count = 0;
+
+        // Count every part in order, without logging the items the stream skips
+        foreach ($this->filePaths as $filePath) {
+            $count += iterator_count($this->streamItemsFromFile(
+                $filePath,
+                $postType,
+                false
+            ));
+        }
+
+        return $count;
     }
 
     /**
@@ -117,11 +130,13 @@ class XmlStreamParser
      *
      * @param  string  $filePath  The part file to stream
      * @param  string  $postType  The desired post_type
+     * @param  bool  $logSkipped  Whether to log an item that cannot be parsed
      * @return \Generator<int, SimpleXMLElement, mixed, void>
      */
     private function streamItemsFromFile(
         string $filePath,
-        string $postType
+        string $postType,
+        bool $logSkipped = true
     ): \Generator {
         $reader = XMLReader::open(
             WxrSanitizedStream::wrap($filePath),
@@ -201,6 +216,11 @@ class XmlStreamParser
                             $xml
                         );
                     } catch (Exception $e) {
+                        // Skip the item silently when only counting
+                        if (! $logSkipped) {
+                            continue;
+                        }
+
                         // Enhance log context with entry information
                         $logData = LogContextHelper::enhanceWithEntryContext(
                             [
