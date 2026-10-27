@@ -319,7 +319,7 @@ class PostEntryCreator extends BaseEntryCreator
         // Loop through all post items to process each post entry
         $audioSeriesConfig = null;
 
-        foreach (ImportProgress::track($output, 'post', $xmlStreamParser->streamItems('post'), $xmlStreamParser->countItems('post')) as $post) {
+        foreach (ImportProgress::track($output, 'post', $xmlStreamParser->streamItems('post'), static fn (): int => $xmlStreamParser->countItems('post')) as $post) {
             // Decode HTML entities and strip HTML tags from the post title
             $title = HtmlTagStripper::strip(
                 html_entity_decode(

@@ -383,7 +383,11 @@ it('still writes an ordinary site\'s rules to its redirects global set', functio
     $global->save();
 
     try {
-        redirectDomainRun(redirectDomainParser('https://supplychain.uams.edu', redirectDomainRules()));
+        $output = redirectDomainRun(redirectDomainParser('https://supplychain.uams.edu', redirectDomainRules()));
+
+        // The global-set path reports its own progress through every rule (#182)
+        expect($output)->toContain('Progress: redirect_rule 0 of 6 (0%)'.\PHP_EOL)
+            ->and($output)->toContain('Progress: redirect_rule 6 of 6 (100%)'.\PHP_EOL);
 
         $stored = GlobalSetFacade::findByHandle('redirects');
         $variables = $stored instanceof ConcreteGlobalSet ? $stored->in('default') : null;
