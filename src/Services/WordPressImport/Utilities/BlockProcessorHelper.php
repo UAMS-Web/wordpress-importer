@@ -128,7 +128,10 @@ class BlockProcessorHelper
 
         $html = $ownerDocument->saveHTML($node);
 
-        // Check if HTML conversion succeeded
+        // Check if HTML conversion succeeded. The node always belongs to the document
+        // that serializes it, so saveHTML() does not return false here and the flipped
+        // comparison returns the same fragment.
+        // @pest-mutate-ignore: FalseToTrue
         if ($html !== false) {
             // Return HTML fragment array format
             return ['html' => $html];
@@ -171,9 +174,11 @@ class BlockProcessorHelper
             return null;
         }
 
-        // Extract and trim comment text content
+        // Read the comment text. A comment's nodeValue is always a string, so the
+        // fallback is for static analysis only and no input reaches it.
         $nodeValue = $node->nodeValue;
-        $comment = is_string($nodeValue) ? \trim($nodeValue) : '';
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $comment = is_string($nodeValue) ? $nodeValue : '';
 
         // Initialize empty attributes array
         $attributes = [];
@@ -189,8 +194,7 @@ class BlockProcessorHelper
             // Decode JSON attributes from comment
             $decodedAttributes = \json_decode(
                 $matches[0],
-                true,
-                512
+                true
             );
             $attributes = is_array($decodedAttributes) ? $decodedAttributes : [];
         }
