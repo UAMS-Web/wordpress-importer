@@ -43,10 +43,11 @@ use Throwable;
  * `ServiceProvider::boot()` (`Event::subscribe(UpdateItemIndexes::class)`) with no
  * config gate, and — unlike `UpdateAssetReferences` — it is not a
  * `Statamic\Events\Subscriber`, so it has no `disable()`/`enable()` of its own.
- * The mechanism that does work is the same one `Subscriber::disable()` uses:
- * `forgetListener()` (a macro Statamic registers on the event dispatcher) unbinds
+ * The mechanism that does work is the one `Subscriber::disable()` uses: forget
  * exactly this subscriber's handlers, leaving every other listener on those events
- * intact. We re-`subscribe()` the class afterwards to restore it.
+ * intact. {@see self::forgetListener()} does that by filtering the dispatcher's
+ * listener table the way Statamic's `forgetListener` macro does, so it needs no
+ * macro. We re-`subscribe()` the class afterwards to restore it.
  *
  * Because removing the listener while indexing is genuinely needed would silently
  * skip search updates, {@see self::withDisabled()} only re-subscribes when the
@@ -164,8 +165,9 @@ class SearchIndexUpdates
      * Uses {@see self::forgetListener()}, which mirrors the macro Statamic registers
      * on the dispatcher (the mechanism `Statamic\Events\Subscriber::disable()` relies
      * on) by filtering the listener table directly. Wrapped per-event so an
-     * unrecognized dispatcher, or an event with no listeners, fails safe — {@see self::withDisabled()} detects whether anything was
-     * actually removed via the listener count.
+     * unrecognized dispatcher, or an event with no listeners, fails safe:
+     * {@see self::withDisabled()} detects whether anything was actually removed
+     * via the listener count.
      */
     private static function disable(): void
     {

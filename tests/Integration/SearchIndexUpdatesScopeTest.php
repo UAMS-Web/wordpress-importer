@@ -7,8 +7,8 @@ declare(strict_types=1);
  * block of work, restores them afterwards, and rebuilds the indexes once on request.
  *
  * `tests/Feature/SearchIndexUpdatesTest.php` counts the listeners under the host app's
- * console kernel and skips where it decides a dispatcher cannot unbind them, so none of
- * its listener-state tests run in the package gate. The guard no longer needs Statamic's
+ * console kernel, which the package gate never boots, and skips where it decides a
+ * dispatcher cannot unbind them. The guard no longer needs Statamic's
  * `forgetListener` macro: it filters the dispatcher's own listener table by reflection.
  * So this file binds a plain `Illuminate\Events\Dispatcher` and asserts the removal and
  * the restore directly, in the gate.

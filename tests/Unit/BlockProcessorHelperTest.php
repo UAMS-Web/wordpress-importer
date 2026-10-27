@@ -161,7 +161,7 @@ it('passes no attributes for a comment that carries none, or carries invalid JSO
 })->with([
     'no braces' => ['wp:separator /'],
     'not JSON' => ['wp:x {not json} /'],
-    'a JSON scalar' => ['wp:x {1} /'],
+    'a bare value in braces' => ['wp:x {1} /'],
 ]);
 
 it('passes no attributes for nested JSON, which the lazy match cuts short', function (): void {

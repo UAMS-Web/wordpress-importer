@@ -19,8 +19,10 @@ final class EntryQueryHelper
     {
         $query = EntryFacade::query();
 
-        // The facade always returns an EntryQueryBuilder here, so neither mutant
-        // changes behavior; the assert exists to narrow the type for PHPStan.
+        // The assert narrows the type for PHPStan. With it mutated or removed, a
+        // builder of another class still fails, at the declared return type: a
+        // TypeError instead of an AssertionError, and the same TypeError the
+        // original raises where assertions are off, as in production.
         // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         \assert($query instanceof EntryQueryBuilder);
 
