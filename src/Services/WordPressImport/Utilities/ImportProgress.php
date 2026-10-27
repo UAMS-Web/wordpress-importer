@@ -30,6 +30,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class ImportProgress
 {
+    // Line coverage never reaches a constant's value, so its mutants count as
+    // uncovered whatever the tests do; a test pins ten seconds as a literal
+    // @pest-mutate-ignore: DecrementFloat, IncrementFloat
     /**
      * The longest a loop goes without a progress line, in seconds, while items are completing.
      */
@@ -73,9 +76,17 @@ final class ImportProgress
             return;
         }
 
+        // A billion nanoseconds is a second; one more or less in the divisor moves a
+        // reading by a billionth
+        // @pest-mutate-ignore: DecrementFloat, IncrementFloat
         $clock ??= static fn (): float => hrtime(true) / 1e9;
 
         $done = 0;
+
+        // Starting at -1 instead would change nothing: intdiv() truncates toward
+        // zero, so -1 is in the first tenth for a total over ten, and below
+        // every count's tenth otherwise
+        // @pest-mutate-ignore: DecrementInteger
         $reported = 0;
         $reportedAt = $clock();
 
