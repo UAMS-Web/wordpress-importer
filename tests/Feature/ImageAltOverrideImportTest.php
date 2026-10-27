@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Statamic\Entries\Entry as StatamicEntry;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -128,7 +129,8 @@ function imageAltOverrideImageSets(mixed $node): array
     $found = [];
 
     // A Bard set carries its fields under attrs.values
-    $values = $node['attrs']['values'] ?? null;
+    $attrs = $node['attrs'] ?? null;
+    $values = is_array($attrs) ? ($attrs['values'] ?? null) : null;
 
     if (($node['type'] ?? null) === 'set' && is_array($values) && ($values['type'] ?? null) === 'image') {
         $found[] = $values;
@@ -139,6 +141,18 @@ function imageAltOverrideImageSets(mixed $node): array
     }
 
     return $found;
+}
+
+/**
+ * The image sets in a saved page's data.
+ *
+ * @return list<array<int|string, mixed>>
+ */
+function imageAltOverrideEntrySets(?StatamicEntry $entry): array
+{
+    $data = $entry?->data();
+
+    return $data instanceof Collection ? imageAltOverrideImageSets($data->all()) : [];
 }
 
 /**
@@ -201,7 +215,7 @@ it('saves the image alt override under alt_override', function (): void {
 
     expect($entry)->toBeInstanceOf(StatamicEntry::class);
 
-    $sets = imageAltOverrideImageSets($entry?->data()->all());
+    $sets = imageAltOverrideEntrySets($entry);
 
     expect($sets)->toHaveCount(1)
         ->and($sets[0]['alt_override'] ?? null)->toBe('A nurse at work')
@@ -214,7 +228,7 @@ it('saves no override for an image without alt text', function (): void {
 
     expect($entry)->toBeInstanceOf(StatamicEntry::class);
 
-    $sets = imageAltOverrideImageSets($entry?->data()->all());
+    $sets = imageAltOverrideEntrySets($entry);
 
     expect($sets)->toHaveCount(1)
         ->and($sets[0])->not->toHaveKey('alt_override');

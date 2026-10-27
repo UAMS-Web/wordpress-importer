@@ -21,6 +21,9 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
+    // Resolve every image to its URL rather than downloading it
+    config(['wordpress-import.upload_images' => false]);
+
     (new ReflectionProperty(TextProcessor::class, 'cachedProcessors'))->setValue(null, []);
 });
 
@@ -43,8 +46,11 @@ function altOverrideSetValues(mixed $node): array
     $found = [];
 
     // A set node carries its fields under attrs.values
-    if (($node['type'] ?? null) === 'set' && is_array($node['attrs']['values'] ?? null)) {
-        $found[] = $node['attrs']['values'];
+    $attrs = $node['attrs'] ?? null;
+    $values = is_array($attrs) ? ($attrs['values'] ?? null) : null;
+
+    if (($node['type'] ?? null) === 'set' && is_array($values)) {
+        $found[] = $values;
     }
 
     foreach ($node as $child) {
@@ -55,26 +61,23 @@ function altOverrideSetValues(mixed $node): array
 }
 
 /**
- * Run a `wp:image` block whose alt text differs from its attachment's through
- * `processForBard()`, and return the values of every set it produced.
+ * Run a `wp:image` block with the given alt text through `processForBard()`,
+ * and return the values of every set it produced. The block names no attachment
+ * in the export, so any non-empty alt differs from the attachment's.
  *
  * @return list<array<int|string, mixed>>
  */
-function altOverrideImageSets(bool $innerBlocks): array
+function altOverrideImageSets(string $alt, bool $innerBlocks): array
 {
-    $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadImages')->andReturnFalse();
-    $importer->shouldIgnoreMissing();
-
-    $html = '<!-- wp:image {"id":5} --><figure class="wp-block-image"><img src="https://example.com/a.jpg" alt="A nurse at work"/></figure><!-- /wp:image -->';
+    $html = '<!-- wp:image {"id":5} --><figure class="wp-block-image"><img src="https://example.com/a.jpg" alt="'.$alt.'"/></figure><!-- /wp:image -->';
 
     return altOverrideSetValues(
-        TextProcessor::processForBard($html, 'default', $importer, new BufferedOutput, false, $innerBlocks)
+        TextProcessor::processForBard($html, 'default', new AssetImporter, new BufferedOutput, false, $innerBlocks)
     );
 }
 
 it('writes the override under alt_override', function (bool $innerBlocks): void {
-    $sets = altOverrideImageSets($innerBlocks);
+    $sets = altOverrideImageSets('A nurse at work', $innerBlocks);
 
     expect($sets)->toHaveCount(1)
         ->and($sets[0]['type'] ?? null)->toBe('image')
@@ -87,14 +90,7 @@ it('writes the override under alt_override', function (bool $innerBlocks): void 
 ]);
 
 it('writes no override when the image has no alt text', function (bool $innerBlocks): void {
-    $importer = Mockery::mock(AssetImporter::class);
-    $importer->shouldReceive('getUploadImages')->andReturnFalse();
-    $importer->shouldIgnoreMissing();
-
-    $html = '<!-- wp:image {"id":5} --><figure class="wp-block-image"><img src="https://example.com/a.jpg" alt=""/></figure><!-- /wp:image -->';
-    $sets = altOverrideSetValues(
-        TextProcessor::processForBard($html, 'default', $importer, new BufferedOutput, false, $innerBlocks)
-    );
+    $sets = altOverrideImageSets('', $innerBlocks);
 
     expect($sets)->toHaveCount(1)
         ->and($sets[0]['image'] ?? null)->toBe('https://example.com/a.jpg')
