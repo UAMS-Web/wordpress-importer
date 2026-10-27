@@ -478,32 +478,19 @@ class ShortcodeProcessor
         }
 
         if ($outputType === 'page_builder') {
+            // ---
             // For 'page_builder', delegate to the handler's toPageBuilderBlock() method.
-            $handlerClass = $this->handlers[$name]['class'];
-            // Check if handler is CaptionShortcodeProcessor which requires content parameter
-            if ($handlerClass === CaptionShortcodeProcessor::class) {
-                // Create caption handler instance
-                $captionHandler = new CaptionShortcodeProcessor;
-
-                // Caption requires content as an argument (content comes before pageSlug)
-                return $captionHandler->toPageBuilderBlock(
-                    $shortcodeAttributes,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $terms,
-                    $shortcodeContent,
-                    $pageSlug
-                );
-            }
-
-            // Handlers without a page builder block (audio, accordion) return null
+            // Handlers without a page builder block (audio, accordion, caption) return
+            // null, and the caller falls back to their Tiptap HTML: a caption lands as
+            // the same image set the Bard route makes, inside a content block, since
+            // the host app defines no caption block (#119).
+            // ---
             $handler = $this->instantiateHandler($name);
             if (! \method_exists($handler, 'toPageBuilderBlock')) {
                 return null;
             }
 
-            // Call toPageBuilderBlock on handler for non-caption shortcodes
+            // Call toPageBuilderBlock on the handler
             $pageBuilderBlock = $handler->toPageBuilderBlock(
                 $shortcodeAttributes,
                 $site,

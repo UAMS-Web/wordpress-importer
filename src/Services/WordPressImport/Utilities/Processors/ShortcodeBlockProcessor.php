@@ -216,8 +216,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // ---
-        // When block contains exactly one shortcode that supports page_builder, try
-        // process(..., 'page_builder') and return as direct set if a block is returned
+        // When the block holds exactly one registered shortcode, try process(...,
+        // 'page_builder') and return its html, with the page builder set when the
+        // handler builds one
         // ---
 
         // Check if block contains exactly one shortcode
@@ -256,68 +257,43 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     $pageSlug
                 );
 
+                // A replicator block (it has a type) is the page builder set
+                $hasPageBuilderSet = isset($pageBuilderBlock['type']);
+
                 // ---
-                // Only treat as page_builder set when result is a replicator block (has type)
+                // Generate Tiptap HTML so the Bard path (TextProcessor) can add this as
+                // content. Callers that need page_builder (e.g., NonAcfBlockParser) use
+                // page_builder_set when there is one, and the html otherwise.
                 // ---
+                $tiptapHtmlForBard = $this->shortcodeProcessor->toTiptapHtml(
+                    $single,
+                    $site,
+                    $assetImporter,
+                    $output,
+                    $attachments,
+                    $terms,
+                    $pageSlug
+                );
 
-                // Check if result is a replicator block (has type)
-                if (
-                    \is_array($pageBuilderBlock)
-                    && $pageBuilderBlock !== []
-                    && isset($pageBuilderBlock['type'])
-                ) {
-                    // ---
-                    // Compute skipCount for wp:shortcode ... <!-- /wp:shortcode -->
-                    // ---
-
-                    // Start skip count with the wp:shortcode comment node
-                    $skipCount = 1;
-
-                    // Start at first sibling after wp:shortcode
-                    $currentNode = $node->nextSibling;
-
-                    // Walk siblings until closing comment
-                    while (
-                        $currentNode instanceof DOMNode
-                        && ! self::matchesClosingShortcodeComment($currentNode)
-                    ) {
-                        // Increment skip count for each node before closing comment
-                        $skipCount++;
-
-                        // Advance to next sibling
-                        $currentNode = $currentNode->nextSibling;
-                    }
-
-                    // Check if closing comment was found
-                    if ($currentNode instanceof DOMNode) {
-                        // Include closing comment in skip count
-                        $skipCount++;
-                    }
-
-                    // ---
-                    // Generate Tiptap HTML so Bard path (TextProcessor) can add this as
-                    // content. Callers that need page_builder (e.g., NonAcfBlockParser)
-                    // use page_builder_set; callers that need Bard use html.
-                    // ---
-                    $tiptapHtmlForBard = $this->shortcodeProcessor->toTiptapHtml(
-                        $single,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-
-                    // ---
-                    // Return both so TextProcessor adds html to Bard and
-                    // NonAcfBlockParser can use page_builder_set
-                    // ---
-                    return [
+                // ---
+                // Return the html with a skip count over the whole block, so the
+                // caller does not read the block's inner nodes a second time. A
+                // handler with no page builder block (caption, accordion, audio)
+                // returns its html this way too, unless it rendered nothing, which
+                // the loop below logs.
+                // ---
+                if ($hasPageBuilderSet || $tiptapHtmlForBard !== '') {
+                    $result = [
                         'html' => $tiptapHtmlForBard,
-                        'page_builder_set' => $pageBuilderBlock,
-                        'skipCount' => $skipCount,
+                        'skipCount' => self::blockSkipCount($node),
                     ];
+
+                    // Return the page builder set beside the html when there is one
+                    if ($hasPageBuilderSet) {
+                        $result['page_builder_set'] = $pageBuilderBlock;
+                    }
+
+                    return $result;
                 }
             }
         }
@@ -459,6 +435,41 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 self::extractNodeValueString($node->nodeValue)
             )
         ) === 1;
+    }
+
+    /**
+     * Counts the nodes from a wp:shortcode comment through its closing comment.
+     *
+     * @param  DOMNode  $node  The opening wp:shortcode comment
+     * @return int The number of nodes to skip, the opening comment included
+     */
+    private static function blockSkipCount(
+        DOMNode $node
+    ): int {
+        // Start skip count with the wp:shortcode comment node
+        $skipCount = 1;
+
+        // Start at first sibling after wp:shortcode
+        $currentNode = $node->nextSibling;
+
+        // Walk siblings until closing comment
+        while (
+            $currentNode instanceof DOMNode
+            && ! self::matchesClosingShortcodeComment($currentNode)
+        ) {
+            // Increment skip count for each node before closing comment
+            $skipCount++;
+
+            // Advance to next sibling
+            $currentNode = $currentNode->nextSibling;
+        }
+
+        // Include the closing comment when it was found
+        if ($currentNode instanceof DOMNode) {
+            $skipCount++;
+        }
+
+        return $skipCount;
     }
 
     /**

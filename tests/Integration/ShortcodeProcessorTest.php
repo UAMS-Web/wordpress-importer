@@ -506,9 +506,9 @@ describe('process', function (): void {
         'show-team' => ['show-team', []],
     ]);
 
-    it('builds a page builder caption block without the shortcode content', function (): void {
-        // Current behavior: this path never puts the shortcode content where the
-        // caption handler reads it, so the caption is lost
+    it('returns no page builder block for a caption, so the caller uses its image set', function (): void {
+        // The host app defines no caption block, so a caption lands as the image set
+        // the Bard route makes, inside a content block (#119)
         $warnings = shortcodeWarnings();
 
         $block = shortcodeProcessor()->process(
@@ -522,11 +522,8 @@ describe('process', function (): void {
             'about'
         );
 
-        expect($block)->toBeArray()
-            ->and(array_column($warnings->getArrayCopy(), 'context'))->toBe([['site' => 'site-a', 'pageSlug' => 'about']])
-            ->and($block['id'] ?? null)->toBeString()
-            ->and(array_diff_key($block ?? [], ['id' => true]))->toBe(['type' => 'uamsweb_block_caption', 'enabled' => true, 'caption' => null, 'align' => null])
-            ->and(array_column($warnings->getArrayCopy(), 'message'))->toBe(['CaptionShortcodeProcessor::parse: No content provided for [caption] shortcode']);
+        expect($block)->toBeNull()
+            ->and($warnings->getArrayCopy())->toBe([]);
     });
 });
 
