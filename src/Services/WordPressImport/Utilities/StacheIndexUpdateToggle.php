@@ -92,7 +92,10 @@ class StacheIndexUpdateToggle
      */
     private static function probe(): bool
     {
+        // The installed Stache declares the property, so no test reaches this return;
+        // it is the guard a future statamic/cms that drops the property would trip.
         if (! property_exists(Stache::class, 'updateIndexes')) {
+            // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
             return false;
         }
 
@@ -120,6 +123,9 @@ class StacheIndexUpdateToggle
             // Stache instance so the live, reflection-written flag is observed.
             $reenabled = StacheFacade::getFacadeRoot();
 
+            // The facade root is the Stache already checked above, so the instanceof
+            // only narrows the type; the shouldUpdateIndexes() half carries the check
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $reenabled instanceof Stache || $reenabled->shouldUpdateIndexes() !== true) {
                 return false;
             }
@@ -147,7 +153,11 @@ class StacheIndexUpdateToggle
         try {
             $stache = StacheFacade::getFacadeRoot();
 
+            // Without this guard, a root that is not a Stache has no such property, so
+            // the reflection below throws and the catch returns the same false
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $stache instanceof Stache) {
+                // @pest-mutate-ignore: RemoveEarlyReturn
                 return false;
             }
 
