@@ -33,7 +33,7 @@ final class ImportProgress
     /**
      * The longest a loop goes without a progress line, in seconds, while items are completing.
      */
-    public const INTERVAL_SECONDS = 10.0;
+    public const float INTERVAL_SECONDS = 10.0;
 
     /**
      * Yield each item of an import loop's source, reporting progress as they complete.
