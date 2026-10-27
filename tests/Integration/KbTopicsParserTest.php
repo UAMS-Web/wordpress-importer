@@ -237,6 +237,12 @@ it('maps a list of topic ids to their entries, in order', function (): void {
     ]);
 });
 
+it('maps the last topic id of a list that ends in a newline', function (): void {
+    kbtRegister(['3' => 'entry-3', '12' => 'entry-12']);
+
+    expect(kbtExtra(['topics' => "12,3\n"])['topic_list'] ?? null)->toBe(['entry-12', 'entry-3']);
+});
+
 it('warns about each topic id with no entry, and keeps the ones it finds', function (): void {
     kbtRegister(['3' => 'entry-3']);
     ProcessingContext::setWordPressPageLink('https://example.org/kb/');
@@ -340,6 +346,8 @@ it('maps the limit of dynamic topics, defaulting one that is not a positive numb
     'zero' => ['0', '4'],
     'zeros' => ['00', '4'],
     'a number with leading zeros' => ['007', '007'],
+    'a number ending in a newline' => ["5\n", "5\n"],
+    'zero ending in a newline' => ["0\n", '4'],
     'a number ending in zero' => ['10', '10'],
     'a negative number' => ['-2', '4'],
     'a number with text' => ['10px', '4'],

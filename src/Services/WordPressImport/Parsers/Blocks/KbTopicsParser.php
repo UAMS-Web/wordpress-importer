@@ -128,6 +128,10 @@ class KbTopicsParser
 
                 // Map WordPress term IDs to Statamic entry IDs
                 foreach ($topicIds as $termId) {
+                    // Trim term ID, since the pattern's $ also matches before a
+                    // trailing newline, which the last ID then carries
+                    $termId = \trim($termId);
+
                     // Get Statamic entry ID for this term ID
                     $entryId = KbLinkRegistry::getKbtopicEntryIdByTermId($termId);
 
