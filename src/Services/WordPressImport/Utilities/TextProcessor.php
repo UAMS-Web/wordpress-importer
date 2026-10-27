@@ -571,8 +571,9 @@ class TextProcessor
                     $shortcodeOnlyParsed !== []
                     && $shortcodeOnlyParsed[0] !== null
                 ) {
-                    // Return the parsed Bard content
-                    return $shortcodeOnlyParsed;
+                    // Return the parsed Bard content, without the empty paragraph a
+                    // flattened accordion's reopened paragraph leaves at the end
+                    return \array_values(self::withoutEmptyParagraphs($shortcodeOnlyParsed));
                 }
             }
         }
@@ -773,10 +774,10 @@ class TextProcessor
                 );
 
                 // Replace shortcode with Tiptap HTML in content
-                $formattedContent = \str_replace(
+                $formattedContent = ShortcodeProcessor::replaceShortcode(
+                    $formattedContent,
                     $shortcode['original'],
-                    $tiptapHtml,
-                    $formattedContent
+                    $tiptapHtml
                 );
             }
 
@@ -1299,14 +1300,7 @@ class TextProcessor
         );
 
         // Filter out empty paragraph nodes from final Bard content
-        $filteredContent = \array_filter(
-            $bardContent,
-            fn ($node): bool => ! (
-                \is_array($node)
-                && ($node['type'] ?? null) === 'paragraph'
-                && (($node['content'] ?? []) === [])
-            )
-        );
+        $filteredContent = self::withoutEmptyParagraphs($bardContent);
 
         // ---
         // Apply Bard Texstyle attributes to Bard content
@@ -1574,6 +1568,25 @@ class TextProcessor
         // Return the HTML, or '' for no node. saveHTML() throws for a node from another
         // document rather than returning false, and every caller passes $doc's own.
         return $html === false ? '' : $html;
+    }
+
+    /**
+     * Drops the paragraph nodes that hold no content.
+     *
+     * @param  array<int|string, mixed>  $nodes  Bard content
+     * @return array<int|string, mixed> The content without its empty paragraphs, keys kept
+     */
+    private static function withoutEmptyParagraphs(
+        array $nodes
+    ): array {
+        return \array_filter(
+            $nodes,
+            fn ($node): bool => ! (
+                \is_array($node)
+                && ($node['type'] ?? null) === 'paragraph'
+                && (($node['content'] ?? []) === [])
+            )
+        );
     }
 
     /**

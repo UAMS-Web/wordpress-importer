@@ -565,3 +565,42 @@ describe('processShortcodesInContent', function (): void {
             ->and($processor->getUnaddressedNodes())->toBe([]);
     });
 });
+
+describe('replaceShortcode', function (): void {
+    it('replaces every occurrence plainly when the HTML opens and closes no paragraph', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("a<br />\n[x]<br />\nb [x]", '[x]', '<i>y</i>'))
+            ->toBe("a<br />\n<i>y</i><br />\nb <i>y</i>");
+    });
+
+    it('takes the breaks before the shortcode when the HTML closes a paragraph first', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x]<br />\nb</p>", '[x]', '</p><h3>y</h3>'))
+            ->toBe("<p>a</p><h3>y</h3><br />\nb</p>");
+    });
+
+    it('takes the breaks after the shortcode when the HTML opens a paragraph last', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x]<br>\n <br/>b</p>", '[x]', '<h3>y</h3><p>'))
+            ->toBe("<p>a<br />\n<h3>y</h3><p>b</p>");
+    });
+
+    it('takes both sides, for every occurrence, with regex characters in the shortcode', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode("<p>a<br />\n[x a=\"(1)*\"]<br />\nb [x a=\"(1)*\"]\nc</p>", '[x a="(1)*"]', '</p><h3>y</h3><p>'))
+            ->toBe('<p>a</p><h3>y</h3><p>b</p><h3>y</h3><p>c</p>');
+    });
+
+    it('falls back to the plain replacement when the pattern fails', function (): void {
+        // A one-step backtrack limit with the JIT off fails the pattern
+        $limit = \ini_get('pcre.backtrack_limit');
+        $jit = \ini_get('pcre.jit');
+        \ini_set('pcre.backtrack_limit', '1');
+        \ini_set('pcre.jit', '0');
+
+        try {
+            $result = ShortcodeProcessor::replaceShortcode("a <br />\n[x] <br />\nb", '[x]', '</p><h3>y</h3><p>');
+        } finally {
+            \ini_set('pcre.backtrack_limit', (string) $limit);
+            \ini_set('pcre.jit', (string) $jit);
+        }
+
+        expect($result)->toBe("a <br />\n</p><h3>y</h3><p> <br />\nb");
+    });
+});
