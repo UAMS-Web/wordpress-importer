@@ -116,6 +116,7 @@ beforeEach(function (): void {
     ProcessingContext::clearXmlPath();
     ProcessingContext::clearWordPressPageLink();
     ProcessingContext::clearMinervaKbSettings();
+    (new ReflectionProperty(LinkProcessor::class, 'cachedXmlPath'))->setValue(null, null);
     config(['app.url' => 'https://statamic.test']);
 });
 
