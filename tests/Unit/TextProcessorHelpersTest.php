@@ -97,17 +97,16 @@ it('keeps characters across the Unicode range, up to U+10FFFF', function (string
     'U+10FFFF' => ["\u{10FFFF}"],
 ]);
 
-it('does not keep U+0080 as itself', function (): void {
+it('reads U+0080 back as one character', function (): void {
     // It is encoded to &#128;, which libxml 2.15.4 on macOS reads as the euro sign
-    // (Windows-1252, as browsers do) and the CI runner's libxml reads as a NUL.
-    // processForBard() strips U+0080 to U+009F before loading, so only a direct
-    // caller meets this.
+    // (Windows-1252, as browsers do) and the CI runner's libxml reads as U+0080
+    // itself. processForBard() strips U+0080 to U+009F before loading, so only a
+    // direct caller meets this.
     $text = TextProcessor::loadHtml("<p>a\u{0080}b</p>")->getElementsByTagName('p')->item(0)?->textContent;
 
     // Either way it stays one character; left unencoded it would come back as two
     expect($text)->toStartWith('a')
         ->toEndWith('b')
-        ->not->toContain("\u{0080}")
         ->and(mb_strlen((string) $text))->toBe(3);
 });
 
