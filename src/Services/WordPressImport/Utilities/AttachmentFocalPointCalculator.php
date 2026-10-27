@@ -78,12 +78,7 @@ class AttachmentFocalPointCalculator
     public static function parseFullImageDimensions(
         string $serialized
     ): ?array {
-        // Treat empty meta as invalid dimensions
-        if ($serialized === '') {
-            return null;
-        }
-
-        // Unserialize WordPress meta (arrays and scalars only)
+        // Unserialize WordPress meta (arrays and scalars only); empty meta yields false
         $meta = @\unserialize(
             $serialized,
             ['allowed_classes' => false]
@@ -132,12 +127,7 @@ class AttachmentFocalPointCalculator
     public static function parseSerializedPointList(
         string $serialized
     ): array {
-        // Treat empty meta as no points
-        if ($serialized === '') {
-            return [];
-        }
-
-        // Unserialize WordPress meta (arrays and scalars only)
+        // Unserialize WordPress meta (arrays and scalars only); empty meta yields false
         $data = @\unserialize(
             $serialized,
             ['allowed_classes' => false]
@@ -158,32 +148,22 @@ class AttachmentFocalPointCalculator
                 continue;
             }
 
-            // Require both x and y keys (0 is valid)
-            if (
-                ! \array_key_exists(
-                    'x',
-                    $item
-                )
-                || ! \array_key_exists(
-                    'y',
-                    $item
-                )
-            ) {
-                continue;
-            }
+            // Read both coordinates; a missing one reads as null
+            $x = $item['x'] ?? null;
+            $y = $item['y'] ?? null;
 
-            // Skip rows without numeric coordinates
+            // Skip rows without numeric coordinates (0 is valid)
             if (
-                ! \is_numeric($item['x'])
-                || ! \is_numeric($item['y'])
+                ! \is_numeric($x)
+                || ! \is_numeric($y)
             ) {
                 continue;
             }
 
             // Append normalized floating-point pixel coordinates
             $points[] = [
-                'x' => (float) $item['x'],
-                'y' => (float) $item['y'],
+                'x' => (float) $x,
+                'y' => (float) $y,
             ];
         }
 
@@ -208,13 +188,14 @@ class AttachmentFocalPointCalculator
             return self::DEFAULT_FOCUS;
         }
 
-        // Use default focal when image dimensions are unusable for percent math
-        if ($dimensions === null) {
-            return self::DEFAULT_FOCUS;
-        }
-
-        $width = $dimensions['width'];
-        $height = $dimensions['height'];
+        // Use default focal when image dimensions are unusable for percent math;
+        // absent dimensions read as zero. For any input the declared shape admits,
+        // the two defaults apply together or not at all, so changing one alone
+        // leaves the other at zero and the result unchanged.
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
+        $width = $dimensions['width'] ?? 0;
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
+        $height = $dimensions['height'] ?? 0;
 
         if ($width <= 0 || $height <= 0) {
             return self::DEFAULT_FOCUS;
@@ -238,7 +219,8 @@ class AttachmentFocalPointCalculator
         // Compute vertical center of the axis-aligned bounding box
         $centerY = (\min($ys) + \max($ys)) / 2;
 
-        // Convert center x to a clamped integer percent (0–100)
+        // Convert center x to a clamped integer percent (0 to 100); the cast also
+        // turns a NAN center (from opposite infinite coordinates) into 0
         $focusX = (int) \min(
             100,
             \max(
@@ -249,7 +231,7 @@ class AttachmentFocalPointCalculator
             )
         );
 
-        // Convert center y to a clamped integer percent (0–100)
+        // Convert center y to a clamped integer percent (0 to 100)
         $focusY = (int) \min(
             100,
             \max(
