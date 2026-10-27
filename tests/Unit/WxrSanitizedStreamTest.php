@@ -166,6 +166,27 @@ it('reads only the first four bytes to decide', function (): void {
     expect(wxrStreamRead(wxrStreamFile("abcd\x00\x01")))->toBe('abcd');
 });
 
+it('serves a directory as empty', function (): void {
+    // fopen() opens a directory on macOS and Linux and fread() then fails; Windows
+    // refuses the fopen() itself, which another path already covers
+    if (PHP_OS_FAMILY === 'Windows') {
+        test()->markTestSkipped('fopen() refuses a directory on Windows.');
+    }
+
+    $directory = sys_get_temp_dir().'/wxs-dir-'.bin2hex(random_bytes(4));
+    mkdir($directory);
+
+    try {
+        wxrStreamWarnings(static function () use (&$read, $directory): void {
+            $read = wxrStreamRead($directory);
+        });
+    } finally {
+        rmdir($directory);
+    }
+
+    expect($read)->toBe('');
+});
+
 it('serves an empty file as empty', function (): void {
     expect(wxrStreamRead(wxrStreamFile('')))->toBe('');
 });

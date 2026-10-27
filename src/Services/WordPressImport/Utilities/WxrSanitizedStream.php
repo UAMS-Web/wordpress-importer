@@ -117,15 +117,13 @@ class WxrSanitizedStream
             return $path;
         }
 
-        // Key by content-free hash so repeated wraps of one path stay identical. Any
-        // 32-character slice of the hash serves equally well as a token.
-        // @pest-mutate-ignore: IncrementInteger
+        // Key by content-free hash so repeated wraps of one path stay identical; the
+        // token is the last 32 of the hash's 64 hex characters
         $token = \substr(
             \hash(
                 'sha256',
                 $path
             ),
-            0,
             32
         );
 
@@ -254,16 +252,18 @@ class WxrSanitizedStream
         // @pest-mutate-ignore: RemoveFunctionCall
         \fclose($handle);
 
-        // fread() fails only on an unusable handle, which this one is not
-        // @pest-mutate-ignore: FalseToTrue
+        // fread() fails on a directory, which fopen() opens on macOS and Linux. Such a
+        // path reads as empty whether or not it is repaired, so the answer here is
+        // only a default.
         if ($head === false) {
-            // @pest-mutate-ignore: TrueToFalse, RemoveEarlyReturn
+            // @pest-mutate-ignore: TrueToFalse
             return true;
         }
 
-        // A UTF-16 byte-order mark rules byte-level repair out. A UTF-32 one begins
-        // with two 0x00 bytes, which the check below already catches. An empty head
-        // matches neither and is repaired, harmlessly.
+        // A UTF-16 byte-order mark rules byte-level repair out. A UTF-32 BE one begins
+        // with two 0x00 bytes, which the check below already catches, and a UTF-32 LE
+        // one begins with the UTF-16 LE mark. An empty head matches neither and is
+        // repaired, harmlessly.
         foreach (["\xFF\xFE", "\xFE\xFF"] as $bom) {
             if (\str_starts_with($head, $bom)) {
                 return false;
@@ -293,8 +293,7 @@ class WxrSanitizedStream
             $count
         );
 
-        // fread() fails only on an unusable handle, which an open stream's is not
-        // @pest-mutate-ignore: FalseToTrue, EmptyStringToNotEmpty
+        // fread() fails on a directory, which serves no bytes
         return $data === false ? '' : $data;
     }
 

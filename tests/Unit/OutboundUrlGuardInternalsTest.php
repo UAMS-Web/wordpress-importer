@@ -75,6 +75,9 @@ it('matches an address against a range by its prefix bits', function (string $ip
     'inside a ten-bit prefix' => ['100.127.255.255', '100.64.0.0/10', true],
     'just past a ten-bit prefix' => ['100.128.0.0', '100.64.0.0/10', false],
     'inside a four-bit prefix' => ['239.0.0.1', '224.0.0.0/4', true],
+    'just below a ten-bit prefix' => ['100.63.255.255', '100.64.0.0/10', false],
+    'past a nine-bit prefix, inside its whole byte' => ['10.128.0.1', '10.0.0.0/9', false],
+    'inside a nine-bit prefix' => ['10.127.0.1', '10.0.0.0/9', true],
     'a malformed address' => ['not-an-ip', '10.0.0.0/8', false],
     'a malformed range' => ['10.0.0.1', 'not-a-range/8', false],
     'an IPv4 address against an IPv6 range' => ['100.64.0.1', '64:ff9b::/96', false],
@@ -92,7 +95,19 @@ it('reads the IPv6 addresses out of an AAAA answer and nothing else', function (
     ],
 ]);
 
-it('answers an A lookup from the system resolver', function (): void {
-    // localhost is answered by the hosts file, so this needs no network
-    expect(outboundGuardPrivate('lookUpRecords', 'localhost', DNS_A))->toBe(['127.0.0.1']);
+it('answers an A lookup from the system resolver, and nothing for a failed one', function (): void {
+    // localhost is answered by the hosts file, and a name over 255 characters is
+    // refused before any query, so neither needs the network. The refusal raises a
+    // warning the class silences with `@`, which the test runner still records, so
+    // a handler takes it here.
+    set_error_handler(static fn (): bool => true);
+
+    try {
+        $refused = outboundGuardPrivate('lookUpRecords', \str_repeat('a', 256), DNS_A);
+    } finally {
+        restore_error_handler();
+    }
+
+    expect(outboundGuardPrivate('lookUpRecords', 'localhost', DNS_A))->toBe(['127.0.0.1'])
+        ->and($refused)->toBe([]);
 });

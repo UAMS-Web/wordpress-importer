@@ -331,17 +331,20 @@ class OutboundUrlGuard
 
         // With no bits left the mask below is zero and its comparison is true, so this
         // return only saves work for every range in the tables
-        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
+        // @pest-mutate-ignore: DecrementInteger
         if ($remainingBits === 0) {
             // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
         // Compare only the leading bits of the byte the prefix stops inside.
-        // A non-zero remainder guarantees this byte exists. Shifting by at least one
-        // bit leaves the mask's lowest bit clear, so masking with 0xFE is the same.
+        // A non-zero remainder guarantees this byte exists
+        $shifted = 0xFF << (8 - $remainingBits);
+
+        // Shifting by at least one bit leaves the lowest bit clear, so masking with
+        // 0xFE is the same
         // @pest-mutate-ignore: DecrementInteger
-        $mask = \chr((0xFF << (8 - $remainingBits)) & 0xFF);
+        $mask = \chr($shifted & 0xFF);
 
         return ($packedIp[$wholeBytes] & $mask) === ($packedSubnet[$wholeBytes] & $mask);
     }
@@ -410,9 +413,7 @@ class OutboundUrlGuard
         if ($type === DNS_A) {
             $ips = @gethostbynamel($host);
 
-            // Only a lookup that fails returns false, and a test cannot make the
-            // system resolver fail without reaching the network
-            // @pest-mutate-ignore: FalseToTrue
+            // A failed lookup returns false
             return $ips === false ? [] : $ips;
         }
 
@@ -496,8 +497,9 @@ class OutboundUrlGuard
         // Read each part in its own base, widest-first so `0x…` wins over `0…`
         foreach ($parts as $part) {
             // hexdec() skips characters that are not hex digits, so leaving the `x` or
-            // the whole `0x` in changes no value, and an int compares and sums the same
-            // as a float here
+            // the whole `0x` in changes no value (the `x` alone raises a deprecation
+            // notice, which the suite does not fail on), and an int compares and sums
+            // the same as a float here
             if (\preg_match('/^0[xX][0-9a-fA-F]+$/', $part) === 1) {
                 // @pest-mutate-ignore: DecrementInteger, UnwrapSubstr, RemoveDoubleCast
                 $values[] = (float) \hexdec(\substr($part, 2));
