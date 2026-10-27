@@ -717,10 +717,8 @@ class ContentProcessor
         // Run the body with libxml warnings visible, as it did before wordpress-importer-archive#1354 when
         // the load below switched the mode back off. A caller may arrive with it
         // on (a direct Bard parse elsewhere leaves it on); process() restores the
-        // caller's mode afterwards, so only code inside the body can observe
-        // this call.
+        // caller's mode afterwards.
         // ---
-        // @pest-mutate-ignore: RemoveFunctionCall
         libxml_use_internal_errors(false);
 
         // Set the XML path in the processing context
@@ -809,9 +807,7 @@ class ContentProcessor
         // (wordpress-importer-archive#1354). The mode is process-wide; leaving it on would silence every
         // later libxml warning in the import.
         // ---
-        // The load is @-suppressed, so turning internal errors off instead changes
-        // nothing it reports; the mode is restored below either way
-        // @pest-mutate-ignore: TrueToFalse
+        // Collect the load's errors internally, so they reach no error handler
         $previousInternalErrors = libxml_use_internal_errors(true);
 
         try {
@@ -839,16 +835,12 @@ class ContentProcessor
                 return ['content' => [], 'page_builder' => []];
             }
         } finally {
-            // Clear libxml errors to prevent interference with future operations.
-            // Restoring the body's mode below turns internal errors off, which
-            // clears them as well.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Clear libxml errors, and the last error, to prevent interference with
+            // future operations
             libxml_clear_errors();
 
-            // Put back the mode the body had. process() restores the caller's mode
-            // in its own finally, so no test can observe this call except from
-            // inside the body; it keeps warnings visible for the rest of the page.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Put back the mode the body had, which keeps warnings visible for the
+            // rest of the page
             libxml_use_internal_errors($previousInternalErrors);
         }
 
@@ -1022,7 +1014,6 @@ class ContentProcessor
             // processed during the main loop, and making another call would cause the block
             // to be duplicated. This check prevents the duplication issue while preserving
             // the mixed content finalization functionality.
-            // ---
             // ---
             // Read the last node; an empty list has none
             $finalNode = $nodes->item($nodes->length - 1);

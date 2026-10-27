@@ -75,9 +75,10 @@ class ContentProcessFakePageBuilder extends PageBuilderParser
     public array $results = [];
 
     /**
-     * libxml's internal-errors mode and buffered error count at each parseNode() call.
+     * libxml's internal-errors mode, buffered error count and last error at each
+     * parseNode() call.
      *
-     * @var list<array{internal: bool, errors: int}>
+     * @var list<array{internal: bool, errors: int, last: ?string}>
      */
     public array $libxml = [];
 
@@ -133,7 +134,8 @@ class ContentProcessFakePageBuilder extends PageBuilderParser
     ): array {
         $label = contentProcessLabel($node);
         $this->calls[] = ['parse', $index, $label];
-        $this->libxml[] = ['internal' => libxml_use_internal_errors(), 'errors' => count(libxml_get_errors())];
+        $last = libxml_get_last_error();
+        $this->libxml[] = ['internal' => libxml_use_internal_errors(), 'errors' => count(libxml_get_errors()), 'last' => $last instanceof LibXMLError ? trim($last->message) : null];
         $content[] = ['type' => 'parsed', 'node' => $label];
 
         return $this->results[$label] ?? [];
@@ -553,6 +555,7 @@ it('finishes the page builder content once, without parsing the last node again 
     'an element' => ['<p>Last</p>', [['parse', 1, 'p:Last']], 1],
     'another block' => ['<!-- wp:custom/x /-->', [['parse', 1, 'comment:wp:custom/x /']], 1],
     'other text' => ['plain [gallery]', [['parse', 1, 'text:plain [gallery]']], 1],
+    'an element holding a form shortcode' => ['<p>[gravityform id="3"]</p>', [['parse', 1, 'p:[gravityform id="3"]']], 1],
 ]);
 
 it('only finishes page builder content with no nodes', function (): void {
@@ -570,13 +573,14 @@ it('parses page builder content with libxml warnings visible and the load\'s err
     $internal = libxml_use_internal_errors(true);
 
     try {
-        contentProcess($fakes['processor'], '<p>A<bogus:x>B</p><div>', 'pages', ['blueprint' => 'landing_page']);
+        // A misplaced <html> is an error on every libxml build measured
+        contentProcess($fakes['processor'], 'x<html>y', 'pages', ['blueprint' => 'landing_page']);
     } finally {
         libxml_clear_errors();
         libxml_use_internal_errors($internal);
     }
 
-    expect($fakes['builder']->libxml[0] ?? null)->toBe(['internal' => false, 'errors' => 0]);
+    expect($fakes['builder']->libxml[0] ?? null)->toBe(['internal' => false, 'errors' => 0, 'last' => null]);
 });
 
 it('keeps text nested past libxml\'s default depth in page builder content', function (): void {
@@ -587,7 +591,7 @@ it('keeps text nested past libxml\'s default depth in page builder content', fun
     expect(contentProcessParses($fakes['builder'])[0][2] ?? null)->toBe('p:deep');
 });
 
-it('keeps text nested past libxml\'s default depth in content without block comments', function (): void {
+it('keeps text nested past libxml\'s default depth in content with block comments', function (): void {
     $fakes = contentProcessFakes();
 
     contentProcess($fakes['processor'], '<!-- wp:acf/a /-->'.str_repeat('<b>', 300).'deep'.str_repeat('</b>', 300), 'pages');
@@ -643,4 +647,22 @@ it('reports its unaddressed blocks together with the shortcode processor\'s', fu
         ],
         'shortcode' => [['id' => '9', 'slug' => 'other', 'link' => 'l', 'original' => '[y]']],
     ]);
+});
+
+it('reports none of the load\'s warnings to an error handler', function (): void {
+    $fakes = contentProcessFakes();
+    $calls = 0;
+    set_error_handler(static function () use (&$calls): bool {
+        $calls++;
+
+        return true;
+    });
+
+    try {
+        contentProcess($fakes['processor'], 'x<html>y', 'pages', ['blueprint' => 'landing_page']);
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($calls)->toBe(0);
 });

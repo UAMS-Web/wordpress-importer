@@ -95,8 +95,7 @@ function linkTablesSet(array $values = []): array
 
 /**
  * The values of the set at the given position of linked content.
- */
-/**
+ *
  * @return array<int|string, mixed>
  */
 function linkTablesValues(mixed $content, int $index): array
@@ -340,7 +339,7 @@ it('counts a page builder table block against the table ids, and links Bard and 
         ->and($warnings->getArrayCopy())->toBe([]);
 });
 
-it('counts a page builder table block only while table ids remain', function (): void {
+it('counts a page builder table block past the last table id without warning', function (): void {
     $warnings = linkTablesWarnings();
 
     linkTables([], [], [['type' => 'uamsweb_block_table'], ['type' => 'uamsweb_block_table']], ['1']);
