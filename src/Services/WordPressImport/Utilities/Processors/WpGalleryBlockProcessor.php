@@ -7,7 +7,6 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processor
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMNodeList;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -109,14 +108,17 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
             $node
         );
 
+        // Select the first <figure> node found. query() returns false only for a
+        // malformed expression or context node, which this constant expression
+        // and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
+
         // Check if no <figure> element is found
-        if (
-            ! $figureNodes instanceof DOMNodeList
-            || $figureNodes->length === 0
-        ) {
+        if (! $figureNode instanceof DOMNode) {
             // Capture the next sibling's HTML for logging, if it exists
             $nextSibling = $node->nextSibling instanceof DOMNode
-                ? $this->renderNodeHtml($node->nextSibling)
+                ? $this->renderNodeHtml($node->nextSibling, $doc)
                 : 'none';
 
             // Enhance log context with entry information
@@ -146,12 +148,6 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
             return null;
         }
 
-        // Select the first <figure> node found
-        $figureNode = $figureNodes->item(0);
-        if (! $figureNode instanceof DOMNode) {
-            return null;
-        }
-
         // Extract image IDs from block attributes
         $imageIds = $attributes['ids'] ?? [];
         if (! \is_array($imageIds)) {
@@ -161,7 +157,7 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
         // Check if there are no IDs in attributes
         if ($imageIds === []) {
             // Try to extract image IDs from the figure element
-            $imageIds = $this->extractImageIdsFromFigure($figureNode);
+            $imageIds = $this->extractImageIdsFromFigure($figureNode, $doc);
         }
 
         // Check if we have any image IDs to process
@@ -246,7 +242,6 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
 
         // Create the gallery values array
         $values = [
-            'type' => 'gallery',
             'heading' => 'Image Gallery',
             'images' => $imagePaths,
             'more_query' => false,
@@ -257,11 +252,6 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
 
         // Loop through values to build HTML attributes
         foreach ($values as $key => $value) {
-            // Skip the 'type' key as it's handled by data-set-type.
-            if ($key === 'type') {
-                continue;
-            }
-
             // Handle array values by converting to JSON.
             if (\is_array($value)) {
                 // Convert array to JSON string.
@@ -270,7 +260,7 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
                 // Add JSON attribute to HTML.
                 $attrs .= \sprintf(
                     " data-set-attr-%s='%s'",
-                    htmlspecialchars($key),
+                    $key,
                     htmlspecialchars(
                         $jsonValue,
                         ENT_QUOTES,
@@ -281,12 +271,12 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
                 continue;
             }
 
-            // Convert scalar gallery values to attribute-safe strings.
+            // Convert the scalar gallery values, all constants, to attribute strings.
             $stringValue = $value === false ? 'false' : $value;
             $attrs .= \sprintf(
                 ' data-set-attr-%s="%s"',
-                htmlspecialchars($key),
-                htmlspecialchars($stringValue)
+                $key,
+                $stringValue
             );
         }
 
@@ -309,33 +299,32 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
      * Extracts image IDs from a figure element containing gallery images.
      *
      * @param  DOMNode  $figureNode  The figure element containing gallery images
+     * @param  DOMDocument  $doc  The document the figure belongs to
      * @return array<int|string, mixed> Array of image IDs
      */
     private function extractImageIdsFromFigure(
-        DOMNode $figureNode
+        DOMNode $figureNode,
+        DOMDocument $doc
     ): array {
-        // Return no IDs when owner document is missing.
-        if (! $figureNode->ownerDocument instanceof DOMDocument) {
-            return [];
-        }
-
         // Initialize array to store image IDs
         $imageIds = [];
 
         // Create XPath instance for querying
-        $xpath = new DOMXPath($figureNode->ownerDocument);
+        $xpath = new DOMXPath($doc);
 
-        // Find all img elements with data-id attributes
+        // Find all img elements with data-id attributes. query() returns false
+        // only for a malformed expression or context node, which this constant
+        // expression and in-document node cannot be.
         $imgNodes = $xpath->query(
             './/img[@data-id]',
             $figureNode
         );
-        if (! $imgNodes instanceof DOMNodeList) {
-            return [];
-        }
 
-        // Loop through each image node
-        foreach ($imgNodes as $imgNode) {
+        // Loop through each image node; query() never returns false here, as above.
+        // @pest-mutate-ignore: FalseToTrue
+        foreach ($imgNodes === false ? [] : $imgNodes as $imgNode) {
+            // The expression selects only img elements; the guard narrows the type.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $imgNode instanceof DOMElement) {
                 continue;
             }
@@ -343,11 +332,8 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
             // Get the data-id attribute value
             $dataId = $imgNode->getAttribute('data-id');
 
-            // Check if the data-id is numeric
-            if (
-                $dataId !== ''
-                && \is_numeric($dataId)
-            ) {
+            // Check if the data-id is numeric; an empty string is not
+            if (\is_numeric($dataId)) {
                 // Add the image ID to our array
                 $imageIds[] = $dataId;
             }
@@ -361,18 +347,15 @@ class WpGalleryBlockProcessor implements BlockProcessorInterface
      * Render a DOM node to a safe HTML string.
      *
      * @param  DOMNode  $node  The node to render
+     * @param  DOMDocument  $doc  The document the node belongs to
      * @return string Rendered HTML or an empty string
      */
     private function renderNodeHtml(
-        DOMNode $node
+        DOMNode $node,
+        DOMDocument $doc
     ): string {
-        // Return an empty string when no owner document exists.
-        if (! $node->ownerDocument instanceof DOMDocument) {
-            return '';
-        }
-
         // Render the node as HTML.
-        $html = $node->ownerDocument->saveHTML($node);
+        $html = $doc->saveHTML($node);
         if (! \is_string($html)) {
             return '';
         }

@@ -966,22 +966,17 @@ class PostAudioProcessor
 
         // If there's content after the last [/accordion], add it to intro
         if ($lastAccordionPos !== false) {
-            // Find the position of [/accordion] in the original content
-            $accordionEndPos = strrpos(
-                $content,
-                '[/accordion]'
+            // ---
+            // Extract content that appears after the last accordion tag. The segment is
+            // the content from [audio] on, so the segment's last [/accordion] is also the
+            // content's.
+            // ---
+            $afterAccordion = \trim(
+                \substr(
+                    $content,
+                    $audioPos + $lastAccordionPos + \strlen('[/accordion]')
+                )
             );
-            if ($accordionEndPos !== false) {
-                // Extract content that appears after the last accordion tag
-                $afterAccordion = \trim(
-                    \substr(
-                        $content,
-                        $accordionEndPos + \strlen('[/accordion]')
-                    )
-                );
-            } else {
-                $afterAccordion = '';
-            }
 
             // Process the after-accordion content if it exists
             if ($afterAccordion !== '') {

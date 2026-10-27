@@ -7,7 +7,6 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processor
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMNodeList;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -97,21 +96,21 @@ class TableProcessor implements BlockProcessorInterface
 
         // Create an XPath helper scoped to the owner document.
         $xpath = new DOMXPath($doc);
-        $figureNode = null;
 
-        // Find the next figure node after the wp:table comment
+        // Find the next figure node after the wp:table comment. query() returns
+        // false only for a malformed expression or context node, which this
+        // constant expression and in-document node cannot be.
         $figureNodes = $xpath->query(
             'following-sibling::figure[contains(@class, "wp-block-table")][1]',
             $node
         );
-        if (
-            $figureNodes instanceof DOMNodeList
-            && $figureNodes->length > 0
-        ) {
-            $figureNode = $figureNodes->item(0);
-        }
 
-        if ($figureNode === null) {
+        // query() never returns false here, as above.
+        // @pest-mutate-ignore: FalseToTrue
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
+
+        // The expression selects only figure elements, so anything else is no match.
+        if (! $figureNode instanceof DOMElement) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -133,10 +132,6 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
-        if (! $figureNode instanceof DOMElement) {
-            return null;
-        }
-
         $tableNode = null;
         foreach ($figureNode->getElementsByTagName('table') as $table) {
             $tableNode = $table;
@@ -150,7 +145,7 @@ class TableProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug ?? 'none',
                     'node_html' => \substr(
-                        $this->renderNodeSnippet($figureNode),
+                        $this->renderNodeSnippet($figureNode, $doc),
                         0,
                         100
                     ).'...',
@@ -196,7 +191,7 @@ class TableProcessor implements BlockProcessorInterface
             foreach ($thead->getElementsByTagName('tr') as $tr) {
                 $row = [];
                 foreach ($tr->getElementsByTagName('th') as $th) {
-                    $row[] = $this->getInnerHTML($th);
+                    $row[] = $this->getInnerHTML($th, $doc);
                 }
 
                 if ($row !== []) {
@@ -210,7 +205,7 @@ class TableProcessor implements BlockProcessorInterface
                 $row = [];
                 $cells = $tr->getElementsByTagName('td');
                 foreach ($cells as $td) {
-                    $row[] = $this->getInnerHTML($td);
+                    $row[] = $this->getInnerHTML($td, $doc);
                 }
 
                 if ($row !== []) {
@@ -224,7 +219,7 @@ class TableProcessor implements BlockProcessorInterface
             foreach ($tfoot->getElementsByTagName('tr') as $tr) {
                 $row = [];
                 foreach ($tr->getElementsByTagName('td') as $td) {
-                    $row[] = $this->getInnerHTML($td);
+                    $row[] = $this->getInnerHTML($td, $doc);
                 }
 
                 if ($row !== []) {
@@ -240,7 +235,7 @@ class TableProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug ?? 'none',
                     'node_html' => \substr(
-                        $this->renderNodeSnippet($figureNode),
+                        $this->renderNodeSnippet($figureNode, $doc),
                         0,
                         100
                     ).'...',
@@ -262,6 +257,9 @@ class TableProcessor implements BlockProcessorInterface
         // Alignment
         $alignInput = $attributes['align'] ?? $figureNode->getAttribute('class');
         if (! \is_string($alignInput)) {
+            // Any string without an align class translates to the center default,
+            // so this value cannot be told apart from another such string.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $alignInput = '';
         }
 
@@ -303,7 +301,7 @@ class TableProcessor implements BlockProcessorInterface
                 // Use single quotes for table_data to avoid conflicts with JSON double quotes
                 $attrs .= \sprintf(
                     " data-set-attr-%s='%s'",
-                    htmlspecialchars($key),
+                    $key,
                     htmlspecialchars(
                         $this->encodeJsonAttributeValue($value),
                         ENT_QUOTES,
@@ -325,7 +323,7 @@ class TableProcessor implements BlockProcessorInterface
             $attrValue = \is_bool($value) ? ($value ? 'true' : 'false') : $value;
             $attrs .= \sprintf(
                 ' data-set-attr-%s="%s"',
-                htmlspecialchars($key),
+                $key,
                 htmlspecialchars($attrValue)
             );
         }
@@ -333,11 +331,9 @@ class TableProcessor implements BlockProcessorInterface
         // Add boolean fields metadata
         $attrs .= \sprintf(
             ' data-set-boolean-fields="%s"',
-            htmlspecialchars(
-                \implode(
-                    ',',
-                    $booleanFields
-                )
+            \implode(
+                ',',
+                $booleanFields
             )
         );
 
@@ -358,20 +354,17 @@ class TableProcessor implements BlockProcessorInterface
      * Get the inner HTML of a DOM element as a string.
      *
      * @param  DOMNode  $element  The DOM element to extract inner HTML from
+     * @param  DOMDocument  $doc  The document the element belongs to
      * @return string The inner HTML string
      */
     private function getInnerHTML(
-        DOMNode $element
+        DOMNode $element,
+        DOMDocument $doc
     ): string {
-        // Return an empty string when no owner document is available.
-        if (! $element->ownerDocument instanceof DOMDocument) {
-            return '';
-        }
-
         // Build the inner HTML by rendering each child node.
         $innerHTML = '';
         foreach ($element->childNodes as $child) {
-            $childHtml = $element->ownerDocument->saveHTML($child);
+            $childHtml = $doc->saveHTML($child);
             if (! \is_string($childHtml)) {
                 continue;
             }
@@ -387,18 +380,15 @@ class TableProcessor implements BlockProcessorInterface
      * Render a DOM element to HTML for log snippets.
      *
      * @param  DOMElement  $element  The element to render
+     * @param  DOMDocument  $doc  The document the element belongs to
      * @return string Safe rendered HTML or an empty string
      */
     private function renderNodeSnippet(
-        DOMElement $element
+        DOMElement $element,
+        DOMDocument $doc
     ): string {
-        // Return an empty value when the owner document is unavailable.
-        if (! $element->ownerDocument instanceof DOMDocument) {
-            return '';
-        }
-
         // Render the element to an HTML string.
-        $html = $element->ownerDocument->saveHTML($element);
+        $html = $doc->saveHTML($element);
         if (! \is_string($html)) {
             return '';
         }
