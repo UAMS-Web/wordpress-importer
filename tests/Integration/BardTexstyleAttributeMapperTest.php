@@ -477,6 +477,7 @@ it('applies nothing to a node type the config does not list', function (mixed $c
     'no paragraph entry' => [['heading' => ['id' => []]]],
     'a paragraph entry that is not an array' => [['paragraph' => 'id']],
     'a config that is not an array' => ['none'],
+    'a config that only behaves like an array' => [new ArrayObject(['paragraph' => ['id' => []]])],
 ]);
 
 it('applies only the string keys the config lists', function (): void {
@@ -491,7 +492,7 @@ it('applies only the attributes the node type accepts', function (): void {
     expect(texstyleAttrs(texstyleOrderedList(), '<ol id="o" start="3" reversed><li>One</li></ol>'))->toBe(['start' => 3]);
 });
 
-it('reads no root from HTML that is only text', function (): void {
+it('maps nothing from HTML that is only text', function (): void {
     expect(texstyleAttrs(texstyleNode('paragraph', [], [texstyleText('Hi')]), 'Hi'))->toBe(['id' => null]);
 });
 
@@ -573,10 +574,10 @@ it('tells apart texts that share their first characters', function (): void {
 });
 
 it('tells texts apart by the first eight hex digits of their hash', function (string $first, string $second, array $ids): void {
-    // `Text 2855` and `Text 16221` share seven leading hex digits of their MD5 and
-    // `Text 0` and `Text 3` share the last one, so both pairs are told apart; `Text
-    // 82061` and `Text 97693` share all eight the signature keeps, so the second
-    // element's id lands on both nodes. A collision needs a 32-bit match, so it is
+    // `Text 2855` and `Text 16221` share seven leading hex digits of their MD5, and
+    // `Text 0` and `Text 3` share the last digit of the full hash, so both pairs are
+    // told apart; `Text 82061` and `Text 97693` share all eight leading digits the
+    // signature keeps, so the second element's id lands on both nodes. A collision needs a 32-bit match, so it is
     // pinned here rather than ticketed.
     $mapped = BardTexstyleAttributeMapper::mapAttributes(
         [texstyleNode('paragraph', [], [texstyleText($first)]), texstyleNode('paragraph', [], [texstyleText($second)])],

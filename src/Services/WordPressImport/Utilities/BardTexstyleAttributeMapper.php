@@ -392,7 +392,7 @@ class BardTexstyleAttributeMapper
                 );
 
                 // Decode JSON attributes; a comment without any, or with JSON that
-                // does not decode to an object, carries none
+                // does not decode to an array, carries none
                 $decoded = \json_decode(
                     $jsonString,
                     true
@@ -1353,7 +1353,8 @@ class BardTexstyleAttributeMapper
         string $nodeType
     ): string {
         // Map Bard node types to HTML tag names. A heading needs no entry: its level
-        // makes its signature start with `h`, as an HTML heading's does.
+        // makes its signature start with `h`, as an HTML heading's does, and one
+        // without a level matches no element either way.
         $tagMap = [
             'paragraph' => 'p',
             'unorderedList' => 'ul',
@@ -1387,8 +1388,9 @@ class BardTexstyleAttributeMapper
             ) {
                 $levelValue = $nodeAttributes['level'];
 
-                // A level that is not a scalar matches no heading; no element's
-                // signature carries the fallback either way
+                // A level that is not a scalar matches no heading. Only a `<heading>`
+                // element could share the fallback's signature, and it never carries
+                // attributes, so the fallback's value changes nothing.
                 // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $level = \is_scalar($levelValue) ? (string) $levelValue : '';
             }
@@ -1457,10 +1459,8 @@ class BardTexstyleAttributeMapper
         // Get attributes from config file
         $attributes = \config('statamic.bard_texstyle.attributes', []);
 
-        // Return empty list when config value is not an array. A string's offset
-        // is not set either, so the next check would return the same.
+        // Return empty list when config value is not an array
         if (! \is_array($attributes)) {
-            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -1509,7 +1509,8 @@ class BardTexstyleAttributeMapper
         $applicableAttributes = self::getApplicableAttributes($nodeType);
 
         // Check if attribute is applicable for this node type. Both sides are
-        // strings, so strict and loose comparison agree.
+        // this class's fixed attribute names, none numeric, so strict and loose
+        // comparison agree.
         // @pest-mutate-ignore: TrueToFalse
         return \in_array(
             $attributeKey,
