@@ -882,3 +882,25 @@ it('keeps each link deferred for the same entry', function (): void {
 it('finds nothing when its only lookup returns something other than an entry', function (): void {
     expect(LinkProcessor::findEntryWithRetry(static fn (): string => 'not an entry', 1, 0))->toBeNull();
 });
+
+it('reports an unresolved link\'s entry with an empty ID when its ID is not a string', function (): void {
+    // An entry file can carry a numeric ID, which a lookup by the ID as a string finds
+    $entry = EntryFacade::make();
+
+    if (! $entry instanceof Entry) {
+        throw new LogicException('Expected an entry.');
+    }
+
+    $entry->collection('pages');
+    $entry->locale('default');
+    $entry->slug('home');
+    $entry->id(1.5);
+    $entry->data(['title' => 'Home']);
+    $entry->save();
+    LinkProcessor::setDeferredInternalLinks(['1.5' => [deferredLink(['post_name' => 'gone', 'post_id' => '98'])]]);
+    $output = new BufferedOutput;
+
+    LinkProcessor::processDeferredInternalLinks('default', $output);
+
+    expect($output->fetch())->toEndWith("          - 'Home' (Statamic ID: '')".PHP_EOL);
+});

@@ -1466,8 +1466,6 @@ class LinkProcessor
                     'statamic_entry_title' => \is_string($link['statamic_source_entry_title'])
                         ? $link['statamic_source_entry_title']
                         : '',
-                    // The entry was found by its string ID, so the fallback is never used
-                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     'statamic_entry_id' => \is_string($link['statamic_source_entry_id'])
                         ? $link['statamic_source_entry_id']
                         : '',
@@ -2032,11 +2030,9 @@ class LinkProcessor
                                     $output
                                 );
 
-                                // Check if file processing failed (it never gives an empty URL)
-                                if ($processedUrl === null) {
-                                    // Use attachment URL as fallback when file processing fails
-                                    $processedUrl = $attachmentUrl;
-                                }
+                                // Use attachment URL as fallback when file processing fails
+                                // (it never gives an empty URL)
+                                $processedUrl ??= $attachmentUrl;
                             }
 
                             // Replace WordPress URL with processed URL in content and page_builder
