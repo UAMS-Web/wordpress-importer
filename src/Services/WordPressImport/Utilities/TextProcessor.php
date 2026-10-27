@@ -170,7 +170,7 @@ class TextProcessor
         );
 
         // Enable formatted output for better readability. Nothing is parsed into
-        // this document, so whitespace preservation is set on the one below.
+        // this document, so its whitespace setting has no effect.
         $doc->formatOutput = true;
 
         // Convert HTML entities to UTF-8 equivalents
@@ -524,9 +524,10 @@ class TextProcessor
                 $shortcodeOnlyMatch
             ) === 1
         ) {
-            // Take the inner content of the shortcode block; the pattern leaves the
-            // whitespace around it outside the group
-            $shortcodeOnlyInner = $shortcodeOnlyMatch[1];
+            // Trim the inner content of the shortcode block. The pattern leaves the
+            // whitespace around it outside the group, but not a NUL, which survives
+            // normalizeUtf8() in content that is not valid UTF-8.
+            $shortcodeOnlyInner = \trim($shortcodeOnlyMatch[1]);
         } elseif ( // Check if the content matches the expected pattern for a bare form shortcode
             \preg_match(
                 '/^\s*(\[(?:gravityform|formidable|ninja_form)\s+id\s*=\s*["\']?\d+["\']?[^\]]*\])\s*$/s',

@@ -829,13 +829,13 @@ it('strips link targets in every excluded block, wherever the earlier ones chang
 it('turns double-encoded entities above 127 into the wrong bytes when it applies WpAutoP', function (): void {
     textProcessorForBardFakes();
 
-    // Characterization of #154: chr() wraps 8212 to the control character U+0014
-    // and turns 233 into a lone byte that comes out as `?`; without WpAutoP both
-    // decode correctly
+    // Characterization of #154: chr() wraps 8212 to the control character U+0014,
+    // which libxml keeps on macOS and drops on the CI runner, and turns 233 into a
+    // lone byte that comes out as `?`; without WpAutoP both decode correctly
     $withAutoP = textProcessorForBard('<p>A &amp;#8212; B &amp;#233; C</p>', autoP: true);
     $without = textProcessorForBard('<p>A &amp;#8212; B &amp;#233; C</p>');
 
-    expect(textProcessorForBardPath($withAutoP, [0, 'content', 0, 'text']))->toBe("A \x14 B ? C")
+    expect(textProcessorForBardPath($withAutoP, [0, 'content', 0, 'text']))->toBeIn(["A \x14 B ? C", 'A  B ? C'])
         ->and(textProcessorForBardPath($without, [0, 'content', 0, 'text']))->toBe("A \u{2014} B \u{00E9} C");
 });
 
@@ -1025,4 +1025,14 @@ it('imports an attribute value only up to its first escaped quote', function ():
 
     // Characterization of #157
     expect(textProcessorForBard('<p id="say &quot;hi&quot; now">x</p>'))->toBe([textProcessorForBardParagraph('x', 'say ')]);
+});
+
+it('trims a NUL from the edges of a shortcode block in content that is not valid UTF-8', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->inContentResult = '<p>Converted</p>';
+
+    // normalizeUtf8() leaves invalid UTF-8 unchanged, so the NUL reaches the block
+    textProcessorForBard("<!-- wp:shortcode --> \0 [gravityform id=\"1\" title=\"\xff\"] \0 <!-- /wp:shortcode -->");
+
+    expect(array_column($fakes['shortcode']->inContent, 'content'))->toBe(["[gravityform id=\"1\" title=\"\xff\"]"]);
 });

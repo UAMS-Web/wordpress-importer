@@ -97,12 +97,14 @@ it('keeps characters across the Unicode range, up to U+10FFFF', function (string
     'U+10FFFF' => ["\u{10FFFF}"],
 ]);
 
-it('reads U+0080 as the euro sign, as HTML reads the entity it is encoded to', function (): void {
-    // libxml reads &#128; as Windows-1252, as browsers do. processForBard() strips
-    // U+0080 to U+009F before loading, so only a direct caller meets this.
+it('does not keep U+0080 as itself', function (): void {
+    // It is encoded to &#128;, which libxml 2.15.4 on macOS reads as the euro sign
+    // (Windows-1252, as browsers do) and the CI runner's libxml drops.
+    // processForBard() strips U+0080 to U+009F before loading, so only a direct
+    // caller meets this.
     $doc = TextProcessor::loadHtml("<p>a\u{0080}b</p>");
 
-    expect($doc->getElementsByTagName('p')->item(0)?->textContent)->toBe("a\u{20AC}b");
+    expect($doc->getElementsByTagName('p')->item(0)?->textContent)->toBeIn(["a\u{20AC}b", 'ab']);
 });
 
 it('keeps a DEL character as it was', function (): void {
