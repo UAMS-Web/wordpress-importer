@@ -73,7 +73,7 @@ composer stan    # phpstan analyse --memory-limit=-1
 composer ci      # @stan, pint --test, @test — aborts at the first failure
 ```
 
-**Remote CI is off.** `.github/workflows/ci.yml` is gated behind the `RUN_REMOTE_CI` org-budget kill-switch, so its jobs report `skipped`. Validation runs locally:
+**Remote CI runs on every pull request, and `main` requires three checks: `CI`, `Attribution footer` and `Closing keywords`** (#163), the same three the Statamic add-ons require. `CI` is the last job in `.github/workflows/ci.yml`; it needs every other job and fails unless each one succeeded, so a skipped or cancelled job fails it. Add a new job to its `needs:` list in the same change; `scripts/ci-local.test.mjs` fails otherwise. The other two are the jobs of `check-attribution-footer.yml` and `check-closing-keyword-across-lines.yml`. Every job but `CI` carries `if: vars.RUN_REMOTE_CI != 'false'`. The organization's variable is scoped to private repositories and does not reach this one, so only a repository variable switches those jobs off, and `CI` then fails rather than passing. Validation also runs locally:
 
 ```bash
 node scripts/ci-local.mjs                      # every job, in this checkout
@@ -155,7 +155,7 @@ Distinct from [`current-content-is-not-the-corpus`](.claude/rules/current-conten
 - [`current-content-is-not-the-corpus`](.claude/rules/current-content-is-not-the-corpus.md) — a zero-result grep of the host app's `content/` is a lead, not a conclusion. Enumerate every writer — this importer, the CP, host-app code — before calling a data shape absent.
 - [`an-empty-result-is-not-evidence`](.claude/rules/an-empty-result-is-not-evidence.md) — a search that finds nothing and one that could never find anything look identical. Run the expression against a known hit and publish the control with the claim.
 - [`impersonal-voice-in-github-artifacts`](.claude/rules/impersonal-voice-in-github-artifacts.md) — PR/issue bodies and comments all post under one account: no `I`/`my`/`you`/`your`, and no vouching stance.
-- [`pre-merge-check`](.claude/rules/pre-merge-check.md) — a pull request is not ready because it was ready; re-verify at the merge. Remote CI is off and `main`'s protection requires no check, so the chain re-run at the merge is the only gate.
+- [`pre-merge-check`](.claude/rules/pre-merge-check.md) — a pull request is not ready because it was ready; re-verify at the merge. `main` requires the remote `CI`, `Attribution footer` and `Closing keywords` checks, and the chain re-run at the merge still gates it.
 - [`american-english-prose`](.claude/rules/american-english-prose.md) — American English for prose; `"language": "en"` in `cspell.json` enforces it, and a `project-words.txt` entry overriding it needs a stated reason.
 - [`cutting-releases`](.claude/rules/cutting-releases.md) — when to tag (see below).
 - [`closing-a-ticket`](.claude/rules/closing-a-ticket.md) — never push to `main`; tick acceptance criteria as they are met and name the ones you cannot; move the board card; give residue a ticket.

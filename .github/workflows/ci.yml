@@ -13,16 +13,36 @@ concurrency:
 permissions:
   contents: read
 
-# RUN_REMOTE_CI — org-budget kill-switch, mirroring uams-statamic (UAMS-Web/uams-statamic#980).
-# GitHub Actions minutes bill to the shared UAMS-Web org pool. Set an Actions
-# variable `RUN_REMOTE_CI` to `false` (org- or repo-level) to make every job
-# below report `skipped` and burn zero runner minutes; unset (or any other
-# value) runs CI as normal. The rulesets on `main` require a pull request but no
-# status check, so a skipped job never blocks a merge.
+# REQUIRED CHECKS (#163). A ruleset for this repository requires three contexts
+# on `main`: `CI`, `Attribution footer` and `Closing keywords`, the same three the
+# Statamic add-ons and `uamswp-migration-api` require. `CI` is the last job in
+# this file; it `needs:` every other job, runs `if: always()`, and fails unless
+# every needed job reports `success` (a `skipped` or `cancelled` job fails it).
+# The ruleset therefore never lists a job by name: renaming a job changes nothing
+# it requires, and a new job is required once it is added to the `needs:` list of
+# `CI`. Add it there in the same change; `scripts/ci-local.test.mjs` fails
+# otherwise. Do not rename `CI`. The other two are the jobs of
+# `check-attribution-footer.yml` and `check-closing-keyword-across-lines.yml`.
+# Job names must stay unique across every workflow in this repository.
+#
+# RUN_REMOTE_CI: off switch, mirroring uams-statamic (UAMS-Web/uams-statamic#980).
+# Every job but `CI` is gated on `if: vars.RUN_REMOTE_CI != 'false'`. Set an
+# Actions variable `RUN_REMOTE_CI` to `false` and they report `skipped` without
+# being dispatched to a runner, so `CI` fails and no pull request can merge until
+# it is unset. Unset (or any other value) runs CI as normal, which is the default.
+#
+#   - The switch began as a budget kill-switch for private repositories, whose
+#     Actions minutes bill to one organization pool. This repository is public,
+#     so its runs do not, and the organization variable (scoped to private
+#     repositories) does not reach it: `actions/organization-variables` returned
+#     `total_count` 0 here on 2026-10-27. Only a REPOSITORY variable turns it off.
+#   - A job skipped by its `if:` reports success to a required check, which is
+#     why the ruleset requires `CI` and never a gated job.
 #
 # PARITY: `local-ci.json`, the shared local CI runner's job list (wordpress-importer-archive#1319), reproduces
-# the jobs below for local runs (no Docker, no act, no Actions minutes), used when
-# this switch is off. Run it with `node scripts/ci-local.mjs`. The two are kept in
+# the jobs below for local runs (no Docker, no act, no Actions minutes). `CI` has
+# no counterpart there: it aggregates the remote jobs into the check the ruleset
+# requires. Run it with `node scripts/ci-local.mjs`. The two are kept in
 # lockstep BY HAND; a change to a job's run command here must be mirrored there
 # (and vice versa). Each job's `run` step is flagged `# PARITY:`.
 # `scripts/ci-local.test.mjs` checks the job names and the commands that can be
@@ -343,3 +363,34 @@ jobs:
       # PARITY: mirrored by the `rector` job in local-ci.json.
       - name: Run Rector
         run: vendor/bin/rector --dry-run --no-progress-bar
+
+  # The one check the ruleset requires from this workflow (#163). Keep `needs:`
+  # listing every other job in the file. Not gated on RUN_REMOTE_CI: it must run,
+  # and fail, when the switch skips the other jobs.
+  ci:
+    name: CI
+    needs:
+      - validate
+      - pest
+      - pint
+      - spell
+      - node-test
+      - python-test
+      - phpstan
+      - rector
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # `skipped` and `cancelled` fail as well as `failure`: a job that did not run proved nothing.
+      - name: Every needed job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Needed job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::A needed job reported $result"
+              exit 1
+            fi
+          done
