@@ -10,6 +10,7 @@ use DOMElement;
 use DOMNode;
 use DOMText;
 use Illuminate\Support\Facades\Log;
+use SplObjectStorage;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\AcfGalleryBlockProcessor;
@@ -828,6 +829,14 @@ class TextProcessor
         // Initialize array to track processed nodes by HTML content
         $processedNodes = [];
 
+        // ---
+        // Nodes of this document a block has already consumed, held by identity. A block's
+        // skipCount and its processed node name particular nodes, so matching them by HTML
+        // would also skip a later node that only happens to share their markup (#152).
+        // ---
+        /** @var SplObjectStorage<DOMNode, null> $consumedNodes */
+        $consumedNodes = new SplObjectStorage;
+
         // Loop through pre-processed nodes to build tracking array
         foreach ($preProcessedNodes as $preProcessedNode) {
             // Skip non-node values from preprocessed node input
@@ -868,7 +877,8 @@ class TextProcessor
 
             // Check if node has already been processed
             if (
-                \in_array(
+                $consumedNodes->contains($node)
+                || \in_array(
                     $nodeHtml,
                     $processedNodes,
                     true
@@ -1009,23 +1019,24 @@ class TextProcessor
                                 // empty string, which no node's HTML equals.
                                 // @pest-mutate-ignore: InstanceOfToTrue
                                 if ($processedNode instanceof DOMNode) {
-                                    $processedNodes[] = self::nodeHtml(
-                                        $doc,
-                                        $processedNode
-                                    );
+                                    $consumedNodes->attach($processedNode);
                                 }
 
-                                // Check if the result specifies nodes to skip
+                                // ---
+                                // Check if the result specifies nodes to skip. Every processor
+                                // counts the opening comment, which is this node, so the
+                                // siblings to skip are one fewer (#152).
+                                // ---
                                 if (\is_int($skipCount)) {
-                                    // Skip the specified number of nodes
-                                    for ($j = 0; $j < $skipCount; $j++) {
+                                    // Skip the block's nodes after its opening comment
+                                    for ($j = 1; $j < $skipCount; $j++) {
                                         // Get the next sibling node
                                         $nextNode = $node->nextSibling;
 
                                         // Check if the next node exists
                                         if ($nextNode instanceof DOMNode) {
                                             // Mark the next node as processed
-                                            $processedNodes[] = $doc->saveHTML($nextNode);
+                                            $consumedNodes->attach($nextNode);
 
                                             // Move to the next node
                                             $node = $nextNode;
@@ -1113,12 +1124,18 @@ class TextProcessor
                                         ) === 1
                                     ) {
                                         // Mark the next node as processed
-                                        $processedNodes[] = $doc->saveHTML($nextNode);
+                                        $consumedNodes->attach($nextNode);
                                     }
                                 }
                             }
 
-                            // The block is handled, so move to the next node
+                            // ---
+                            // The block is handled, so move to the next node. Leaving only
+                            // the processor loop would add the opening comment to the
+                            // accumulated content, which the Bard parser strips, so the two
+                            // give the same content.
+                            // ---
+                            // @pest-mutate-ignore: DecrementInteger
                             continue 2;
                         }
                     }
