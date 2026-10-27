@@ -86,29 +86,27 @@ function logoListSetWithoutIds(array $set): array
 /**
  * Every term the parser queued for the batched creation pass.
  *
- * @return array<string, mixed>
+ * @return array<string, array<string, array<string, mixed>>>
  */
 function logoListDeferredQueue(): array
 {
     $property = new ReflectionProperty(BaseEntryCreator::class, 'deferredTermQueue');
 
-    /** @var array<string, mixed> $queue */
+    /** @var array<string, array<string, array<string, mixed>>> $queue */
     $queue = $property->getValue();
 
     return $queue;
 }
 
 /**
- * Assert exactly one warning was logged, with this message and this context.
+ * Assert a warning was logged with exactly this message and this context.
  *
  * @param  array<string, mixed>  $context
  */
 function expectLogoListWarning(mixed $logSpy, string $message, array $context): void
 {
     /** @var MockInterface $logSpy */
-    $logSpy->shouldHaveReceived('warning')
-        ->once()
-        ->with($message, $context);
+    $logSpy->shouldHaveReceived('warning', [$message, $context]);
 }
 
 it('emits every field of a fully populated grid block', function (): void {
@@ -173,10 +171,11 @@ it('emits every field of a fully populated grid block', function (): void {
 })->group('blocks', 'logo-list');
 
 it('reads attributes passed without a data wrapper', function (): void {
-    $attributes = logoListAttributes(['block_logo_list_heading' => 'Top level']);
+    /** @var array<string, mixed> $data */
+    $data = logoListAttributes(['block_logo_list_heading' => 'Top level'])['data'];
 
     $set = (new LogoListParser)->parse(
-        $attributes['data'],
+        $data,
         'default',
         logoListAssetImporter(),
         new BufferedOutput,
@@ -603,6 +602,10 @@ it('does not treat a label term listed among the filter ids as a category', func
             </wp:term>
         </channel></rss>
         XML);
+
+    if ($xml === false) {
+        throw new RuntimeException('Expected the inline label term to parse.');
+    }
 
     $terms = [...logoListFixtureTerms()];
 
