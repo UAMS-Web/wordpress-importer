@@ -288,7 +288,7 @@ class FormPluginCoordinator
 
             // Filter to only form IDs that exist in the data
             $gravityFormIds = \array_intersect(
-                \array_map(strval(...), $gravityFormIds),
+                $gravityFormIds,
                 $availableGravityFormIds
             );
         }
@@ -308,7 +308,7 @@ class FormPluginCoordinator
 
             // Filter to only form IDs that exist in the data
             $formidableFormIds = \array_intersect(
-                \array_map(strval(...), $formidableFormIds),
+                $formidableFormIds,
                 $availableFormidableFormIds
             );
         }
@@ -328,7 +328,7 @@ class FormPluginCoordinator
 
             // Filter to only form IDs that exist in the data
             $ninjaFormIds = \array_intersect(
-                \array_map(strval(...), $ninjaFormIds),
+                $ninjaFormIds,
                 $availableNinjaFormIds
             );
         }
@@ -525,11 +525,6 @@ class FormPluginCoordinator
     ): void {
         $referenced = $this->referencedFormPages[$pluginName] ?? [];
 
-        // Nothing referenced this plugin, so there is nothing to reconcile.
-        if ($referenced === []) {
-            return;
-        }
-
         // No export supplied: the operator declined the prompt and knows why.
         if ($formsData === null || $formsData === []) {
             return;
@@ -544,7 +539,7 @@ class FormPluginCoordinator
             // in, while extractAvailableFormIds() yields strings. A strict comparison
             // between the two never matches, and would report every form as missing.
             if (! \in_array((string) $formId, $available, true)) {
-                $unsatisfied[(string) $formId] = $pageSlugs;
+                $unsatisfied[$formId] = $pageSlugs;
             }
         }
 
@@ -681,6 +676,9 @@ class FormPluginCoordinator
                 'collection',
                 $collectionHandle
             );
+            // Statamic's where() is untyped, so PHPStan needs this guard, but it always returns
+            // a query builder, so neither half can be false and joining them with `and` changes nothing.
+            // @pest-mutate-ignore: BooleanOrToBooleanAnd
             if (
                 ! \is_object($collectionQuery)
                 || ! method_exists(
@@ -695,6 +693,8 @@ class FormPluginCoordinator
                 'site',
                 $siteHandle
             );
+            // The same guard on the second where(), for the same reason.
+            // @pest-mutate-ignore: BooleanOrToBooleanAnd
             if (
                 ! \is_object($siteQuery)
                 || ! method_exists(
@@ -716,12 +716,17 @@ class FormPluginCoordinator
 
             // Loop through all entries in this collection
             foreach ($entries as $entry) {
+                // An entry query yields only entries; the check narrows the untyped get() for PHPStan.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if (! $entry instanceof StatamicEntry) {
                     continue;
                 }
 
                 // Get entry data as array
                 $entryData = $entry->data();
+                // An entry's data() is always a collection, so this guard, like the query guards,
+                // cannot see either half false.
+                // @pest-mutate-ignore: BooleanOrToBooleanAnd
                 if (
                     ! \is_object($entryData)
                     || ! method_exists(
@@ -760,16 +765,10 @@ class FormPluginCoordinator
 
                     // Carry unresolved form references up to the entry, which is the only frame
                     // that knows which entry they belong to (wordpress-importer-archive#1162).
-                    $entryUnresolvedNotes = [
-                        ...$entryUnresolvedNotes,
-                        ...$contentUnresolved,
-                    ];
+                    $entryUnresolvedNotes = $contentUnresolved;
 
-                    // Merge content form updates into entry form updates
-                    $entryFormUpdates = [
-                        ...$entryFormUpdates,
-                        ...$contentFormUpdates,
-                    ];
+                    // Start the entry's form updates with the content's
+                    $entryFormUpdates = $contentFormUpdates;
 
                     // Check if content was updated
                     if ($updatedContent !== $data['content']) {
@@ -870,7 +869,7 @@ class FormPluginCoordinator
      * Naming the entry is what makes this actionable. The form id is a dangling pointer; the entry
      * is the page an editor opens to fix the embed.
      *
-     * @param  array<int, mixed>  $notes  The unresolved `import_wordpress_notes` values
+     * @param  array<int, string>  $notes  The unresolved `import_wordpress_notes` values
      */
     private function warnUnresolvedFormReferences(
         StatamicEntry $entry,
@@ -878,13 +877,10 @@ class FormPluginCoordinator
     ): void {
         // Deduplicate: one entry can carry the same dead embed in several sets, and reporting it
         // once per set tells an editor nothing extra.
-        $unique = \array_values(\array_filter(
-            \array_unique(\array_map(
-                static fn (mixed $note): string => \is_string($note) ? $note : '',
-                $notes
-            )),
+        $unique = \array_filter(
+            \array_unique($notes),
             static fn (string $note): bool => $note !== ''
-        ));
+        );
 
         $entryId = $entry->id();
 
@@ -914,16 +910,13 @@ class FormPluginCoordinator
      * @return array{
      *   0: array<int|string, mixed>,
      *   1: array<int, array{form_note: string, form_handle: string}>,
-     *   2: array<int, mixed>
+     *   2: array<int, string>
      * } Tuple containing [updated array, array of form updates, unresolved form notes]
      */
     private function updateAllFormHandlesInArray(
         array $array,
         array $formHandleMap
     ): array {
-        // Initialize flag to track if array was updated
-        $updated = false;
-
         // Initialize result array
         $result = [];
 
@@ -996,9 +989,6 @@ class FormPluginCoordinator
                             'values' => $updatedValues,
                         ],
                     ];
-
-                    // Mark array as updated
-                    $updated = true;
                 } else { // Otherwise, recursively process nested arrays
                     // ---
                     // Recursively update nested arrays
@@ -1023,17 +1013,8 @@ class FormPluginCoordinator
                         ...$nestedUnresolved,
                     ];
 
-                    // Check if nested array was updated
-                    if ($nestedResult !== $value) {
-                        // Store updated nested result
-                        $result[$key] = $nestedResult;
-
-                        // Mark array as updated
-                        $updated = true;
-                    } else { // Otherwise, store original value
-                        // Store original value unchanged
-                        $result[$key] = $value;
-                    }
+                    // Store the nested result, which is the original array itself when nothing in it resolved
+                    $result[$key] = $nestedResult;
                 }
             } else { // Otherwise, store non-array value unchanged
                 // Store non-array value unchanged
@@ -1041,15 +1022,13 @@ class FormPluginCoordinator
             }
         }
 
-        // Return updated array and form updates if changes were made, otherwise return original and
-        // empty updates.
-        //
-        // **`$unresolvedNotes` is returned on BOTH branches deliberately.** An entry whose only form
-        // set is unresolved never sets `$updated` — the guard `continue`s before it — so folding the
-        // notes into the truthy branch would discard them in exactly the case this fix exists for.
-        return $updated
-            ? [$result, $formUpdates, $unresolvedNotes]
-            : [$array, [], $unresolvedNotes];
+        // An array with no resolved set comes back as the original array itself, so the caller's
+        // `!==` check is a reference comparison rather than a deep one, and a value that never
+        // equals itself (NAN) cannot mark an untouched entry as rewritten. Its unresolved notes
+        // still travel up: an entry whose only form set is unresolved must still be reported.
+        return $formUpdates === []
+            ? [$array, [], $unresolvedNotes]
+            : [$result, $formUpdates, $unresolvedNotes];
     }
 
     /**
@@ -1082,22 +1061,14 @@ class FormPluginCoordinator
     /**
      * Resolves a created Statamic form handle from plugin coordinator results.
      *
-     * @param  mixed  $result  The plugin coordinator creation result
-     * @return ?string The created form handle, or null when unavailable
+     * Every caller checks for a Form first, so this only narrows the handle to a string.
+     *
+     * @param  Form  $result  The created form
+     * @return ?string The created form handle, or null when it has none
      */
     private function resolveFormHandle(
-        mixed $result
+        Form $result
     ): ?string {
-        if (
-            ! \is_object($result)
-            || ! method_exists(
-                $result,
-                'handle'
-            )
-        ) {
-            return null;
-        }
-
         return $this->normalizeIdentifier(
             $result->handle()
         );
