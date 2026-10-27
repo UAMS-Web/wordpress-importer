@@ -262,18 +262,8 @@ class WpGroupBlockProcessor implements BlockProcessorInterface
             return $this->containsOnlyTable($matches[2]);
         }
 
-        // Check if content contains a nested wp:group with table inside a div wrapper
-        if (
-            \preg_match(
-                '/^<div[^>]*>\s*<!--\s*wp:group\s*({.*?})?\s*-->\s*<div[^>]*>(.*?)<\/div>\s*<!--\s*\/wp:group\s*-->\s*<\/div>$/is',
-                $trimmed,
-                $matches
-            ) === 1
-        ) {
-            // Recursively check if the nested group content contains only a table
-            return $this->containsOnlyTable($matches[2]);
-        }
-
+        // A nested group inside a wrapper div needs no pattern of its own: any table
+        // it holds is already matched by the wrapper patterns above.
         // Return false if no table pattern matches
         return false;
     }

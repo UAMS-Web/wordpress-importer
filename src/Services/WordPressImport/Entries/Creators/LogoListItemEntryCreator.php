@@ -20,6 +20,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStruc
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
@@ -174,7 +175,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         $skippedCount = 0;
 
         // Loop through all logo-list-item posts from the XML stream
-        foreach ($xmlStreamParser->streamItems('logo-list-item') as $logoListItem) {
+        foreach (ImportProgress::track($output, 'logo-list-item', $xmlStreamParser->streamItems('logo-list-item'), $xmlStreamParser->countItems('logo-list-item')) as $logoListItem) {
             // Attempt to process the logo list item
             try {
                 // Process the current logo list item and get the result

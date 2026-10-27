@@ -81,6 +81,8 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
         // Check if the comment content matches the wp:block pattern
         return \preg_match(
             $pattern,
+            // A comment node always carries a string value, so the fallback never applies.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $node->nodeValue ?? ''
         ) === 1;
     }
@@ -117,16 +119,6 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
             $attributes['ref'] ?? null
         );
 
-        // ---
-        // Track wp_block post ID for import triggering
-        // ---
-
-        // Check if wp_block post ID is available
-        if ($wpBlockPostId !== '') {
-            // Add wp_block post ID to tracking cache
-            static::addWpBlockPostId($wpBlockPostId);
-        }
-
         // Check if wp_block post ID is available
         if ($wpBlockPostId === '') {
             // Enhance log context with entry information
@@ -150,6 +142,9 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
             // Return null if no ref attribute available
             return null;
         }
+
+        // Track wp_block post ID for import triggering
+        static::addWpBlockPostId($wpBlockPostId);
 
         // Look up the Statamic entry ID for this wp_block post ID
         $entryId = WpBlockRegistry::getEntryId($wpBlockPostId);
@@ -347,36 +342,33 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
         // Uses same core pattern as canProcess() but includes XML comment markers
         $pattern = '/<!--\s*wp:block\s*({.+?})\s*(?:\/)?-->/s';
 
-        // Search for wp:block blocks in content
-        if (
-            \preg_match_all(
-                $pattern,
-                $contentEncoded,
-                $matches,
-                PREG_SET_ORDER
-            ) > 0
-        ) {
-            // Extract wp_block post IDs from matches
-            foreach ($matches as $match) {
-                // Decode JSON attributes to extract ref value (same approach as process())
-                $decodedAttributes = \json_decode(
-                    $match[1],
-                    true,
-                    512
-                );
-                $attributes = \is_array($decodedAttributes) ? $decodedAttributes : [];
+        // Search for wp:block blocks in content; with no match the loop does nothing
+        \preg_match_all(
+            $pattern,
+            $contentEncoded,
+            $matches,
+            PREG_SET_ORDER
+        );
 
-                // Check if ref attribute exists (same extraction as process())
-                if (isset($attributes['ref'])) {
-                    $ref = self::extractScalarString($attributes['ref']);
+        // Extract wp_block post IDs from matches
+        foreach ($matches as $match) {
+            // Decode JSON attributes to extract ref value (same approach as process())
+            $decodedAttributes = \json_decode(
+                $match[1],
+                true
+            );
+            $attributes = \is_array($decodedAttributes) ? $decodedAttributes : [];
 
-                    if ($ref === '') {
-                        continue;
-                    }
+            // Check if ref attribute exists (same extraction as process())
+            if (isset($attributes['ref'])) {
+                $ref = self::extractScalarString($attributes['ref']);
 
-                    // Add wp_block post ID to array (convert to string)
-                    $wpBlockPostIds[] = $ref;
+                if ($ref === '') {
+                    continue;
                 }
+
+                // Add wp_block post ID to array (convert to string)
+                $wpBlockPostIds[] = $ref;
             }
         }
 
@@ -489,7 +481,9 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
         // Get all wp_block mappings from registry
         $wpBlockMappings = WpBlockRegistry::getAllMappings();
 
-        // Extract wp_block post IDs from mappings
+        // Extract wp_block post IDs from mappings. updateBardSetsInArray() reads
+        // the registry rather than this list, so keys and values behave alike.
+        // @pest-mutate-ignore: UnwrapArrayKeys
         $wpBlockPostIds = \array_keys($wpBlockMappings);
 
         // Check if any wp_blocks were imported
@@ -658,10 +652,7 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
         array $array,
         array $wpBlockPostIds
     ): array {
-        // Initialize flag to track if array was updated
-        $updated = false;
-
-        // Initialize result array
+        // Initialize result array; it equals the input when nothing is replaced
         $result = [];
 
         // Loop through each key-value pair in the array
@@ -700,8 +691,6 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
                     // "wp_block post ID X"
                     // ---
                     if (
-                        $importNote !== ''
-                        &&
                         \preg_match(
                             '/wp_block post ID (\d+)/',
                             $importNote,
@@ -740,9 +729,6 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
                                     'values' => $updatedValues,
                                 ],
                             ];
-
-                            // Mark array as updated
-                            $updated = true;
                         } else { // Otherwise
                             // Keep the placeholder if entry ID not found
                             $result[$key] = $value;
@@ -771,8 +757,6 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
 
                     // Check if import_wordpress_notes matches the pattern "wp_block post ID X"
                     if (
-                        $importNote !== ''
-                        &&
                         \preg_match(
                             '/wp_block post ID (\d+)/',
                             $importNote,
@@ -805,74 +789,6 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
 
                             // Store updated replicator set
                             $result[$key] = $replicatorValue;
-
-                            // Mark array as updated
-                            $updated = true;
-                        } else { // Otherwise
-                            // Keep the placeholder if entry ID not found
-                            $result[$key] = $value;
-                        }
-                    } else { // Otherwise
-                        // Keep the value if pattern doesn't match
-                        $result[$key] = $value;
-                    }
-                } elseif (
-                    isset($value['type'])
-                    && $value['type'] === 'uamsweb_block_reusable_content_landing_page'
-                    && isset($value['import_wordpress_notes'])
-                ) {
-                    // ---
-                    // Check if this is a replicator set with reusable_content type and
-                    // import_wordpress_notes
-                    // ---
-
-                    // Extract wp_block post ID from import_wordpress_notes
-                    $importNote = self::extractScalarString(
-                        $value['import_wordpress_notes']
-                    );
-
-                    // Initialize wp_block post ID variable
-                    $wpBlockPostId = null;
-
-                    // Check if import_wordpress_notes matches the pattern "wp_block post ID X"
-                    if (
-                        $importNote !== ''
-                        &&
-                        \preg_match(
-                            '/wp_block post ID (\d+)/',
-                            $importNote,
-                            $matches
-                        ) === 1
-                    ) {
-                        // Extract wp_block post ID from regex match
-                        $wpBlockPostId = $matches[1];
-                    }
-
-                    // Check if we have an entry ID for this wp_block post ID
-                    if ($wpBlockPostId !== null) {
-                        // Get entry ID for wp_block post ID from registry
-                        $entryId = WpBlockRegistry::getEntryId($wpBlockPostId);
-
-                        // ---
-                        // Update the replicator set to use content array instead of import_wordpress_notes
-                        // ---
-
-                        // Check if entry ID was found
-                        if ($entryId !== null && $entryId !== '') {
-                            // Copy replicator set into a mutable array
-                            $replicatorValue = $value;
-
-                            // Remove import_wordpress_notes from replicator set
-                            unset($replicatorValue['import_wordpress_notes']);
-
-                            // Set content array with entry ID
-                            $replicatorValue['content'] = [$entryId];
-
-                            // Store updated replicator set
-                            $result[$key] = $replicatorValue;
-
-                            // Mark array as updated
-                            $updated = true;
                         } else { // Otherwise
                             // Keep the placeholder if entry ID not found
                             $result[$key] = $value;
@@ -883,22 +799,10 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
                     }
                 } else { // Otherwise
                     // Recursively update nested arrays
-                    $nestedResult = static::updateBardSetsInArray(
+                    $result[$key] = static::updateBardSetsInArray(
                         $value,
                         $wpBlockPostIds
                     );
-
-                    // Check if nested array was updated
-                    if ($nestedResult !== $value) {
-                        // Use updated nested result
-                        $result[$key] = $nestedResult;
-
-                        // Mark array as updated
-                        $updated = true;
-                    } else { // Otherwise
-                        // Keep original value if not updated
-                        $result[$key] = $value;
-                    }
                 }
             } else { // Otherwise
                 // Keep non-array values as-is
@@ -906,8 +810,8 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
             }
         }
 
-        // Return updated array if changes were made, otherwise return original
-        return $updated ? $result : $array;
+        // Return the rebuilt array
+        return $result;
     }
 
     /**
@@ -919,12 +823,7 @@ class WpBlockBlockProcessor implements BlockProcessorInterface
     private static function extractScalarString(
         mixed $value
     ): string {
-        // Return string values directly
-        if (\is_string($value)) {
-            return $value;
-        }
-
-        // Convert scalar values to strings
+        // Convert scalar values, strings included, to strings
         if (\is_scalar($value)) {
             return (string) $value;
         }

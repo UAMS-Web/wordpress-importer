@@ -14,7 +14,7 @@
  *
  * Subcommands:
  *   status              every tree, its branch, whether it is free, and any detected drift
- *   refresh <target>    reconcile vendor/ and node_modules/
+ *   refresh <target>    reconcile vendor/ (re-applying recorded patches) and node_modules/
  *   release <slot>      assert a clean tree, then detach to origin/main so the branch is free
  *   provision <slot>    create and bootstrap a slot from scratch
  *
@@ -30,6 +30,12 @@
  * alone, so a tree whose `node_modules/` is absent reports clean and then fails the `spell` job.
  * The stamp exists for `status` to judge drift, not to gate the install.
  *
+ * **The patches `patches.lock.json` records are judged from the files, not from the stamp (#113).**
+ * `composer install` treats a package already at its locked version as satisfied and does not
+ * re-apply a patch added since, and `cweagans/composer-patches` keeps no record in `vendor/` of what
+ * it applied. So `status` asks each patch whether it reverse-applies to the installed package, and
+ * `refresh` and `provision` reinstall exactly the packages where one does not.
+ *
  * Exit codes make it usable as a shell guard:
  *   0  the operation completed, or `status` found no drift
  *   1  refused, or `status` found drift (with `--check`)
@@ -44,9 +50,9 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { nodeModulesDrift } from './node-modules-drift.mjs';
 import { primaryCheckout } from './repo-root.mjs';
@@ -255,9 +261,9 @@ export function expectationsFor(kind, atRest = true) {
  * "`--check` can never exit 0" bug. Testing the halves in isolation cannot catch that, so the
  * composition is what gets tested.
  *
- * `probe` carries the measurements `driftReasons` reads — `composerHash`, `stampComposerHash`,
- * `behind` — plus `atRest`, which is not a measurement but the occupancy that
- * decides whether base position is judged at all.
+ * `probe` carries the measurements `driftReasons` reads (`composerHash`, `stampComposerHash`,
+ * `unpatched`, `unchecked`, `patchesLockUnreadable`, `behind`) plus `atRest`, which is not a
+ * measurement but the occupancy that decides whether base position is judged at all.
  *
  * @param  string  treePath
  * @param  string  repoRoot
@@ -424,6 +430,74 @@ export function installStaleReason(lockHash, stampHash) {
 }
 
 /**
+ * The patches a tree's `patches.lock.json` records, grouped by package.
+ *
+ * Returns null when the text is not a lock this script can read, so a corrupt file is reported
+ * rather than read as "no patches", which would certify every package as patched.
+ *
+ * @param  string  text  The contents of `patches.lock.json`
+ * @return ?array  `[{ package, patches: [{ url, depth }] }]`, in the lock's order
+ */
+export function recordedPatches(text) {
+    let lock;
+
+    try {
+        lock = JSON.parse(text);
+    } catch {
+        return null;
+    }
+
+    if (lock === null || typeof lock !== 'object' || lock.patches === null || typeof lock.patches !== 'object') {
+        return null;
+    }
+
+    const groups = [];
+
+    for (const [name, list] of Object.entries(lock.patches)) {
+        if (!Array.isArray(list) || list.some((patch) => typeof patch?.url !== 'string')) {
+            return null;
+        }
+
+        // The plugin records the `-p` depth it applied with; 1 is its own default.
+        const patches = list.map((patch) => ({ url: patch.url, depth: Number.isInteger(patch.depth) ? patch.depth : 1 }));
+
+        if (patches.length) {
+            groups.push({ package: name, patches });
+        }
+    }
+
+    return groups;
+}
+
+/**
+ * Sort the recorded packages by the state of their patch stacks.
+ *
+ * `stateOf` is passed in so the decision is testable without a `vendor/`; `patchDrift` supplies
+ * the real probe. A package whose stack could not be checked is kept apart from one whose stack is
+ * missing, because the remedy differs: a reinstall fixes the second and cannot fix the first.
+ *
+ * @param  array     groups   What `recordedPatches` returned
+ * @param  function  stateOf  `(package, patches) => ({ state: 'applied' | 'missing' | 'unchecked', reason? })`
+ * @return object  `{ unpatched: [name], unchecked: [{ package, reason }] }`, in the lock's order
+ */
+export function classifyPatchStacks(groups, stateOf) {
+    const unpatched = [];
+    const unchecked = [];
+
+    for (const group of groups) {
+        const result = stateOf(group.package, group.patches);
+
+        if (result.state === 'missing') {
+            unpatched.push(group.package);
+        } else if (result.state !== 'applied') {
+            unchecked.push({ package: group.package, reason: result.reason || 'unknown' });
+        }
+    }
+
+    return { unpatched, unchecked };
+}
+
+/**
  * Summarize every drift a tree is carrying, as human-readable reasons.
  *
  * Returns an empty array when the tree is current, so the caller can treat "no reasons" as the
@@ -444,6 +518,9 @@ export function installStaleReason(lockHash, stampHash) {
 export function driftReasons({
     composerHash = null,
     stampComposerHash = null,
+    unpatched = [],
+    unchecked = [],
+    patchesLockUnreadable = false,
     behind = null,
     expected = null,
 }) {
@@ -468,6 +545,20 @@ export function driftReasons({
 
         if (vendor) {
             reasons.push(`vendor: ${vendor}`);
+        }
+
+        // Named per package, because the remedy is a reinstall of exactly those packages.
+        if (unpatched.length) {
+            reasons.push(`vendor: recorded patches not applied to ${unpatched.join(', ')}`);
+        }
+
+        // Drift rather than a note: a stack nobody could check is not certified as applied.
+        for (const entry of unchecked) {
+            reasons.push(`vendor: recorded patches for ${entry.package} could not be checked (${entry.reason})`);
+        }
+
+        if (patchesLockUnreadable) {
+            reasons.push('vendor: patches.lock.json could not be read');
         }
     }
 
@@ -533,16 +624,17 @@ export function checkoutArgs(path, ref, { create = false } = {}) {
  * @param  array    args
  * @param  ?string  cwd
  * @param  mixed    stdio
+ * @param  ?object  env    Added to the inherited environment
  * @return object
  */
-function spawn(file, args, cwd, stdio) {
+function spawn(file, args, cwd, stdio, env = null) {
     const exe = which(file) || file;
     const shell = needsShell(exe);
 
     return spawnSync(
         shell ? winQuote(exe) : exe,
         shell ? args.map(winQuote) : args,
-        { cwd, stdio, shell, encoding: 'utf8' },
+        { cwd, stdio, shell, encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env },
     );
 }
 
@@ -639,6 +731,214 @@ function stampHashOf(treePath) {
     } catch {
         return null;
     }
+}
+
+/**
+ * The environment every `git apply` in the patch probe runs under.
+ *
+ * Both calls run in a scratch directory made inside the OS temporary directory, and that directory
+ * can sit inside a repository (a home directory kept in git, say). git would then adopt that
+ * repository and read a patch's paths relative to it, skipping every one outside the directory it
+ * runs in: `--numstat` reports nothing and `--reverse` exits 0. The ceiling stops git climbing
+ * into the temporary directory, so both read the paths relative to the scratch directory. It
+ * protects only a directory strictly below it, which is why neither call runs in `tmpdir()`.
+ *
+ * @return object
+ */
+function outsideAnyRepository() {
+    return { GIT_CEILING_DIRECTORIES: tmpdir() };
+}
+
+/**
+ * The paths a patch touches, relative to the package after its `-p` strip.
+ *
+ * Read with `git apply --numstat -z`, which parses the patch without applying it. Every field
+ * that is not a counted line is taken as a path too, so a rename is covered whether git emits one
+ * path for it or two (git 2.39.5 emits only the new one).
+ *
+ * @param  string  file   The patch file
+ * @param  number  depth
+ * @param  string  cwd    A scratch directory below the OS temporary directory
+ * @return ?array  The paths, or null when git could not read the patch
+ */
+function patchedPaths(file, depth, cwd) {
+    const result = spawn('git', ['apply', '--numstat', '-z', `-p${depth}`, file], cwd, ['ignore', 'pipe', 'ignore'], outsideAnyRepository());
+
+    if (result.status !== 0 || typeof result.stdout !== 'string') {
+        return null;
+    }
+
+    return result.stdout.split('\0').filter(Boolean).map((field) => {
+        const counted = field.split('\t');
+
+        return counted.length >= 3 ? counted.slice(2).join('\t') : field;
+    }).filter(Boolean);
+}
+
+/**
+ * Whether a package's recorded patches are all applied to the installed files.
+ *
+ * A patch that reverse-applies cleanly is present in the files, which is the only evidence there
+ * is: the plugin writes no record of what it applied. **The stack is judged as a whole, newest
+ * patch first,** because a later patch can change lines an earlier one wrote or rests on, and the
+ * earlier one then reverse-applies only to the file as it stood before the later one. So the files
+ * the patches touch are copied to a temporary directory and the patches reversed there in reverse
+ * order. Nothing in `vendor/` is touched.
+ *
+ * `missing` means a patch would not reverse (`git apply` exits 1). `unchecked` means the check
+ * itself could not run: a patch file that is not there, a touched file that could not be copied,
+ * or git failing to start or to read a patch. The two are kept apart because a reinstall repairs the first and only hides the second.
+ *
+ * @param  string  treePath
+ * @param  string  name      The package, as `vendor/name`
+ * @param  array   patches   `[{ url, depth }]` from `recordedPatches`, in the order they apply
+ * @return object  `{ state: 'applied' | 'missing' | 'unchecked', reason? }`
+ */
+export function patchStackState(treePath, name, patches) {
+    const packageDir = join(treePath, 'vendor', ...name.split('/'));
+    const files = patches.map((patch) => (isAbsolute(patch.url) ? patch.url : join(treePath, patch.url)));
+    const absent = files.find((file) => !existsSync(file));
+
+    if (absent) {
+        return { state: 'unchecked', reason: `patch file not found: ${absent}` };
+    }
+
+    const scratch = mkdtempSync(join(tmpdir(), 'wt-slots-patch-'));
+
+    try {
+        const touched = new Set();
+
+        for (const [index, patch] of patches.entries()) {
+            const paths = patchedPaths(files[index], patch.depth, scratch);
+
+            if (paths === null) {
+                return { state: 'unchecked', reason: `git could not read ${patch.url}` };
+            }
+
+            paths.forEach((path) => touched.add(path));
+        }
+
+        // A path the package does not have is left out, so a patch that creates a file reads as
+        // missing when the file is not there.
+        for (const path of touched) {
+            const source = join(packageDir, path);
+
+            if (existsSync(source)) {
+                // A file that cannot be read leaves the stack unjudged; thrown, it would end
+                // `status` for every tree, verdict line included.
+                try {
+                    mkdirSync(dirname(join(scratch, path)), { recursive: true });
+                    copyFileSync(source, join(scratch, path));
+                } catch (error) {
+                    return { state: 'unchecked', reason: `could not copy ${path}: ${error.code || error.message}` };
+                }
+            }
+        }
+
+        for (let index = patches.length - 1; index >= 0; index--) {
+            const result = spawn('git', ['apply', '--reverse', `-p${patches[index].depth}`, files[index]], scratch, ['ignore', 'ignore', 'pipe'], outsideAnyRepository());
+
+            if (result.error) {
+                return { state: 'unchecked', reason: `git could not be started: ${result.error.message}` };
+            }
+
+            if (result.status === 1) {
+                return { state: 'missing' };
+            }
+
+            if (result.status !== 0) {
+                return { state: 'unchecked', reason: `git apply exited ${result.status} on ${patches[index].url}` };
+            }
+        }
+
+        return { state: 'applied' };
+    } finally {
+        rmSync(scratch, { recursive: true, force: true });
+    }
+}
+
+/**
+ * Which packages in a tree are missing a patch its `patches.lock.json` records.
+ *
+ * Two cases are not judged, each for a reason:
+ *
+ *   - a package absent from `vendor/` has nothing to patch, and a tree with no install is
+ *     already reported by the install stamp;
+ *   - a stack holding a patch recorded by URL rather than by path has no file on disk to compare
+ *     against. This repository records none; one added later would go unjudged here rather than
+ *     pin `--check` at 1.
+ *
+ * @param  string  treePath
+ * @return object  `{ unpatched, unchecked, patchesLockUnreadable }`
+ */
+export function patchDrift(treePath) {
+    const lockFile = join(treePath, 'patches.lock.json');
+
+    if (!existsSync(lockFile)) {
+        return { unpatched: [], unchecked: [], patchesLockUnreadable: false };
+    }
+
+    const groups = recordedPatches(readFileSync(lockFile, 'utf8'));
+
+    if (groups === null) {
+        return { unpatched: [], unchecked: [], patchesLockUnreadable: true };
+    }
+
+    const judged = groups.filter((group) => existsSync(join(treePath, 'vendor', ...group.package.split('/')))
+        && !group.patches.some((patch) => patch.url.includes('://')));
+
+    return { ...classifyPatchStacks(judged, (name, patches) => patchStackState(treePath, name, patches)), patchesLockUnreadable: false };
+}
+
+/**
+ * Reinstall every package whose recorded patches are not applied, then confirm they are.
+ *
+ * Only the drifted packages are reinstalled: a reinstall deletes and re-extracts the package, which
+ * is wasted work on one already patched. `composer reinstall` runs the plugin's install hook, which
+ * is what `composer install` skips for a package at its locked version (#113). A stack that could
+ * not be checked stops the command before anything is reinstalled, since a reinstall cannot show
+ * the stack is applied when the check itself does not run.
+ *
+ * `reinstall` and `write` are parameters so the repair is testable without Composer.
+ *
+ * @param  string    path
+ * @param  object    io  `{ reinstall: (name) => void, write: (text) => void }`
+ * @return void
+ */
+export function reapplyPatches(path, {
+    reinstall = (name) => run('composer', ['reinstall', name, '--no-interaction'], path),
+    write = (text) => process.stdout.write(text),
+} = {}) {
+    const fail = (drift, when) => {
+        if (drift.patchesLockUnreadable) {
+            throw new Error('patches.lock.json could not be read; run `composer patches-relock` and retry');
+        }
+
+        if (drift.unchecked.length) {
+            throw new Error(`recorded patches could not be checked: ${drift.unchecked.map((entry) => `${entry.package} (${entry.reason})`).join(', ')}`);
+        }
+
+        if (when === 'after' && drift.unpatched.length) {
+            throw new Error(`recorded patches still not applied after reinstalling: ${drift.unpatched.join(', ')}`);
+        }
+    };
+
+    const before = patchDrift(path);
+
+    fail(before, 'before');
+
+    if (!before.unpatched.length) {
+        write('every patch in patches.lock.json is applied\n');
+
+        return;
+    }
+
+    for (const name of before.unpatched) {
+        write(`${name}: recorded patches not applied; reinstalling\n`);
+        reinstall(name);
+    }
+
+    fail(patchDrift(path), 'after');
 }
 
 /**
@@ -951,9 +1251,12 @@ function inspect(repoRoot) {
         const base = baseProbe(tree.path);
         const behind = base.behind;
         const atRest = slotOccupancy(tree) === 'free';
+        // Spawns git per package, so it runs only where `judgeTree` will read the result.
+        const patches = expectationsFor(treeKind(tree.path, repoRoot)).checkInstall ? patchDrift(tree.path) : {};
         const { kind, drift } = judgeTree(tree.path, repoRoot, {
             composerHash: composerHashOf(tree.path),
             stampComposerHash: stampHashOf(tree.path),
+            ...patches,
             behind,
             atRest,
         });
@@ -1339,6 +1642,7 @@ function commandRefresh(repoRoot, name) {
         // Idempotent and cheap — it reports "Nothing to install, update or remove" when the tree
         // is already current, so there is nothing to reason about before running it.
         run('composer', ['install', '--no-interaction'], path);
+        reapplyPatches(path);
         installNodeModules(path);
         writeInstallStamp(path);
     } else {
@@ -1456,6 +1760,7 @@ function commandProvision(repoRoot, name) {
     run('git', ['-C', repoRoot, 'worktree', 'add', '--detach', path, 'origin/main'], repoRoot);
 
     run('composer', ['install', '--no-interaction'], path);
+    reapplyPatches(path);
     installNodeModules(path);
     writeInstallStamp(path);
 

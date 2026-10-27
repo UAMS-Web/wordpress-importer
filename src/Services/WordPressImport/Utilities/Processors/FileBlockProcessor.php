@@ -147,7 +147,6 @@ class FileBlockProcessor implements BlockProcessorInterface
 
         // Create file set values using imported path or original URL
         $values = [
-            'type' => 'file',
             'file' => $importedPath, // Use imported path or original URL
             'title' => $title,
             'new_window_query' => true, // Default to new window for external URLs
@@ -159,15 +158,12 @@ class FileBlockProcessor implements BlockProcessorInterface
 
         // Loop through values to build data attributes
         foreach ($values as $key => $value) {
-            // Check if this is not the type key (excluded from attributes)
-            if ($key !== 'type') {
-                // Add data attribute for this value
-                $attrs .= \sprintf(
-                    ' data-set-attr-%s="%s"',
-                    htmlspecialchars($key),
-                    htmlspecialchars((string) $value)
-                );
-            }
+            // Add data attribute for this value
+            $attrs .= \sprintf(
+                ' data-set-attr-%s="%s"',
+                $key,
+                htmlspecialchars((string) $value)
+            );
         }
 
         // Create Tiptap-compatible HTML for file set
@@ -197,13 +193,11 @@ class FileBlockProcessor implements BlockProcessorInterface
             $node
         );
 
-        // Get the first matching div node or null if none found
-        $divNode = (
-            $divNodes !== false
-            && $divNodes->length > 0
-        )
-            ? $divNodes->item(0)
-            : null;
+        // Get the first matching div node, or null if none follows. query()
+        // returns false only for a malformed expression or context node, which
+        // this constant expression and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $divNode = $divNodes === false ? null : $divNodes->item(0);
 
         // Return processing result with HTML and node information
         return [

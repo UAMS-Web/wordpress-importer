@@ -21,8 +21,8 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingConte
  * parsing (Bard sets) or page builder replicator sets. Handles malformed
  * shortcodes by logging errors and skipping. Supports extensible handlers for
  * specific shortcodes and integrates with term tracking for validation. Tracks
- * unhandled shortcodes as unaddressed nodes, suppressing those within specific
- * unaddressed blocks (e.g., [table] in wp:tablepress/table).
+ * unhandled shortcodes as unaddressed nodes, except the recognized-but-dropped
+ * ones, which emit nothing.
  */
 class ShortcodeProcessor
 {
@@ -91,16 +91,6 @@ class ShortcodeProcessor
     protected $pageLink = '';
 
     /**
-     * Suppression list mapping unaddressed block types to shortcodes to ignore.
-     *
-     * @var array<string, string[]>
-     */
-    private array $suppressedShortcodes = [
-        'tablepress/table' => ['table'],
-        'formidable/simple-form' => ['formidable'],
-    ];
-
-    /**
      * Extracts shortcode data from text.
      *
      * Parses shortcode syntax (e.g., [show-people attr="value"]) into a
@@ -108,16 +98,31 @@ class ShortcodeProcessor
      *
      * @param  string  $content  The raw text containing shortcodes
      * @param  OutputInterface  $output  Console output for logging errors
-     * @return array<int|string, mixed> Array of shortcode data (e.g., [['name' => 'show-people', 'attributes' => [...], 'original' => '[...]']])
+     * @return array<int|string, mixed> Registered and dropped shortcodes only (e.g., [['name' => 'show-people', 'attributes' => [...], 'content' => '', 'original' => '[...]']])
      */
     public function extract(
         string $content,
         OutputInterface $output
     ): array {
+        return $this->extractShortcodes($content);
+    }
+
+    /**
+     * Extracts shortcode data from text, typed for this class's own callers.
+     *
+     * @param  string  $content  The raw text containing shortcodes
+     * @return list<array{name: string, attributes: array<string, string|true>, content: string, original: string}> Registered and dropped shortcodes only
+     */
+    private function extractShortcodes(
+        string $content
+    ): array {
         $shortcodes = [];
 
-        // Match shortcodes with optional content
-        $shortcodePattern = '/\[([^\s]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+        // Match shortcodes with optional content. The name stops at whitespace, "]"
+        // and "/", none of which WordPress's add_shortcode() accepts in a name, so a
+        // shortcode written with no attributes ends at its own bracket instead of
+        // running on to the next one in the text
+        $shortcodePattern = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
         preg_match_all(
             $shortcodePattern,
             $content,
@@ -135,7 +140,8 @@ class ShortcodeProcessor
                 continue;
             }
 
-            $attrString = \trim($match[2]);
+            // The attribute pattern skips surrounding whitespace on its own
+            $attrString = $match[2];
             $original = $match[0];
             $innerContent = $match[3] ?? '';
 
@@ -153,11 +159,10 @@ class ShortcodeProcessor
                     $key = $attr[5];
                     $value = true;
                 } else {
-                    $key = self::extractScalarString($attr[1] ?? '');
-
-                    if ($key === '') {
-                        continue;
-                    }
+                    // Without group 5 the named alternative matched, and it always
+                    // captures a non-empty \w+ key in group 1, so the default never applies.
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $key = $attr[1] ?? '';
 
                     // The value alternation is either quoted (groups 2/3) or unquoted
                     // (group 4); the two are mutually exclusive, so the presence of
@@ -170,7 +175,7 @@ class ShortcodeProcessor
                         // the value matches its intended form, and surface the source defect as
                         // an import warning so it stays visible instead of being silently repaired.
                         // ---
-                        $rawValue = \trim($attr[4]);
+                        $rawValue = $attr[4];
                         $value = \rtrim($rawValue, '/');
 
                         // Record a warning only when a slash was actually stripped.
@@ -185,6 +190,9 @@ class ShortcodeProcessor
                         }
                     } else {
                         // Quoted value: left intact, including any legitimate trailing slash.
+                        // Group 3 always takes part in a quoted match, even when empty,
+                        // so the default never applies.
+                        // @pest-mutate-ignore: EmptyStringToNotEmpty
                         $value = $attr[3] ?? '';
                     }
                 }
@@ -206,8 +214,8 @@ class ShortcodeProcessor
     /**
      * Converts shortcode data to HTML for Tiptap setContent.
      *
-     * Uses raw attributes for 'show-people' to preserve complex structures and
-     * handler's parse method for others.
+     * Delegates to the registered handler's toTiptapHtml(). A shortcode with no
+     * handler is logged and kept as an 'unknown' set carrying its content.
      *
      * @param  array<int|string, mixed>  $shortcode  Shortcode data (['name' => '...', 'attributes' => [...]])
      * @param  string  $site  Site handle for context
@@ -228,105 +236,20 @@ class ShortcodeProcessor
         ?string $pageSlug = null
     ): string {
         $shortcodeName = self::extractScalarString($shortcode['name'] ?? null);
-        $shortcodeAttributes = \is_array($shortcode['attributes'] ?? null)
-            ? $shortcode['attributes']
-            : [];
-        $shortcodeContent = self::extractNullableString($shortcode['content'] ?? null);
 
         // Recognized-but-dropped shortcodes (e.g. subpage-list) emit nothing: the
         // page template renders their output on its own, so return an empty string
-        // and let callers strip the original text. No warning — this is expected.
+        // and let callers strip the original text. No warning, since this is expected.
         if ($this->isDroppedShortcode($shortcodeName)) {
             return '';
         }
 
-        // Get the handler configuration for this shortcode type
-        $handler = $this->handlers[$shortcodeName] ?? null;
-
-        // Extract the set type from the handler configuration
-        $setType = $handler['set'] ?? 'unknown';
-
-        // Check if handler has a custom toTiptapHtml method
-        if ($handler !== null) {
-            // Get the handler class name
-            $handlerClass = $handler['class'];
-
-            // ---
-            // Create an instance of the handler class
-            //
-            // Note: Pass shortcode name to constructor only for PeopleShortcodeProcessor
-            // ---
-            // Pass shortcode name to constructor only for PeopleShortcodeProcessor
-            $handlerInstance = ($handlerClass === PeopleShortcodeProcessor::class)
-                ? new $handlerClass($shortcodeName)
-                : new $handlerClass;
-
-            // Check if the handler has a custom toTiptapHtml method
-            if (
-                method_exists(
-                    $handlerInstance,
-                    'toTiptapHtml'
-                )
-            ) {
-                // Delegate to the custom handler implementation
-                $customResult = $handlerInstance->toTiptapHtml(
-                    $shortcode,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $attachments,
-                    $terms,
-                    $pageSlug
-                );
-
-                return \is_string($customResult) ? $customResult : '';
-            }
-        }
-
-        // Initialize values array for default processing
-        $values = [];
-
-        // Process shortcode using the default handler if no custom method exists
-        if ($handler !== null) {
-            // Set ProcessingContext for the shortcode processor
-            ProcessingContext::setShortcodeContext(
-                $attachments,
-                $shortcodeContent
-            );
-
-            // Get the handler class name for default processing
-            $handlerClass = $handler['class'];
-
-            // ---
-            // Create an instance of the handler class for default processing
-            //
-            // Note: Pass shortcode name to constructor only for PeopleShortcodeProcessor
-            // ---
-            $handlerInstance = ($handlerClass === PeopleShortcodeProcessor::class)
-                ? new $handlerClass($shortcodeName)
-                : new $handlerClass;
-
-            if (! $handlerInstance instanceof ShortcodeProcessorInterface) {
-                return '';
-            }
-
-            // Parse the shortcode using the handler's parse method
-            $result = $handlerInstance->parse(
-                $shortcodeAttributes,
-                $site,
-                $assetImporter,
-                $output,
-                $terms,
-                $pageSlug
-            );
-
-            // Handle both old Bard set structure and new simplified structure
-            $values = self::extractSetValues($result);
-        } else { // Handle case where no valid handler is found
+        // Without a handler, warn and keep the content in an unknown set
+        if (! isset($this->handlers[$shortcodeName])) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
-                    'handler' => $handler,
+                    'handler' => null,
                     'site' => $site,
                     'pageSlug' => $pageSlug,
                 ]
@@ -340,13 +263,29 @@ class ShortcodeProcessor
                 ),
                 $logData['context']
             );
+
+            return self::generateTiptapHtml(
+                [],
+                'unknown',
+                self::extractScalarString($shortcode['content'] ?? null)
+            );
         }
 
-        // Use shared utility method to generate Tiptap HTML
-        return self::generateTiptapHtml(
-            $values,
-            $setType,
-            $shortcodeContent ?? ''
+        // A registered class that is not a shortcode processor renders nothing
+        $handler = $this->instantiateHandler($shortcodeName);
+        if (! $handler instanceof ShortcodeProcessorInterface) {
+            return '';
+        }
+
+        // Delegate to the handler's own Tiptap rendering
+        return $handler->toTiptapHtml(
+            $shortcode,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms,
+            $pageSlug
         );
     }
 
@@ -403,6 +342,8 @@ class ShortcodeProcessor
                 $attrString = \sprintf(
                     " data-set-attr-%s='%s'",
                     htmlspecialchars($attributeKey),
+                    // Base64 output holds no character htmlspecialchars() changes.
+                    // @pest-mutate-ignore: UnwrapHtmlspecialchars
                     htmlspecialchars(
                         $encodedValue,
                         ENT_QUOTES,
@@ -491,7 +432,6 @@ class ShortcodeProcessor
             $this->trackUnaddressedShortcode(
                 $name,
                 $site,
-                [],
                 $shortcodeOriginal,
                 $pageSlug
             );
@@ -510,11 +450,7 @@ class ShortcodeProcessor
                 $attachments,
                 $shortcodeContent
             );
-            $handlerClass = $this->handlers[$name]['class'];
-            // Pass shortcode name to constructor only for PeopleShortcodeProcessor
-            $handler = ($handlerClass === PeopleShortcodeProcessor::class)
-                ? new $handlerClass($name)
-                : new $handlerClass;
+            $handler = $this->instantiateHandler($name);
             if (! $handler instanceof ShortcodeProcessorInterface) {
                 return null;
             }
@@ -543,11 +479,6 @@ class ShortcodeProcessor
 
         if ($outputType === 'page_builder') {
             // For 'page_builder', delegate to the handler's toPageBuilderBlock() method.
-            // Handle shortcodes that don't have page builder blocks
-            if ($name === 'audio' || $name === 'accordion') {
-                return null;
-            }
-
             $handlerClass = $this->handlers[$name]['class'];
             // Check if handler is CaptionShortcodeProcessor which requires content parameter
             if ($handlerClass === CaptionShortcodeProcessor::class) {
@@ -566,14 +497,8 @@ class ShortcodeProcessor
                 );
             }
 
-            // Pass shortcode name to constructor only for PeopleShortcodeProcessor
-            $handler = ($handlerClass === PeopleShortcodeProcessor::class)
-                ? new $handlerClass($name)
-                : new $handlerClass;
-            if (! $handler instanceof ShortcodeProcessorInterface) {
-                return null;
-            }
-
+            // Handlers without a page builder block (audio, accordion) return null
+            $handler = $this->instantiateHandler($name);
             if (! \method_exists($handler, 'toPageBuilderBlock')) {
                 return null;
             }
@@ -616,9 +541,9 @@ class ShortcodeProcessor
     /**
      * Processes shortcodes in content, converting supported ones to Tiptap HTML.
      *
-     * Tracks unhandled shortcodes as unaddressed nodes, unless suppressed by
-     * unaddressed blocks (e.g., [table] in wp:tablepress/table). Used by
-     * ContentProcessor for non-ACF content.
+     * Recognized-but-dropped shortcodes are stripped. Unregistered ones are left
+     * in place untouched; extract() does not return them, so they are not
+     * tracked as unaddressed here.
      *
      * @param  string  $content  HTML content containing shortcodes
      * @param  string  $site  Statamic site handle
@@ -626,7 +551,7 @@ class ShortcodeProcessor
      * @param  OutputInterface  $output  Console output for logging
      * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects from XML
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
-     * @param  array<int|string, mixed>  $unaddressedBlocks  List of unaddressed block types for suppression
+     * @param  array<int|string, mixed>  $unaddressedBlocks  Unused; kept for existing callers
      * @param  ?string  $pageSlug  Page slug for logging
      * @return string Processed content with shortcodes replaced or left as-is
      */
@@ -640,58 +565,44 @@ class ShortcodeProcessor
         array $unaddressedBlocks = [],
         ?string $pageSlug = null
     ): string {
-        $shortcodes = $this->extract(
-            $content,
-            $output
+        $shortcodes = $this->extractShortcodes(
+            $content
         );
-        $processedContent = $content;
-        $singleShortcode = $shortcodes[0] ?? [];
-        $singleOriginal = \is_array($singleShortcode)
-            ? self::extractScalarString($singleShortcode['original'] ?? null)
-            : '';
 
-        // Handle single shortcode in <p> tag
+        // A lone registered shortcode wrapped in <p> becomes the handler markup alone
         if (
             \count($shortcodes) === 1
+            && isset($this->handlers[$shortcodes[0]['name']])
             && \preg_match(
                 '/^<p>\s*'.preg_quote(
-                    $singleOriginal,
+                    $shortcodes[0]['original'],
                     '/'
                 ).'\s*<\/p>$/s',
                 \trim($content)
             ) === 1
         ) {
-            $shortcode = $shortcodes[0];
-            if (! \is_array($shortcode)) {
-                return $processedContent;
-            }
-
-            $shortcodeName = self::extractScalarString($shortcode['name'] ?? null);
-
-            if (isset($this->getHandlers()[$shortcodeName])) {
-                return $this->toTiptapHtml(
-                    $shortcode,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $attachments,
-                    $terms,
-                    $pageSlug
-                );
-            }
+            return $this->toTiptapHtml(
+                $shortcodes[0],
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $pageSlug
+            );
         }
 
-        // Process all shortcodes
+        // ---
+        // Replace each shortcode in place. extract() returns only registered and
+        // dropped shortcodes, and toTiptapHtml() renders a dropped one as '', which
+        // strips its raw [shortcode] text from the imported content.
+        // ---
+        $processedContent = $content;
         foreach ($shortcodes as $shortcode) {
-            if (! \is_array($shortcode)) {
-                continue;
-            }
-
-            $shortcodeName = self::extractScalarString($shortcode['name'] ?? null);
-            $shortcodeOriginal = self::extractScalarString($shortcode['original'] ?? null);
-
-            if (isset($this->getHandlers()[$shortcodeName])) {
-                $tiptapHtml = $this->toTiptapHtml(
+            $processedContent = self::replaceShortcode(
+                $processedContent,
+                $shortcode['original'],
+                $this->toTiptapHtml(
                     $shortcode,
                     $site,
                     $assetImporter,
@@ -699,33 +610,41 @@ class ShortcodeProcessor
                     $attachments,
                     $terms,
                     $pageSlug
-                );
-                $processedContent = \str_replace(
-                    $shortcodeOriginal,
-                    $tiptapHtml,
-                    $processedContent
-                );
-            } elseif ($this->isDroppedShortcode($shortcodeName)) {
-                // Strip recognized-but-dropped shortcodes so their raw [shortcode]
-                // text does not leak into imported content.
-                $processedContent = \str_replace(
-                    $shortcodeOriginal,
-                    '',
-                    $processedContent
-                );
-            } else {
-                // Track unhandled shortcode if not suppressed
-                $this->trackUnaddressedShortcode(
-                    $shortcodeName,
-                    $site,
-                    $unaddressedBlocks,
-                    $shortcodeOriginal,
-                    $pageSlug
-                );
-            }
+                )
+            );
         }
 
         return $processedContent;
+    }
+
+    /**
+     * Replaces a shortcode's original text with its rendered HTML.
+     *
+     * HTML that closes the surrounding paragraph before it, or opens a new one
+     * after it (a flattened accordion does both), also takes the whitespace and
+     * line breaks wpautop left on that side of the shortcode. Left in place, a break would
+     * end the closed paragraph, or start the new one, as a blank line.
+     *
+     * @param  string  $content  The content holding the shortcode
+     * @param  string  $original  The shortcode's original text
+     * @param  string  $html  The HTML to put in its place
+     * @return string The content with every occurrence replaced
+     */
+    public static function replaceShortcode(
+        string $content,
+        string $original,
+        string $html
+    ): string {
+        // Take the breaks on the side where the HTML closes or opens a paragraph
+        $before = \str_starts_with($html, '</p>') ? '(?:\s|<br\s*\/?>)*' : '';
+        $after = \str_ends_with($html, '<p>') ? '(?:\s|<br\s*\/?>)*' : '';
+
+        // With neither this is a plain replacement; a failed pattern falls back to one
+        return \preg_replace_callback(
+            '/'.$before.\preg_quote($original, '/').$after.'/',
+            static fn (): string => $html,
+            $content
+        ) ?? \str_replace($original, $html, $content);
     }
 
     /**
@@ -768,42 +687,21 @@ class ShortcodeProcessor
     }
 
     /**
-     * Tracks an unhandled shortcode as an unaddressed node, unless suppressed.
+     * Tracks an unhandled shortcode as an unaddressed node.
      *
-     * Records unhandled shortcodes for reporting, skipping those in suppressed
-     * blocks like wp:tablepress/table.
+     * Records the shortcode for reporting and adds an import warning.
      *
      * @param  string  $shortcodeName  Name of the unhandled shortcode
      * @param  string  $site  Statamic site handle
-     * @param  array<int|string, mixed>  $unaddressedBlocks  List of unaddressed block types
      * @param  string  $original  Original shortcode text (e.g., '[1]')
      * @param  ?string  $pageSlug  Page slug for logging
      */
     private function trackUnaddressedShortcode(
         string $shortcodeName,
         string $site,
-        array $unaddressedBlocks,
         string $original,
         ?string $pageSlug = null
     ): void {
-        // Check if the shortcode should be suppressed due to an unaddressed block
-        foreach ($unaddressedBlocks as $blockType) {
-            if (! \is_string($blockType)) {
-                continue;
-            }
-
-            if (
-                isset($this->suppressedShortcodes[$blockType])
-                && \in_array(
-                    $shortcodeName,
-                    $this->suppressedShortcodes[$blockType],
-                    true
-                )
-            ) {
-                return;
-            }
-        }
-
         // Track the unhandled shortcode with original text
         $this->unaddressedNodes["shortcode:$shortcodeName"][] = [
             'id' => $this->pageId,
@@ -858,6 +756,25 @@ class ShortcodeProcessor
     }
 
     /**
+     * Instantiates the registered handler class for a shortcode.
+     *
+     * PeopleShortcodeProcessor takes the shortcode name, because show-team and
+     * show-people read different WordPress taxonomies.
+     *
+     * @param  string  $name  A registered shortcode name
+     * @return object The handler instance
+     */
+    private function instantiateHandler(
+        string $name
+    ): object {
+        $handlerClass = $this->handlers[$name]['class'];
+
+        return ($handlerClass === PeopleShortcodeProcessor::class)
+            ? new $handlerClass($name)
+            : new $handlerClass;
+    }
+
+    /**
      * Returns the registered shortcode handlers.
      *
      * Provides the list of configured shortcode handlers.
@@ -881,9 +798,11 @@ class ShortcodeProcessor
      */
     public function isDroppedShortcode(string $name): bool
     {
+        // Names and the dropped list are both strings, so strict and loose agree.
         return \in_array(
             $name,
             $this->droppedShortcodes,
+            // @pest-mutate-ignore: TrueToFalse
             true
         );
     }
@@ -897,10 +816,6 @@ class ShortcodeProcessor
     private static function extractScalarString(
         mixed $value
     ): string {
-        if (\is_string($value)) {
-            return $value;
-        }
-
         if (\is_scalar($value)) {
             return (string) $value;
         }
@@ -917,10 +832,6 @@ class ShortcodeProcessor
     private static function extractNullableString(
         mixed $value
     ): ?string {
-        if ($value === null) {
-            return null;
-        }
-
         $stringValue = self::extractScalarString($value);
 
         return $stringValue === '' ? null : $stringValue;
@@ -929,13 +840,13 @@ class ShortcodeProcessor
     /**
      * Extract parsed set values from nested or flat parser results.
      *
-     * @param  mixed  $result  Parser result payload
+     * @param  array<int|string, mixed>|null  $result  Parser result payload, null when the parser produced none
      * @return array<int|string, mixed> Normalized values array
      */
     private static function extractSetValues(
-        mixed $result
+        ?array $result
     ): array {
-        if (! \is_array($result)) {
+        if ($result === null) {
             return [];
         }
 

@@ -383,9 +383,10 @@ class NewsParser
         mixed $articleId,
         string $site
     ): array {
-        // Nothing to report when the block never named an article
+        // Nothing to report when the block never named an article. A missing id
+        // never arrives as null: the only caller coalesces it to ''.
         if (
-            in_array($articleId, [null, '', []], true)
+            in_array($articleId, ['', []], true)
         ) {
             return [];
         }

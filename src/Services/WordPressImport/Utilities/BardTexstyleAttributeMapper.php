@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 
+use DOMComment;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
 use Illuminate\Support\Str;
-use Statamic\Fieldtypes\Bard\LinkMark;
 
 /**
  * Maps HTML attributes to Bard Texstyle attributes during WordPress import.
@@ -50,7 +50,8 @@ class BardTexstyleAttributeMapper
      */
     private static function splitWhitespaceClasses(string $classNames): array
     {
-        // Split the class string on whitespace boundaries
+        // Split the class string on whitespace boundaries. The trim also strips the
+        // NUL a block comment's JSON className can carry, which `\s` does not match.
         $classes = \preg_split(
             '/\s+/',
             \trim($classNames)
@@ -68,6 +69,9 @@ class BardTexstyleAttributeMapper
      *
      * @var array<string, string>
      */
+    // A property initializer is never reported as an executed line; removing an
+    // entry by hand fails its list-style rows in BardTexstyleAttributeMapperTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     private static array $listStyleMap = [
         'decimal' => 'decimal',
         'upper-alpha' => 'upper-alpha',
@@ -78,14 +82,29 @@ class BardTexstyleAttributeMapper
     ];
 
     /**
-     * Standard link mark attributes fallback.
+     * Class names that mark a heading or horizontal rule as clearboth.
      *
-     * Used as a fallback when Statamic's LinkMark class cannot be accessed
-     * via reflection. These are the standard attributes defined in Statamic's
-     * LinkMark::addAttributes() method.
+     * @var list<string>
+     */
+    // A constant initializer is never reported as an executed line; removing an
+    // entry by hand fails its row of the clearboth tests in
+    // BardTexstyleAttributeMapperTest, for an element and for a block comment.
+    // @pest-mutate-ignore: RemoveArrayItem
+    private const array CLEARBOTH_CLASSES = [
+        'clear',
+        'clear-both',
+        'clearboth',
+    ];
+
+    /**
+     * The attributes Statamic's LinkMark::addAttributes() defines for a link mark.
      *
      * @var array<string>
      */
+    // A property initializer is never reported as an executed line. A test
+    // compares this list with LinkMark's own, so removing an entry, or Statamic
+    // adding one, fails it.
+    // @pest-mutate-ignore: RemoveArrayItem
     private static array $standardLinkAttributes = [
         'href',
         'target',
@@ -108,9 +127,11 @@ class BardTexstyleAttributeMapper
         array $bardContent,
         string $html
     ): array {
-        // Check if Bard content is empty
+        // Check if Bard content is empty. Mapping no nodes returns them unchanged
+        // too, so this only saves loading the HTML.
         if ($bardContent === []) {
             // Return empty content early
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $bardContent;
         }
 
@@ -160,9 +181,11 @@ class BardTexstyleAttributeMapper
         // Get root div element
         $root = $doc->getElementsByTagName('div')->item(0);
 
-        // Check if root element exists
+        // Check if root element exists. TextProcessor::loadHtml() always appends
+        // one, so this never returns.
         if ($root === null) {
             // Return empty attribute map if no root element
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $attributeMap;
         }
 
@@ -248,11 +271,7 @@ class BardTexstyleAttributeMapper
         $href = $link->getAttribute('href');
 
         // Get text content and normalize whitespace
-        $textContent = \preg_replace(
-            '/\s+/',
-            ' ',
-            \trim($link->textContent ?? '')
-        );
+        $textContent = self::normalizeWhitespace($link->textContent);
 
         // Generate hash from href and text content
         $signatureHash = \substr(
@@ -351,9 +370,9 @@ class BardTexstyleAttributeMapper
         array &$blockCommentAttributes
     ): void {
         // Check if this is a comment node
-        if ($node->nodeType === XML_COMMENT_NODE) {
+        if ($node instanceof DOMComment) {
             // Check if this is a Gutenberg block comment
-            $commentContent = \trim($node->nodeValue ?? '');
+            $commentContent = \trim($node->data);
 
             // Extract block type using regex
             if (
@@ -363,36 +382,22 @@ class BardTexstyleAttributeMapper
                     $typeMatches
                 ) === 1
             ) {
-                // Extract block type
-                $blockType = $typeMatches[1];
-
-                // Extract JSON attributes using TextProcessor method
+                // Extract JSON attributes using TextProcessor method, passing the
+                // block type. The extractor reads neither the site nor the block type.
+                // @pest-mutate-ignore: DecrementInteger, EmptyStringToNotEmpty
                 $jsonString = TextProcessor::extractJsonFromWordPressComment(
                     $commentContent,
                     '',
-                    $blockType
+                    $typeMatches[1]
                 );
 
-                // Initialize JSON attributes array
-                $jsonAttributes = [];
-
-                // Check if JSON string was extracted
-                if ($jsonString !== '') {
-                    // Decode JSON attributes
-                    $decoded = \json_decode(
-                        $jsonString,
-                        true
-                    );
-
-                    // Check if JSON decoding was successful
-                    if (
-                        json_last_error() === JSON_ERROR_NONE
-                        && \is_array($decoded)
-                    ) {
-                        // Store decoded JSON attributes
-                        $jsonAttributes = $decoded;
-                    }
-                }
+                // Decode JSON attributes; a comment without any, or with JSON that
+                // does not decode to an array, carries none
+                $decoded = \json_decode(
+                    $jsonString,
+                    true
+                );
+                $jsonAttributes = \is_array($decoded) ? $decoded : [];
 
                 // Find the corresponding HTML element (next element after comment)
                 $element = self::findElementAfterComment($node);
@@ -418,7 +423,6 @@ class BardTexstyleAttributeMapper
                 // Clean up variables to free up memory
                 unset(
                     $typeMatches,
-                    $blockType,
                     $jsonString,
                     $decoded,
                     $jsonAttributes,
@@ -492,8 +496,8 @@ class BardTexstyleAttributeMapper
         // Initialize attributes array
         $attributes = [];
 
-        // Get tag name
-        $tagName = \strtolower($element->tagName);
+        // Get tag name, which the HTML parser has already lowercased
+        $tagName = $element->tagName;
 
         // ---
         // Extract className from block comment and use for clearboth/list_style
@@ -516,29 +520,9 @@ class BardTexstyleAttributeMapper
                 ) === 1
                 || $tagName === 'hr'
             ) {
-                // Define matching class values for clearboth
-                $matchingClasses = [
-                    'clear',
-                    'clear-both',
-                    'clearboth',
-                ];
-
-                // Loop through classes to find matching clearboth class
-                foreach ($classes as $classValue) {
-                    // Check if class matches clearboth pattern
-                    if (
-                        \in_array(
-                            $classValue,
-                            $matchingClasses,
-                            true
-                        )
-                    ) {
-                        // Set clearboth attribute
-                        $attributes['clearboth'] = 'clearboth';
-
-                        // Exit loop after first match
-                        break;
-                    }
+                // Set clearboth when any class matches
+                if (\array_intersect($classes, self::CLEARBOTH_CLASSES) !== []) {
+                    $attributes['clearboth'] = 'clearboth';
                 }
             }
 
@@ -566,7 +550,10 @@ class BardTexstyleAttributeMapper
         if ($tagName === 'ol') {
             // Check if reversed is present in block comment
             if (isset($jsonAttributes['reversed'])) {
-                // Convert to boolean (block comment has boolean value)
+                // Convert to boolean (block comment has boolean value). The cast
+                // only satisfies PHPStan's strict boolean rule; the check below
+                // reads the value the same way without it.
+                // @pest-mutate-ignore: RemoveBooleanCast
                 $reversed = (bool) $jsonAttributes['reversed'];
 
                 // Check if reversed is true
@@ -590,6 +577,8 @@ class BardTexstyleAttributeMapper
                 ) {
                     $start = (int) $startValue;
                 } else {
+                    // Any value that is not above 0 is dropped below
+                    // @pest-mutate-ignore: DecrementInteger
                     $start = 0;
                 }
 
@@ -682,11 +671,11 @@ class BardTexstyleAttributeMapper
     private static function getElementSignature(
         DOMElement $element
     ): string {
-        // Get tag name and normalize to lowercase for consistent signatures
-        $tagName = \strtolower($element->tagName);
+        // Get tag name, which the HTML parser has already lowercased
+        $tagName = $element->tagName;
 
         // Get text content and normalize whitespace
-        $textContent = self::normalizeWhitespace($element->textContent ?? '');
+        $textContent = self::normalizeWhitespace($element->textContent);
 
         // ---
         // Get level for headings
@@ -739,20 +728,18 @@ class BardTexstyleAttributeMapper
         // This ensures consistent signatures between HTML elements and Bard nodes
         // ---
 
-        // Use 'h' as the base tag name for headings, otherwise use the tag name as-is
-        $signature = (
-            \preg_match(
-                '/^h[1-6]$/',
-                $tagName
-            ) === 1
-            && $level !== ''
-        ) ? 'h' : $tagName;
+        // Use 'h' as the base tag name for headings, otherwise use the tag name
+        // as-is. Both callers pass a level only for a heading.
+        $signature = $level !== '' ? 'h' : $tagName;
 
         // ---
         // Add level for headings
         // ---
 
-        // Check if level was extracted
+        // Check if level was extracted. Both sides of a match build their
+        // signature here, so a change that applies to both still pairs the same
+        // nodes with the same elements.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty, ConcatEqualToEqual
         if ($level !== '') {
             // Append level to signature
             $signature .= ":{$level}";
@@ -794,8 +781,8 @@ class BardTexstyleAttributeMapper
         // Initialize attributes array
         $attributes = [];
 
-        // Get tag name
-        $tagName = \strtolower($element->tagName);
+        // Get tag name, which the HTML parser has already lowercased
+        $tagName = $element->tagName;
 
         // ---
         // Extract clearboth attribute for heading and hr elements
@@ -896,68 +883,27 @@ class BardTexstyleAttributeMapper
     private static function extractClearbothAttribute(
         DOMElement $element
     ): ?string {
-        // Get class attribute
-        $class = $element->getAttribute('class');
+        // Split class into individual classes
+        $classes = self::splitWhitespaceClasses($element->getAttribute('class'));
 
-        // Check if class contains matching values
-        if ($class !== '') {
-            // Split class into individual classes
-            $classes = self::splitWhitespaceClasses($class);
-
-            // Check for matching class values
-            $matchingClasses = [
-                'clear',
-                'clear-both',
-                'clearboth',
-            ];
-
-            // Loop through classes to find matching clearboth class
-            foreach ($classes as $classValue) {
-                // Check if class matches clearboth pattern
-                if (
-                    \in_array(
-                        $classValue,
-                        $matchingClasses,
-                        true
-                    )
-                ) {
-                    // Return clearboth value if match found
-                    return 'clearboth';
-                }
-            }
+        // Return clearboth value if any class matches
+        if (\array_intersect($classes, self::CLEARBOTH_CLASSES) !== []) {
+            return 'clearboth';
         }
 
-        // Get style attribute
-        $style = $element->getAttribute('style');
-
-        // Check if style contains matching values
-        if ($style !== '') {
-            // Normalize style attribute (remove whitespace variations)
-            $normalizedStyle = \preg_replace(
-                '/\s+/',
-                ' ',
-                \trim($style)
-            );
-
-            // Skip style pattern matching when normalization fails
-            if (! \is_string($normalizedStyle)) {
-                return null;
-            }
-
-            // ---
-            // Check for matching style patterns
-            //
-            // Match: clear: both, clear: both;, clear:both, clear:both;
-            // ---
-            if (
-                \preg_match(
-                    '/\bclear\s*:\s*both\b/i',
-                    $normalizedStyle
-                ) === 1
-            ) {
-                // Return clearboth value if style pattern matches
-                return 'clearboth';
-            }
+        // ---
+        // Check for matching style patterns
+        //
+        // Match: clear: both, clear: both;, clear:both, clear:both;
+        // ---
+        if (
+            \preg_match(
+                '/\bclear\s*:\s*both\b/i',
+                $element->getAttribute('style')
+            ) === 1
+        ) {
+            // Return clearboth value if style pattern matches
+            return 'clearboth';
         }
 
         // Return null if no clearboth attribute found
@@ -1002,16 +948,13 @@ class BardTexstyleAttributeMapper
         // Get start attribute
         $start = $element->getAttribute('start');
 
-        // Check if start is not empty
-        if ($start !== '') {
-            // Convert to integer
-            $startInt = (int) $start;
+        // Convert to integer; an absent or non-numeric start reads as 0
+        $startInt = (int) $start;
 
-            // Check if conversion was successful
-            if ($startInt > 0) {
-                // Return start value as integer
-                return $startInt;
-            }
+        // Check if conversion was successful
+        if ($startInt > 0) {
+            // Return start value as integer
+            return $startInt;
         }
 
         // Return null if no start attribute found
@@ -1064,92 +1007,71 @@ class BardTexstyleAttributeMapper
     private static function extractListStyleAttribute(
         DOMElement $element
     ): ?string {
-        // Get class attribute
-        $class = $element->getAttribute('class');
+        // Split class into individual classes
+        $classes = self::splitWhitespaceClasses($element->getAttribute('class'));
 
-        // Check if class contains matching values
-        if ($class !== '') {
-            // Split class into individual classes
-            $classes = self::splitWhitespaceClasses($class);
-
-            // Loop through classes to find matching list_style class
-            foreach ($classes as $classValue) {
-                // Check if class maps to a list_style value
-                if (isset(self::$listStyleMap[$classValue])) {
-                    // Return list_style value from class map
-                    return self::$listStyleMap[$classValue];
-                }
+        // Loop through classes to find matching list_style class
+        foreach ($classes as $classValue) {
+            // Check if class maps to a list_style value
+            if (isset(self::$listStyleMap[$classValue])) {
+                // Return list_style value from class map
+                return self::$listStyleMap[$classValue];
             }
         }
 
-        // Get style attribute
+        // Get style attribute; the patterns below allow any whitespace
         $style = $element->getAttribute('style');
 
-        // Check if style contains matching values
-        if ($style !== '') {
-            // Normalize style attribute (remove whitespace variations)
-            $normalizedStyle = \preg_replace(
-                '/\s+/',
-                ' ',
-                \trim($style)
+        // ---
+        // Map style values to list_style values
+        // Match: list-style-type: decimal, list-style: decimal *, etc.
+        // The * in list-style: decimal * means any word(s) after decimal
+        // Match patterns: list-style-type: decimal, list-style: decimal,
+        // list-style: decimal inside, list-style: decimal inside;
+        // ---
+
+        // Loop through list style values to check for matches
+        foreach (self::$listStyleMap as $value => $listStyleValue) {
+            // Escape special regex characters in the value
+            $escapedValue = \preg_quote(
+                $value,
+                '/'
             );
 
-            // Skip style pattern matching when normalization fails
-            if (! \is_string($normalizedStyle)) {
-                return null;
+            // ---
+            // Check for list-style-type pattern
+            // ---
+
+            // Build regex pattern for list-style-type
+            $typePattern = "/\blist-style-type\s*:\s*{$escapedValue}\b/i";
+
+            // Check if pattern matches the style
+            if (
+                \preg_match(
+                    $typePattern,
+                    $style
+                ) === 1
+            ) {
+                // Return list_style value if pattern matches
+                return $listStyleValue;
             }
 
             // ---
-            // Map style values to list_style values
-            // Match: list-style-type: decimal, list-style: decimal *, etc.
-            // The * in list-style: decimal * means any word(s) after decimal
-            // Match patterns: list-style-type: decimal, list-style: decimal,
-            // list-style: decimal inside, list-style: decimal inside;
+            // Check for list-style pattern (with optional words after value)
             // ---
 
-            // Loop through list style values to check for matches
-            foreach (self::$listStyleMap as $value => $listStyleValue) {
-                // Escape special regex characters in the value
-                $escapedValue = \preg_quote(
-                    $value,
-                    '/'
-                );
+            // Build regex pattern for list-style
+            $stylePattern = "/\blist-style\s*:\s*{$escapedValue}(?:\s+\w+)?(?:\s*;|\s|$)/i";
 
-                // ---
-                // Check for list-style-type pattern
-                // ---
-
-                // Build regex pattern for list-style-type
-                $typePattern = "/\blist-style-type\s*:\s*{$escapedValue}\b/i";
-
-                // Check if pattern matches normalized style
-                if (
-                    \preg_match(
-                        $typePattern,
-                        $normalizedStyle
-                    ) === 1
-                ) {
-                    // Return list_style value if pattern matches
-                    return $listStyleValue;
-                }
-
-                // ---
-                // Check for list-style pattern (with optional words after value)
-                // ---
-
-                // Build regex pattern for list-style
-                $stylePattern = "/\blist-style\s*:\s*{$escapedValue}(?:\s+\w+)?(?:\s*;|\s|$)/i";
-
-                // Check if pattern matches normalized style
-                if (
-                    \preg_match(
-                        $stylePattern,
-                        $normalizedStyle
-                    ) === 1
-                ) {
-                    // Return list_style value if pattern matches
-                    return $listStyleValue;
-                }
+            // Check if pattern matches the style
+            if (
+                \preg_match(
+                    $stylePattern,
+                    $style
+                ) === 1
+            ) {
+                // Return list_style value if pattern matches
+                return $listStyleValue;
             }
         }
 
@@ -1205,7 +1127,10 @@ class BardTexstyleAttributeMapper
             }
 
             // Get node signature for matching
-            $signature = self::getBardNodeSignature($node);
+            $signature = self::getBardNodeSignature(
+                $node,
+                $nodeType
+            );
 
             // Get applicable attributes for this node type
             $applicableAttributes = self::getApplicableAttributes($nodeType);
@@ -1231,8 +1156,10 @@ class BardTexstyleAttributeMapper
 
                 // Loop through attributes to apply to node
                 foreach ($attributes as $key => $value) {
-                    // Skip non-string attribute keys
+                    // Skip non-string attribute keys. Every key is a name this class
+                    // sets, so none is skipped.
                     if (! \is_string($key)) {
+                        // @pest-mutate-ignore: ContinueToBreak
                         continue;
                     }
 
@@ -1267,7 +1194,7 @@ class BardTexstyleAttributeMapper
                     }
 
                     // Check if this is a link mark
-                    if (($mark['type'] ?? '') === 'link') {
+                    if (($mark['type'] ?? null) === 'link') {
                         // ---
                         // Initialize attrs if not present
                         // ---
@@ -1328,7 +1255,7 @@ class BardTexstyleAttributeMapper
                         // ---
 
                         // Get child node type
-                        $childType = $childNode['type'] ?? '';
+                        $childType = $childNode['type'] ?? null;
 
                         // Check if child is text or hardBreak node
                         if (
@@ -1353,7 +1280,7 @@ class BardTexstyleAttributeMapper
                                     }
 
                                     // Check if this is a link mark
-                                    if (($mark['type'] ?? '') === 'link') {
+                                    if (($mark['type'] ?? null) === 'link') {
                                         // ---
                                         // Initialize attrs if not present
                                         // ---
@@ -1418,18 +1345,17 @@ class BardTexstyleAttributeMapper
      * content to match Bard nodes to HTML elements.
      *
      * @param  array<int|string, mixed>  $node  The Bard node
+     * @param  string  $nodeType  The node's type
      * @return string The node signature
      */
     private static function getBardNodeSignature(
-        array $node
+        array $node,
+        string $nodeType
     ): string {
-        // Get node type
-        $nodeType = $node['type'] ?? '';
-        $nodeType = \is_string($nodeType) ? $nodeType : '';
-
-        // Map Bard node types to HTML tag names
+        // Map Bard node types to HTML tag names. A heading needs no entry: its level
+        // makes its signature start with `h`, as an HTML heading's does, and one
+        // without a level matches no element either way.
         $tagMap = [
-            'heading' => 'h',
             'paragraph' => 'p',
             'unorderedList' => 'ul',
             'orderedList' => 'ol',
@@ -1461,6 +1387,11 @@ class BardTexstyleAttributeMapper
                 && isset($nodeAttributes['level'])
             ) {
                 $levelValue = $nodeAttributes['level'];
+
+                // A level that is not a scalar matches no heading. Only a `<heading>`
+                // element could share the fallback's signature, and it never carries
+                // attributes, so the fallback's value changes nothing.
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $level = \is_scalar($levelValue) ? (string) $levelValue : '';
             }
         }
@@ -1487,19 +1418,9 @@ class BardTexstyleAttributeMapper
     private static function extractBardNodeText(
         array $node
     ): string {
-        // Initialize text content
-        $text = '';
-
-        // Check if node has text
-        if (isset($node['text'])) {
-            // Read text value from node
-            $nodeText = $node['text'];
-
-            // Append node text when value is a string
-            if (\is_string($nodeText)) {
-                $text .= $nodeText;
-            }
-        }
+        // Start from the node's own text when it is a string
+        $nodeText = $node['text'] ?? null;
+        $text = \is_string($nodeText) ? $nodeText : '';
 
         // Check if node has content
         if (
@@ -1561,11 +1482,9 @@ class BardTexstyleAttributeMapper
         $attributeKeys = \array_keys($nodeAttributes);
 
         // Keep only string keys expected by downstream methods
-        $stringAttributeKeys = \array_values(
-            \array_filter(
-                $attributeKeys,
-                \is_string(...)
-            )
+        $stringAttributeKeys = \array_filter(
+            $attributeKeys,
+            \is_string(...)
         );
 
         // Return attribute keys
@@ -1589,7 +1508,10 @@ class BardTexstyleAttributeMapper
         // Get applicable attributes for node type
         $applicableAttributes = self::getApplicableAttributes($nodeType);
 
-        // Check if attribute is applicable for this node type
+        // Check if attribute is applicable for this node type. Both sides are
+        // this class's fixed attribute names, none numeric, so strict and loose
+        // comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
         return \in_array(
             $attributeKey,
             $applicableAttributes,
@@ -1615,21 +1537,17 @@ class BardTexstyleAttributeMapper
         // Read mark attrs
         $markAttributes = $mark['attrs'] ?? [];
 
-        // Stop when mark attrs are not an array
+        // Stop when mark attrs are not an array. Both callers have made them one,
+        // so this never returns.
         if (! \is_array($markAttributes)) {
-            return;
-        }
-
-        // Check if link mark has href attribute
-        if (! isset($markAttributes['href'])) {
-            // Cannot match without href
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return;
         }
 
         // Get href from link mark
-        $href = $markAttributes['href'];
+        $href = $markAttributes['href'] ?? null;
 
-        // Stop when href is not a string
+        // Stop when href is absent or not a string; a link cannot match without one
         if (! \is_string($href)) {
             return;
         }
@@ -1724,76 +1642,12 @@ class BardTexstyleAttributeMapper
     }
 
     /**
-     * Gets standard link mark attributes from Statamic's LinkMark class.
-     *
-     * Returns the standard attributes defined for link marks in Statamic's
-     * Bard LinkMark extension. Dynamically fetches from the Statamic LinkMark
-     * class using reflection to avoid hard-coding attribute definitions and to
-     * avoid duplicating the control panel UI configuration.
+     * Gets the attributes Statamic's LinkMark defines for a link mark.
      *
      * @return array<string> Array of standard link mark attribute keys
      */
     private static function getStandardLinkAttributes(): array
     {
-        // ---
-        // Fetch from Statamic's LinkMark class using reflection
-        // ---
-
-        // Check if Statamic's LinkMark class exists
-        if (! \class_exists(LinkMark::class)) {
-            // Fallback to standard attributes if class doesn't exist
-            return self::$standardLinkAttributes;
-        }
-
-        // Create a reflection class for LinkMark
-        $reflection = new \ReflectionClass(
-            LinkMark::class
-        );
-
-        // Check if addAttributes method exists
-        if (! $reflection->hasMethod('addAttributes')) {
-            // Fallback to standard attributes if method doesn't exist
-            return self::$standardLinkAttributes;
-        }
-
-        // ---
-        // Create an instance of LinkMark to call the method.
-        //
-        // Note: LinkMark extends Tiptap\Marks\Link, so we need to instantiate it.
-        // ---
-
-        // Try to instantiate LinkMark and get attributes
-        try {
-            // Create new instance of LinkMark using reflection
-            $linkMark = $reflection->newInstance();
-
-            // Call addAttributes method to get the attribute definitions
-            $linkAttributes = $linkMark->addAttributes();
-
-            // Fallback when returned attributes are not an array
-            if (! \is_array($linkAttributes)) {
-                return self::$standardLinkAttributes;
-            }
-
-            // Extract attribute keys from the returned array
-            $attributeKeys = \array_keys($linkAttributes);
-
-            // Keep only string keys expected for mark attributes
-            $stringAttributeKeys = \array_values(
-                \array_filter(
-                    $attributeKeys,
-                    \is_string(...)
-                )
-            );
-
-            // Return the attribute keys
-            return $stringAttributeKeys;
-        }
-
-        // Catch any exceptions during instantiation or method call
-        catch (\Exception) {
-            // Fallback to standard attributes if instantiation fails
-            return self::$standardLinkAttributes;
-        }
+        return self::$standardLinkAttributes;
     }
 }

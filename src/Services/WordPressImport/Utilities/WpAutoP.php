@@ -217,8 +217,10 @@ class WpAutoP
                 "\n",
                 $trimmed
             );
-            // Restore <pre> tags
+            // Restore <pre> tags. str_replace() reads an array's values in order
+            // whatever their keys, so array_values() only documents the intent.
             if ($pre_tags !== []) {
+                // @pest-mutate-ignore: UnwrapArrayValues
                 return \str_replace(
                     \array_keys($pre_tags),
                     \array_values($pre_tags),
@@ -229,14 +231,18 @@ class WpAutoP
             return $text;
         }
 
-        // Split into paragraphs
+        // Split into paragraphs. A limit of 0 means no limit, as -1 does.
+        // @pest-mutate-ignore: IncrementInteger
         $paragraphs = \preg_split(
             '/\n\s*\n/',
             $text,
             -1,
             PREG_SPLIT_NO_EMPTY
         );
+        // A fixed pattern on a string cannot fail to split, so no test reaches this
+        // @pest-mutate-ignore: FalseToTrue
         if ($paragraphs === false) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $text;
         }
 
@@ -294,6 +300,11 @@ class WpAutoP
 
         // Handle line breaks if enabled
         if ($br) {
+            // The wpnl pass above normally leaves no newline inside these elements,
+            // so this pass usually finds none. It does find them when that pass hit
+            // the PCRE backtrack limit on a large element and left the text unchanged
+            // while the clean-up since has shrunk it under the limit; its restore then
+            // writes `<br />` inside the element, unlike wpautop()'s plain newline (#146).
             $text = self::pregReplaceCallback(
                 '#<(script|style|svg|math)([^>]*)>(.*?)</\1>#si',
                 fn ($matches): string => \str_replace(
@@ -338,8 +349,9 @@ class WpAutoP
             $text
         );
 
-        // Restore <pre> tags
+        // Restore <pre> tags; array_values() only documents the intent, as above
         if ($pre_tags !== []) {
+            // @pest-mutate-ignore: UnwrapArrayValues
             $text = \str_replace(
                 \array_keys($pre_tags),
                 \array_values($pre_tags),
