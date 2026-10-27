@@ -571,8 +571,8 @@ class TextProcessor
                     $shortcodeOnlyParsed !== []
                     && $shortcodeOnlyParsed[0] !== null
                 ) {
-                    // Return the parsed Bard content, without the empty paragraph a
-                    // flattened accordion's reopened paragraph leaves at the end
+                    // Return the parsed Bard content, without the empty paragraphs a
+                    // flattened accordion leaves where it closes and reopens one
                     return \array_values(self::withoutEmptyParagraphs($shortcodeOnlyParsed));
                 }
             }

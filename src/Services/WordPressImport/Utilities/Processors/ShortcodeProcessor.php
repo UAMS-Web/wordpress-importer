@@ -621,8 +621,8 @@ class ShortcodeProcessor
      * Replaces a shortcode's original text with its rendered HTML.
      *
      * HTML that closes the surrounding paragraph before it, or opens a new one
-     * after it (a flattened accordion does both), also takes the line breaks
-     * wpautop left on that side of the shortcode. Left in place, a break would
+     * after it (a flattened accordion does both), also takes the whitespace and
+     * line breaks wpautop left on that side of the shortcode. Left in place, a break would
      * end the closed paragraph, or start the new one, as a blank line.
      *
      * @param  string  $content  The content holding the shortcode

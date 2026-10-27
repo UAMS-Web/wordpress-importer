@@ -280,12 +280,15 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
             // An accordion in Classic content sits inside a wpautop paragraph. Close
             // that paragraph first and open one at the end, and put any text between
             // sections in a paragraph of its own, so no text lands at the top level of
-            // the document. Where no paragraph is open the parser drops the stray
-            // close, and the empty paragraphs this leaves are filtered out.
-            // ShortcodeProcessor::replaceShortcode() takes the line breaks wpautop
-            // left on either side, so they cannot become blank-line paragraphs.
+            // the document. A leading paragraph is opened only when text comes before
+            // the first section, so a heading stays the first node where a caller
+            // keeps only that (a wp:shortcode block, #156). Where no paragraph is open
+            // the parser drops the stray close, and the top-level empty paragraphs
+            // this leaves are filtered out. ShortcodeProcessor::replaceShortcode()
+            // takes the whitespace and line breaks wpautop left on either side, so
+            // they cannot become blank-line paragraphs.
             // ---
-            $flattened = '</p><p>'.$flattened.'</p><p>';
+            $flattened = (\str_starts_with($flattened, '</p>') ? $flattened : '</p><p>'.$flattened).'</p><p>';
         }
 
         // Process the shortcodes inside the sections
