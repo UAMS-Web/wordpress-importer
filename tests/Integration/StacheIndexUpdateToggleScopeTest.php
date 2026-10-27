@@ -88,6 +88,58 @@ class StacheIndexUpdateToggleProbeStache extends Stache
 }
 
 /**
+ * A Stache whose flag refuses to be set back to true, as a hooked redeclaration of
+ * the untyped property can on PHP 8.4, so the reflection write in forceEnable() throws.
+ */
+class StacheIndexUpdateToggleRefusingStache extends Stache
+{
+    /**
+     * The flag, refusing any write of true. Untyped, as the parent declares it, which
+     * is what lets a hook be added here.
+     *
+     * @var mixed
+     */
+    protected $updateIndexes = true {
+        set($value) {
+            if ($value === true) {
+                throw new RuntimeException('re-enable refused');
+            }
+
+            $this->updateIndexes = $value;
+        }
+    }
+
+    /**
+     * How many times shouldUpdateIndexes() was asked.
+     */
+    public int $reads = 0;
+
+    /**
+     * Configure what shouldUpdateIndexes() answers after the first two reads.
+     *
+     * @param  ?bool  $laterReads  A fixed answer from the third read on, or null for the flag
+     */
+    public function __construct(private readonly ?bool $laterReads = null)
+    {
+        parent::__construct();
+    }
+
+    /**
+     * Report the flag, or the configured answer from the third read on.
+     */
+    public function shouldUpdateIndexes(): bool
+    {
+        $this->reads++;
+
+        if ($this->reads > 2 && $this->laterReads !== null) {
+            return $this->laterReads;
+        }
+
+        return (bool) $this->updateIndexes;
+    }
+}
+
+/**
  * Put a Stache behind the facade and forget any memoized probe result.
  */
 function stacheToggleUse(object $stache): void
@@ -214,6 +266,29 @@ it('disables through the public API and re-enables, confirming it took effect', 
 
 it('reports a failed re-enable when the facade holds something other than a Stache', function (): void {
     stacheToggleUse(new stdClass);
+
+    expect(StacheIndexUpdateToggle::enable())->toBeFalse();
+});
+
+it('refuses support when the reflection re-enable throws', function (): void {
+    stacheToggleUse(new StacheIndexUpdateToggleRefusingStache);
+
+    expect(StacheIndexUpdateToggle::isSupported())->toBeFalse();
+});
+
+it('refuses support when the re-enable fails, whatever the public API reads next', function (): void {
+    // The first two reads are the starting state and the disable check; a later read
+    // reporting enabled must not count, because the re-enable itself failed
+    stacheToggleUse(new StacheIndexUpdateToggleRefusingStache(laterReads: true));
+
+    expect(StacheIndexUpdateToggle::isSupported())->toBeFalse();
+});
+
+it('reports a failed re-enable when the reflection write throws', function (): void {
+    // The public API would report enabled; the failed write is what must decide
+    $stache = new StacheIndexUpdateToggleRefusingStache(laterReads: true);
+    $stache->reads = 2;
+    stacheToggleUse($stache);
 
     expect(StacheIndexUpdateToggle::enable())->toBeFalse();
 });

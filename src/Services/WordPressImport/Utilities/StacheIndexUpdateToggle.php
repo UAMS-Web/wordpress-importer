@@ -114,10 +114,7 @@ class StacheIndexUpdateToggle
                 return false;
             }
 
-            // forceEnable() fails only when the facade holds no Stache or the property
-            // is missing, and both were ruled out above, so no test reaches this return
             if (! self::forceEnable()) {
-                // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
                 return false;
             }
 
@@ -169,8 +166,6 @@ class StacheIndexUpdateToggle
 
             return true;
         } catch (Throwable) {
-            // Only a non-Stache root throws here, and the guard above returns first
-            // @pest-mutate-ignore: FalseToTrue
             return false;
         }
     }
