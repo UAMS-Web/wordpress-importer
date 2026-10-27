@@ -19,6 +19,12 @@ class KeyTracker
      *
      * @var array<int|string, mixed>
      */
+    // A property initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Removing an entry that does not start with `_` by
+    // hand fails its row of KeyTrackerAddressedKeysTest, which lists every such entry
+    // in tests/Fixtures/key-tracker/; one that starts with `_` changes nothing, since
+    // trackKeys() leaves every underscore key out of the report.
+    // @pest-mutate-ignore: RemoveArrayItem
     protected $ignoredMetaKeys = [
         '__thumbnail_id',
         '_action_menu',
@@ -88,84 +94,44 @@ class KeyTracker
         '_home_slides_1_home_slide_text_color',
         '_home_slides_1_home_slide_title',
         '_home_slides_2_home_slide_button_text',
-        '_home_slides_2_home_slide_button_text',
-        '_home_slides_2_home_slide_desktop',
         '_home_slides_2_home_slide_desktop',
         '_home_slides_2_home_slide_external',
-        '_home_slides_2_home_slide_external',
-        '_home_slides_2_home_slide_external_link',
         '_home_slides_2_home_slide_external_link',
         '_home_slides_2_home_slide_internal',
-        '_home_slides_2_home_slide_internal',
-        '_home_slides_2_home_slide_internal_link',
         '_home_slides_2_home_slide_internal_link',
         '_home_slides_2_home_slide_mobile',
-        '_home_slides_2_home_slide_mobile',
-        '_home_slides_2_home_slide_text',
         '_home_slides_2_home_slide_text',
         '_home_slides_2_home_slide_text_color',
-        '_home_slides_2_home_slide_text_color',
-        '_home_slides_2_home_slide_title',
         '_home_slides_2_home_slide_title',
         '_home_slides_3_home_slide_button_text',
-        '_home_slides_3_home_slide_button_text',
-        '_home_slides_3_home_slide_desktop',
         '_home_slides_3_home_slide_desktop',
         '_home_slides_3_home_slide_external',
-        '_home_slides_3_home_slide_external',
-        '_home_slides_3_home_slide_external_link',
         '_home_slides_3_home_slide_external_link',
         '_home_slides_3_home_slide_internal',
-        '_home_slides_3_home_slide_internal',
-        '_home_slides_3_home_slide_internal_link',
         '_home_slides_3_home_slide_internal_link',
         '_home_slides_3_home_slide_mobile',
-        '_home_slides_3_home_slide_mobile',
-        '_home_slides_3_home_slide_text',
         '_home_slides_3_home_slide_text',
         '_home_slides_3_home_slide_text_color',
-        '_home_slides_3_home_slide_text_color',
-        '_home_slides_3_home_slide_title',
         '_home_slides_3_home_slide_title',
         '_home_slides_4_home_slide_button_text',
-        '_home_slides_4_home_slide_button_text',
-        '_home_slides_4_home_slide_desktop',
         '_home_slides_4_home_slide_desktop',
         '_home_slides_4_home_slide_external',
-        '_home_slides_4_home_slide_external',
-        '_home_slides_4_home_slide_external_link',
         '_home_slides_4_home_slide_external_link',
         '_home_slides_4_home_slide_internal',
-        '_home_slides_4_home_slide_internal',
-        '_home_slides_4_home_slide_internal_link',
         '_home_slides_4_home_slide_internal_link',
         '_home_slides_4_home_slide_mobile',
-        '_home_slides_4_home_slide_mobile',
-        '_home_slides_4_home_slide_text',
         '_home_slides_4_home_slide_text',
         '_home_slides_4_home_slide_text_color',
-        '_home_slides_4_home_slide_text_color',
-        '_home_slides_4_home_slide_title',
         '_home_slides_4_home_slide_title',
         '_home_slides_5_home_slide_button_text',
-        '_home_slides_5_home_slide_button_text',
-        '_home_slides_5_home_slide_desktop',
         '_home_slides_5_home_slide_desktop',
         '_home_slides_5_home_slide_external',
-        '_home_slides_5_home_slide_external',
-        '_home_slides_5_home_slide_external_link',
         '_home_slides_5_home_slide_external_link',
         '_home_slides_5_home_slide_internal',
-        '_home_slides_5_home_slide_internal',
-        '_home_slides_5_home_slide_internal_link',
         '_home_slides_5_home_slide_internal_link',
         '_home_slides_5_home_slide_mobile',
-        '_home_slides_5_home_slide_mobile',
-        '_home_slides_5_home_slide_text',
         '_home_slides_5_home_slide_text',
         '_home_slides_5_home_slide_text_color',
-        '_home_slides_5_home_slide_text_color',
-        '_home_slides_5_home_slide_title',
         '_home_slides_5_home_slide_title',
         '_links_to',
         '_links_to_target',
@@ -569,6 +535,10 @@ class KeyTracker
      *
      * @var array<int|string, mixed>
      */
+    // Annotated for the same reason as $ignoredMetaKeys, against the same test.
+    // trackKeys() collects only unprefixed and `wp:` children, so removing the
+    // content:, dc: or excerpt: entry changes nothing.
+    // @pest-mutate-ignore: RemoveArrayItem
     protected $topLevelXmlKeys = [
         'category',
         'content:encoded',
