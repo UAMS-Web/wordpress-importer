@@ -86,7 +86,6 @@ function scopedConvertLink(string $url): mixed
     return $method->invoke(
         new LinkProcessor,
         $url,
-        'https://example.test',
         'default',
         new AssetImporter,
         new BufferedOutput

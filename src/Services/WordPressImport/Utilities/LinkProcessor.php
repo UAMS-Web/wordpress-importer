@@ -342,7 +342,6 @@ class LinkProcessor
                 // Convert the internal WordPress link to a Statamic entry URL
                 $newUrl = $this->convertInternalPageLink(
                     $href,
-                    $wordPressBaseBlogUrl,
                     $statamicSiteHandle,
                     $assetImporter,
                     $output,
@@ -808,7 +807,6 @@ class LinkProcessor
      * as a file URL instead.
      *
      * @param  string  $wordPressUrl  The internal WordPress page URL
-     * @param  string  $wordPressBaseBlogUrl  The base WordPress blog URL
      * @param  string  $statamicSiteHandle  The Statamic site handle
      * @param  AssetImporter  $assetImporter  Instance for importing files
      * @param  OutputInterface  $output  Console output for logging
@@ -817,7 +815,6 @@ class LinkProcessor
      */
     private function convertInternalPageLink(
         string $wordPressUrl,
-        string $wordPressBaseBlogUrl,
         string $statamicSiteHandle,
         AssetImporter $assetImporter,
         OutputInterface $output,
@@ -870,7 +867,7 @@ class LinkProcessor
         // ---
 
         // Parse current page link into components (base, query, fragment)
-        $currentPageUrlComponents = ($currentPageLink !== null && $currentPageLink !== '') ? self::parseUrlComponents($currentPageLink) : null;
+        $currentPageUrlComponents = $currentPageLink !== null ? self::parseUrlComponents($currentPageLink) : null;
 
         // ---
         // Construct search URL from current page (base + query, without fragment) for
@@ -885,19 +882,9 @@ class LinkProcessor
             $currentPageSearchUrl !== null && $currentPageSearchUrl !== ''
             && $searchUrl === $currentPageSearchUrl
         ) {
-            // Initialize href value for same-page link
-            $hrefValue = '';
-
-            // ---
-            // Add fragment identifier if present (query string is not needed for same-page
-            // links)
-            // ---
-
-            // Check if fragment identifier is present
-            if ($fragment !== null && $fragment !== '') {
-                // Append fragment to href value
-                $hrefValue .= $fragment;
-            }
+            // The href is the fragment, if any (query string is not needed for
+            // same-page links)
+            $hrefValue = $fragment ?? '';
 
             // Inform user of same-page link conversion
             $output->writeln("  - <info>Converted same-page link: {$wordPressUrl} -> {$hrefValue}</info>");
@@ -930,8 +917,8 @@ class LinkProcessor
             self::$cachedXmlPath = $currentXmlPath;
         }
 
-        // Use current XML path if available, otherwise fall back to cached value
-        $xmlPath = $currentXmlPath ?? self::$cachedXmlPath;
+        // Use the cached path, which is now the current one when there is one
+        $xmlPath = self::$cachedXmlPath;
 
         // Check if the XML path is available
         if ($xmlPath === null || $xmlPath === '') {
@@ -964,129 +951,21 @@ class LinkProcessor
                 $xmlPath // No final URL yet, we'll try redirects if this fails
             );
 
-            // Check if post data was found in the XML
+            // Convert the post found for the URL
             if ($postData !== null) {
-                // Extract the WordPress post name from the found data
-                $wordPressPostName = $postData['post_name'];
-
-                // Extract the WordPress post ID from the found data
-                $wordPressPostId = $postData['post_id'];
-
-                // Extract the WordPress post type from the found data
-                $wordPressPostType = $postData['post_type'];
-
-                // Skip redirect_rule post types as they are imported into redirects global,
-                // not a collection, and should not be linked to
-                if ($wordPressPostType === 'redirect_rule') {
-                    // Return null to skip this link (redirect rules are not linkable entries)
-                    return null;
-                }
-
-                // ---
-                // Handle attachment post types by extracting attachment URL and processing as file
-                // ---
-
-                // Check if the post type is attachment
-                if ($wordPressPostType === 'attachment') {
-                    // Find the attachment item in XML to extract the attachment URL
-                    $attachmentItem = XpathHelper::findItemByPostId(
-                        $xmlPath,
-                        $wordPressPostId,
-                        'attachment'
-                    );
-
-                    // Check if attachment item was found
-                    if ($attachmentItem instanceof SimpleXMLElement) {
-                        // Extract the attachment URL from the XML item
-                        $attachmentUrl = XpathHelper::getStringValue(
-                            $attachmentItem,
-                            'wp:attachment_url'
-                        );
-
-                        // Check if attachment URL was successfully extracted
-                        if ($attachmentUrl !== '') {
-                            // Process the attachment URL as a file URL
-                            return $this->processAttachmentUrlAsFile(
-                                $attachmentUrl,
-                                $statamicSiteHandle,
-                                $assetImporter,
-                                $output
-                            );
-                        }
-                    }
-
-                    // Return null if attachment URL could not be extracted
-                    return null;
-                }
-
-                // Map the WordPress post type to Statamic target collection handle
-                $statamicTargetCollectionHandle = self::mapPostTypeToCollection($wordPressPostType);
-
-                // Initialize entry variable for lookup results
-                $statamicTargetEntry = null;
-
-                // Check if we have a valid target collection handle to search
-                if ($statamicTargetCollectionHandle !== null && $statamicTargetCollectionHandle !== '') {
-                    // Try to find the entry by slug if post name is not empty
-                    if ($wordPressPostName !== '') {
-                        // Try to find the entry by slug (single attempt during initial processing)
-                        $statamicTargetEntry = EntryFinder::findEntryBySlug(
-                            $statamicTargetCollectionHandle,
-                            $wordPressPostName,
-                            true, // Force fresh query
-                            $statamicSiteHandle
-                        );
-                    }
-
-                    $statamicTargetEntry ??= EntryFinder::findEntryByWordPressId(
-                        $statamicTargetCollectionHandle,
-                        $wordPressPostId,
-                        true, // Force fresh query
-                        $statamicSiteHandle
-                    );
-                }
-
-                // Check if the Statamic entry was found
-                if ($statamicTargetEntry instanceof Entry) {
-                    // Generate the Statamic entry reference
-                    $statamicUrl = self::generateEntryReference(
-                        $statamicTargetEntry,
-                        $fragment,
-                        $query
-                    );
-
-                    // Store the successful conversion in the cache (use search URL as key)
-                    self::$processedLinksCache[$searchUrl] = $statamicUrl;
-
-                    // Inform user of successful link conversion
-                    $output->writeln("  - <info>Converted internal link: {$wordPressUrl} -> {$statamicUrl}</info>");
-
-                    // Return the converted Statamic entry reference
-                    return $statamicUrl;
-                }
-
-                // If we have a current entry ID, defer the link for later processing
-                if ($statamicEntryId !== null && $statamicEntryId !== '') {
-                    // Store the link for deferred processing after all entries are imported
-                    $this->storeDeferredLink(
-                        $statamicEntryId,
-                        ProcessingContext::getCollectionHandle() ?? 'pages',
-                        $wordPressUrl,
-                        $wordPressPostName,
-                        $wordPressPostId,
-                        $wordPressPostType,
-                        $statamicSiteHandle,
-                        $output,
-                        $fragment,
-                        $query
-                    );
-
-                    // Return null to indicate the link was deferred
-                    return null;
-                }
-
-                // Return null to indicate the link could not be converted immediately
-                return null;
+                return $this->convertFoundPost(
+                    $postData,
+                    $xmlPath,
+                    $wordPressUrl,
+                    $searchUrl,
+                    $fragment,
+                    $query,
+                    $statamicSiteHandle,
+                    $assetImporter,
+                    $output,
+                    $statamicEntryId,
+                    'Converted internal link'
+                );
             }
 
             // ---
@@ -1095,9 +974,10 @@ class LinkProcessor
             // ---
             $finalUrl = $this->followRedirects($searchUrl);
 
-            // Check if the URL was redirected to a different location
+            // Check if the URL was redirected to a different location (a failed
+            // fetch gives null, and a resolved one is never empty)
             if (
-                ! in_array($finalUrl, [null, '', $searchUrl], true)
+                ! in_array($finalUrl, [null, $searchUrl], true)
             ) {
                 // Step 2.A: If redirected, get and store the final URL
                 // Step 2.A.i: Repeat step 1, using both the original URL and final URL for search
@@ -1107,147 +987,29 @@ class LinkProcessor
                     $finalUrl // Pass both original and final URL for comprehensive search
                 );
 
-                // Check if post data was found for the redirected URL
+                // Convert the post found for the redirected URL
                 if ($postData !== null) {
-                    // Extract the WordPress post name from the redirected URL data
-                    $wordPressPostName = $postData['post_name'];
-
-                    // Extract the WordPress post ID from the redirected URL data
-                    $wordPressPostId = $postData['post_id'];
-
-                    // Extract the WordPress post type from the redirected URL data
-                    $wordPressPostType = $postData['post_type'];
-
-                    // Skip redirect_rule post types as they are imported into redirects global,
-                    // not a collection, and should not be linked to
-                    if ($wordPressPostType === 'redirect_rule') {
-                        // Return null to skip this link (redirect rules are not linkable entries)
-                        return null;
-                    }
-
-                    // ---
-                    // Handle attachment post types by extracting attachment URL and processing as file
-                    // ---
-
-                    // Check if the post type is attachment
-                    if ($wordPressPostType === 'attachment') {
-                        // Find the attachment item in XML to extract the attachment URL
-                        $attachmentItem = XpathHelper::findItemByPostId(
-                            $xmlPath,
-                            $wordPressPostId,
-                            'attachment'
-                        );
-
-                        // Check if attachment item was found
-                        if ($attachmentItem instanceof SimpleXMLElement) {
-                            // Extract the attachment URL from the XML item
-                            $attachmentUrl = XpathHelper::getStringValue(
-                                $attachmentItem,
-                                'wp:attachment_url'
-                            );
-
-                            // Check if attachment URL was successfully extracted
-                            if ($attachmentUrl !== '') {
-                                // Process the attachment URL as a file URL
-                                return $this->processAttachmentUrlAsFile(
-                                    $attachmentUrl,
-                                    $statamicSiteHandle,
-                                    $assetImporter,
-                                    $output
-                                );
-                            }
-                        }
-
-                        // Return null if attachment URL could not be extracted
-                        return null;
-                    }
-
-                    // Map the WordPress post type to Statamic target collection handle
-                    $statamicTargetCollectionHandle = self::mapPostTypeToCollection($wordPressPostType);
-
-                    // Initialize entry variable for lookup results
-                    $statamicTargetEntry = null;
-
-                    // Check if we have a valid target collection handle to search
-                    if ($statamicTargetCollectionHandle !== null && $statamicTargetCollectionHandle !== '') {
-                        // Try to find the entry by slug (single attempt during initial processing)
-                        $statamicTargetEntry = EntryFinder::findEntryBySlug(
-                            $statamicTargetCollectionHandle,
-                            $wordPressPostName,
-                            true, // Force fresh query
-                            $statamicSiteHandle
-                        );
-                    }
-
-                    // If not found by slug, try to find by WordPress post ID
-                    if (
-                        ! $statamicTargetEntry instanceof Entry
-                        && $statamicTargetCollectionHandle !== null && $statamicTargetCollectionHandle !== ''
-                    ) {
-                        // ---
-                        // Try to find the entry by WordPress post ID (single attempt during initial
-                        // processing)
-                        // ---
-                        $statamicTargetEntry = EntryFinder::findEntryByWordPressId(
-                            $statamicTargetCollectionHandle,
-                            $wordPressPostId,
-                            true, // Force fresh query
-                            $statamicSiteHandle
-                        );
-                    }
-
-                    // Check if the Statamic entry was found for the redirected URL
-                    if ($statamicTargetEntry instanceof Entry) {
-                        // Generate the Statamic entry reference
-                        $statamicUrl = self::generateEntryReference(
-                            $statamicTargetEntry,
-                            $fragment,
-                            $query
-                        );
-
-                        // Store the successful conversion in the cache (use search URL as key)
-                        self::$processedLinksCache[$searchUrl] = $statamicUrl;
-
-                        // Inform user of successful link conversion via redirect
-                        $output->writeln("  - <info>Converted internal link (via redirect): {$wordPressUrl} -> {$statamicUrl}</info>");
-
-                        // Return the converted Statamic entry reference
-                        return $statamicUrl;
-                    }
-
-                    // If we have a current entry ID, defer the link for later processing
-                    if ($statamicEntryId !== null && $statamicEntryId !== '') {
-                        // Store the link for deferred processing after all entries are imported
-                        $this->storeDeferredLink(
-                            $statamicEntryId,
-                            ProcessingContext::getCollectionHandle() ?? 'pages',
-                            $wordPressUrl,
-                            $wordPressPostName,
-                            $wordPressPostId,
-                            $wordPressPostType,
-                            $statamicSiteHandle,
-                            $output,
-                            $fragment,
-                            $query
-                        );
-                    }
-
-                    // Return null to indicate the link could not be converted immediately
-                    return null;
+                    return $this->convertFoundPost(
+                        $postData,
+                        $xmlPath,
+                        $wordPressUrl,
+                        $searchUrl,
+                        $fragment,
+                        $query,
+                        $statamicSiteHandle,
+                        $assetImporter,
+                        $output,
+                        $statamicEntryId,
+                        'Converted internal link (via redirect)'
+                    );
                 }
             }
 
             // Else, return the HREF URL (unchanged)
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'wordpress_url' => $wordPressUrl,
-                    'wordpress_base_blog_url' => $wordPressBaseBlogUrl,
-                    'statamic_site_handle' => $statamicSiteHandle,
-                ]
-            );
 
-            // Cache the unresolved link for later reporting (use search URL as key)
+            // Cache the unresolved link for later reporting (use search URL as key).
+            // Only the cache's keys are read, so the value stored is never seen.
+            // @pest-mutate-ignore: TrueToFalse
             self::$unresolvedLinksCache[$searchUrl] = true;
 
             // A scoped run may not have read the target's type, which fails this search exactly
@@ -1278,13 +1040,162 @@ class LinkProcessor
     }
 
     /**
+     * Converts the WordPress post found for an internal link to a Statamic entry
+     * reference, or to the imported file for an attachment.
+     *
+     * A redirect rule is not linkable. An entry not imported yet is deferred when
+     * the link's own entry is known.
+     *
+     * @param  PostData  $postData  The post found for the link
+     * @param  string  $xmlPath  The export path, for an attachment's URL
+     * @param  string  $wordPressUrl  The link as written
+     * @param  string  $searchUrl  The link without its fragment, the cache key
+     * @param  ?string  $fragment  The link's fragment
+     * @param  ?string  $query  The link's query
+     * @param  string  $statamicSiteHandle  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  ?string  $statamicEntryId  The entry the link is in, for deferral
+     * @param  string  $conversion  How the conversion is described when reported
+     * @return ?string The entry reference or file URL, or null
+     */
+    private function convertFoundPost(
+        array $postData,
+        string $xmlPath,
+        string $wordPressUrl,
+        string $searchUrl,
+        ?string $fragment,
+        ?string $query,
+        string $statamicSiteHandle,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        ?string $statamicEntryId,
+        string $conversion
+    ): ?string {
+        // Extract the WordPress post name, ID and type from the found data
+        $wordPressPostName = $postData['post_name'];
+        $wordPressPostId = $postData['post_id'];
+        $wordPressPostType = $postData['post_type'];
+
+        // Skip redirect_rule post types as they are imported into redirects global,
+        // not a collection, and should not be linked to
+        if ($wordPressPostType === 'redirect_rule') {
+            return null;
+        }
+
+        // Handle an attachment by processing its URL as a file
+        if ($wordPressPostType === 'attachment') {
+            // Find the attachment item in XML to extract the attachment URL
+            $attachmentItem = XpathHelper::findItemByPostId(
+                $xmlPath,
+                $wordPressPostId,
+                'attachment'
+            );
+
+            // Extract the attachment URL from the XML item (the item can be
+            // missing: an exact link match reads the post ID's whole value, and
+            // this query compares single text nodes)
+            $attachmentUrl = $attachmentItem instanceof SimpleXMLElement
+                ? XpathHelper::getStringValue(
+                    $attachmentItem,
+                    'wp:attachment_url'
+                )
+                : '';
+
+            // Return null if the attachment URL could not be extracted
+            if ($attachmentUrl === '') {
+                return null;
+            }
+
+            // Process the attachment URL as a file URL
+            return $this->processAttachmentUrlAsFile(
+                $attachmentUrl,
+                $statamicSiteHandle,
+                $assetImporter,
+                $output
+            );
+        }
+
+        // Map the WordPress post type to Statamic target collection handle (every
+        // mapped handle is non-empty)
+        $statamicTargetCollectionHandle = self::mapPostTypeToCollection($wordPressPostType);
+
+        // Initialize entry variable for lookup results
+        $statamicTargetEntry = null;
+
+        // Check if we have a target collection handle to search
+        if ($statamicTargetCollectionHandle !== null) {
+            // Try to find the entry by slug if post name is not empty. A fresh
+            // slug lookup invalidates nothing (#127), so asking for one changes
+            // nothing.
+            if ($wordPressPostName !== '') {
+                $statamicTargetEntry = EntryFinder::findEntryBySlug(
+                    $statamicTargetCollectionHandle,
+                    $wordPressPostName,
+                    // @pest-mutate-ignore: TrueToFalse
+                    true,
+                    $statamicSiteHandle
+                );
+            }
+
+            // Otherwise try to find the entry by WordPress post ID. The reference
+            // is built from the entry's id, which a stale cached copy shares, so a
+            // fresh lookup changes nothing here.
+            $statamicTargetEntry ??= EntryFinder::findEntryByWordPressId(
+                $statamicTargetCollectionHandle,
+                $wordPressPostId,
+                // @pest-mutate-ignore: TrueToFalse
+                true,
+                $statamicSiteHandle
+            );
+        }
+
+        // Check if the Statamic entry was found
+        if ($statamicTargetEntry instanceof Entry) {
+            // Generate the Statamic entry reference
+            $statamicUrl = self::generateEntryReference(
+                $statamicTargetEntry,
+                $fragment,
+                $query
+            );
+
+            // Store the successful conversion in the cache (use search URL as key)
+            self::$processedLinksCache[$searchUrl] = $statamicUrl;
+
+            // Inform user of successful link conversion
+            $output->writeln("  - <info>{$conversion}: {$wordPressUrl} -> {$statamicUrl}</info>");
+
+            // Return the converted Statamic entry reference
+            return $statamicUrl;
+        }
+
+        // If we have a current entry ID, defer the link for later processing
+        if ($statamicEntryId !== null && $statamicEntryId !== '') {
+            // Store the link for deferred processing after all entries are imported
+            $this->storeDeferredLink(
+                $statamicEntryId,
+                ProcessingContext::getCollectionHandle() ?? 'pages',
+                $wordPressUrl,
+                $wordPressPostName,
+                $wordPressPostId,
+                $wordPressPostType,
+                $statamicSiteHandle,
+                $output,
+                $fragment,
+                $query
+            );
+        }
+
+        // Return null to indicate the link could not be converted immediately
+        return null;
+    }
+
+    /**
      * Extracts the page slug from a WordPress URL.
      *
-     * Removes the base blog URL and any query parameters to extract the clean
-     * page slug. For hierarchical URLs, tries both the full path and the final
-     * slug segment since Statamic entries can be stored with either format.
-     * Handles various URL formats including trailing slashes, query parameters,
-     * and URL encoding.
+     * Removes the base blog URL, the query and fragment, and any trailing slashes,
+     * and returns the last path segment as written, percent-encoding included.
+     * Its only caller checks the slug for a dot, to tell a file from a page.
      *
      * @param  string  $wordPressUrl  The WordPress page URL
      * @param  string  $wordPressBaseBlogUrl  The base WordPress blog URL
@@ -1306,13 +1217,7 @@ class LinkProcessor
             return null;
         }
 
-        // Remove leading slashes from the path
-        $path = \ltrim(
-            $path,
-            '/'
-        );
-
-        // Remove trailing slash
+        // Remove trailing slashes (a leading one only adds an empty first segment)
         $path = \rtrim(
             $path,
             '/'
@@ -1321,17 +1226,6 @@ class LinkProcessor
         // Check if the path is empty after processing
         if ($path === '') {
             // Return null if no path remains
-            return null;
-        }
-
-        // Convert URL-encoded sequences to hex representation without % symbols
-        // This handles cases like %c2%a7 -> c2a7 to match Statamic entry slugs
-        $path = preg_replace_callback(
-            '/%([0-9A-Fa-f]{2})/',
-            fn ($matches): string => \strtolower($matches[1]),
-            $path
-        );
-        if ($path === null) {
             return null;
         }
 
