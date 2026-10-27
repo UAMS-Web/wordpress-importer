@@ -948,8 +948,9 @@ class ContentProcessor
                 ) {
                     // Extract block type (e.g., 'tablepress/table')
                     $blockType = $matches[1];
-                    // Skip blocks handled by Tiptap. A block type and these names are
-                    // all non-numeric strings, so strict and loose comparison agree.
+                    // Skip blocks handled by Tiptap. Every name in the list is a
+                    // non-numeric string, so even a numeric block type (wp:123 gives
+                    // '123') compares as a string, and strict and loose agree.
                     // @pest-mutate-ignore: TrueToFalse
                     if (
                         \in_array(
