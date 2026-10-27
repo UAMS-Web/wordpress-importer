@@ -61,8 +61,8 @@ class KbTopicsParser
 
         // Check if title is set
         if ($title !== null) {
-            // Set block_heading to 'Popular Topics' if title is empty, 'Popular Topics', or 'Popular topics'
-            $result['block_heading'] = (in_array($title, ['', 'Popular Topics', 'Popular topics'], true))
+            // Set block_heading to 'Popular Topics' if title is empty or 'Popular topics'
+            $result['block_heading'] = (in_array($title, ['', 'Popular topics'], true))
                 ? 'Popular Topics'
                 : $title;
         }
@@ -128,14 +128,9 @@ class KbTopicsParser
 
                 // Map WordPress term IDs to Statamic entry IDs
                 foreach ($topicIds as $termId) {
-                    // Trim term ID
+                    // Trim term ID, since the pattern's $ also matches before a
+                    // trailing newline, which the last ID then carries
                     $termId = \trim($termId);
-
-                    // Skip empty term IDs
-                    if ($termId === '') {
-                        // Continue to next term ID
-                        continue;
-                    }
 
                     // Get Statamic entry ID for this term ID
                     $entryId = KbLinkRegistry::getKbtopicEntryIdByTermId($termId);
@@ -186,38 +181,18 @@ class KbTopicsParser
                     $topics
                 );
 
-                // Process each keyword in order
+                // Map each keyword to its topic_dynamic value in order, skipping
+                // empty and unknown keywords
+                $dynamicTopics = [
+                    'recent' => 'recently_published',
+                    'updated' => 'recently_updated',
+                    'top_views' => 'top_views',
+                    'top_likes' => 'top_likes',
+                ];
                 foreach ($topicKeywords as $keyword) {
-                    // Trim keyword
-                    $keyword = \trim($keyword);
-
-                    // ---
-                    // Skip empty keywords
-                    // ---
-
-                    // Check if keyword is empty
-                    if ($keyword === '') {
-                        // Continue to next keyword
-                        continue;
-                    }
-
-                    // ---
-                    // Map keyword to topic_dynamic value
-                    // ---
-
-                    // Check if keyword is 'recent'
-                    if ($keyword === 'recent') {
-                        // Add 'recently_published' to topic dynamic
-                        $topicDynamic[] = 'recently_published';
-                    } elseif ($keyword === 'updated') { // Check if keyword is 'updated'
-                        // Add 'recently_updated' to topic dynamic
-                        $topicDynamic[] = 'recently_updated';
-                    } elseif ($keyword === 'top_views') { // Check if keyword is 'top_views'
-                        // Add 'top_views' to topic dynamic
-                        $topicDynamic[] = 'top_views';
-                    } elseif ($keyword === 'top_likes') { // Check if keyword is 'top_likes'
-                        // Add 'top_likes' to topic dynamic
-                        $topicDynamic[] = 'top_likes';
+                    $dynamicTopic = $dynamicTopics[\trim($keyword)] ?? null;
+                    if ($dynamicTopic !== null) {
+                        $topicDynamic[] = $dynamicTopic;
                     }
                 }
 
@@ -318,8 +293,7 @@ class KbTopicsParser
                 // Set topic_limit to limit if it's a positive number string, otherwise '4'
                 $result['topic_limit'] = (
                     \is_string($limit)
-                    && \preg_match('/^\d+$/', $limit) === 1
-                    && (int) $limit > 0
+                    && \preg_match('/^\d*[1-9]\d*$/', $limit) === 1
                 )
                     ? $limit
                     : '4';
@@ -581,17 +555,8 @@ class KbTopicsParser
             // Set topic_graphic to 'icon'
             $result['topic_graphic'] = 'icon';
         } elseif ($showTopicIcons === true) { // Check if showTopicIcons is set and is true
-            // Check if useTopicImage is set and is false or null
-            if ($useTopicImage === false || $useTopicImage === null) {
-                // Set topic_graphic to 'icon'
-                $result['topic_graphic'] = 'icon';
-            } elseif ($useTopicImage === true) { // Check if useTopicImage is set and is true
-                // Set topic_graphic to 'featured_image'
-                $result['topic_graphic'] = 'featured_image';
-            } else { // Otherwise
-                // Set topic_graphic to 'icon'
-                $result['topic_graphic'] = 'icon';
-            }
+            // Set topic_graphic to 'featured_image' when useTopicImage is true, otherwise 'icon'
+            $result['topic_graphic'] = $useTopicImage === true ? 'featured_image' : 'icon';
         } elseif ($showTopicIcons === false || $showTopicIcons === null) { // Check if showTopicIcons is set and is false or null
             // Set topic_graphic to 'none'
             $result['topic_graphic'] = 'none';
