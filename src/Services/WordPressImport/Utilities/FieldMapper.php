@@ -22,15 +22,16 @@ class FieldMapper
      *
      * @var array<int|string, mixed>
      */
+    // Keys are looked up after their leading underscore is stripped, so each entry
+    // also maps its underscored form. A property initializer is never reported as an
+    // executed line; removing an entry by hand fails "maps the direct keys, with or
+    // without a leading underscore" in FieldMapperTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     protected $directMapMetaKeys = [
         'genesis_scripts' => 'scripts_head',
-        '_genesis_scripts' => 'scripts_head',
         'genesis_scripts_body' => 'scripts_body',
-        '_genesis_scripts_body' => 'scripts_body',
         'genesis_scripts_body_position' => 'scripts_body_position',
-        '_genesis_scripts_body_position' => 'scripts_body_position',
         'seopress_robots_canonical_meta' => 'robots_canonical_meta',
-        '_seopress_robots_canonical_meta' => 'robots_canonical_meta',
     ];
 
     /**
@@ -84,7 +85,7 @@ class FieldMapper
                     $matches
                 ) === 1
             ) {
-                // Extract hero index from matched pattern
+                // Extract hero index from matched pattern, so `01` and `1` are one slide
                 $index = (int) $matches[1];
 
                 // Extract hero field from matched pattern
@@ -106,7 +107,10 @@ class FieldMapper
         foreach ($heroSlides as $index => $slide) {
             $siteHandle = self::extractScalarString($data['site'] ?? '');
 
+            // The site is the same for every slide, so stopping here or skipping each
+            // slide in turn processes none of them either way
             if ($siteHandle === '') {
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -138,7 +142,9 @@ class FieldMapper
             // Normalize mixed meta values to scalar strings when needed
             $valueString = self::extractScalarString($value);
 
-            // Check if key matches hero slide field pattern
+            // Check if key matches hero slide field pattern. A hero key matches no
+            // case below either, so this skip only saves the work.
+            // @pest-mutate-ignore: IncrementInteger
             if (
                 \preg_match(
                     '/^page_hero_hero_\d+_hero_/',
@@ -187,6 +193,8 @@ class FieldMapper
             if (isset($this->directMapMetaKeys[$normalizedKey])) {
                 $targetField = $this->directMapMetaKeys[$normalizedKey];
 
+                // Skip a target that is not a field handle, which only a subclass
+                // overriding the map can supply
                 if (! \is_string($targetField) || $targetField === '') {
                     continue;
                 }
@@ -221,7 +229,7 @@ class FieldMapper
                     // Map post_hide_author value to Statamic hide_creator_query field.
                     // WordPress stores '1'/'0'; cast to bool for Statamic true_false field.
                     // ---
-                    $data['hide_creator_query'] = ($value ?? '') === '1';
+                    $data['hide_creator_query'] = $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -256,7 +264,7 @@ class FieldMapper
                     // Check if a target field was resolved for this SEO robots key
                     if ($targetSeoRobotsField !== null) {
                         // Cast WordPress '1'/'0' values to booleans for Statamic true_false fields
-                        $data[$targetSeoRobotsField] = ($value ?? '') === '1';
+                        $data[$targetSeoRobotsField] = $value === '1';
                     }
 
                     // Track this key as mapped
@@ -282,7 +290,7 @@ class FieldMapper
                     // Set subsection value, defaulting to false if empty or not '1'. WordPress uses
                     // '1' for true, empty string or other values for false.
                     // ---
-                    $data['subsection'] = ($value ?? '') === '1';
+                    $data['subsection'] = $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -307,7 +315,10 @@ class FieldMapper
                     // Set hide from menu value; preserve true if already set by 'parent' meta.
                     // WordPress uses '1' for true, empty string or other values for false.
                     // ---
-                    $data['hide_from_menu'] = (bool) ($data['hide_from_menu'] ?? false) || (($value ?? '') === '1');
+                    // The cast only satisfies PHPStan's strict boolean rule; `||` yields a
+                    // bool whichever way
+                    // @pest-mutate-ignore: RemoveBooleanCast
+                    $data['hide_from_menu'] = (bool) ($data['hide_from_menu'] ?? false) || $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -321,7 +332,7 @@ class FieldMapper
                     // When parent meta is 'on', set hide from menu so the page does not
                     // appear in navigation (WordPress “parent” placeholder page).
                     // ---
-                    if (($value ?? '') === 'on') {
+                    if ($value === 'on') {
                         $data['hide_from_menu'] = true;
                     }
 
@@ -337,7 +348,7 @@ class FieldMapper
                     // Set hide child menu value, defaulting to false if empty or not '1'. WordPress
                     // uses '1' for true, empty string or other values for false.
                     // ---
-                    $data['hide_child_menu'] = ($value ?? '') === '1';
+                    $data['hide_child_menu'] = $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -351,7 +362,9 @@ class FieldMapper
                     // Set hide breadcrumbs value; preserve true if already set by
                     // 'breadcrumb' meta. WordPress uses '1' for true.
                     // ---
-                    $data['hide_breadcrumbs'] = (bool) ($data['hide_breadcrumbs'] ?? false) || (($value ?? '') === '1');
+                    // The cast only satisfies PHPStan, as for hide_from_menu
+                    // @pest-mutate-ignore: RemoveBooleanCast
+                    $data['hide_breadcrumbs'] = (bool) ($data['hide_breadcrumbs'] ?? false) || $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -365,7 +378,7 @@ class FieldMapper
                     // When breadcrumb meta is 'on', set hide breadcrumbs so the page
                     // does not show breadcrumbs.
                     // ---
-                    if (($value ?? '') === 'on') {
+                    if ($value === 'on') {
                         $data['hide_breadcrumbs'] = true;
                     }
 
@@ -381,7 +394,7 @@ class FieldMapper
                     // Set boilerplate query value, defaulting to false if empty or not '1'. WordPress
                     // uses '1' for true, empty string or other values for false.
                     // ---
-                    $data['boilerplate_query'] = ($value ?? '') === '1';
+                    $data['boilerplate_query'] = $value === '1';
 
                     // Track this key as mapped
                     $mappedKeys[] = $key;
@@ -403,14 +416,16 @@ class FieldMapper
                         $normalizedValue !== ''
                         && $normalizedValue !== 'null'
                     ) {
-                        // Strip 'Media ' prefix and lowercase remainder to match fieldset key format
-                        $mediaContactKey = \strtolower(
-                            \preg_replace(
-                                '/^Media\s+/',
-                                '',
-                                $normalizedValue
-                            ) ?? ''
+                        // Strip 'Media ' prefix to match fieldset key format
+                        $strippedContact = \preg_replace(
+                            '/^Media\s+/',
+                            '',
+                            $normalizedValue
                         );
+
+                        // Lowercase the remainder, or store an empty key when the
+                        // replacement fails at a PCRE limit
+                        $mediaContactKey = \strtolower($strippedContact ?? '');
 
                         // Set the mapped media contact key in entry data
                         $data['media_contact'] = $mediaContactKey;
@@ -490,15 +505,14 @@ class FieldMapper
                     // Normalize value to handle potential null cases defensively
                     $normalizedValue = $valueString;
 
-                    // Treat empty values as 'default'
-                    $templateValue = $normalizedValue === '' ? 'default' : $normalizedValue;
-
                     // ---
                     // Apply landing page blueprint/template only for these WordPress
                     // templates; otherwise keep basic page blueprint/template
                     // ---
+                    // Strings on both sides, so strict and loose comparison agree
+                    // @pest-mutate-ignore: TrueToFalse
                     $isLandingPageTemplate = \in_array(
-                        $templateValue,
+                        $normalizedValue,
                         [
                             'templates/modules.php',
                             'templates/page_landing.php',
@@ -529,11 +543,9 @@ class FieldMapper
 
                     $siteHandle = self::extractScalarString($data['site'] ?? '');
 
-                    // Check if this is a page with a valid thumbnail value
-                    if (
-                        $postType === 'page'
-                        && $thumbnailValue !== ''
-                    ) {
+                    // Check if this is a page. An empty thumbnail imports nothing, so
+                    // the value is not checked here.
+                    if ($postType === 'page') {
                         // Import image with disabled upload handling
                         $featuredImagePath = ImageProcessor::importImageWithDisabledUploadHandling(
                             $thumbnailValue,
@@ -705,7 +717,7 @@ class FieldMapper
 
         // Check if blueprint is landing_page but header_marketing_landing_page was not set
         if (
-            ($data['blueprint'] ?? '') === 'landing_page'
+            ($data['blueprint'] ?? null) === 'landing_page'
             && ! isset($data['header_marketing_landing_page'])
         ) {
             // Initialize default header_marketing_landing_page structure with null values
@@ -943,10 +955,6 @@ class FieldMapper
     private static function extractScalarString(
         mixed $value
     ): string {
-        if (\is_string($value)) {
-            return $value;
-        }
-
         if (\is_scalar($value)) {
             return (string) $value;
         }
