@@ -8,7 +8,8 @@ declare(strict_types=1);
  *
  * Most of the manager's hooks are protected, so they are called through reflection on a
  * real instance; the public entry point configures and saves a real form.
- * `PreventsSavingStacheItemsToDisk` keeps that form out of the working tree.
+ * `StatamicTestCase` points form writes at a per-process directory, so that form never
+ * lands in the working tree.
  *
  * @command  php vendor/bin/pest tests/Integration/GravityFormsFormConfigurationManagerTest.php
  */
@@ -200,6 +201,7 @@ it('resolves a subfield to its parent handle and mapped subfield handle', functi
     'a typed parent after an untyped one' => ['4.3', [['id' => 4, 'label' => 'Home', 'inputs' => [['id' => '4.3', 'label' => 'City']]], ['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.3', 'label' => 'City']]]], 'home_4.city'],
     'a parent with inputs after one without' => ['4.3', [['id' => 4, 'label' => 'Home', 'type' => 'address'], ['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.3', 'label' => 'City']]]], 'home_4.city'],
     'a labelled input after an unlabelled one' => ['4.3', [['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.3'], ['id' => '4.3', 'label' => 'City']]]], 'home_4.city'],
+    'an input labelled like a path segment' => ['4.3', [['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.3', 'label' => '{first}']]]], null],
     'a second parent after a mismatch' => ['4.3', [['id' => 3, 'label' => 'Other'], ['id' => 4, 'label' => 'Home', 'type' => 'address', 'inputs' => [['id' => '4.1', 'label' => 'Street Address'], ['id' => '4.3', 'label' => 'City']]]], 'home_4.city'],
 ]);
 
@@ -233,6 +235,8 @@ it('converts routing rules whose field resolves, with each operator', function (
         ['operator' => 'is', 'value' => 'a', 'email' => 'c@uams.edu'],
         ['fieldId' => '1', 'operator' => 5, 'value' => 'a', 'email' => 7],
     ], gfcmFields());
+    // A rule without a field ID is looked up as an empty one, which only such a field matches.
+    $unnamed = gfcmCall($this->manager, 'convertRoutingRulesToStatamicFormat', [['operator' => 'is', 'value' => 'a', 'email' => 'c@uams.edu']], [['id' => '', 'label' => 'Blank']]);
 
     expect($rules)->toBe([
         ['field' => 'full_name_1', 'operator' => 'equals', 'value' => 'Ann', 'email' => 'ann@uams.edu'],
@@ -245,7 +249,7 @@ it('converts routing rules whose field resolves, with each operator', function (
         ['field' => 'full_name_1', 'operator' => 'unknown', 'value' => 'a', 'email' => 'c@uams.edu'],
         ['field' => 'full_name_1', 'operator' => '', 'value' => 'a', 'email' => 'c@uams.edu'],
         ['field' => 'full_name_1', 'operator' => '5', 'value' => 'a', 'email' => '7'],
-    ]);
+    ])->and($unnamed)->toBe([['field' => 'blank_', 'operator' => 'equals', 'value' => 'a', 'email' => 'c@uams.edu']]);
 });
 
 it('passes form data through unparsed', function (): void {
@@ -345,6 +349,13 @@ it('combines the datetime fields a mapping names', function (string $date, strin
     'an upper-case midnight' => ['09/03/2025', '12', 'AM', '2025-09-03 00:07'],
 ]);
 
+it('reads a datetime part through a field name given as a number', function (): void {
+    $config = ['datetime_combination' => ['date_field' => 'd', 'hour_field' => 5, 'minute_field' => 1.5, 'ampm_field' => 'a']];
+
+    // A float name is read as its text, never truncated to an integer key.
+    expect(gfcmCall($this->manager, 'processDatetimeCombination', $config, ['d' => '09/03/2025', 5 => '9', '1.5' => '07', 1 => '59', 'a' => 'am']))->toBe('2025-09-03 09:07');
+});
+
 it('combines no datetime from a mapping or a value it cannot use', function (array $config, array $formData): void {
     expect(gfcmCall($this->manager, 'processDatetimeCombination', $config, $formData))->toBeNull();
 })->with(function (): array {
@@ -360,7 +371,7 @@ it('combines no datetime from a mapping or a value it cannot use', function (arr
         $cases["no {$key}"] = [['datetime_combination' => \array_diff_key($full, [$key => true])], $data];
         $cases["a {$key} that is not text"] = [['datetime_combination' => [...$full, $key => ['x']]], $data];
         $cases["an empty {$key}"] = [['datetime_combination' => [...$full, $key => '']], [...$data, '' => '09/03/2025']];
-        $cases["a numeric {$key}"] = [['datetime_combination' => [...$full, $key => 5]], [...$data, 5 => '09/03/2025']];
+        $cases["a false {$key}, which reads as empty"] = [['datetime_combination' => [...$full, $key => false]], [...$data, '' => '09/03/2025']];
     }
 
     foreach (['d', 'h', 'm', 'a'] as $key) {

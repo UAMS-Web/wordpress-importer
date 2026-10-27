@@ -1104,24 +1104,18 @@ class FormConfigurationManager
         string $subfieldLabel,
         array $subfieldMapping
     ): ?string {
-        // Read the subfield's settings, which the mapping keys by field type and label
-        $subfieldConfig = data_get(
-            $subfieldMapping,
-            [
-                'fieldtypes',
-                $fieldType,
-                'subfields',
-                $subfieldLabel,
-            ]
-        );
+        // Walk to the subfield's handle by exact keys: the mapping is keyed by field type,
+        // then by subfield label, and a label is read as written
+        $value = $subfieldMapping;
+        foreach (['fieldtypes', $fieldType, 'subfields', $subfieldLabel, 'handle'] as $key) {
+            if (! \is_array($value) || ! isset($value[$key])) {
+                return null;
+            }
 
-        // Return the subfield's handle, if it names one
-        $handle = data_get(
-            $subfieldConfig,
-            'handle'
-        );
+            $value = $value[$key];
+        }
 
-        return \is_string($handle) ? $handle : null;
+        return \is_string($value) ? $value : null;
     }
 
     /**
@@ -1142,14 +1136,13 @@ class FormConfigurationManager
                 continue;
             }
 
-            // A rule names its field by ID
-            if (! isset($rule['fieldId']) || ! \is_scalar($rule['fieldId'])) {
-                continue;
-            }
-
-            // Convert the field ID to a field handle
+            // Extract field ID and convert to field handle; a rule without one is looked up
+            // as an empty ID, which only a field with an empty ID matches
+            $fieldId = isset($rule['fieldId']) && \is_scalar($rule['fieldId'])
+                ? (string) $rule['fieldId']
+                : '';
             $fieldHandle = $this->getFieldHandleById(
-                (string) $rule['fieldId'],
+                $fieldId,
                 $formFields
             );
 
@@ -1185,6 +1178,7 @@ class FormConfigurationManager
             $routingRules,
             $formFields,
             $rule,
+            $fieldId,
             $fieldHandle,
             $operator,
             $statamicRule,
@@ -1797,15 +1791,15 @@ class FormConfigurationManager
      * Read one part of a datetime from the form data.
      *
      * @param  array<int|string, mixed>  $formData  The form data
-     * @param  mixed  $field  The part's key; only non-empty text names a form field
+     * @param  mixed  $field  The part's key; any scalar other than empty text names a form field
      * @return ?string The part, or null when it is missing, blank or not a scalar
      */
     private function readDateTimePart(
         array $formData,
         mixed $field
     ): ?string {
-        $part = \is_string($field) && $field !== ''
-            ? ($formData[$field] ?? null)
+        $part = \is_scalar($field) && (string) $field !== ''
+            ? ($formData[(string) $field] ?? null)
             : null;
 
         if (! \is_scalar($part) || (string) $part === '') {
