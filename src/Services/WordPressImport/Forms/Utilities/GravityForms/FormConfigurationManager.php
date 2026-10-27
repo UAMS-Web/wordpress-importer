@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
 
 use DateTime;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use ReflectionClass;
 use Statamic\Forms\Form;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormConfigurationManagerTrait;
@@ -124,6 +124,52 @@ class FormConfigurationManager
      * so it is the one value that needs no warning. wordpress-importer-archive#35
      */
     protected const string NOTIFICATION_SCHEDULE_TYPE_IMMEDIATE = 'immediate';
+
+    /**
+     * Gravity Forms system merge tags, which are never read as a field merge tag even when
+     * they carry a number, such as `{entry_id:5}`.
+     *
+     * @var list<string>
+     */
+    protected const array SYSTEM_MERGE_TAGS = [
+        'activation_url',
+        'admin_email',
+        'all_fields',
+        'all_quiz_results',
+        'apc_media',
+        'created_by',
+        'current_page_number',
+        'custom_field',
+        'date_created',
+        'date_updated',
+        'embed_post',
+        'embed_url',
+        'entry_id',
+        'entry_url',
+        'entry',
+        'form_id',
+        'form_title',
+        'ip',
+        'payment_action',
+        'payment_date',
+        'post_edit_url',
+        'post_id',
+        'pricing_fields',
+        'quiz_grade',
+        'quiz_passfail',
+        'quiz_percent',
+        'quiz_score',
+        'quiz',
+        'referer',
+        'save_email_input',
+        'score',
+        'source_page_number',
+        'square_receipt_url',
+        'survey_total_score',
+        'today',
+        'user_agent',
+        'user',
+    ];
 
     /**
      * Mapping from Gravity Forms form configuration fields to Statamic form fields.
@@ -640,11 +686,7 @@ class FormConfigurationManager
             $value
         );
 
-        if (\is_string($processedValue)) {
-            return $processedValue;
-        }
-
-        return $value;
+        return $processedValue ?? $value;
     }
 
     /**
@@ -663,9 +705,7 @@ class FormConfigurationManager
             $value
         );
 
-        if (\is_string($processedValue)) {
-            $value = $processedValue;
-        }
+        $value = $processedValue ?? $value;
 
         // Handle {quiz_score:id=handle} patterns
         $processedValue = \preg_replace(
@@ -674,11 +714,7 @@ class FormConfigurationManager
             $value
         );
 
-        if (\is_string($processedValue)) {
-            return $processedValue;
-        }
-
-        return $value;
+        return $processedValue ?? $value;
     }
 
     /**
@@ -697,11 +733,7 @@ class FormConfigurationManager
             $value
         );
 
-        if (\is_string($processedValue)) {
-            return $processedValue;
-        }
-
-        return $value;
+        return $processedValue ?? $value;
     }
 
     /**
@@ -793,16 +825,13 @@ class FormConfigurationManager
     ): string {
         $pattern = '/\{user:(?:display_name|user_email)\}|\{created_by:[A-Za-z0-9_]+\}/';
 
+        // Find every tag. A value with none passes through the strip loop below unchanged.
         $matches = [];
-        $occurrences = \preg_match_all(
+        \preg_match_all(
             $pattern,
             $value,
             $matches
         );
-
-        if ($occurrences === false || $occurrences === 0) {
-            return $value;
-        }
 
         // Warn once per occurrence so the import report accounts for every tag that
         // was dropped rather than translated.
@@ -827,19 +856,20 @@ class FormConfigurationManager
         // overlapping tag reassemble into a live one — removing the inner tag from
         // `{user:dis{user:user_email}play_name}` yields `{user:display_name}`, which
         // would then ship untouched. wordpress-importer-archive#444
-        do {
+        while (\preg_match($pattern, $value) === 1) {
             $stripped = \preg_replace(
                 $pattern,
                 '',
                 $value
-            );
+            ) ?? $value;
 
-            if ($stripped === null || $stripped === $value) {
+            // A strip that changed nothing could only be a failed one; stop rather than loop
+            if ($stripped === $value) {
                 break;
             }
 
             $value = $stripped;
-        } while (\preg_match($pattern, $value) === 1);
+        }
 
         return $value;
     }
@@ -862,53 +892,13 @@ class FormConfigurationManager
         string $value,
         array $formFields
     ): string {
-        // List of Gravity Forms system merge tags that should NOT be processed as field merge tags
-        $systemMergeTags = [
-            'activation_url',
-            'admin_email',
-            'all_fields',
-            'all_quiz_results',
-            'apc_media',
-            'created_by',
-            'current_page_number',
-            'custom_field',
-            'date_created',
-            'date_updated',
-            'embed_post',
-            'embed_url',
-            'entry_id',
-            'entry_url',
-            'entry',
-            'form_id',
-            'form_title',
-            'ip',
-            'payment_action',
-            'payment_date',
-            'post_edit_url',
-            'post_id',
-            'pricing_fields',
-            'quiz_grade',
-            'quiz_passfail',
-            'quiz_percent',
-            'quiz_score',
-            'quiz',
-            'referer',
-            'save_email_input',
-            'score',
-            'source_page_number',
-            'square_receipt_url',
-            'survey_total_score',
-            'today',
-            'user_agent',
-            'user',
-        ];
 
         // Pattern to match any merge tag with braces
         $pattern = '/\{([^}]+)\}/';
 
         $result = preg_replace_callback(
             $pattern,
-            function ($matches) use ($systemMergeTags, $formFields): string {
+            function ($matches) use ($formFields): string {
                 $fullMatch = $matches[0];
                 $content = $matches[1];
 
@@ -955,8 +945,11 @@ class FormConfigurationManager
                 );
 
                 // Skip if this is a system merge tag
+                // A descriptor is text and the system tags are words, so a loose comparison
+                // matches exactly what this strict one does.
+                // @pest-mutate-ignore: TrueToFalse
                 if (
-                    \in_array($descriptor, $systemMergeTags, true)
+                    \in_array($descriptor, self::SYSTEM_MERGE_TAGS, true)
                 ) {
                     return $fullMatch; // Return original unchanged
                 }
@@ -979,7 +972,6 @@ class FormConfigurationManager
 
         // Clean up variables to free up memory
         unset(
-            $systemMergeTags,
             $formFields,
             $pattern,
         );
@@ -1025,7 +1017,6 @@ class FormConfigurationManager
         }
 
         $parentFieldId = $parts[0];
-        $subfieldNumber = $parts[1];
 
         // Find the parent field
         foreach ($formFields as $field) {
@@ -1037,43 +1028,50 @@ class FormConfigurationManager
                 continue;
             }
 
-            if (isset($field['label']) && \is_scalar($field['label'])) {
-                // Get the parent field handle
-                $parentLabel = (string) $field['label'];
-                $parentHandle = $this->convertLabelToHandle(
-                    $parentLabel,
-                    $parentFieldId
+            // A subfield is named after a labelled, typed parent that lists its inputs
+            if (! isset($field['label']) || ! \is_scalar($field['label'])) {
+                continue;
+            }
+
+            if (! isset($field['type']) || ! \is_scalar($field['type'])) {
+                continue;
+            }
+
+            if (! isset($field['inputs']) || ! \is_array($field['inputs'])) {
+                continue;
+            }
+
+            // Get the parent field handle
+            $parentHandle = $this->convertLabelToHandle(
+                (string) $field['label'],
+                $parentFieldId
+            );
+
+            // Find the subfield in the inputs array
+            foreach ($field['inputs'] as $input) {
+                if (! \is_array($input)) {
+                    continue;
+                }
+
+                if (! isset($input['id']) || ! \is_scalar($input['id']) || (string) $input['id'] !== $subfieldId) {
+                    continue;
+                }
+
+                // An input with no label has no mapped subfield
+                if (! isset($input['label']) || ! \is_scalar($input['label'])) {
+                    continue;
+                }
+
+                // Get the subfield handle from the mapping
+                $subfieldHandle = $this->getSubfieldHandleFromMapping(
+                    (string) $field['type'],
+                    (string) $input['label'],
+                    FieldtypeMapping::getSubfieldMapping()
                 );
 
-                // Find the subfield in the inputs array
-                if (isset($field['inputs']) && \is_array($field['inputs'])) {
-                    foreach ($field['inputs'] as $input) {
-                        if (! \is_array($input)) {
-                            continue;
-                        }
-
-                        if (isset($input['id']) && \is_scalar($input['id']) && (string) $input['id'] === $subfieldId) {
-                            // Get the subfield label
-                            $subfieldLabel = isset($input['label']) && \is_scalar($input['label'])
-                                ? (string) $input['label']
-                                : '';
-
-                            // Get the subfield handle from the mapping
-                            $subfieldMapping = FieldtypeMapping::getSubfieldMapping();
-                            $subfieldHandle = $this->getSubfieldHandleFromMapping(
-                                isset($field['type']) && \is_scalar($field['type'])
-                                    ? (string) $field['type']
-                                    : '',
-                                $subfieldLabel,
-                                $subfieldMapping
-                            );
-
-                            if ($subfieldHandle !== null) {
-                                // Return the combined handle: parent.subfield
-                                return $parentHandle.'.'.$subfieldHandle;
-                            }
-                        }
-                    }
+                if ($subfieldHandle !== null) {
+                    // Return the combined handle: parent.subfield
+                    return $parentHandle.'.'.$subfieldHandle;
                 }
             }
         }
@@ -1084,13 +1082,9 @@ class FormConfigurationManager
             $formFields,
             $parts,
             $parentFieldId,
-            $subfieldNumber,
             $field,
-            $parentLabel,
             $parentHandle,
             $input,
-            $subfieldLabel,
-            $subfieldMapping,
             $subfieldHandle,
         );
 
@@ -1110,48 +1104,18 @@ class FormConfigurationManager
         string $subfieldLabel,
         array $subfieldMapping
     ): ?string {
-        $fieldTypeMappings = $subfieldMapping['fieldtypes'] ?? null;
-        if (! \is_array($fieldTypeMappings)) {
-            return null;
+        // Walk to the subfield's handle by exact keys: the mapping is keyed by field type,
+        // then by subfield label, and a label is read as written
+        $value = $subfieldMapping;
+        foreach (['fieldtypes', $fieldType, 'subfields', $subfieldLabel, 'handle'] as $key) {
+            if (! \is_array($value) || ! isset($value[$key])) {
+                return null;
+            }
+
+            $value = $value[$key];
         }
 
-        $singleFieldTypeMapping = $fieldTypeMappings[$fieldType] ?? null;
-        if (! \is_array($singleFieldTypeMapping)) {
-            return null;
-        }
-
-        $subfields = $singleFieldTypeMapping['subfields'] ?? null;
-        if (! \is_array($subfields)) {
-            return null;
-        }
-
-        $subfieldConfig = $subfields[$subfieldLabel] ?? null;
-
-        // Check if the field type exists in the mapping
-        if (\is_array($subfieldConfig)) {
-            $handle = isset($subfieldConfig['handle']) && \is_string($subfieldConfig['handle'])
-                ? $subfieldConfig['handle']
-                : null;
-
-            // Clean up variables to free up memory
-            unset(
-                $fieldType,
-                $subfieldLabel,
-                $subfieldMapping,
-                $subfieldConfig,
-            );
-
-            return $handle;
-        }
-
-        // Clean up variables to free up memory
-        unset(
-            $fieldType,
-            $subfieldLabel,
-            $subfieldMapping,
-        );
-
-        return null;
+        return \is_string($value) ? $value : null;
     }
 
     /**
@@ -1172,7 +1136,8 @@ class FormConfigurationManager
                 continue;
             }
 
-            // Extract field ID and convert to field handle
+            // Extract field ID and convert to field handle; a rule without one is looked up
+            // as an empty ID, which only a field with an empty ID matches
             $fieldId = isset($rule['fieldId']) && \is_scalar($rule['fieldId'])
                 ? (string) $rule['fieldId']
                 : '';
@@ -1237,9 +1202,6 @@ class FormConfigurationManager
             'isnot' => 'not',
             '>' => 'greater_than',
             '<' => 'less_than',
-            'contains' => 'contains',
-            'starts_with' => 'starts_with',
-            'ends_with' => 'ends_with',
         ];
 
         // Return mapped operator or original if not found
@@ -1359,27 +1321,16 @@ class FormConfigurationManager
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Check if confirmation mapping is defined
-        if (! defined('static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION')) {
-            return;
-        }
-
         // Check if confirmations exist and have at least one item
         if (! isset($formData['confirmations']) || ! \is_array($formData['confirmations']) || $formData['confirmations'] === []) {
             return;
         }
 
-        // Get the current form data
+        // Get the current form data. A Statamic form's data is always a collection; the check
+        // narrows the untyped accessor for PHPStan.
         $formDataStore = $form->data();
-        $currentFormDataFromForm = \is_object($formDataStore) && \method_exists(
-            $formDataStore,
-            'all'
-        )
-            ? $formDataStore->all()
-            : [];
-        $currentFormData = \is_array($currentFormDataFromForm)
-            ? $currentFormDataFromForm
-            : [];
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $currentFormData = $formDataStore instanceof Collection ? $formDataStore->all() : [];
 
         // Initialize arrays for default and additional confirmations
         $defaultConfirmation = null;
@@ -1480,19 +1431,6 @@ class FormConfigurationManager
             $currentFormData['confirmation_settings_default'] ??= [];
 
             // ---
-            // Check if confirmation mapping is defined
-            // ---
-
-            // Get reflection of current class for mapping constant check
-            $reflection = new ReflectionClass(static::class);
-
-            // Skip mapping when confirmation mapping constant is not defined
-            if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION')) {
-                // Return early when no confirmation mapping is defined
-                return;
-            }
-
-            // ---
             // Use common mapping logic
             // ---
 
@@ -1501,19 +1439,16 @@ class FormConfigurationManager
                 ? $formData['fields']
                 : [];
 
-            // Map confirmation fields to Statamic structure
-            $mappedData = $this->processConfirmationFieldMapping(
+            // Map confirmation fields to Statamic structure. The confirmation table spreads no
+            // value and sets no other field, so the mapped data it returns is always empty.
+            $this->processConfirmationFieldMapping(
                 $confirmation,
                 $formData,
                 $siteHandle,
                 $assetImporter,
                 $formFields,
                 static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION,
-                function ($statamicKey, $value, $mappingConfig) use (&$currentFormData): void {
-                    if (! \is_int($statamicKey) && ! \is_string($statamicKey)) {
-                        return;
-                    }
-
+                function (string $statamicKey, $value, $mappingConfig) use (&$currentFormData): void {
                     if (
                         ! isset($currentFormData['confirmation_settings_default'])
                         || ! \is_array($currentFormData['confirmation_settings_default'])
@@ -1524,19 +1459,11 @@ class FormConfigurationManager
                     // Store the value in the default confirmation settings group
                     $currentFormData['confirmation_settings_default'][$statamicKey] = $value;
                 },
-                true // This is a default confirmation
+                // This is a default confirmation. The flag only excludes entries marked for it,
+                // and this class's confirmation table marks none.
+                // @pest-mutate-ignore: TrueToFalse
+                true
             );
-
-            // Process statamic_other_field_value for the mapped data
-            foreach ($mappedData as $statamicKey => $value) {
-                // Process statamic_other_field_value for this mapped field
-                $this->processStatamicOtherFieldValue(
-                    ['statamic_attribute' => $statamicKey],
-                    $value,
-                    $currentFormData,
-                    'confirmation_settings_default'
-                );
-            }
 
             // ---
             // Note: Default confirmations do not support conditional logic in Statamic.
@@ -1553,8 +1480,6 @@ class FormConfigurationManager
             $formData,
             $siteHandle,
             $assetImporter,
-            $statamicKey,
-            $value,
         );
     }
 
@@ -1564,7 +1489,7 @@ class FormConfigurationManager
      * Maps additional confirmations to the confirmation_additional replicator field.
      *
      * @param  array<int|string, mixed>  &$currentFormData  The current form data (passed by reference)
-     * @param  array<int|string, mixed>  $additionalConfirmations  Array of additional confirmations
+     * @param  list<array<int|string, mixed>>  $additionalConfirmations  Array of additional confirmations
      * @param  array<int|string, mixed>  $formData  The complete form data for context
      * @param  string  $siteHandle  The Statamic site handle
      * @param  ?AssetImporter  $assetImporter  The asset importer instance
@@ -1580,10 +1505,6 @@ class FormConfigurationManager
 
         // Process each additional confirmation
         foreach ($additionalConfirmations as $confirmation) {
-            if (! \is_array($confirmation)) {
-                continue;
-            }
-
             $formIdForContext = isset($formData['id']) && \is_scalar($formData['id'])
                 ? $formData['id']
                 : '?';
@@ -1631,19 +1552,6 @@ class FormConfigurationManager
                 $replicatorSet['confirmation_settings'] = [];
 
                 // ---
-                // Check if confirmation mapping is defined
-                // ---
-
-                // Get reflection of current class for mapping constant check
-                $reflection = new ReflectionClass(static::class);
-
-                // Skip this confirmation when mapping constant is not defined
-                if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION')) {
-                    // Continue to next confirmation when no mapping is defined
-                    continue;
-                }
-
-                // ---
                 // Use common mapping logic
                 // ---
 
@@ -1652,35 +1560,24 @@ class FormConfigurationManager
                     ? $formData['fields']
                     : [];
 
-                // Map confirmation fields to Statamic structure
-                $mappedData = $this->processConfirmationFieldMapping(
+                // Map confirmation fields to Statamic structure; as for the default confirmation,
+                // the mapped data it returns is always empty
+                $this->processConfirmationFieldMapping(
                     $confirmation,
                     $formData,
                     $siteHandle,
                     $assetImporter,
                     $formFields,
                     static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION,
-                    function ($statamicKey, $value, $mappingConfig) use (&$replicatorSet): void {
-                        if (! \is_int($statamicKey) && ! \is_string($statamicKey)) {
-                            return;
-                        }
-
+                    function (string $statamicKey, $value, $mappingConfig) use (&$replicatorSet): void {
                         // Store the value in the confirmation settings group
                         $replicatorSet['confirmation_settings'][$statamicKey] = $value;
                     },
-                    false // This is an additional confirmation
+                    // This is an additional confirmation; as above, the table marks no entry the
+                    // flag could exclude.
+                    // @pest-mutate-ignore: FalseToTrue
+                    false
                 );
-
-                // Process statamic_other_field_value for the mapped data
-                foreach ($mappedData as $statamicKey => $value) {
-                    // Process statamic_other_field_value for this mapped field
-                    $this->processStatamicOtherFieldValue(
-                        ['statamic_attribute' => $statamicKey],
-                        $value,
-                        $replicatorSet,
-                        'confirmation_settings'
-                    );
-                }
 
                 // ---
                 // Map conditional logic if present
@@ -1731,8 +1628,6 @@ class FormConfigurationManager
             $assetImporter,
             $confirmation,
             $replicatorSet,
-            $statamicKey,
-            $value,
         );
     }
 
@@ -1755,96 +1650,42 @@ class FormConfigurationManager
         array $formData
     ): ?string {
         // Determine if this is start or end datetime
-        $isStart = $statamicKey === 'schedule_form.start_datetime';
-        $prefix = $isStart ? 'scheduleStart' : 'scheduleEnd';
+        $prefix = $statamicKey === 'schedule_form.start_datetime' ? 'scheduleStart' : 'scheduleEnd';
 
-        // Extract all datetime components from form data
-        $date = $formData[$prefix] ?? null;
-        $hour = $formData[$prefix.'Hour'] ?? null;
-        $minute = $formData[$prefix.'Minute'] ?? null;
-        $ampm = $formData[$prefix.'Ampm'] ?? null;
-
-        if (
-            ! \is_scalar($date)
-            || ! \is_scalar($hour)
-            || ! \is_scalar($minute)
-            || ! \is_scalar($ampm)
-        ) {
-            return null;
-        }
-
-        $dateString = (string) $date;
-        $hourString = (string) $hour;
-        $minuteString = (string) $minute;
-        $ampmString = (string) $ampm;
-
-        // If any required component is missing, return null
-        if ($dateString === '' || $hourString === '' || $minuteString === '' || $ampmString === '') {
-            return null;
-        }
-
-        // Convert 12-hour format to 24-hour format
-        $hour24 = (int) $hourString;
-        if (\strtolower($ampmString) === 'pm' && $hour24 !== 12) {
-            $hour24 += 12;
-        } elseif (\strtolower($ampmString) === 'am' && $hour24 === 12) {
-            $hour24 = 0;
-        }
-
-        // Parse the date (assuming format like "08/19/2025")
-        $dateObj = DateTime::createFromFormat(
-            'm/d/Y',
-            $dateString
+        // Read the date, hour, minute and meridiem from the form data
+        $parts = $this->readDateTimeParts(
+            $formData,
+            [
+                $prefix,
+                $prefix.'Hour',
+                $prefix.'Minute',
+                $prefix.'Ampm',
+            ]
         );
-        if ($dateObj === false) {
+        if ($parts === null) {
+            return null;
+        }
+
+        // Combine them, warning about a date that cannot be read (assuming a format like "08/19/2025")
+        $formattedDateTime = $this->formatDateTimeParts($parts);
+        if ($formattedDateTime === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
                     'prefix' => $prefix,
-                    'date' => $dateString,
+                    'date' => $parts[0],
                 ]
             );
 
             // Log warning for invalid date format
             Log::warning(
                 LogContextHelper::formatMessageWithEntry(
-                    "Invalid date format for {$prefix}: {$dateString}",
+                    "Invalid date format for {$prefix}: {$parts[0]}",
                     $logData['page_url']
                 ),
                 $logData['context']
             );
-
-            return null;
         }
-
-        // Set the time components
-        $dateObj->setTime(
-            $hour24,
-            (int) $minuteString,
-            0
-        );
-
-        // Return formatted datetime string
-        $formattedDateTime = $dateObj->format('Y-m-d H:i');
-
-        // Clean up variables to free up memory
-        unset(
-            $statamicKey,
-            $value,
-            $formData,
-            $isStart,
-            $prefix,
-            $date,
-            $dateString,
-            $hour,
-            $hourString,
-            $minute,
-            $minuteString,
-            $ampm,
-            $ampmString,
-            $hour24,
-            $dateObj,
-        );
 
         return $formattedDateTime;
     }
@@ -1868,14 +1709,8 @@ class FormConfigurationManager
     ): mixed {
         // Handle datetime fields for schedule form (Gravity Forms specific)
         if (
-            \in_array(
-                $statamicKey,
-                [
-                    'schedule_form.start_datetime',
-                    'schedule_form.end_datetime',
-                ],
-                true
-            )
+            $statamicKey === 'schedule_form.start_datetime'
+            || $statamicKey === 'schedule_form.end_datetime'
         ) {
             return $this->processDateTimeField(
                 $statamicKey,
@@ -1899,107 +1734,116 @@ class FormConfigurationManager
         array $mappingConfig,
         array $formData
     ): ?string {
-        $datetimeConfig = $mappingConfig['datetime_combination'];
-
-        if (! \is_array($datetimeConfig)) {
+        // Read the date, hour, minute and meridiem from the form fields the mapping names
+        $parts = $this->readDateTimeParts(
+            $formData,
+            [
+                data_get($mappingConfig, 'datetime_combination.date_field'),
+                data_get($mappingConfig, 'datetime_combination.hour_field'),
+                data_get($mappingConfig, 'datetime_combination.minute_field'),
+                data_get($mappingConfig, 'datetime_combination.ampm_field'),
+            ]
+        );
+        if ($parts === null) {
             return null;
         }
 
-        $dateField = isset($datetimeConfig['date_field']) && \is_scalar($datetimeConfig['date_field'])
-            ? (string) $datetimeConfig['date_field']
-            : '';
-        $hourField = isset($datetimeConfig['hour_field']) && \is_scalar($datetimeConfig['hour_field'])
-            ? (string) $datetimeConfig['hour_field']
-            : '';
-        $minuteField = isset($datetimeConfig['minute_field']) && \is_scalar($datetimeConfig['minute_field'])
-            ? (string) $datetimeConfig['minute_field']
-            : '';
-        $ampmField = isset($datetimeConfig['ampm_field']) && \is_scalar($datetimeConfig['ampm_field'])
-            ? (string) $datetimeConfig['ampm_field']
-            : '';
+        // Accept a date written with escaped slashes ("09\/03\/2025") as well as plain ones
+        $parts[0] = \str_replace(
+            '\\/',
+            '/',
+            $parts[0]
+        );
 
-        if ($dateField === '' || $hourField === '' || $minuteField === '' || $ampmField === '') {
+        return $this->formatDateTimeParts($parts);
+    }
+
+    /**
+     * Read a datetime's date, hour, minute and meridiem from the form data.
+     *
+     * @param  array<int|string, mixed>  $formData  The form data
+     * @param  array{0: mixed, 1: mixed, 2: mixed, 3: mixed}  $fields  The keys of the date, hour, minute and meridiem
+     * @return ?array{0: string, 1: string, 2: string, 3: string} The four parts, or null when one is missing, blank or not a scalar
+     */
+    private function readDateTimeParts(
+        array $formData,
+        array $fields
+    ): ?array {
+        $date = $this->readDateTimePart($formData, $fields[0]);
+        $hour = $this->readDateTimePart($formData, $fields[1]);
+        $minute = $this->readDateTimePart($formData, $fields[2]);
+        $ampm = $this->readDateTimePart($formData, $fields[3]);
+
+        // A part that is missing means there is no datetime to combine
+        if ($date === null || $hour === null || $minute === null || $ampm === null) {
             return null;
         }
 
-        // Extract all datetime components from form data
-        $date = $formData[$dateField] ?? null;
-        $hour = $formData[$hourField] ?? null;
-        $minute = $formData[$minuteField] ?? null;
-        $ampm = $formData[$ampmField] ?? null;
+        return [
+            $date,
+            $hour,
+            $minute,
+            $ampm,
+        ];
+    }
 
-        if (
-            ! \is_scalar($date)
-            || ! \is_scalar($hour)
-            || ! \is_scalar($minute)
-            || ! \is_scalar($ampm)
-        ) {
+    /**
+     * Read one part of a datetime from the form data.
+     *
+     * @param  array<int|string, mixed>  $formData  The form data
+     * @param  mixed  $field  The part's key; any scalar other than empty text names a form field
+     * @return ?string The part, or null when it is missing, blank or not a scalar
+     */
+    private function readDateTimePart(
+        array $formData,
+        mixed $field
+    ): ?string {
+        $part = \is_scalar($field) && (string) $field !== ''
+            ? ($formData[(string) $field] ?? null)
+            : null;
+
+        if (! \is_scalar($part) || (string) $part === '') {
             return null;
         }
 
-        $dateString = (string) $date;
-        $hourString = (string) $hour;
-        $minuteString = (string) $minute;
-        $ampmString = (string) $ampm;
+        return (string) $part;
+    }
 
-        // If any required component is missing, return null
-        if ($dateString === '' || $hourString === '' || $minuteString === '' || $ampmString === '') {
-            return null;
-        }
+    /**
+     * Combine a date and a 12-hour time into a 24-hour datetime.
+     *
+     * @param  array{0: string, 1: string, 2: string, 3: string}  $parts  The date (m/d/Y), hour, minute and meridiem
+     * @return ?string The datetime as "Y-m-d H:i", or null when the date cannot be read
+     */
+    private function formatDateTimeParts(
+        array $parts
+    ): ?string {
+        [$date, $hour, $minute, $ampm] = $parts;
 
         // Convert 12-hour format to 24-hour format
-        $hour24 = (int) $hourString;
-        if (\strtolower($ampmString) === 'pm' && $hour24 !== 12) {
+        $hour24 = (int) $hour;
+        if (\strtolower($ampm) === 'pm' && $hour24 !== 12) {
             $hour24 += 12;
-        } elseif (\strtolower($ampmString) === 'am' && $hour24 === 12) {
+        } elseif (\strtolower($ampm) === 'am' && $hour24 === 12) {
             $hour24 = 0;
         }
 
-        // Parse the date (handle both "09/03/2025" and "09\/03\/2025" formats)
-        $normalizedDate = \str_replace(
-            '\\/',
-            '/',
-            $dateString
-        );
+        // Parse the date
         $dateObj = DateTime::createFromFormat(
             'm/d/Y',
-            $normalizedDate
+            $date
         );
         if ($dateObj === false) {
             return null;
         }
 
-        // Set the time components
+        // Set the time; the format below shows no seconds
         $dateObj->setTime(
             $hour24,
-            (int) $minuteString,
-            0
+            (int) $minute
         );
 
-        // Return formatted datetime string
-        $formattedDateTime = $dateObj->format('Y-m-d H:i');
-
-        // Clean up variables to free up memory
-        unset(
-            $datetimeConfig,
-            $dateField,
-            $hourField,
-            $minuteField,
-            $ampmField,
-            $date,
-            $dateString,
-            $hour,
-            $hourString,
-            $minute,
-            $minuteString,
-            $ampm,
-            $ampmString,
-            $hour24,
-            $normalizedDate,
-            $dateObj,
-        );
-
-        return $formattedDateTime;
+        return $dateObj->format('Y-m-d H:i');
     }
 
     /**
@@ -2303,8 +2147,9 @@ class FormConfigurationManager
     /**
      * Translate field references in string values to Statamic format.
      *
-     * Gravity Forms uses {field_id} syntax (e.g., {67}, {Something:67}) and
-     * converts them to Statamic submission field tags.
+     * Gravity Forms writes a field reference as a field merge tag ({Something:67}), so it
+     * is translated exactly as one, into a Statamic submission field tag. A bare number
+     * such as {67} is not a field reference and is left alone.
      *
      * @param  string  $text  The text containing field references
      * @param  array<int|string, mixed>  $allFields  Array of all form fields for field handle lookup
@@ -2314,121 +2159,11 @@ class FormConfigurationManager
         string $text,
         array $allFields = []
     ): string {
-        // Pattern to match Gravity Forms field references: {field_id} or {Something:67}
-        $pattern = '/\{([^}]+)\}/';
-
-        $processedText = preg_replace_callback(
-            $pattern,
-            function ($matches) use ($allFields): string {
-                $reference = $matches[1];
-
-                // Parse the content to find the field ID (which is always a number)
-                $parts = \explode(
-                    ':',
-                    $reference
-                );
-
-                // If there's only one part, it's not a field merge tag
-                if (\count($parts) < 2) {
-                    return $matches[0]; // Return original unchanged
-                }
-
-                // Find the field ID by looking for a number (integer or decimal)
-                $fieldId = null;
-                $descriptorParts = [];
-
-                foreach ($parts as $part) {
-                    // Check if this part is a number (field ID)
-                    if (
-                        \preg_match(
-                            '/^\d+(?:\.\d+)?$/',
-                            $part
-                        ) === 1
-                    ) {
-                        $fieldId = $part;
-                        break;
-                    } else { // Otherwise
-                        // This part is part of the descriptor
-                        $descriptorParts[] = $part;
-                    }
-                }
-
-                // If no field ID found, this is not a field merge tag
-                if ($fieldId === null) {
-                    return $matches[0]; // Return original unchanged
-                }
-
-                // Join the descriptor parts
-                $descriptor = \implode(
-                    ':',
-                    $descriptorParts
-                );
-
-                // List of Gravity Forms system merge tags that should NOT be processed as field merge tags
-                $systemMergeTags = [
-                    'activation_url',
-                    'admin_email',
-                    'all_fields',
-                    'all_quiz_results',
-                    'apc_media',
-                    'created_by',
-                    'current_page_number',
-                    'custom_field',
-                    'date_created',
-                    'date_updated',
-                    'embed_post',
-                    'embed_url',
-                    'entry_id',
-                    'entry_url',
-                    'entry',
-                    'form_id',
-                    'form_title',
-                    'ip',
-                    'payment_action',
-                    'payment_date',
-                    'post_edit_url',
-                    'post_id',
-                    'pricing_fields',
-                    'quiz_grade',
-                    'quiz_passfail',
-                    'quiz_percent',
-                    'quiz_score',
-                    'quiz',
-                    'referer',
-                    'save_email_input',
-                    'score',
-                    'source_page_number',
-                    'square_receipt_url',
-                    'survey_total_score',
-                    'today',
-                    'user_agent',
-                    'user',
-                ];
-
-                // Skip if this is a system merge tag
-                if (
-                    \in_array($descriptor, $systemMergeTags, true)
-                ) {
-                    return $matches[0]; // Return original unchanged
-                }
-
-                // Find the field handle for this field ID
-                $fieldHandle = $this->getFieldHandleById(
-                    $fieldId,
-                    $allFields
-                );
-
-                if ($fieldHandle !== null) {
-                    return "{{ submission:{$fieldHandle} }}";
-                }
-
-                // If field handle not found, return original unchanged
-                return $matches[0];
-            },
-            $text
+        // A field reference is written exactly as a field merge tag, so it is resolved the same way
+        return $this->processFieldMergeTags(
+            $text,
+            $allFields
         );
-
-        return \is_string($processedText) ? $processedText : $text;
     }
 
     /**
@@ -2453,13 +2188,10 @@ class FormConfigurationManager
         // Gravity Forms: Use direct mapping
         foreach (static::FORM_CONFIGURATION_ACTION_MAPPING_CONFIRMATION as $pluginKey => $mappingConfig) {
             // Handle complex mapping configurations (arrays) vs simple string mappings
-            if (
-                isset($mappingConfig['statamic_attribute'])
-                && \is_string($mappingConfig['statamic_attribute'])
-            ) {
-                $statamicKey = $mappingConfig['statamic_attribute'];
-            } else { // Otherwise
-                // Skip complex mappings that need special handling
+            $statamicKey = $mappingConfig['statamic_attribute'];
+
+            // Skip the entries handled elsewhere, which map to no attribute
+            if (! \is_string($statamicKey)) {
                 continue;
             }
 
@@ -2484,44 +2216,21 @@ class FormConfigurationManager
                     $formFields
                 );
 
-                // Check if this is a multiple mapping configuration
-                if ($this->hasMultipleMappings($mappingConfig)) {
-                    // Process multiple mappings
-                    $multipleResults = $this->processMultipleMappingsAndGetResults(
-                        $value,
-                        $mappingConfig,
-                        $formData,
-                        $siteHandle,
-                        $assetImporter
-                    );
-
-                    // Add all results to the mapped data
-                    foreach ($multipleResults as $targetAttribute => $processedValue) {
-                        if ($processedValue !== null) {
-                            $this->assignNestedFieldToMappedData(
-                                $mappedData,
-                                $targetAttribute,
-                                $processedValue,
-                                $isAdditional
-                            );
-                        }
+                // Set the value in the appropriate structure. The confirmation table spreads no
+                // value over several attributes, so each lands under its own attribute.
+                if ($isAdditional) {
+                    // For additional confirmations, add to confirmation_settings
+                    if (
+                        ! isset($mappedData['confirmation_settings'])
+                        || ! \is_array($mappedData['confirmation_settings'])
+                    ) {
+                        $mappedData['confirmation_settings'] = [];
                     }
+
+                    $mappedData['confirmation_settings'][$statamicKey] = $value;
                 } else { // Otherwise
-                    // Set the value in the appropriate structure
-                    if ($isAdditional) {
-                        // For additional confirmations, add to confirmation_settings
-                        if (
-                            ! isset($mappedData['confirmation_settings'])
-                            || ! \is_array($mappedData['confirmation_settings'])
-                        ) {
-                            $mappedData['confirmation_settings'] = [];
-                        }
-
-                        $mappedData['confirmation_settings'][$statamicKey] = $value;
-                    } else { // Otherwise
-                        // For default confirmation, set directly
-                        $mappedData[$statamicKey] = $value;
-                    }
+                    // For default confirmation, set directly
+                    $mappedData[$statamicKey] = $value;
                 }
             }
         }
