@@ -242,7 +242,7 @@ trait FormConfigurationManagerTrait
         // Read the form configuration mapping, if the class defines one. It is read through
         // reflection, as processEmailContentMappings() reads its table, so the trait stays
         // analyzable in a class that defines no table.
-        $mappingConfigs = (new \ReflectionClass(static::class))->getConstant('FORM_CONFIGURATION_MAPPING');
+        $mappingConfigs = new \ReflectionClass(static::class)->getConstant('FORM_CONFIGURATION_MAPPING');
         if (! \is_array($mappingConfigs)) {
             return;
         }
@@ -791,7 +791,7 @@ trait FormConfigurationManagerTrait
 
         // Read the email mapping, if the class defines one, through reflection for the
         // same reason as mapFormConfigurationFields()
-        $emailMapping = (new \ReflectionClass(static::class))->getConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL');
+        $emailMapping = new \ReflectionClass(static::class)->getConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL');
         if (! \is_array($emailMapping)) {
             return $emailConfig;
         }
