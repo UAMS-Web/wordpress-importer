@@ -18,6 +18,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
@@ -117,7 +118,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         $newRedirects = [];
 
-        foreach ($redirectRules as $rule) {
+        foreach (ImportProgress::track($output, 'redirect_rule', $redirectRules) as $rule) {
             // Extract and strip HTML tags from the redirect source URL
             $source = HtmlTagStripper::strip(
                 XpathHelper::getStringValue(
@@ -338,7 +339,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $written = [];
         $unsupportedResponses = 0;
 
-        foreach ($redirectRules as $rule) {
+        foreach (ImportProgress::track($output, "redirect_rule ({$host})", $redirectRules) as $rule) {
             // Only published rules are live on the domain
             if (XpathHelper::getStringValue($rule, 'wp:status') !== 'publish') {
                 $skipped++;
@@ -378,7 +379,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         // A rule unpublished or deleted at the source since an earlier run leaves its entry behind.
         // Disable it rather than delete it, so the redirect stops and the change stays reversible (wordpress-importer-archive#1311).
-        foreach ($this->importedDomainEntries($host) as $entry) {
+        foreach (ImportProgress::track($output, "stale redirect_rule entries ({$host})", $this->importedDomainEntries($host)) as $entry) {
             if (isset($written[self::entryId($entry)]) || $entry->get('enabled') === false) {
                 continue;
             }

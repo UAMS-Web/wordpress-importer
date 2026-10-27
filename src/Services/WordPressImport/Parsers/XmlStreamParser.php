@@ -97,6 +97,22 @@ class XmlStreamParser
     }
 
     /**
+     * Count the <item> nodes with the given post_type across all parts.
+     *
+     * Counts exactly what streamItems() yields, whatever their status, so a loop over
+     * that stream reaches the count. It reads the stream once more, which is what lets
+     * an import report how far through a streamed loop it is.
+     *
+     * @param  string  $postType  The desired post_type (e.g., 'page', 'post', 'attachment')
+     * @return int The number of matching items
+     */
+    public function countItems(
+        string $postType
+    ): int {
+        return iterator_count($this->streamItems($postType));
+    }
+
+    /**
      * Streams matching <item> nodes from a single part file.
      *
      * @param  string  $filePath  The part file to stream

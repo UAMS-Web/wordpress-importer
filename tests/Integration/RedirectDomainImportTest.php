@@ -433,3 +433,19 @@ it('reads the list from configuration', function (): void {
 
     expect(RedirectRuleGlobalCreator::redirectDomainHost('https://uams.info'))->toBeNull();
 });
+
+it('reports progress through the rules and the stale-entry pass, leaving the summary as it was (#103)', function (): void {
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', redirectDomainRules()));
+
+    // Six rules, the draft among them, so the count reaches six
+    expect($output)->toContain("Progress: redirect_rule (uams.info) 0 of 6 (0%)\n")
+        ->toContain("Progress: redirect_rule (uams.info) 6 of 6 (100%)\n")
+        ->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped.');
+
+    // The second run passes over the five entries the first one wrote
+    $again = redirectDomainRun(redirectDomainParser('https://uams.info', redirectDomainRules()));
+
+    expect($again)->toContain("Progress: stale redirect_rule entries (uams.info) 5 of 5 (100%)\n")
+        ->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped.')
+        ->toMatch('/Progress: redirect_rule \(uams\.info\) 6 of 6 \(100%\)\n.*Redirect domain uams\.info:/s');
+});

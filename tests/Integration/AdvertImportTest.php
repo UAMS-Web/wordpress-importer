@@ -915,3 +915,19 @@ final class AdvertEmptyPathImporter extends AssetImporter
         return \in_array($url, $this->emptyFor, true) ? '' : $url;
     }
 }
+
+it('reports progress through the listings, leaving the per-listing lines as they were (#103)', function (): void {
+    $run = advertImportRun();
+
+    $progress = \array_values(\array_filter(
+        \explode("\n", $run['output']),
+        static fn (string $line): bool => \preg_match('/^Progress: advert \d/', $line) === 1
+    ));
+
+    expect($progress)->toBe([
+        'Progress: advert 0 of 3 (0%)',
+        'Progress: advert 1 of 3 (33%)',
+        'Progress: advert 2 of 3 (66%)',
+        'Progress: advert 3 of 3 (100%)',
+    ])->and($run['output'])->toContain("Processing advert '".advertSlug('bike-for-sale')."'...");
+});

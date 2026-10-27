@@ -13,6 +13,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -90,7 +91,7 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
         $wpBlocks = $xmlParser->getItems('wp_block');
 
         // Loop through wp_block items from parser
-        foreach ($wpBlocks as $wpBlock) {
+        foreach (ImportProgress::track($output, 'wp_block', $wpBlocks) as $wpBlock) {
             // Decode HTML entities and strip HTML tags from title
             $title = HtmlTagStripper::strip(
                 TextProcessor::decodeEntities(
