@@ -118,8 +118,11 @@ class ShortcodeProcessor
     ): array {
         $shortcodes = [];
 
-        // Match shortcodes with optional content
-        $shortcodePattern = '/\[([^\s]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+        // Match shortcodes with optional content. The name stops at whitespace, "]"
+        // and "/", none of which WordPress's add_shortcode() accepts in a name, so a
+        // shortcode written with no attributes ends at its own bracket instead of
+        // running on to the next one in the text
+        $shortcodePattern = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
         preg_match_all(
             $shortcodePattern,
             $content,

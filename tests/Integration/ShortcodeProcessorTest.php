@@ -198,11 +198,32 @@ describe('extract', function (): void {
         expect(array_column($result, 'name'))->toBe(['probe', 'subpage-list', 'gallery']);
     });
 
-    it('swallows a bare shortcode followed later by another closing bracket', function (): void {
-        // Current behavior, recorded so a parser fix shows up here: the name group
-        // runs past the bare shortcode's "]", so both shortcodes are lost.
-        expect(shortcodeProcessor()->extract('[probe] then [gallery ids="1"]', new BufferedOutput))->toBe([])
-            ->and(shortcodeProcessor()->extract('[probe]', new BufferedOutput))->toHaveCount(1);
+    it('ends a bare shortcode name at its own closing bracket', function (): void {
+        // A later "]" in the text must not extend the name of a shortcode written
+        // with no attributes, or that shortcode and the next one are both lost (#118)
+        $result = shortcodeProcessor()->extract('[probe] then [gallery ids="1"]', new BufferedOutput);
+
+        expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
+            ->and(array_column($result, 'original'))->toBe(['[probe]', '[gallery ids="1"]'])
+            ->and($result[0]['attributes'] ?? null)->toBe([]);
+    });
+
+    it('captures the content of a bare enclosing shortcode', function (): void {
+        $result = shortcodeProcessor()->extract('[probe]some text[/probe]', new BufferedOutput);
+
+        expect($result)->toBe([[
+            'name' => 'probe',
+            'attributes' => [],
+            'content' => 'some text',
+            'original' => '[probe]some text[/probe]',
+        ]]);
+    });
+
+    it('ends a shortcode name at a self-closing slash', function (): void {
+        $result = shortcodeProcessor()->extract('[probe/] then [gallery ids="1"]', new BufferedOutput);
+
+        expect(array_column($result, 'name'))->toBe(['probe', 'gallery'])
+            ->and($result[0]['attributes'] ?? null)->toBe([]);
     });
 
     it('parses flags, quoted, escaped and unquoted attributes', function (): void {
