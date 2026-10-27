@@ -136,8 +136,13 @@ final class ContentTypeReads
         bool $redirectDomain
     ): array {
         if ($contentType === self::REDIRECT_RULE) {
-            // A vanity domain is not a Statamic site, so its rules can name nothing the
-            // import keeps from that site: its files are fetched by URL, never by item.
+            // ---
+            // A vanity domain is not a Statamic site, so its pages are never imported and a
+            // rule targeting one stays a URL in any run. A file target is fetched by its URL.
+            // An attachment page resolves through its attachment item, which this read does
+            // not fetch, so such a target stays a URL on the vanity host instead of becoming
+            // an asset, as an unscoped run would make it; the run reports it as unresolved.
+            // ---
             return $redirectDomain ? [] : self::REDIRECT_RULE_COMPANIONS;
         }
 
@@ -150,13 +155,17 @@ final class ContentTypeReads
     /**
      * The post types a type reads so its same-site links can become entry references.
      *
-     * **Redirect rules keep them on a site and drop them on a vanity domain.** Measured
-     * across the 143 site exports carrying `redirect_rule` items (5,378 rules, Windows 11):
-     * 975 targets are the URL of a `page`, `post` or `uamspeople` item in the same export,
-     * so dropping the link targets on a site would turn each of those into a plain URL that
-     * no longer follows a rename. None of the 143 is a vanity domain. A vanity domain's own
-     * pages are never imported as entries, so an entry reference to one cannot exist, and
-     * reading them there only adds endpoints that can stop the run (#93).
+     * **Redirect rules keep them on a site and drop them on a vanity domain.** Measured on
+     * macOS against `UAMS-Web/wordpress-importer-exports` at `2dc5f67` (#171): of its 254
+     * sites (the 256 `WordPress/*.xml` exports other than the `_cleaned` copies, with the
+     * parts of a split export taken as one site), 143 carry `redirect_rule` items, 5,310
+     * rules in all, 5,304 with a target. 980 of those targets are the URL of a `page` (757),
+     * `post` (25) or `uamspeople` (198) item of the same site, comparing host and path with
+     * the scheme, query and fragment dropped and a relative target joined to the site's base
+     * URL. So dropping the link targets on a site would turn each of those into a plain URL
+     * that no longer follows a rename. None of the 143 is a vanity domain. A vanity domain's
+     * own pages are never imported as entries, so an entry reference to one cannot exist,
+     * and reading them there only adds endpoints that can stop the run (#93).
      *
      * @param  string  $contentType  The requested content type
      * @param  bool  $redirectDomain  Whether the site is a listed vanity redirect domain
@@ -205,6 +214,9 @@ final class ContentTypeReads
             return true;
         }
 
-        return array_any($contentTypes, fn (string $contentType): bool => \in_array($pass, self::passes($contentType), true));
+        // Pass names and the declared lists are strings, so in_array()'s strict flag, which
+        // phpstan-strict-rules requires, changes no result.
+        // @pest-mutate-ignore: TrueToFalse
+        return \array_any($contentTypes, fn (string $contentType): bool => \in_array($pass, self::passes($contentType), true));
     }
 }

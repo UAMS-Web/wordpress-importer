@@ -205,3 +205,29 @@ it('reports two different unresolved links separately', function (): void {
 
     expect(scopedWarnings('scope_unresolved_links'))->toHaveCount(2);
 });
+
+it('says how an unscoped run treats an unresolved link, for a site and for a vanity domain', function (bool $redirectDomain, string $consequence): void {
+    // A vanity domain's pages are never imported, so an unscoped run converts only an
+    // attachment-page target there (#171)
+    MaterializationScope::set(['redirect_rule'], $redirectDomain);
+
+    scopedConvertLink('https://example.test/a-page-this-run-did-not-read/');
+
+    $warnings = scopedWarnings('scope_unresolved_links');
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0]['consequence'] ?? null)->toBe($consequence);
+})->with([
+    'a site' => [false, 'the link was left unconverted; if its target is of a type this run did not read, an unscoped run converts it'],
+    'a vanity domain' => [true, 'the link was left unconverted; this site is a vanity redirect domain, whose pages are never imported, so an unscoped run converts it only if its target is an attachment page'],
+]);
+
+it('forgets a vanity domain when the scope is set again for a site', function (): void {
+    MaterializationScope::set(['redirect_rule'], true);
+    MaterializationScope::set(['redirect_rule']);
+
+    scopedConvertLink('https://example.test/a-page-this-run-did-not-read/');
+
+    expect(scopedWarnings('scope_unresolved_links')[0]['consequence'] ?? null)
+        ->toStartWith('the link was left unconverted; if its target is of a type');
+});
