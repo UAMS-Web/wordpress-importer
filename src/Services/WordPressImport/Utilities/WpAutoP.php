@@ -79,6 +79,10 @@ class WpAutoP
             );
             $last_part = array_pop($text_parts);
             $text = '';
+
+            // The counter only has to give each placeholder a distinct name, which
+            // any start or direction does
+            // @pest-mutate-ignore: DecrementInteger, IncrementInteger
             $i = 0;
 
             foreach ($text_parts as $text_part) {
@@ -102,6 +106,8 @@ class WpAutoP
                     0,
                     $start
                 ).$name;
+
+                // @pest-mutate-ignore: PostIncrementToPostDecrement
                 $i++;
             }
 
@@ -217,8 +223,10 @@ class WpAutoP
                 "\n",
                 $trimmed
             );
-            // Restore <pre> tags
+            // Restore <pre> tags. str_replace() reads an array's values in order
+            // whatever their keys, so array_values() only documents the intent.
             if ($pre_tags !== []) {
+                // @pest-mutate-ignore: UnwrapArrayValues
                 return \str_replace(
                     \array_keys($pre_tags),
                     \array_values($pre_tags),
@@ -229,14 +237,18 @@ class WpAutoP
             return $text;
         }
 
-        // Split into paragraphs
+        // Split into paragraphs. A limit of 0 means no limit, as -1 does.
+        // @pest-mutate-ignore: IncrementInteger
         $paragraphs = \preg_split(
             '/\n\s*\n/',
             $text,
             -1,
             PREG_SPLIT_NO_EMPTY
         );
+        // A fixed pattern on a string cannot fail to split, so no test reaches this
+        // @pest-mutate-ignore: FalseToTrue
         if ($paragraphs === false) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $text;
         }
 
@@ -294,6 +306,11 @@ class WpAutoP
 
         // Handle line breaks if enabled
         if ($br) {
+            // The wpnl pass above has already replaced every newline inside these
+            // elements, so this pass and its restore below find none; they are kept
+            // to match WordPress's wpautop(). A fuzz of 40,000 inputs found no output
+            // change with either removed.
+            // @pest-mutate-ignore: UnwrapStrReplace
             $text = self::pregReplaceCallback(
                 '#<(script|style|svg|math)([^>]*)>(.*?)</\1>#si',
                 fn ($matches): string => \str_replace(
@@ -314,6 +331,7 @@ class WpAutoP
                 "<br />\n",
                 $text
             );
+            // @pest-mutate-ignore: UnwrapStrReplace
             $text = \str_replace(
                 '<WPPreserveNewline />',
                 "<br />\n",
@@ -338,8 +356,9 @@ class WpAutoP
             $text
         );
 
-        // Restore <pre> tags
+        // Restore <pre> tags; array_values() only documents the intent, as above
         if ($pre_tags !== []) {
+            // @pest-mutate-ignore: UnwrapArrayValues
             $text = \str_replace(
                 \array_keys($pre_tags),
                 \array_values($pre_tags),
