@@ -43,10 +43,11 @@ use Throwable;
  * `ServiceProvider::boot()` (`Event::subscribe(UpdateItemIndexes::class)`) with no
  * config gate, and — unlike `UpdateAssetReferences` — it is not a
  * `Statamic\Events\Subscriber`, so it has no `disable()`/`enable()` of its own.
- * The mechanism that does work is the same one `Subscriber::disable()` uses:
- * `forgetListener()` (a macro Statamic registers on the event dispatcher) unbinds
+ * The mechanism that does work is the one `Subscriber::disable()` uses: forget
  * exactly this subscriber's handlers, leaving every other listener on those events
- * intact. We re-`subscribe()` the class afterwards to restore it.
+ * intact. {@see self::forgetListener()} does that by filtering the dispatcher's
+ * listener table the way Statamic's `forgetListener` macro does, so it needs no
+ * macro. We re-`subscribe()` the class afterwards to restore it.
  *
  * Because removing the listener while indexing is genuinely needed would silently
  * skip search updates, {@see self::withDisabled()} only re-subscribes when the
@@ -161,11 +162,12 @@ class SearchIndexUpdates
     /**
      * Forget the `UpdateItemIndexes` handlers on every event it subscribes to.
      *
-     * Uses the `forgetListener` macro Statamic registers on the dispatcher (the
-     * same mechanism `Statamic\Events\Subscriber::disable()` relies on). Wrapped
-     * per-event so a dispatcher without the macro, or an event with no listeners,
-     * fails safe — {@see self::withDisabled()} detects whether anything was
-     * actually removed via the listener count.
+     * Uses {@see self::forgetListener()}, which mirrors the macro Statamic registers
+     * on the dispatcher (the mechanism `Statamic\Events\Subscriber::disable()` relies
+     * on) by filtering the listener table directly. Wrapped per-event so an
+     * unrecognized dispatcher, or an event with no listeners, fails safe:
+     * {@see self::withDisabled()} detects whether anything was actually removed
+     * via the listener count.
      */
     private static function disable(): void
     {
@@ -207,6 +209,10 @@ class SearchIndexUpdates
 
         $listenersRaw = $property->getValue($events);
 
+        // An event with no listeners has nothing to forget. Without this return the
+        // read below raises an undefined-key error, which disable() catches per event,
+        // so the outcome is the same and these mutants cannot be told apart.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (! \is_array($listenersRaw) || ! isset($listenersRaw[$event])) {
             return;
         }
@@ -252,6 +258,9 @@ class SearchIndexUpdates
             return $handler[0].'@'.$handler[1];
         }
 
+        // Any value that is not a `Class@method` id keeps the handler bound, so a
+        // different non-empty string behaves the same
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return '';
     }
 

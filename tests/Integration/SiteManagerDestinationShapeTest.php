@@ -26,11 +26,9 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  * pass, which would be a worse defect than the one being repaired.
  *
  * **Not covered here: enabling a site on a destination that exists but is not yet
- * enabled for it.** That is `enableCollectionForSite`'s pre-existing behaviour
- * rather than anything this change alters, and the state could not be constructed
- * in this harness — a collection reports the default site as enabled whatever its
- * `sites` array holds, on both a single-site and a two-site config. Left uncovered
- * and named rather than asserted loosely enough to pass.
+ * enabled for it.** Without `statamic.system.multisite`, Statamic reports the default
+ * site as a destination's only site whatever its `sites` array holds, so that state
+ * needs multisite switched on; `SiteManagerTest` does that and covers it.
  *
  * @command  php vendor/bin/pest tests/Integration/SiteManagerDestinationShapeTest.php
  */
