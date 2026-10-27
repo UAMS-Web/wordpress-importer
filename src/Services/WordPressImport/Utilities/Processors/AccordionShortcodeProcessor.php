@@ -8,26 +8,29 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
- * Processes WordPress [accordion] and [section] shortcodes into section data.
+ * Processes WordPress [accordion] and [section] shortcodes.
  *
- * Handles parsing of [accordion] and [section title="..."] shortcode structures
- * into arrays of section data with titles and content. Processes section content
- * with wpautop formatting for proper paragraph handling.
+ * Parses [accordion] and [section title="..."] structures into arrays of section
+ * data with titles and wpautop-processed content, which the audio post importer
+ * reads transcripts from. In Bard content an accordion is flattened instead: each
+ * section becomes its title as a heading followed by its content, because the
+ * host app defines no accordion set.
  */
 class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
 {
     /**
-     * Provides default implementation of toTiptapHtml method.
-     *
-     * This trait handles the standard conversion of shortcode data to
-     * Tiptap-compatible HTML, including content processing and HTML
-     * structure generation.
+     * Matches one [section title="..."]...[/section], capturing the title and body.
      */
-    use DefaultTiptapHtmlTrait;
+    private const string SECTION_PATTERN = '/\[section\s+title=["\']([^"\']*)["\'][^]]*\]((?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
+
+    /**
+     * Matches one line break or whitespace character, the residue wpautop leaves
+     * around shortcode tags.
+     */
+    private const string BREAK_PATTERN = '(?:\s|<br\s*\/?>)';
 
     /**
      * Parse a WordPress [accordion] shortcode and return an array of sections.
@@ -60,12 +63,9 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Initialize array to store parsed section data
         $sections = [];
 
-        // Match [section title="..."]...[/section] patterns
-        $sectionPattern = '/\[section\s+title=["\']([^"\']*)["\'][^]]*\]((?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
-
         // Extract all section matches from the accordion content
         preg_match_all(
-            $sectionPattern,
+            self::SECTION_PATTERN,
             $content,
             $matches,
             PREG_SET_ORDER
@@ -162,5 +162,84 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
 
         // Return empty array if no accordion content is found
         return [];
+    }
+
+    /**
+     * Flatten a WordPress [accordion] shortcode into Bard-ready HTML.
+     *
+     * Each section becomes an <h3> holding its title, followed by its content in
+     * a paragraph; a section with an empty title keeps its content alone. Text
+     * outside any section is kept, so an accordion without sections keeps its
+     * content. Shortcodes inside the sections are processed, since the outer
+     * extraction consumed them along with the accordion.
+     *
+     * @param  array<int|string, mixed>  $shortcode  Shortcode data (['name' => '...', 'attributes' => [...], 'content' => '...'])
+     * @param  string  $site  The site handle for context
+     * @param  AssetImporter  $assetImporter  Instance for importing linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of attachment objects for image processing
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     * @return string Tiptap-compatible HTML
+     */
+    public function toTiptapHtml(
+        array $shortcode,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null
+    ): string {
+        // Read the accordion's inner content
+        $content = \is_string($shortcode['content'] ?? null)
+            ? $shortcode['content']
+            : '';
+
+        // ---
+        // Drop the line breaks wpautop leaves at the edges, between sections and at
+        // the ends of each section body, so none is left standing outside or at the
+        // edge of a paragraph once the sections are replaced.
+        // A failed replacement keeps the content as it was rather than losing it.
+        // ---
+        $break = self::BREAK_PATTERN;
+        $content = \preg_replace(
+            [
+                '/^'.$break.'+|'.$break.'+$/',
+                '/'.$break.'+(?=\[\/?section\b)/',
+                '/(?<=\[\/section\])'.$break.'+/',
+                '/(\[section\b[^\]]*\])'.$break.'+/',
+            ],
+            ['', '', '', '$1'],
+            $content
+        ) ?? $content;
+
+        // Replace each section with its title as a heading and its body as a paragraph
+        $flattened = \preg_replace_callback(
+            self::SECTION_PATTERN,
+            static function (array $match): string {
+                // The stripper decodes entities and trims, so the title is plain text
+                $title = HtmlTagStripper::strip($match[1]);
+
+                $heading = $title === ''
+                    ? ''
+                    : '<h3>'.\htmlspecialchars($title).'</h3>';
+
+                return $heading.'<p>'.$match[2].'</p>';
+            },
+            $content
+        ) ?? $content;
+
+        // Process the shortcodes inside the sections
+        return (new ShortcodeProcessor)->processShortcodesInContent(
+            $flattened,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms,
+            [],
+            $pageSlug
+        );
     }
 }

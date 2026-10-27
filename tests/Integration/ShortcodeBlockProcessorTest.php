@@ -371,7 +371,7 @@ it('process returns a Tiptap html string for an audio shortcode', function (): v
     expect($result)->toContain('data-set-type="audio"');
 });
 
-it('process returns a string for an accordion shortcode', function (): void {
+it('process flattens an accordion shortcode into a heading and its content', function (): void {
     $html = '<!-- wp:shortcode --><div>[accordion][section title="Section A"]Content A[/section][/accordion]</div><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
@@ -389,12 +389,11 @@ it('process returns a string for an accordion shortcode', function (): void {
         )
     );
 
-    // Extract may match only [accordion] (empty content) for nested markup, so the
-    // result may be the replaced div or the original shortcode text.
-    expect(
-        str_contains($result, 'data-set-type="accordion"')
-        || str_contains($result, '[accordion]')
-    )->toBeTrue();
+    // The host app defines no accordion set, so the section becomes a heading
+    // and a paragraph in place of the shortcode
+    expect($result)->toContain('<h3>Section A</h3><p>Content A</p>')
+        ->not->toContain('[accordion]')
+        ->not->toContain('data-set-type');
 });
 
 it('process handles a wp:shortcode block within mixed block types', function (): void {
