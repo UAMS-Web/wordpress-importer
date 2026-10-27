@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks;
 
-use DOMDocument;
 use DOMElement;
-use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -20,7 +18,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 
 /**
  * Parses WordPress ACF uams-content blocks into Statamic page_builder replicator
@@ -36,6 +33,11 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
  */
 class ContentParser
 {
+    /**
+     * The heading a block with body content but no heading receives.
+     */
+    private const string DEFAULT_HEADING = 'Content Block Title - Please Replace';
+
     /**
      * Defines the mapping between field-based ACF field names and standard field
      * names.
@@ -61,21 +63,6 @@ class ContentParser
     }
 
     /**
-     * Defines which nested structures should be processed for content blocks.
-     *
-     * This method provides the nested structure mappings needed by AcfFieldNormalizer
-     * to handle complex ACF block structures.
-     *
-     * @return array<int|string, mixed> The nested structure mappings for content blocks
-     */
-    private function getNestedStructures(): array
-    {
-        return [
-            // No nested structures for content blocks
-        ];
-    }
-
-    /**
      * Parses a WordPress ACF uams-content block into a Statamic replicator set.
      *
      * Processes the block attributes to map content_heading, hide_block_heading, and
@@ -87,7 +74,7 @@ class ContentParser
      * RowId. Uses AcfFieldNormalizer for consistent field mapping across different
      * WordPress ACF data structures. Skips the block (returns null) if the body
      * content is empty, regardless of heading. If body has content but heading is
-     * empty or default, sets heading to the default placeholder.
+     * empty, sets heading to the default placeholder.
      *
      * @param  array<int|string, mixed>  $attributes  The block attributes from the wp:acf/uams-content comment
      * @param  array<int|string, mixed>  $innerContent  The parsed inner content (unused)
@@ -108,76 +95,27 @@ class ContentParser
         array $terms = []
     ): ?array {
         $dataRaw = $attributes['data'] ?? [];
-        $data = \is_array($dataRaw) ? $dataRaw : [];
 
         // Normalize field names using AcfFieldNormalizer
         $normalizedData = AcfFieldNormalizer::normalize(
-            $data,
-            $this->getFieldMappings(),
-            $this->getNestedStructures()
+            \is_array($dataRaw) ? $dataRaw : [],
+            $this->getFieldMappings()
         );
 
-        // Map WordPress ACF fields to Statamic fields using normalized data
-        $headingRaw = $normalizedData['content_heading'] ?? 'Content Block Title - Please Replace';
-        $blockHeading = HtmlTagStripper::strip(
-            \is_string($headingRaw) ? $headingRaw : 'Content Block Title - Please Replace'
-        );
-        $hideBlockHeading = isset($normalizedData['content_hide_heading']) && $normalizedData['content_hide_heading'] === '1';
-        $backgroundColorRaw = $normalizedData['content_background_color'] ?? 'bg-auto';
-        $backgroundColor = \is_string($backgroundColorRaw)
-            ? $backgroundColorRaw
-            : 'bg-auto';
+        $set = $this->buildSet($normalizedData, $site, $assetImporter, $output, $attachments, $terms);
 
-        // Process content_content (WYSIWYG) into Bard format
-        $contentContentRaw = $normalizedData['content_content'] ?? '';
-        $contentContent = \is_string($contentContentRaw) ? $contentContentRaw : '';
-        $bodyContent = [];
-        if ($contentContent !== '') {
-            $decodedContent = self::decodeContentString($contentContent);
-
-            // Convert iframes to video embed sets before processing
-            $decodedContent = $this->convertIframesToVideoEmbeds(
-                $decodedContent
-            );
-
-            // Process content using TextProcessor with WpAutoP enabled
-            $bodyContent = TextProcessor::processForBard(
-                $decodedContent,
-                $site,
-                $assetImporter,
-                $output,
-                true, // Apply WpAutoP for uams-content WYSIWYG
-                false,
-                $attachments,
-                $terms,
-                null,
-                ProcessingContext::getStatamicEntryId(),
-                ProcessingContext::getCollectionHandle()
-            );
-        }
-
-        // Determine if heading is empty or default placeholder
-        $headingIsEmpty = $blockHeading === '' || $blockHeading === 'Content Block Title - Please Replace';
-
-        // Check if body content is empty
-        $bodyIsEmpty = $bodyContent === [];
-
-        // ---
-        // Skip block if body is empty (regardless of heading)
-        // ---
-
-        // Check if body is empty to skip the block
-        if ($bodyIsEmpty) {
+        // Skip the block if its body is empty, whatever its heading
+        if ($set['body'] === []) {
             // Get entry data for post_name access
             $entryData = ProcessingContext::getEntryData();
 
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
-                    'block_heading' => $blockHeading,
-                    'heading_is_default' => $blockHeading === 'Content Block Title - Please Replace',
+                    'block_heading' => $set['block_heading'],
+                    'heading_is_default' => $set['block_heading'] === self::DEFAULT_HEADING,
                     'body_content_empty' => true,
-                    'content_content_empty' => $contentContent === '',
+                    'content_content_empty' => self::contentString($normalizedData) === '',
                     'normalized_data_keys' => \array_keys($normalizedData),
                     'content_heading_in_data' => isset($normalizedData['content_heading']),
                     'wordpress_post_id' => ProcessingContext::getWordPressPostId(),
@@ -195,26 +133,15 @@ class ContentParser
                 $logData['context']
             );
 
-            // Return null to skip the block
             return null;
         }
 
-        // Check if heading is empty to set default placeholder
-        if ($headingIsEmpty) {
-            // Set heading to default placeholder when body has content but heading is empty
-            $blockHeading = 'Content Block Title - Please Replace';
+        // Give a block with body content but no heading the placeholder
+        if ($set['block_heading'] === '') {
+            $set['block_heading'] = self::DEFAULT_HEADING;
         }
 
-        // Return replicator set with processed content
-        return [
-            'id' => (new RowId)->generate(), // Unique ID for replicator set
-            'type' => 'uamsweb_block_content',
-            'block_heading' => $blockHeading,
-            'hide_block_heading' => $hideBlockHeading,
-            'background_color' => $backgroundColor,
-            'body' => $bodyContent,
-            'enabled' => true,
-        ];
+        return $set;
     }
 
     /**
@@ -246,34 +173,51 @@ class ContentParser
         ?XmlStreamParser $xmlParser = null,
         array $terms = []
     ): ?array {
-        // Normalize field names using AcfFieldNormalizer
-        $normalizedData = AcfFieldNormalizer::normalize(
-            $moduleData,
-            $this->getFieldMappings(),
-            $this->getNestedStructures()
+        return $this->buildSet(
+            AcfFieldNormalizer::normalize($moduleData, $this->getFieldMappings()),
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms
         );
+    }
 
-        // Map WordPress ACF fields to Statamic fields using normalized data
-        $headingRaw = $normalizedData['content_heading'] ?? 'Content Block Title - Please Replace';
-        $blockHeading = HtmlTagStripper::strip(
-            \is_string($headingRaw) ? $headingRaw : 'Content Block Title - Please Replace'
-        );
-        $hideBlockHeading = isset($normalizedData['content_hide_heading']) && $normalizedData['content_hide_heading'] === '1';
-        $backgroundColorRaw = $normalizedData['content_background_color'] ?? 'bg-auto';
-        $backgroundColor = \is_string($backgroundColorRaw)
-            ? $backgroundColorRaw
-            : 'bg-auto';
+    /**
+     * Builds the uamsweb_block_content set both entry points share.
+     *
+     * Strips tags from the heading, reads the hide flag and background color, and
+     * runs the content_content WYSIWYG through TextProcessor with WpAutoP after
+     * decoding its Unicode escapes and converting its iframes to video sets.
+     *
+     * @param  array<int|string, mixed>  $normalizedData  The normalized block or module data
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing linked files
+     * @param  OutputInterface  $output  Console output
+     * @param  array<int|string, mixed>  $attachments  Array of attachment data
+     * @param  array<int|string, mixed>  $terms  Array of terms data
+     * @return array{id: mixed, type: string, block_heading: string, hide_block_heading: bool, background_color: string, body: array<int|string, mixed>, enabled: bool} The replicator set
+     */
+    private function buildSet(
+        array $normalizedData,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms
+    ): array {
+        $heading = $normalizedData['content_heading'] ?? null;
+        $backgroundColor = $normalizedData['content_background_color'] ?? null;
+        $contentContent = self::contentString($normalizedData);
 
         // Process content_content (WYSIWYG) into Bard format
-        $contentContentRaw = $normalizedData['content_content'] ?? '';
-        $contentContent = \is_string($contentContentRaw) ? $contentContentRaw : '';
         $bodyContent = [];
+        // Empty content parses to an empty body either way; the check only saves the work.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if ($contentContent !== '') {
-            $decodedContent = self::decodeContentString($contentContent);
-
             // Convert iframes to video embed sets before processing
             $decodedContent = $this->convertIframesToVideoEmbeds(
-                $decodedContent
+                self::decodeContentString($contentContent)
             );
 
             // Process content using TextProcessor with WpAutoP enabled
@@ -295,23 +239,40 @@ class ContentParser
         return [
             'id' => (new RowId)->generate(),
             'type' => 'uamsweb_block_content',
-            'block_heading' => $blockHeading,
-            'hide_block_heading' => $hideBlockHeading,
-            'background_color' => $backgroundColor,
+            'block_heading' => HtmlTagStripper::strip(
+                \is_string($heading) ? $heading : self::DEFAULT_HEADING
+            ),
+            'hide_block_heading' => ($normalizedData['content_hide_heading'] ?? null) === '1',
+            'background_color' => \is_string($backgroundColor) ? $backgroundColor : 'bg-auto',
             'body' => $bodyContent,
             'enabled' => true,
         ];
     }
 
     /**
+     * Reads the content_content WYSIWYG value, or an empty string when it is not one.
+     *
+     * @param  array<int|string, mixed>  $normalizedData  The normalized block or module data
+     * @return string The raw content
+     */
+    private static function contentString(
+        array $normalizedData
+    ): string {
+        $content = $normalizedData['content_content'] ?? null;
+
+        return \is_string($content) ? $content : '';
+    }
+
+    /**
      * Converts iframe elements to video embed sets in HTML content.
      *
      * Detects YouTube and Vimeo iframes in the content and converts them to
-     * Statamic video embed set HTML — `data-set-type="youtube"` / `"vimeo"` /
-     * `"box"`, routed by `VideoSetType` (wordpress-importer-archive#298) — that can be processed by
-     * TextProcessor. Extracts video URL, alignment, and caption from the iframe and
-     * its parent container. An iframe whose URL routes to no platform-specific set
-     * is left alone rather than emitting a set type the Bard field does not define.
+     * Statamic video embed set HTML (`data-set-type="youtube"` / `"vimeo"` /
+     * `"box"`, routed by `VideoSetType`, wordpress-importer-archive#298) that can be
+     * processed by TextProcessor. Extracts video URL, alignment, and caption from
+     * the iframe and its parent container. An iframe whose URL routes to no
+     * platform-specific set is left alone rather than emitting a set type the Bard
+     * field does not define.
      *
      * @param  string  $html  The HTML content containing iframes
      * @return string The HTML content with iframes converted to video embed sets
@@ -319,116 +280,43 @@ class ContentParser
     private function convertIframesToVideoEmbeds(
         string $html
     ): string {
-        // Check if content contains iframes
-        if (
-            ! str_contains(
-                $html,
-                '<iframe'
-            )
-        ) {
-            // Return content unchanged if no iframes found
+        // Return content unchanged if no iframes found
+        if (! str_contains($html, '<iframe')) {
             return $html;
         }
 
         // Load HTML into DOMDocument for parsing
         $doc = TextProcessor::loadHtml($html);
 
-        // Create XPath instance for DOM navigation
-        $xpath = new DOMXPath($doc);
-
-        // Find all iframe elements
-        $iframes = $xpath->query('//iframe');
-
-        if ($iframes === false) {
-            return $html;
-        }
-
-        // Process iframes in reverse order to maintain correct positions
-        for ($i = $iframes->length - 1; $i >= 0; $i--) {
-            // Get current iframe element from collection
-            $iframe = $iframes->item($i);
-
-            // Check if iframe is a valid DOMElement
-            if (! ($iframe instanceof DOMElement)) {
-                // Skip to next iframe if not a valid element
+        // Copy the live list, since replacing an iframe removes it from the document
+        foreach (\iterator_to_array($doc->getElementsByTagName('iframe')) as $iframe) {
+            // Extract the watch URL, skipping an iframe from an unsupported provider
+            $videoUrl = $this->extractVideoUrlFromIframeSrc($iframe->getAttribute('src'));
+            if ($videoUrl === null) {
                 continue;
             }
-
-            // Extract iframe src attribute
-            $iframeSrc = $iframe->getAttribute('src');
-
-            // Check if iframe src is empty
-            if ($iframeSrc === '') {
-                // Skip to next iframe if src is empty
-                continue;
-            }
-
-            // Extract video URL and provider from iframe src
-            $videoData = $this->extractVideoDataFromIframeSrc($iframeSrc);
-
-            // Check if video data extraction was successful
-            if ($videoData === null || $videoData === []) {
-                // Skip to next iframe if extraction failed
-                continue;
-            }
-
-            // ---
-            // Extract alignment from parent div classes
-            // ---
-
-            // Get parent node from iframe element
-            $parentDiv = $iframe->parentNode;
-
-            // Initialize alignment with default center value
-            $align = 'aligncenter'; // Default alignment
-
-            // Check if parent div is a valid DOMElement div node
-            if (
-                $parentDiv instanceof DOMElement
-                && $parentDiv->nodeName === 'div'
-            ) {
-                // Get parent div class attribute
-                $parentClass = $parentDiv->getAttribute('class');
-
-                // Extract alignment from class string
-                $align = Alignment::translate(
-                    $parentClass,
-                    false // Not for image sets
-                );
-            }
-
-            // Extract caption from iframe title attribute
-            $caption = \trim($iframe->getAttribute('title'));
-
-            // Check if caption starts with "Video: " prefix
-            if (
-                str_starts_with($caption, 'Video: ')
-            ) {
-                // Remove "Video: " prefix from caption
-                $caption = \substr(
-                    $caption,
-                    7
-                );
-            }
-
-            // ---
-            // Resolve the platform-specific Bard set that hosts this URL. #589 retired
-            // the single `video` set for `youtube` / `vimeo` / `box` (wordpress-importer-archive#298).
-            // ---
-            $videoUrl = \is_string($videoData['url']) ? $videoData['url'] : '';
-            $provider = isset($videoData['provider']) && \is_string($videoData['provider'])
-                ? $videoData['provider']
-                : '';
-
-            $resolved = VideoSetType::resolve($videoUrl);
 
             // Leave an unroutable iframe alone rather than emitting a set type the
             // Bard field does not define, or a URL its validation rejects
+            $resolved = VideoSetType::resolve($videoUrl);
             if ($resolved === null) {
                 continue;
             }
 
-            $setType = $resolved['type'];
+            // The alignment comes from a parent div's classes, centered otherwise
+            $parent = $iframe->parentNode;
+            // A loaded iframe always has an element parent, at least the body; PHPStan needs the check.
+            // @pest-mutate-ignore: InstanceOfToTrue
+            $parentDiv = $parent instanceof DOMElement && $parent->nodeName === 'div' ? $parent : null;
+            $align = $parentDiv === null
+                ? 'aligncenter'
+                : Alignment::translate($parentDiv->getAttribute('class'), false);
+
+            // The caption is the iframe title, without a leading "Video: " prefix
+            $caption = \trim($iframe->getAttribute('title'));
+            if (str_starts_with($caption, 'Video: ')) {
+                $caption = \substr($caption, 7);
+            }
 
             // ---
             // Build video set values. The URL handle is `url`, not `video_url`, and
@@ -437,134 +325,60 @@ class ContentParser
             // mode is never justified by the source data (wordpress-importer-archive#298).
             // ---
             $values = [
-                'type' => $setType,
                 'embed_mode' => VideoSetType::EMBED_MODE_SIMPLE,
                 'url' => $resolved['url'],
                 'aspect_ratio' => '16by9', // Default per uamsweb_common_video.yaml
                 'align' => $align,
             ];
 
-            // Check if caption exists
             if ($caption !== '') {
-                // Add caption to values array
                 $values['caption'] = $caption;
             }
 
-            // ---
-            // Create video embed set div element
-            // ---
-
-            // Create div element for video embed set
+            // Create the set div with the platform-specific set handle
             $videoSetDiv = $doc->createElement('div');
-
-            // Set data-set-type attribute to the platform-specific set handle
-            $videoSetDiv->setAttribute(
-                'data-set-type',
-                $setType
-            );
+            $videoSetDiv->setAttribute('data-set-type', $resolved['type']);
 
             // Stamp the run nonce so Set::parseHTML() trusts this as our own markup
-            $videoSetDiv->setAttribute(
-                SetMarkupNonce::ATTRIBUTE,
-                SetMarkupNonce::value()
-            );
+            $videoSetDiv->setAttribute(SetMarkupNonce::ATTRIBUTE, SetMarkupNonce::value());
 
-            // ---
-            // Set data-set-attr attributes for each value
-            // ---
-
-            // Loop through values array to set data-set-attr attributes
             foreach ($values as $key => $value) {
-                // Check if key is not 'type' (type is used in data-set-type attribute)
-                if ($key !== 'type') {
-                    // Set attribute on div element
-                    $videoSetDiv->setAttribute(
-                        "data-set-attr-{$key}",
-                        $value
-                    );
-                }
+                $videoSetDiv->setAttribute("data-set-attr-{$key}", $value);
             }
 
-            // Get parent container (div with embed-responsive class)
-            $parentContainer = $iframe->parentNode;
-
-            // Check if parent container is a div with embed-responsive class
-            if (
-                $parentContainer instanceof DOMElement
-                && $parentContainer->nodeName === 'div'
-                && str_contains(
-                    $parentContainer->getAttribute('class'),
-                    'embed-responsive'
-                )
-            ) {
-                $parentContainerParent = $parentContainer->parentNode;
-
-                // Replace parent container with video embed set
-                if ($parentContainerParent instanceof \DOMNode) {
-                    $parentContainerParent->replaceChild(
-                        $videoSetDiv,
-                        $parentContainer
-                    );
-                }
-            } else { // Otherwise
-                $iframeParent = $iframe->parentNode;
-
-                // Replace iframe directly with video embed set
-                if ($iframeParent instanceof \DOMNode) {
-                    $iframeParent->replaceChild(
-                        $videoSetDiv,
-                        $iframe
-                    );
-                }
-            }
+            // Replace an embed-responsive container whole, and the iframe otherwise
+            $replaced = $parentDiv !== null && str_contains($parentDiv->getAttribute('class'), 'embed-responsive')
+                ? $parentDiv
+                : $iframe;
+            $replaced->replaceWith($videoSetDiv);
 
             // Clean up variables to free up memory
-            unset(
-                $iframe,
-                $iframeSrc,
-                $videoData,
-                $parentDiv,
-                $align,
-                $parentClass,
-                $caption,
-                $values,
-                $videoSetDiv,
-                $parentContainer,
-                $key,
-                $value
-            );
+            unset($iframe, $parent, $parentDiv, $values, $videoSetDiv, $replaced);
         }
 
         // Extract inner HTML from DOMDocument
         $convertedHtml = TextProcessor::getInnerHtml($doc);
 
         // Clean up variables to free up memory
-        unset(
-            $doc,
-            $xpath,
-            $iframes,
-            $i
-        );
+        unset($doc);
 
-        // Return converted HTML
         return $convertedHtml;
     }
 
     /**
-     * Extracts video URL and provider information from an iframe src attribute.
+     * Extracts the video watch URL from an iframe src attribute.
      *
-     * Parses YouTube and Vimeo embed URLs to extract the watch URL and provider
-     * name. Converts YouTube embed URLs (e.g., youtube.com/embed/VIDEO_ID) to watch
-     * URLs (e.g., youtube.com/watch?v=VIDEO_ID). Extracts Vimeo video IDs from
-     * embed URLs.
+     * Converts YouTube embed URLs (e.g., youtube.com/embed/VIDEO_ID) to watch URLs
+     * (e.g., youtube.com/watch?v=VIDEO_ID) and Vimeo player URLs to vimeo.com/ID.
+     * A src that is already a YouTube or Vimeo watch URL is returned as written.
      *
      * @param  string  $iframeSrc  The iframe src attribute value
-     * @return array<int|string, mixed>|null Array with 'url' and 'provider' keys, or null if extraction failed
+     * @return ?string The watch URL, or null for an unsupported provider
      */
-    private function extractVideoDataFromIframeSrc(
+    private function extractVideoUrlFromIframeSrc(
         string $iframeSrc
-    ): ?array {
-        // Check if this is a YouTube embed URL
+    ): ?string {
+        // Convert a YouTube embed URL to a watch URL
         if (
             \preg_match(
                 '#^(?:https?:)?//(?:www\.|m\.)?(?:youtube\.com|youtube-nocookie\.com)/embed/([a-zA-Z0-9_-]+)#i',
@@ -572,20 +386,10 @@ class ContentParser
                 $matches
             ) === 1
         ) {
-            // Extract video ID from embed URL
-            $videoId = $matches[1];
-
-            // Convert embed URL to watch URL
-            $watchUrl = "https://www.youtube.com/watch?v={$videoId}";
-
-            // Return video data
-            return [
-                'url' => $watchUrl,
-                'provider' => 'youtube',
-            ];
+            return "https://www.youtube.com/watch?v={$matches[1]}";
         }
 
-        // Check if this is a Vimeo embed URL
+        // Convert a Vimeo embed URL to a watch URL
         if (
             \preg_match(
                 '#^(?:https?:)?//(?:www\.|player\.)?vimeo\.com/video/(\d+)#i',
@@ -593,50 +397,17 @@ class ContentParser
                 $matches
             ) === 1
         ) {
-            // Extract video ID from embed URL
-            $videoId = $matches[1];
-
-            // Convert embed URL to watch URL
-            $watchUrl = "https://vimeo.com/{$videoId}";
-
-            // Return video data
-            return [
-                'url' => $watchUrl,
-                'provider' => 'vimeo',
-            ];
+            return "https://vimeo.com/{$matches[1]}";
         }
 
-        // Check if this is already a YouTube watch URL
+        // Keep a src that is already a YouTube or Vimeo watch URL
         if (
-            \preg_match(
-                '#^(?:https?:)?//(?:www\.|m\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]+)#i',
-                $iframeSrc,
-                $matches
-            ) === 1
+            \preg_match('#^(?:https?:)?//(?:www\.|m\.)?youtube\.com/watch\?v=[a-zA-Z0-9_-]+#i', $iframeSrc) === 1
+            || \preg_match('#^(?:https?:)?//(?:www\.)?vimeo\.com/\d+#i', $iframeSrc) === 1
         ) {
-            // Return video data with original URL
-            return [
-                'url' => $iframeSrc,
-                'provider' => 'youtube',
-            ];
+            return $iframeSrc;
         }
 
-        // Check if this is already a Vimeo watch URL
-        if (
-            \preg_match(
-                '#^(?:https?:)?//(?:www\.)?vimeo\.com/(\d+)#i',
-                $iframeSrc,
-                $matches
-            ) === 1
-        ) {
-            // Return video data with original URL
-            return [
-                'url' => $iframeSrc,
-                'provider' => 'vimeo',
-            ];
-        }
-
-        // Return null for unsupported video providers
         return null;
     }
 
@@ -644,25 +415,15 @@ class ContentParser
      * Decode JSON-encoded Unicode content strings from ACF WYSIWYG fields.
      *
      * @param  string  $contentContent  The raw content string from WordPress
-     * @return string The decoded content string
+     * @return string The decoded content string, or the raw string when it does not decode
      */
     private static function decodeContentString(
         string $contentContent
     ): string {
         $decodedContent = \json_decode(
-            '"'.\str_replace(
-                '"',
-                '\"',
-                $contentContent
-            ).'"',
-            false,
-            512
+            '"'.\str_replace('"', '\"', $contentContent).'"'
         );
 
-        if (\is_string($decodedContent)) {
-            return $decodedContent;
-        }
-
-        return $contentContent;
+        return \is_string($decodedContent) ? $decodedContent : $contentContent;
     }
 }
