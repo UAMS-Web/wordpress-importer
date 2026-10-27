@@ -165,13 +165,10 @@ trait FormConfigurationManagerTrait
                     $siteHandle, // The Statamic site handle
                     $assetImporter, // Instance for importing files
                     new NullOutput, // Console output for logging
-                    // Don't apply WpAutoP formatting again since we already did it. A second
-                    // pass finds nothing left to change: the text above is already decoded and
-                    // wrapped, so escaped markup and entities above U+00FF come out the same.
-                    // @pest-mutate-ignore: FalseToTrue
-                    false,
-                    // Not inner-block content. Treating it as such would only strip WordPress
-                    // block comments, which the Bard parser drops anyway.
+                    false, // Don't apply WpAutoP formatting again since we already did it
+                    // Not inner-block content. Treating it as such strips WordPress block comments
+                    // before the shortcode and gallery block lookups; measured with a confirmation
+                    // holding a wp:shortcode block, the Bard content is the same either way.
                     // @pest-mutate-ignore: FalseToTrue
                     false,
                     [],

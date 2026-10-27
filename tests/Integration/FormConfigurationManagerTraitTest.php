@@ -473,6 +473,8 @@ it('converts a value to a boolean, inverting it when asked', function (mixed $va
     'a padded zero' => [' 0 ', false],
     'a padded one' => [' 1 ', true],
     'a zero with a decimal' => ['0.0', true],
+    // Judged by its trimmed text, as convertToInteger() judges it.
+    'a number ending in a null byte' => ["2\0", true],
 ]);
 
 it('leaves the boolean alone when inversion is not exactly true', function (): void {
@@ -574,9 +576,9 @@ it('turns text into Bard content, and blank text into none', function (): void {
     expect(\json_encode($bard))->toContain('Hello {{ site:name }}')->toContain('Again')
         ->and(fcmCall($this->probe, 'processMappingConfiguration', '   ', ['as_bard' => true], [], 'default', $this->importer))->toBe([])
         ->and(fcmCall($this->probe, 'processMappingConfiguration', '   ', ['as_bard' => true], [], 'default'))->toBe([])
-        // The text is not run through a second paragraph pass, whose byte-wise entity decoding
-        // would mangle a character above U+00FF.
-        ->and(\json_encode(fcmCall($this->probe, 'processMappingConfiguration', 'A &#8220;quoted&#8221; word', ['as_bard' => true], [], 'default', $this->importer), \JSON_UNESCAPED_UNICODE))->toContain("A \u{201C}quoted\u{201D} word")
+        // The text is not run through a second paragraph pass, whose byte-wise decoding would
+        // turn an entity escaped twice into a control character.
+        ->and(\json_encode(fcmCall($this->probe, 'processMappingConfiguration', 'It&amp;#8217;s fine', ['as_bard' => true], [], 'default', $this->importer), \JSON_UNESCAPED_UNICODE))->toContain("It\u{2019}s fine")
         // A single line break is kept as a hard break.
         ->and(\json_encode(fcmCall($this->probe, 'processMappingConfiguration', "One\nTwo", ['as_bard' => true], [], 'default', $this->importer)))->toContain('hardBreak')
         // Without an asset importer the text is left as it was.
