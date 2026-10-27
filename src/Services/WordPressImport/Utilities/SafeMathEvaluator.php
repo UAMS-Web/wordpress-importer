@@ -51,9 +51,7 @@ class SafeMathEvaluator
      * @var array<string, list<int>>
      */
     // A constant initializer is never reported as an executed line. Changing either
-    // count or removing an entry by hand fails a round() row of SafeMathEvaluatorTest,
-    // except lowering 1 to 0: a call always parses at least one argument, so a count
-    // of zero is never reached.
+    // count or removing an entry by hand fails a round() row of SafeMathEvaluatorTest.
     // @pest-mutate-ignore: DecrementInteger, IncrementInteger, RemoveArrayItem
     private const array ALLOWED_FUNCTIONS = ['round' => [1, 2]];
 
@@ -401,13 +399,11 @@ class SafeMathEvaluator
     ): bool {
         $token = $this->peek();
 
-        // Only an operator token carries a value from $operators, and the values are
-        // strings on both sides, so neither the type check's `&&` nor strictness
-        // changes the answer
-        // @pest-mutate-ignore: BooleanAndToBooleanOr, TrueToFalse
-        return $token !== null
-            && $token['type'] === 'operator'
-            && \in_array($token['value'], $operators, true);
+        // The tokenizer gives the values `+`, `-`, `*` and `/` to operator tokens
+        // only, so the value alone identifies one, and past the end there is no
+        // value. Both sides are strings, so strict and loose comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
+        return \in_array($token['value'] ?? null, $operators, true);
     }
 
     /**
