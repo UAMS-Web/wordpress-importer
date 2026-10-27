@@ -17,12 +17,14 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * more-link fields, every sort key, scalar normalization of each attribute,
  * the exact context of each warning, and the filter loops over several ids.
  *
- * Reuses the fixture helpers that `LogoListBlockImportTest` defines
- * (`logoListAttributes()`, `logoListFixtureTerms()`, `logoListAssetImporter()`),
- * so this file only runs alongside that one, as the `Integration` suite does.
+ * Shares its fixture helpers (`logoListAttributes()`, `logoListFixtureTerms()`,
+ * `logoListAssetImporter()`) with `LogoListBlockImportTest` through
+ * `tests/Support/logo-list-test-support.php`.
  *
- * @command  php vendor/bin/pest tests/Integration/LogoListBlockImportTest.php tests/Integration/LogoListParserSetTest.php
+ * @command  php vendor/bin/pest tests/Integration/LogoListParserSetTest.php
  */
+require_once __DIR__.'/../Support/logo-list-test-support.php';
+
 uses(StatamicTestCase::class);
 
 // The parser writes three process-statics; clear all of them on both sides so
@@ -625,4 +627,58 @@ it('does not treat a label term listed among the filter ids as a category', func
     expect($set['logo_list_filter_category'] ?? null)->toBe(['default_2024-best-of-northwest-arkansas'])
         ->and(array_keys(logoListDeferredQueue()['logos_item_categories']['default'] ?? []))
         ->toBe(['2024-best-of-northwest-arkansas']);
+})->group('blocks', 'logo-list');
+
+it('keeps the parent in a category slug when the parent slug is also a label slug', function (): void {
+    // The parent lookup matches by slug across taxonomies and takes the first
+    // match, here the label, so the label must be in the map for the parent to
+    // resolve; the item creator maps both taxonomies the same way.
+    $xml = simplexml_load_string(<<<'XML'
+        <rss xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+            <wp:term>
+                <wp:term_id>5</wp:term_id>
+                <wp:term_taxonomy>logo-list-label</wp:term_taxonomy>
+                <wp:term_slug>research</wp:term_slug>
+                <wp:term_parent></wp:term_parent>
+                <wp:term_name>Research label</wp:term_name>
+            </wp:term>
+            <wp:term>
+                <wp:term_id>9</wp:term_id>
+                <wp:term_taxonomy>logo-list-category</wp:term_taxonomy>
+                <wp:term_slug>research</wp:term_slug>
+                <wp:term_parent></wp:term_parent>
+                <wp:term_name>Research</wp:term_name>
+            </wp:term>
+            <wp:term>
+                <wp:term_id>12</wp:term_id>
+                <wp:term_taxonomy>logo-list-category</wp:term_taxonomy>
+                <wp:term_slug>partners</wp:term_slug>
+                <wp:term_parent>research</wp:term_parent>
+                <wp:term_name>Partners</wp:term_name>
+            </wp:term>
+        </channel></rss>
+        XML);
+
+    if ($xml === false) {
+        throw new RuntimeException('Expected the inline terms to parse.');
+    }
+
+    $terms = [];
+
+    foreach ($xml->channel->children('wp', true)->term as $term) {
+        $terms[] = $term;
+    }
+
+    $set = (new LogoListParser)->parse(
+        logoListAttributes(['block_logo_list_filter_ids' => ['12']]),
+        'default',
+        logoListAssetImporter(),
+        new BufferedOutput,
+        $terms,
+        'logo-list-set-test',
+    );
+
+    expect($set['logo_list_filter_category'] ?? null)->toBe(['default_research_partners'])
+        ->and(array_keys(logoListDeferredQueue()['logos_item_categories']['default'] ?? []))
+        ->toBe(['research_partners']);
 })->group('blocks', 'logo-list');

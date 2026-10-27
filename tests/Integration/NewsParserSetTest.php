@@ -193,7 +193,7 @@ it('reads every field from its ACF field key', function (): void {
         $keyed['field_'.$name.'_b'] = $value;
     }
 
-    // The background colour also arrives under the short spelling's key
+    // The background color also arrives under the short spelling's key
     $keyed['field_news_bgcolor_b'] = $keyed['field_news_background_color_b'];
     unset($keyed['field_news_background_color_b']);
 
@@ -214,7 +214,7 @@ it('reads every field from its ACF field key', function (): void {
     ]);
 });
 
-it('reads the include-link, position and long background-colour keys', function (): void {
+it('reads the include-link, position and long background-color keys', function (): void {
     $set = newsSetWithoutId($this->parser, $this->assetImporter, ['data' => [
         'field_news_format_b' => 'side',
         'field_news_include_link_b' => '1',

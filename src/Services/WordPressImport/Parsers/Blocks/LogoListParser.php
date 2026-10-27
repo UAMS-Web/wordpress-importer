@@ -123,13 +123,17 @@ class LogoListParser
         $data = $this->resolveDataAttributes($attributes);
 
         // ---
-        // Build the term map for the category taxonomy alone. Labels resolve
-        // through TermDestinationRegistry below, so a label term in this map
-        // could only let a label id in the category filter pass as a category.
+        // Build the term map over both logo list taxonomies, as the item
+        // creator does, so a category whose parent id resolves to a label term
+        // keeps the same full slug on both sides. The category filter below
+        // accepts only category terms from it.
         // ---
         $termMap = TermMapBuilder::buildTermMap(
             $terms,
-            ['logo-list-category']
+            [
+                'logo-list-category',
+                'logo-list-label',
+            ]
         );
 
         // Map basic fields
@@ -326,8 +330,11 @@ class LogoListParser
             // Normalize term ID to string for map lookups and deferred queues.
             $termId = (string) $id;
 
-            // Skip unknown term IDs that are not available in the prepared map.
-            if (! isset($termMap[$termId])) {
+            // Skip unknown term IDs, and label terms, which are not categories.
+            if (
+                ! isset($termMap[$termId])
+                || $termMap[$termId]['term_taxonomy'] !== 'logo-list-category'
+            ) {
                 continue;
             }
 
