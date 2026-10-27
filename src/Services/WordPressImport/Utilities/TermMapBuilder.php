@@ -22,7 +22,8 @@ class TermMapBuilder
      *
      * Creates a standardized term map structure that includes:
      *   - Basic term data (ID, taxonomy, slug, name, parent)
-     *   - Resolved parent IDs (converted from parent slugs)
+     *   - Resolved parent IDs (converted from parent slugs, within the child's
+     *     taxonomy)
      *   - Pre-computed full hierarchical slugs
      *   - Optional taxonomy filtering
      *
@@ -99,7 +100,14 @@ class TermMapBuilder
 
             // Convert parent slug to parent ID if parent exists
             if ($termParent !== '') {
-                // Search through all terms to find parent by slug
+                // ---
+                // Search the terms for the parent by slug, within the child's
+                // taxonomy. WordPress slugs are unique only within a taxonomy, so a
+                // term in another taxonomy can carry the same slug and come first in
+                // the export. The WordPress Importer plugin resolves a parent slug
+                // within the child's taxonomy too, so a stored parent in another
+                // taxonomy, which core does not refuse, is dropped there as here.
+                // ---
                 foreach ($terms as $parentTerm) {
                     if (! ($parentTerm instanceof SimpleXMLElement)) {
                         continue;
@@ -111,8 +119,14 @@ class TermMapBuilder
                         'wp:term_slug'
                     );
 
-                    // Check if this term matches the parent slug
-                    if ($parentTermSlug === $termParent) {
+                    // Check if this term matches the parent slug in the child's taxonomy
+                    if (
+                        $parentTermSlug === $termParent
+                        && XpathHelper::getStringValue(
+                            $parentTerm,
+                            'wp:term_taxonomy'
+                        ) === $termTaxonomy
+                    ) {
                         // Extract parent term ID and break the loop
                         $parentId = XpathHelper::getStringValue(
                             $parentTerm,

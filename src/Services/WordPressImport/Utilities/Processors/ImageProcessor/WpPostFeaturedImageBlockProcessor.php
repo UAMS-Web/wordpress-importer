@@ -64,22 +64,15 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        // Check if the node is a comment node
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            // Only process comment nodes
+        // Only comment nodes can carry a wp:post-featured-image marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
-        // Return whether this node can be processed
-        if (! ($node instanceof DOMComment)) {
-            return false;
-        }
-
-        $commentValue = $node->nodeValue;
-
+        // Return whether the comment is the featured image block marker
         return \preg_match(
             '/^wp:post-featured-image\s*\/?$/',
-            \is_string($commentValue) ? \trim($commentValue) : ''
+            \trim($node->data)
         ) === 1;
     }
 
@@ -144,14 +137,14 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
 
         $attachmentId = (string) $thumbnailId;
 
-        // Get the featured image data from attachments using thumbnail ID
-        $featuredImageData = $this->getFeaturedImageDataFromAttachments(
+        // Get the featured image URL from attachments using thumbnail ID
+        $imgSrc = $this->getFeaturedImageUrlFromAttachments(
             $attachmentId,
             $attachments
         );
 
         // Check if we found featured image data
-        if ($featuredImageData === null || $featuredImageData === []) {
+        if ($imgSrc === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -173,10 +166,6 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
             // Return null to indicate processing failure
             return null;
         }
-
-        // Extract the image source URL from the featured image data
-        $imgSrcRaw = $featuredImageData['url'] ?? '';
-        $imgSrc = \is_string($imgSrcRaw) ? $imgSrcRaw : '';
 
         // Get the base blog URL for same-site comparison
         $baseBlogUrl = $assetImporter->getBaseBlogUrl();
@@ -205,7 +194,7 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
 
         // Create a virtual <figure> element with the featured image
         $figureHtml = $this->createVirtualFigureElement(
-            $featuredImageData,
+            $imgSrc,
             $modifiedAttributes
         );
 
@@ -227,7 +216,7 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
                 [
                     'site' => $site,
                     'pageSlug' => $pageSlug ?? 'none',
-                    'featured_image_data' => $featuredImageData,
+                    'featured_image_data' => ['url' => $imgSrc],
                 ]
             );
 
@@ -284,20 +273,20 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
     }
 
     /**
-     * Gets the featured image data from attachments using thumbnail ID.
+     * Gets the featured image URL from attachments using thumbnail ID.
      *
      * Looks up the attachment in the attachments array using the thumbnail ID
-     * and extracts the attachment URL. Returns an array with the featured image
-     * information or null if not found.
+     * and extracts the attachment URL. Returns null when the attachment is
+     * missing or carries no URL.
      *
      * @param  string  $thumbnailId  The thumbnail ID from _thumbnail_id meta_key
      * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
-     * @return array<int|string, mixed>|null The featured image data with 'url' key, or null if not found
+     * @return ?string The non-empty featured image URL, or null if not found
      */
-    private function getFeaturedImageDataFromAttachments(
+    private function getFeaturedImageUrlFromAttachments(
         string $thumbnailId,
         array $attachments
-    ): ?array {
+    ): ?string {
         // Find the attachment by ID using XpathHelper
         $attachment = XpathHelper::findAttachmentById(
             $attachments,
@@ -313,16 +302,17 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
         // Extract attachment data using XpathHelper
         $attachmentData = XpathHelper::extractAttachmentData($attachment);
 
+        // Read the attachment URL
+        $url = $attachmentData['url'];
+
         // Check if attachment URL exists
-        if ($attachmentData['url'] === null || $attachmentData['url'] === '') {
+        if (! \is_string($url) || $url === '') {
             // Return null if no attachment URL is available
             return null;
         }
 
-        // Return the featured image data array
-        return [
-            'url' => $attachmentData['url'],
-        ];
+        // Return the featured image URL
+        return $url;
     }
 
     /**
@@ -331,18 +321,14 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
      * Constructs HTML for a <figure> element containing an <img> tag
      * with the featured image's URL and metadata.
      *
-     * @param  array<int|string, mixed>  $attachment  The attachment data
+     * @param  string  $imageUrl  The featured image URL
      * @param  array<int|string, mixed>  $attributes  Block attributes for alignment and other properties
      * @return string The HTML for the virtual <figure> element
      */
     private function createVirtualFigureElement(
-        array $attachment,
+        string $imageUrl,
         array $attributes
     ): string {
-        // Extract image URL from attachment data
-        $imageUrlRaw = $attachment['url'] ?? '';
-        $imageUrl = \is_string($imageUrlRaw) ? $imageUrlRaw : '';
-
         // Get alignment from attributes
         $alignmentRaw = $attributes['align'] ?? 'center';
         $alignment = \is_string($alignmentRaw) ? $alignmentRaw : 'center';
@@ -359,19 +345,12 @@ class WpPostFeaturedImageBlockProcessor implements BlockProcessorInterface
             htmlspecialchars($imageUrl)
         );
 
-        // Set the base CSS class for the figure element
-        $figureClass = 'wp-block-post-featured-image';
-
-        // Add alignment class if one is specified
-        if ($alignmentClass !== '') {
-            // Append the alignment class to the figure class
-            $figureClass .= " {$alignmentClass}";
-        }
-
-        // Build the opening figure tag with the image
+        // Build the opening figure tag with the image. Alignment::translate()
+        // always returns one of a fixed set of class names, so the class needs
+        // neither an emptiness check nor escaping.
         $figureHtml = \sprintf(
-            '<figure class="%s">%s',
-            htmlspecialchars($figureClass),
+            '<figure class="wp-block-post-featured-image %s">%s',
+            $alignmentClass,
             $imgTag
         );
 

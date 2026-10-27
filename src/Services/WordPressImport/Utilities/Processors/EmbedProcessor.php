@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
+use DOMComment;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMNodeList;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -37,24 +37,15 @@ class EmbedProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        // Check if node is an XML comment node (WordPress blocks are stored as comments)
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            // Return false for non-comment nodes
-            return false;
-        }
-
-        // Capture comment text and ensure it is a string before trimming
-        $commentText = $node->nodeValue;
-
-        // Return false when the comment node value is missing
-        if (! \is_string($commentText)) {
+        // Only comment nodes can carry a WordPress block marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
         // Check if comment matches wp:embed or wp:core-embed block pattern
         return \preg_match(
             '/^wp:(?:core-)?embed(?:\/[^\s]+)?(?:\s*({.+?}))?\s*$/s',
-            \trim($commentText)
+            \trim($node->data)
         ) === 1;
     }
 
@@ -271,26 +262,20 @@ class EmbedProcessor implements BlockProcessorInterface
         // Create XPath query object for finding elements
         $xpath = new DOMXPath($doc);
 
-        // Initialize figure node variable
-        $figureNode = null;
-
         // Query for figure element containing wp-block-embed class after the comment node
         $figureNodes = $xpath->query(
             'following-sibling::figure[contains(@class, "wp-block-embed")][1]',
             $node
         );
 
-        // Check if figure nodes were found
-        if (
-            $figureNodes instanceof DOMNodeList
-            && $figureNodes->length > 0
-        ) {
-            // Get first figure node from query results
-            $figureNode = $figureNodes->item(0);
-        }
+        // Select the first figure found. query() returns false only for a
+        // malformed expression or context node, which this constant expression
+        // and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 
         // Check if figure node is missing (invalid embed block structure)
-        if ($figureNode === null) {
+        if (! $figureNode instanceof DOMElement) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -313,10 +298,6 @@ class EmbedProcessor implements BlockProcessorInterface
             return null;
         }
 
-        if (! $figureNode instanceof DOMElement) {
-            return null;
-        }
-
         // Get wrapper div element from figure node
         $wrapper = $figureNode->getElementsByTagName('div')->item(0);
 
@@ -334,6 +315,7 @@ class EmbedProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug,
                     'node_html' => $this->buildNodeHtmlSnippet(
+                        $doc,
                         $figureNode
                     ),
                 ]
@@ -367,6 +349,7 @@ class EmbedProcessor implements BlockProcessorInterface
                     'site' => $site,
                     'pageSlug' => $pageSlug,
                     'node_html' => $this->buildNodeHtmlSnippet(
+                        $doc,
                         $figureNode
                     ),
                 ]
@@ -400,10 +383,8 @@ class EmbedProcessor implements BlockProcessorInterface
         // ---
         $resolved = VideoSetType::resolve($videoUrl);
 
-        $setType = $resolved['type'] ?? null;
-
         // Check if the provider is unsupported (no platform-specific set hosts it)
-        if ($setType === null || $resolved === null) {
+        if ($resolved === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -449,10 +430,7 @@ class EmbedProcessor implements BlockProcessorInterface
         // Loop through child nodes to find figcaption element
         foreach ($figureNode->childNodes as $child) {
             // Check if child is a figcaption element
-            if (
-                $child instanceof DOMElement
-                && $child->nodeName === 'figcaption'
-            ) {
+            if ($child->nodeName === 'figcaption') {
                 // Extract caption text content
                 $caption = \trim($child->textContent);
 
@@ -468,7 +446,6 @@ class EmbedProcessor implements BlockProcessorInterface
         // justified by the source data (wordpress-importer-archive#298).
         // ---
         $values = [
-            'type' => $setType,
             'embed_mode' => VideoSetType::EMBED_MODE_SIMPLE,
             'url' => $resolved['url'],
             'aspect_ratio' => '16by9', // Default per uamsweb_common_video.yaml
@@ -483,7 +460,7 @@ class EmbedProcessor implements BlockProcessorInterface
 
         // Generate Tiptap HTML from values
         $html = $this->buildVideoSetHtml(
-            $setType,
+            $resolved['type'],
             $values
         );
 
@@ -502,7 +479,7 @@ class EmbedProcessor implements BlockProcessorInterface
      * data-set-attr attributes for Statamic Bard video sets.
      *
      * @param  string  $setType  The platform-specific set handle (`youtube` / `vimeo` / `box`)
-     * @param  array<int|string, mixed>  $values  Array of video set values (type, url, embed_mode, aspect_ratio, align, caption)
+     * @param  array<string, string>  $values  Array of video set values (embed_mode, url, aspect_ratio, align, caption)
      * @return string Tiptap HTML string
      */
     private function buildVideoSetHtml(
@@ -512,30 +489,24 @@ class EmbedProcessor implements BlockProcessorInterface
         // Initialize HTML attributes string
         $attrs = '';
 
-        // Loop through values to build HTML attributes
+        // Append one data attribute per value
         foreach ($values as $key => $value) {
-            // Check if key is not 'type' (type is used in data-set-type attribute)
-            if ($key !== 'type') {
-                // Normalize the key to a string for safe HTML escaping
-                $normalizedKey = \is_string($key) ? $key : (string) $key;
-
-                // Normalize the value to a scalar string for safe HTML escaping
-                if (! \is_scalar($value)) {
-                    continue;
-                }
-
-                // Append attribute to HTML attributes string
-                $attrs .= \sprintf(
-                    ' data-set-attr-%s="%s"',
-                    htmlspecialchars($normalizedKey),
-                    htmlspecialchars((string) $value)
-                );
-            }
+            $attrs .= \sprintf(
+                ' data-set-attr-%s="%s"',
+                // The keys are the fixed handles written by processVideoEmbed(), none
+                // of which contains a character htmlspecialchars() changes.
+                // @pest-mutate-ignore: UnwrapHtmlspecialchars
+                htmlspecialchars($key),
+                htmlspecialchars($value)
+            );
         }
 
         // Generate Tiptap HTML div element with video set attributes
         return \sprintf(
             '<div data-set-type="%s"%s%s></div>',
+            // VideoSetType::resolve() only returns youtube, vimeo or box, none of
+            // which contains a character htmlspecialchars() changes.
+            // @pest-mutate-ignore: UnwrapHtmlspecialchars
             htmlspecialchars($setType),
             SetMarkupNonce::attribute(),
             $attrs
@@ -575,31 +546,20 @@ class EmbedProcessor implements BlockProcessorInterface
     /**
      * Build a short HTML snippet for logging.
      *
+     * @param  DOMDocument  $doc  The document the node belongs to
      * @param  DOMNode  $node  Node to serialize for diagnostics
-     * @return string Serialized HTML snippet (max 100 chars) or placeholder text
+     * @return string Serialized HTML snippet (max 100 chars)
      */
     private function buildNodeHtmlSnippet(
+        DOMDocument $doc,
         DOMNode $node
     ): string {
-        // Access the node owner document for HTML serialization
-        $ownerDocument = $node->ownerDocument;
-
-        // Return placeholder when owner document is unavailable
-        if (! $ownerDocument instanceof DOMDocument) {
-            return '[unavailable]';
-        }
-
-        // Serialize node HTML for contextual logging
-        $nodeHtml = $ownerDocument->saveHTML($node);
-
-        // Return placeholder when serialization fails
-        if ($nodeHtml === false) {
-            return '[unavailable]';
-        }
-
-        // Return a short snippet to avoid oversized log payloads
+        // Return a short snippet to avoid oversized log payloads. saveHTML() of
+        // a node in its own document does not fail, so the cast only satisfies
+        // the string|false return type.
         return \substr(
-            $nodeHtml,
+            // @pest-mutate-ignore: RemoveStringCast
+            (string) $doc->saveHTML($node),
             0,
             100
         ).'...';

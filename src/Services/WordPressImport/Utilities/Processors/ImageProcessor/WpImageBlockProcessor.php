@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor;
 
+use DOMComment;
 use DOMElement;
 use DOMNode;
 use DOMXPath;
@@ -60,16 +61,14 @@ class WpImageBlockProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        if ($node->nodeType !== XML_COMMENT_NODE) {
+        // Only comment nodes can carry a wp:image marker
+        if (! $node instanceof DOMComment) {
             return false;
         }
 
-        // Normalize comment text before matching a wp:image marker.
-        $commentText = is_string($node->nodeValue) ? $node->nodeValue : '';
-
         return \preg_match(
             '/^wp:image\s*({.*?})\s*$/',
-            \trim($commentText)
+            \trim($node->data)
         ) === 1;
     }
 
@@ -114,12 +113,15 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             'following-sibling::figure | following-sibling::div/figure[1]',
             $node
         );
-        if ($figureNodes === false) {
-            return null;
-        }
+
+        // Select the first <figure> node found. query() returns false only for a
+        // malformed expression or context node, which this constant expression
+        // and in-document node cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
 
         // Check if no <figure> element is found
-        if ($figureNodes->length === 0) {
+        if (! $figureNode instanceof DOMElement) {
             // Capture the next sibling's HTML for logging, if it exists
             $nextSibling = $node->nextSibling instanceof DOMNode
                 ? $this->normalizeSavedHtml($doc->saveHTML($node->nextSibling))
@@ -144,13 +146,6 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             );
 
             // Return null to indicate processing failure
-            return null;
-        }
-
-        // Select the first <figure> node found
-        $figureNode = $figureNodes->item(0);
-
-        if (! $figureNode instanceof DOMElement) {
             return null;
         }
 
@@ -200,19 +195,16 @@ class WpImageBlockProcessor implements BlockProcessorInterface
 
             // Get the <figure> node to insert the <img> into
             $figureParent = $aNode->parentNode;
-            if ($figureParent === null) {
-                return null;
+
+            // An <a> found inside the <figure> always has a parent
+            if ($figureParent !== null) {
+                // Move the <img> out of the <a> tag and into the <figure>
+                $figureParent->insertBefore($img, $aNode);
+
+                // Remove the now-empty <a> tag
+                $figureParent->removeChild($aNode);
             }
-
-            // Move the <img> out of the <a> tag and into the <figure>
-            $figureParent->insertBefore($img, $aNode);
-
-            // Remove the now-empty <a> tag
-            $figureParent->removeChild($aNode);
         }
-
-        // Extract attachment ID from block attributes, if available
-        $attachmentId = $attributes['id'] ?? null;
 
         // Extract the image source URL from the img element
         $imgSrc = $img->getAttribute('src');
@@ -225,12 +217,6 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             $imgSrc,
             $baseBlogUrl
         );
-
-        // Clear attachment ID if image is not on the same site
-        if (! $isSameSite) {
-            // Disregard asset ID for different-site images
-            $attachmentId = null;
-        }
 
         // Extract the <figure> element's HTML for processing
         $html = $this->normalizeSavedHtml($doc->saveHTML($figureNode));
@@ -315,12 +301,13 @@ class WpImageBlockProcessor implements BlockProcessorInterface
             $attrs
         );
 
-        // Determine number of nodes to skip based on DOM structure
-        $figureParentNode = $figureNode->parentNode;
-        $skipCount = $figureParentNode instanceof DOMNode
-            && $figureParentNode->nodeName === 'div'
-                ? 3
-                : 2;
+        // Determine number of nodes to skip based on DOM structure. A figure found
+        // through a following-sibling query always has a parent, so the nullsafe
+        // operator only satisfies the nullable parentNode type.
+        // @pest-mutate-ignore: RemoveNullSafeOperator
+        $skipCount = $figureNode->parentNode?->nodeName === 'div'
+            ? 3
+            : 2;
         // If <figure> is inside a <div>, skip 3 nodes (comment, div, closing comment)
         // Otherwise, skip 2 nodes (comment, figure)
 
@@ -341,7 +328,9 @@ class WpImageBlockProcessor implements BlockProcessorInterface
     private function normalizeSavedHtml(
         string|false $html
     ): string {
-        // Return an empty string for failed saveHTML calls.
+        // Return an empty string for failed saveHTML calls. saveHTML() of a node
+        // in its own document does not fail, so neither mutant can be observed.
+        // @pest-mutate-ignore: FalseToTrue,EmptyStringToNotEmpty
         return $html === false ? '' : $html;
     }
 }

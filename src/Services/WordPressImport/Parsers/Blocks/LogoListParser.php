@@ -124,9 +124,9 @@ class LogoListParser
 
         // ---
         // Build the term map over both logo list taxonomies, as the item
-        // creator does, so a category whose parent id resolves to a label term
-        // keeps the same full slug on both sides. The category filter below
-        // accepts only category terms from it.
+        // creator does, so both sides work from one map. A parent slug resolves
+        // within its child's taxonomy, so a label never enters a category's full
+        // slug. The category filter below accepts only category terms from it.
         // ---
         $termMap = TermMapBuilder::buildTermMap(
             $terms,
