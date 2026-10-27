@@ -1762,8 +1762,8 @@ trait FormConfigurationManagerTrait
         $value
     ): bool {
         // Handle string values: the words for true, then the trimmed text for the numeric
-        // check below, which reads '0', ' 0 ' and '0.0' as false and true as numbers do. Any
-        // other word, 'false', 'no' and 'off' among them, is false.
+        // check below, which casts it as PHP casts a string, so '0' and ' 0 ' are false while
+        // '0.0' and '2' are true. Any other word, 'false', 'no' and 'off' among them, is false.
         if (\is_string($value)) {
             $value = \strtolower(\trim($value));
 
