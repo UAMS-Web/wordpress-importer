@@ -42,6 +42,8 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
         // Check if this is an ACF gallery block comment
         $canProcess = \preg_match(
             '/^wp:acf\/uams-gallery\s+/',
+            // A comment node always carries a string value, so the fallback never applies.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             \trim($node->nodeValue ?? '')
         );
 
@@ -218,40 +220,39 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
         // Initialize array to store description content
         $descriptionContent = [];
 
-        // Check if we have a description to process
-        if ($galleryDescription !== '') {
-            // Split description by double line breaks and create paragraphs
-            $descriptionParagraphs = \preg_split(
-                '/\r?\n\r?\n/',
-                $galleryDescription
-            );
+        // Split description by double line breaks; an empty description yields
+        // one empty paragraph, which the loop skips
+        $descriptionParagraphs = \preg_split(
+            '/\r?\n\r?\n/',
+            $galleryDescription
+        );
 
-            // Normalize paragraphs to an iterable list
-            $descriptionParagraphList = $descriptionParagraphs === false
-                ? []
-                : $descriptionParagraphs;
+        // Normalize paragraphs to an iterable list. preg_split() returns false
+        // only for a failed pattern, which this constant one cannot be.
+        // @pest-mutate-ignore: FalseToTrue
+        $descriptionParagraphList = $descriptionParagraphs === false
+            ? []
+            : $descriptionParagraphs;
 
-            // Loop through each paragraph
-            foreach ($descriptionParagraphList as $paragraph) {
-                // Check if paragraph is not empty
-                if (\trim($paragraph) !== '') {
-                    // Create paragraph content structure
-                    $descriptionContent[] = [
-                        'type' => 'paragraph',
-                        'content' => [
-                            [
-                                'type' => 'text',
-                                'text' => \trim($paragraph),
-                            ],
+        // Loop through each paragraph
+        foreach ($descriptionParagraphList as $paragraph) {
+            // Check if paragraph is not empty
+            if (\trim($paragraph) !== '') {
+                // Create paragraph content structure
+                $descriptionContent[] = [
+                    'type' => 'paragraph',
+                    'content' => [
+                        [
+                            'type' => 'text',
+                            'text' => \trim($paragraph),
                         ],
-                    ];
-                }
+                    ],
+                ];
             }
         }
 
         // Create the gallery values array
         $values = [
-            'type' => 'gallery',
             'heading' => $galleryHeading,
             'images' => $imagePaths,
             'more_query' => $galleryMore,
@@ -268,42 +269,32 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
 
         // Loop through values to build attributes
         foreach ($values as $key => $value) {
-            // Skip the 'type' key as it's handled by data-set-type
-            if ($key !== 'type') {
-                // Handle array values by converting to JSON
-                if (\is_array($value)) {
-                    // Convert array to JSON
-                    $jsonValue = \json_encode($value);
+            // Handle array values by converting to JSON
+            if (\is_array($value)) {
+                // Convert array to JSON. A string that is not valid UTF-8 cannot
+                // encode, and the field is then written empty so the import carries on.
+                $jsonValue = \json_encode($value);
 
-                    // Build attribute with proper escaping
-                    $attrs .= \sprintf(
-                        " data-set-attr-%s='%s'",
-                        \htmlspecialchars(
-                            $key,
-                            ENT_QUOTES,
-                            'UTF-8'
-                        ),
-                        \htmlspecialchars(
-                            $jsonValue === false ? '' : $jsonValue,
-                            ENT_QUOTES,
-                            'UTF-8'
-                        )
-                    );
-                } else { // Otherwise
-                    $attrs .= \sprintf(
-                        ' data-set-attr-%s="%s"',
-                        \htmlspecialchars(
-                            $key,
-                            ENT_QUOTES,
-                            'UTF-8'
-                        ),
-                        \htmlspecialchars(
-                            (string) $value,
-                            ENT_QUOTES,
-                            'UTF-8'
-                        )
-                    );
-                }
+                // Build attribute with proper escaping
+                $attrs .= \sprintf(
+                    " data-set-attr-%s='%s'",
+                    $key,
+                    \htmlspecialchars(
+                        $jsonValue === false ? '' : $jsonValue,
+                        ENT_QUOTES,
+                        'UTF-8'
+                    )
+                );
+            } else { // Otherwise
+                $attrs .= \sprintf(
+                    ' data-set-attr-%s="%s"',
+                    $key,
+                    \htmlspecialchars(
+                        (string) $value,
+                        ENT_QUOTES,
+                        'UTF-8'
+                    )
+                );
             }
         }
 
@@ -352,7 +343,9 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
 
         // Return normalized image IDs when gallery_images is an array
         if (\is_array($rawImageIds)) {
-            // Normalize each image ID value to a non-empty string
+            // Normalize each image ID value to a non-empty string. Reindexing keeps
+            // the list contract; the caller only iterates, so it cannot tell.
+            // @pest-mutate-ignore: UnwrapArrayValues
             return \array_values(\array_filter(
                 \array_map(function (mixed $imageId): string {
                     // Return string image IDs as-is
@@ -373,17 +366,18 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
             ));
         }
 
-        // Parse comma-delimited image IDs when gallery_images is a string
-        if (\is_string($rawImageIds) && $rawImageIds !== '') {
+        // Parse comma-delimited image IDs when gallery_images is a string; an
+        // empty string splits to one empty ID, which the filter drops
+        if (\is_string($rawImageIds)) {
             // Split comma-delimited IDs and trim each element
             $splitImageIds = \array_map(trim(...), \explode(',', $rawImageIds));
 
             // Return only non-empty parsed IDs
-            return \array_values(\array_filter(
+            return \array_filter(
                 $splitImageIds,
                 // Keep only non-empty parsed IDs
                 fn (string $imageId): bool => $imageId !== ''
-            ));
+            );
         }
 
         // Return an empty list when no valid image IDs exist
