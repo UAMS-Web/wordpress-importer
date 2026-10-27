@@ -322,6 +322,15 @@ it('reports no file path before one is set', function (): void {
         ->and($xmlParser->getFilePaths())->toBe([]);
 });
 
+it('records the parsed file as its only part, so the tags are read from it', function (): void {
+    $xmlParser = new XmlParser;
+    $xmlParser->parse($this->xmlPath);
+
+    expect($xmlParser->getFilePaths())->toBe([$this->xmlPath])
+        ->and($xmlParser->getFilePath())->toBe($this->xmlPath)
+        ->and($xmlParser->getTags())->toHaveCount(1);
+});
+
 it('reads WordPress elements bound to a prefix other than wp', function (): void {
     // The parser registers the `wp` prefix on the export URI, so an export
     // that binds that URI to another prefix still answers `wp:` queries.
