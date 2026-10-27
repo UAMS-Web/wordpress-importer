@@ -156,16 +156,19 @@ final class ContentTypeReads
      * The post types a type reads so its same-site links can become entry references.
      *
      * **Redirect rules keep them on a site and drop them on a vanity domain.** Measured on
-     * macOS against `UAMS-Web/wordpress-importer-exports` at `2dc5f67` (#171): of its 254
-     * sites (the 256 `WordPress/*.xml` exports other than the `_cleaned` copies, with the
-     * parts of a split export taken as one site), 143 carry `redirect_rule` items, 5,310
-     * rules in all, 5,304 with a target. 980 of those targets are the URL of a `page` (757),
-     * `post` (25) or `uamspeople` (198) item of the same site, comparing host and path with
-     * the scheme, query and fragment dropped and a relative target joined to the site's base
-     * URL. So dropping the link targets on a site would turn each of those into a plain URL
-     * that no longer follows a rename. None of the 143 is a vanity domain. A vanity domain's
-     * own pages are never imported as entries, so an entry reference to one cannot exist,
-     * and reading them there only adds endpoints that can stop the run (#93).
+     * macOS against `UAMS-Web/wordpress-importer-exports` at `2dc5f67` (#171), by passing
+     * each rule's target through `LinkProcessor`'s own same-site check and item lookup: of
+     * its 254 sites (the 256 `WordPress/*.xml` exports other than the `_cleaned` copies, with
+     * the parts of a split export taken as one site), 143 carry `redirect_rule` items, 5,310
+     * rules with 5,304 targets. 4,312 targets are root-relative, and the same-site check
+     * refuses 4,311 of them, so they pass through unchanged in any run. 87 targets pass the
+     * check, and 53 of those resolve to an item: 43 a `page`, 2 an attachment, 2 a `kb` item and 6 another
+     * `redirect_rule`. Dropping the link targets on a site would turn those 43 into plain
+     * URLs that no longer follow a rename; `post` and `uamspeople` stay in the list because
+     * every other type reads them, not because a rule in the corpus targets one. The corpus
+     * holds no vanity domain export. A vanity domain's own pages are never imported as
+     * entries, so an entry reference to one cannot exist, and reading them there only adds
+     * endpoints that can stop the run (#93).
      *
      * @param  string  $contentType  The requested content type
      * @param  bool  $redirectDomain  Whether the site is a listed vanity redirect domain
