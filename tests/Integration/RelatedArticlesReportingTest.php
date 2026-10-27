@@ -101,6 +101,35 @@ it('reports a resolved reference as processed rather than failed', function (): 
     expect($saved->get('related_articles'))->toBe([$targetId]);
 });
 
+it('reports progress through the deferred related articles (#182)', function (): void {
+    // Two referring articles, both pointing at one target
+    $firstId = makeKbArticle('sample-article-12-12-dddd', 'sample-article-12');
+    $secondId = makeKbArticle('sample-article-14-14-ffff', 'sample-article-14');
+    $targetId = makeKbArticle('sample-article-13-13-eeee', 'sample-article-13');
+
+    $output = new BufferedOutput;
+
+    $creator = new RelatedArticlesProbeCreator(
+        $this->createMock(EntryCreator::class),
+        $this->createMock(MinervaKbSettingsSelector::class)
+    );
+    $creator->seedDeferred(
+        [
+            $firstId => ['wp_post_ids' => ['13'], 'slug' => 'sample-article-12', 'date' => null],
+            $secondId => ['wp_post_ids' => ['13'], 'slug' => 'sample-article-14', 'date' => null],
+        ],
+        ['13' => $targetId]
+    );
+
+    $creator->runDeferredRelatedArticles($output, 'default', 'knowledge_bases');
+
+    $reported = $output->fetch();
+
+    expect($reported)->toContain('Progress: kb related articles 0 of 2 (0%)'.\PHP_EOL)
+        ->and($reported)->toContain('Progress: kb related articles 2 of 2 (100%)'.\PHP_EOL)
+        ->and($reported)->toContain('Processed 2 entries with related articles.');
+});
+
 it('reports a reference whose target is absent from the export', function (): void {
     // Only the referring article exists; post 999 was never imported
     $referrerId = makeKbArticle('sample-article-12-12-cccc', 'sample-article-12');

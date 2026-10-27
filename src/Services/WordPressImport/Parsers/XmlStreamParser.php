@@ -103,7 +103,8 @@ class XmlStreamParser
      * including items the importing loop later skips), so a loop over that stream
      * reaches the count. It reads the export once more, which is what lets an import report how
      * far through a streamed loop it is. An item that cannot be parsed is left out of
-     * the count without a log line, since the stream the loop reads logs it.
+     * the count without a log line, and so is a part that cannot be opened, since the
+     * stream the loop reads logs both.
      *
      * @param  string  $postType  The desired post_type (e.g., 'page', 'post', 'attachment')
      * @return int The number of matching items
@@ -130,7 +131,7 @@ class XmlStreamParser
      *
      * @param  string  $filePath  The part file to stream
      * @param  string  $postType  The desired post_type
-     * @param  bool  $logSkipped  Whether to log an item that cannot be parsed
+     * @param  bool  $logSkipped  Whether to log an item that cannot be parsed, or a part that cannot be opened
      * @return \Generator<int, SimpleXMLElement, mixed, void>
      */
     private function streamItemsFromFile(
@@ -138,11 +139,10 @@ class XmlStreamParser
         string $postType,
         bool $logSkipped = true
     ): \Generator {
-        $reader = XMLReader::open(
-            WxrSanitizedStream::wrap($filePath),
-            null,
-            0
-        );
+        // A part that cannot be opened warns once, from the stream the loop reads
+        $reader = $logSkipped
+            ? XMLReader::open(WxrSanitizedStream::wrap($filePath), null, 0)
+            : @XMLReader::open(WxrSanitizedStream::wrap($filePath), null, 0);
 
         if ($reader === false) {
             return;
