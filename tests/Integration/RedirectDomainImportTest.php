@@ -471,9 +471,74 @@ it('keeps the Safe Redirect Manager rule tried first when two share a source (#1
         ->and($entries['/tie']->get('wordpress_post_id'))->toBe('9')
         ->and($output)->toContain('Redirect domain uams.info: 2 created, 0 updated, 0 disabled, 0 unpublished skipped, 2 shadowed.')
         ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([
-            ['host' => 'uams.info', 'source' => '/give', 'served' => '32', 'shadowed' => '31'],
-            ['host' => 'uams.info', 'source' => '/tie', 'served' => '9', 'shadowed' => '10'],
+            ['host' => 'uams.info', 'source' => '/give', 'served' => '32', 'served_source' => '/give', 'shadowed' => '31'],
+            ['host' => 'uams.info', 'source' => '/tie', 'served' => '9', 'served_source' => '/tie', 'shadowed' => '10'],
         ]);
+
+    ImportWarningManager::clearWarnings();
+});
+
+it('collapses sources that differ only in case, since the entry lookup ignores case (#108)', function (): void {
+    ImportWarningManager::clearWarnings();
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', [
+        ['id' => 51, 'from' => '/Flu', 'to' => 'https://uams.edu/upper/', 'order' => 0],
+        ['id' => 52, 'from' => '/flu', 'to' => 'https://uams.edu/lower/', 'order' => 1],
+    ]));
+    $stored = redirectDomainStored();
+
+    expect($stored)->toHaveCount(1)
+        ->and($stored[0]->get('wordpress_post_id'))->toBe('51')
+        ->and($stored[0]->get('source'))->toBe('/Flu')
+        ->and($output)->toContain('1 created, 0 updated, 0 disabled, 0 unpublished skipped, 1 shadowed.')
+        ->and($output)->toContain('uams.info/flu: 52 shares its source with 51 (/Flu), which WordPress serves; only 51 was imported.')
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([
+            ['host' => 'uams.info', 'source' => '/flu', 'served' => '51', 'served_source' => '/Flu', 'shadowed' => '52'],
+        ]);
+
+    ImportWarningManager::clearWarnings();
+});
+
+it('writes one entry when two rules carry the same id and source (#108)', function (): void {
+    ImportWarningManager::clearWarnings();
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', [
+        ['id' => 60, 'from' => '/dup', 'to' => 'https://uams.edu/first/'],
+        ['id' => 60, 'from' => '/dup', 'to' => 'https://uams.edu/second/'],
+    ]));
+    $stored = redirectDomainStored();
+
+    // Identical keys leave export order to decide, and the other is still reported
+    expect($stored)->toHaveCount(1)
+        ->and($stored[0]->get('target_url'))->toBe('https://uams.edu/first/')
+        ->and($output)->toContain('1 created, 0 updated, 0 disabled, 0 unpublished skipped, 1 shadowed.')
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toHaveCount(1);
+
+    ImportWarningManager::clearWarnings();
+});
+
+it('rewrites an entry an earlier import left holding a shadowed rule (#108)', function (): void {
+    ImportWarningManager::clearWarnings();
+
+    // Before #108 the last rule in the export won, so the entry held rule 31
+    redirectDomainRun(redirectDomainParser('https://uams.info', [
+        ['id' => 31, 'from' => '/give', 'to' => 'https://uams.edu/later/', 'order' => 5],
+    ]));
+    $before = redirectDomainStored();
+
+    $output = redirectDomainRun(redirectDomainParser('https://uams.info', [
+        ['id' => 32, 'from' => '/give', 'to' => 'https://uams.edu/first/', 'order' => 2],
+        ['id' => 31, 'from' => '/give', 'to' => 'https://uams.edu/later/', 'order' => 5],
+    ]));
+    $after = redirectDomainStored();
+
+    expect($before)->toHaveCount(1)
+        ->and($after)->toHaveCount(1)
+        ->and(redirectDomainId($after[0]))->toBe(redirectDomainId($before[0]))
+        ->and($after[0]->get('wordpress_post_id'))->toBe('32')
+        ->and($after[0]->get('target_url'))->toBe('https://uams.edu/first/')
+        ->and($after[0]->get('enabled'))->toBeTrue()
+        ->and($output)->toContain('Redirect domain uams.info: 0 created, 1 updated, 0 disabled, 0 unpublished skipped, 1 shadowed.');
 
     ImportWarningManager::clearWarnings();
 });

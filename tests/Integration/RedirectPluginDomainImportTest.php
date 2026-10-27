@@ -431,9 +431,9 @@ it('keeps the Pretty Links link when a Redirection rule shares its source, and r
         ->and($entries['/flu']->get('target_url'))->toBe('https://uamshealth.com/flu/')
         ->and($counts)->toBe(['created' => 2, 'updated' => 0, 'disabled' => 0, 'skipped' => 0, 'shadowed' => 1])
         ->and($counts['created'] + $counts['updated'] + $counts['skipped'] + $counts['shadowed'])->toBe(\count($parser->getItems('redirect_rule')))
-        ->and($output)->toContain('go.uams.edu/flu: redirection-1 shares its source with pretty-links-10, which WordPress serves; only pretty-links-10 was imported.')
+        ->and($output)->toContain('go.uams.edu/flu: redirection-1 shares its source with pretty-links-10 (/flu), which WordPress serves; only pretty-links-10 was imported.')
         ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([
-            ['host' => 'go.uams.edu', 'source' => '/flu', 'served' => 'pretty-links-10', 'shadowed' => 'redirection-1'],
+            ['host' => 'go.uams.edu', 'source' => '/flu', 'served' => 'pretty-links-10', 'served_source' => '/flu', 'shadowed' => 'redirection-1'],
         ]);
 });
 
@@ -462,8 +462,8 @@ it('keeps the Redirection rule tried first when two share a source, whatever the
         ->and($entries['/same']->get('wordpress_post_id'))->toBe('redirection-9')
         ->and(redirectPluginSummary($output, 'go.uams.edu'))->toBe(['created' => 2, 'updated' => 0, 'disabled' => 0, 'skipped' => 1, 'shadowed' => 2])
         ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toEqualCanonicalizing([
-            ['host' => 'go.uams.edu', 'source' => '/give', 'served' => 'redirection-7', 'shadowed' => 'redirection-3'],
-            ['host' => 'go.uams.edu', 'source' => '/same', 'served' => 'redirection-9', 'shadowed' => 'redirection-10'],
+            ['host' => 'go.uams.edu', 'source' => '/give', 'served' => 'redirection-7', 'served_source' => '/give', 'shadowed' => 'redirection-3'],
+            ['host' => 'go.uams.edu', 'source' => '/same', 'served' => 'redirection-9', 'served_source' => '/same', 'shadowed' => 'redirection-10'],
         ]);
 });
 
@@ -490,7 +490,7 @@ it('keeps the same rule and reports the same collapse on a second run (#108)', f
         ->and($second['/a']->get('wordpress_post_id'))->toBe('redirection-5')
         ->and($second['/a']->get('enabled'))->toBeTrue()
         ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe($firstWarnings)
-        ->and($firstWarnings)->toBe([['host' => 'go.uams.edu', 'source' => '/a', 'served' => 'redirection-5', 'shadowed' => 'redirection-6']]);
+        ->and($firstWarnings)->toBe([['host' => 'go.uams.edu', 'source' => '/a', 'served' => 'redirection-5', 'served_source' => '/a', 'shadowed' => 'redirection-6']]);
 });
 
 it('does not collapse the same source on two domains, or two sources on one (#108)', function (): void {

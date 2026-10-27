@@ -362,9 +362,9 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $unsupportedResponses = 0;
 
         // The rule WordPress serves for each source, so a rule another one shadows is never written
-        $served = self::servedRuleIds($redirectRules);
+        $served = self::servedRules($redirectRules);
 
-        foreach (ImportProgress::track($output, "redirect_rule ({$host})", $redirectRules) as $rule) {
+        foreach (ImportProgress::track($output, "redirect_rule ({$host})", $redirectRules) as $index => $rule) {
             // Only published rules are live on the domain
             if (XpathHelper::getStringValue($rule, 'wp:status') !== 'publish') {
                 $skipped++;
@@ -376,15 +376,18 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             $source = self::ruleSource($rule);
             $ruleId = XpathHelper::getStringValue($rule, 'wp:post_id');
 
-            if (isset($served[$source]) && $served[$source] !== $ruleId) {
+            $winner = $served[\strtolower($source)] ?? null;
+
+            if ($winner !== null && $winner['index'] !== $index) {
                 $shadowed++;
 
-                $output->writeln("  - <comment>{$host}{$source}: {$ruleId} shares its source with {$served[$source]}, which WordPress serves; only {$served[$source]} was imported.</comment>");
+                $output->writeln("  - <comment>{$host}{$source}: {$ruleId} shares its source with {$winner['id']} ({$winner['source']}), which WordPress serves; only {$winner['id']} was imported.</comment>");
 
                 ImportWarningManager::addWarning('redirects', 'shadowed_rules', [
                     'host' => $host,
                     'source' => $source,
-                    'served' => $served[$source],
+                    'served' => $winner['id'],
+                    'served_source' => $winner['source'],
                     'shadowed' => $ruleId,
                 ]);
 
@@ -507,7 +510,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     }
 
     /**
-     * The id of the rule WordPress serves for each source, among the published rules (#108).
+     * The rule WordPress serves for each source, among the published rules (#108).
      *
      * WordPress answers a path with the first rule that matches it, so of the rules sharing a
      * source, the one tried first is the one served. The plugins are tried in the order of
@@ -515,28 +518,35 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * by ascending position (`wp:menu_order`) and then by ascending id. Pretty Links slugs are
      * unique, so two of its links never share a source.
      *
+     * Sources are compared ignoring case, because `findDomainEntry()` does: the Stache compares
+     * a `where()` value in lower case, so `/Flu` and `/flu` reach one entry. The served rule is
+     * identified by its position in the export, so two rules with the same `wp:post_id` still
+     * resolve to one served rule and one shadowed rule.
+     *
      * @param  list<SimpleXMLElement>  $redirectRules  The export's `redirect_rule` items
-     * @return array<string, string> The served rule's `wp:post_id`, keyed by source
+     * @return array<string, array{index: int, id: string, source: string}> The served rule's
+     *                                                                      position in the export, `wp:post_id` and source, keyed by the lower-cased source
      */
-    private static function servedRuleIds(array $redirectRules): array
+    private static function servedRules(array $redirectRules): array
     {
         $served = [];
         $keys = [];
 
-        foreach ($redirectRules as $rule) {
+        foreach ($redirectRules as $index => $rule) {
             // An unpublished rule serves nothing, so it never shadows a published one
             if (XpathHelper::getStringValue($rule, 'wp:status') !== 'publish') {
                 continue;
             }
 
             $source = self::ruleSource($rule);
+            $match = \strtolower($source);
             $ruleId = XpathHelper::getStringValue($rule, 'wp:post_id');
             $key = self::servingKey($ruleId, XpathHelper::getIntValue($rule, 'wp:menu_order', 0));
 
-            // Keep the rule tried earliest; the comparison does not depend on export order
-            if (! isset($keys[$source]) || $key < $keys[$source]) {
-                $keys[$source] = $key;
-                $served[$source] = $ruleId;
+            // Keep the rule tried earliest; export order decides only between identical keys
+            if (! isset($keys[$match]) || $key < $keys[$match]) {
+                $keys[$match] = $key;
+                $served[$match] = ['index' => $index, 'id' => $ruleId, 'source' => $source];
             }
         }
 
