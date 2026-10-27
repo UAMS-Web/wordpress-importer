@@ -1138,9 +1138,10 @@ class LinkProcessor
                 );
             }
 
-            // Otherwise try to find the entry by WordPress post ID. The reference
-            // is built from the entry's id, which a stale cached copy shares, so a
-            // fresh lookup changes nothing here.
+            // Otherwise try to find the entry by WordPress post ID. A fresh lookup
+            // evicts each candidate's cached item from the Stache, but the
+            // reference is built from the entry's ID, which a stale cached copy
+            // shares, so it changes nothing this method returns.
             $statamicTargetEntry ??= EntryFinder::findEntryByWordPressId(
                 $statamicTargetCollectionHandle,
                 $wordPressPostId,
@@ -1408,10 +1409,8 @@ class LinkProcessor
 
             // Remove successfully processed links from the deferred links array
             if ($processedLinkIndices !== []) {
-                // Sort indices in descending order to avoid index shifting issues
-                rsort($processedLinkIndices);
-
                 // Remove successfully processed links from the deferred links array
+                // (unset by key shifts nothing, so the order does not matter)
                 foreach ($processedLinkIndices as $index) {
                     unset(self::$deferredInternalLinks[$statamicSourceEntryId][$index]);
                 }
@@ -1454,25 +1453,22 @@ class LinkProcessor
 
             // Loop through all unresolved links to group them by URL
             foreach ($unresolvedLinks as $link) {
-                if (! \is_string($link['wordpress_url'] ?? null)) {
-                    continue;
-                }
-
                 // Extract the URL for grouping
                 $url = $link['wordpress_url'];
 
                 $groupedLinks[$url] ??= [
                     'wordpress_post_name' => $link['wordpress_post_name'],
                     'wordpress_post_id' => $link['wordpress_post_id'],
-                    'statamic_entries' => [],
                 ];
 
-                // Add this entry to the group for this URL
+                // Add this entry to the group for this URL (the first starts its list)
                 $groupedLinks[$url]['statamic_entries'][] = [
-                    'statamic_entry_title' => \is_string($link['statamic_source_entry_title'] ?? null)
+                    'statamic_entry_title' => \is_string($link['statamic_source_entry_title'])
                         ? $link['statamic_source_entry_title']
                         : '',
-                    'statamic_entry_id' => \is_string($link['statamic_source_entry_id'] ?? null)
+                    // The entry was found by its string ID, so the fallback is never used
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    'statamic_entry_id' => \is_string($link['statamic_source_entry_id'])
                         ? $link['statamic_source_entry_id']
                         : '',
                 ];
@@ -1480,12 +1476,8 @@ class LinkProcessor
 
             // Loop through grouped links to display them in organized format
             foreach ($groupedLinks as $url => $linkData) {
-                $wordPressPostName = \is_string($linkData['wordpress_post_name'])
-                    ? $linkData['wordpress_post_name']
-                    : '';
-                $wordPressPostId = \is_string($linkData['wordpress_post_id'])
-                    ? $linkData['wordpress_post_id']
-                    : '';
+                $wordPressPostName = $linkData['wordpress_post_name'];
+                $wordPressPostId = $linkData['wordpress_post_id'];
 
                 // Display the WordPress URL, slug and ID
                 $output->writeln("  - <comment>{$url} (WordPress slug: '{$wordPressPostName}'; WordPress ID: '{$wordPressPostId}')</comment>");
@@ -1819,10 +1811,8 @@ class LinkProcessor
         // stored as arrays of nodes with numeric indices.
         // ---
         if (
-            $content !== []
-            && \array_keys($content) === \range(0, \count($content) - 1)
-            && isset($content[0])
-            && \is_array($content[0])
+            \array_is_list($content)
+            && \is_array($content[0] ?? null)
             && isset($content[0]['type'])
         ) {
             // Process as Bard content array for proper link mark handling
@@ -1896,7 +1886,14 @@ class LinkProcessor
      *     page_builder_updated: bool,
      *     processed_link_urls: list<string>,
      *     processed_link_indices: list<int>,
-     *     unresolved_links: list<array<int|string, mixed>>
+     *     unresolved_links: list<array{
+     *         statamic_source_entry_id: mixed,
+     *         statamic_source_entry_title: mixed,
+     *         wordpress_url: string,
+     *         wordpress_post_name: string,
+     *         wordpress_post_id: string,
+     *         statamic_target_collection_handle: ?string
+     *     }>
      * }
      */
     public static function processDeferredLinksForEntry(
@@ -2002,8 +1999,9 @@ class LinkProcessor
                 // Get XML path from ProcessingContext
                 $xmlPath = ProcessingContext::getXmlPath();
 
-                // Check if XML path is available
-                if ($xmlPath !== null && $xmlPath !== '') {
+                // Check if XML path is available (an empty one names no part, so
+                // finds no item)
+                if ($xmlPath !== null) {
                     // Find the attachment item in XML to extract the attachment URL
                     $attachmentItem = XpathHelper::findItemByPostId(
                         $xmlPath,
@@ -2034,8 +2032,8 @@ class LinkProcessor
                                     $output
                                 );
 
-                                // Check if file processing failed and processed URL is empty
-                                if ($processedUrl === null || $processedUrl === '') {
+                                // Check if file processing failed (it never gives an empty URL)
+                                if ($processedUrl === null) {
                                     // Use attachment URL as fallback when file processing fails
                                     $processedUrl = $attachmentUrl;
                                 }
@@ -2300,19 +2298,18 @@ class LinkProcessor
             return null;
         }
 
-        // Use the stored target collection handle, or fall back to mapping from post type
-        if (
-            ($statamicTargetCollectionHandle === null || $statamicTargetCollectionHandle === '')
-            && $wordPressPostType !== ''
-        ) {
+        // Use the stored target collection handle, or fall back to mapping from post
+        // type (an empty type maps to none)
+        if ($statamicTargetCollectionHandle === null || $statamicTargetCollectionHandle === '') {
             // Map WordPress post type to Statamic collection handle
             $statamicTargetCollectionHandle = self::mapPostTypeToCollection(
                 $wordPressPostType
             );
         }
 
-        // Skip if we don't have a valid target collection handle
-        if ($statamicTargetCollectionHandle === null || $statamicTargetCollectionHandle === '') {
+        // Skip if we don't have a target collection handle (an empty one was mapped
+        // above, and a mapping is never empty)
+        if ($statamicTargetCollectionHandle === null) {
             // Return null if no collection handle found
             return null;
         }
@@ -2411,35 +2408,13 @@ class LinkProcessor
             ? self::normalizeEntryId($entryOrId->id())
             : $entryOrId;
 
-        // Create the base Statamic entry reference
-        $statamicUrl = "statamic://entry::{$entryId}";
-
-        // ---
-        // Add query string if present
-        // ---
-
-        // Check if query string is provided. The query precedes the fragment per
-        // standard URL syntax (`?query#fragment`) and the shape Statamic 6 expects
-        // for Bard entry links (statamic/cms#11468). Appending it first keeps the
-        // `?` outside the fragment so consumers can re-parse the query.
-        if ($query !== null && $query !== '') {
-            // Append query string to the Statamic URL
-            $statamicUrl .= $query;
-        }
-
-        // ---
-        // Add fragment if present
-        // ---
-
-        // Check if fragment identifier is provided. The fragment goes last so the
-        // `#` terminates the URL, leaving any preceding query intact.
-        if ($fragment !== null && $fragment !== '') {
-            // Append fragment identifier to the Statamic URL
-            $statamicUrl .= $fragment;
-        }
-
-        // Return the complete Statamic entry reference URL
-        return $statamicUrl;
+        // Build the reference with the query, then the fragment. The query precedes
+        // the fragment per standard URL syntax (`?query#fragment`) and the shape
+        // Statamic 6 expects for Bard entry links (statamic/cms#11468), keeping the
+        // `?` outside the fragment so consumers can re-parse the query; the
+        // fragment goes last so the `#` terminates the URL. A missing or empty part
+        // adds nothing.
+        return "statamic://entry::{$entryId}".($query ?? '').($fragment ?? '');
     }
 
     /**
@@ -3647,6 +3622,8 @@ class LinkProcessor
     public static function findEntryWithRetry(
         callable $findCallback,
         int $retryCount = 2,
+        // A microsecond either way is no different wait
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         int $retryDelay = 100000
     ): ?Entry {
         // Initialize entry variable for lookup results
