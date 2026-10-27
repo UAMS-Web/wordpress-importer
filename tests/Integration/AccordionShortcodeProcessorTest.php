@@ -309,65 +309,83 @@ function accordionBardOutline(mixed $nodes): array
 describe('toTiptapHtml', function (): void {
     it('turns each section into a heading and a paragraph', function (): void {
         expect(accordionFlattened('[section title="A"]one[/section][section title="B"]two[/section]'))
-            ->toBe("<h3>A</h3><p>one</p>\n<h3>B</h3><p>two</p>\n");
+            ->toBe("</p><h3>A</h3><p>one</p>\n<h3>B</h3><p>two</p>\n<p>");
     });
 
     it('drops the line breaks wpautop leaves at the edges, between sections and inside a body', function (): void {
         $content = "<br />\n[section title=\"A\"]<br />\none<br />\n[/section]<br />\n[section title=\"B\"]two[/section]<br />\n";
 
-        expect(accordionFlattened($content))->toBe("<h3>A</h3><p>one</p>\n<h3>B</h3><p>two</p>\n");
+        expect(accordionFlattened($content))->toBe("</p><h3>A</h3><p>one</p>\n<h3>B</h3><p>two</p>\n<p>");
     });
 
     it('gives a plain-text section body paragraphs, as WordPress renders it', function (): void {
         // Gutenberg content and wp:shortcode blocks reach this without wpautop
         expect(accordionFlattened("[section title=\"A\"]Line one.\n\nLine two.[/section]"))
-            ->toBe("<h3>A</h3><p>Line one.</p>\n<p>Line two.</p>\n")
+            ->toBe("</p><h3>A</h3><p>Line one.</p>\n<p>Line two.</p>\n<p>")
             ->and(accordionFlattened('[section title="A"]<ul><li>x</li></ul>[/section]'))
-            ->toBe("<h3>A</h3><ul><li>x</li>\n\n</ul>");
+            ->toBe("</p><h3>A</h3><ul><li>x</li>\n\n</ul><p>");
     });
 
     it('keeps the paragraph boundaries wpautop put inside a section body', function (): void {
         expect(accordionFlattened("[section title=\"A\"]one.</p>\n<p>two.[/section]"))
-            ->toBe("<h3>A</h3><p>one.</p>\n<p>two.</p>");
+            ->toBe("</p><h3>A</h3><p>one.</p>\n<p>two.</p><p>");
     });
 
     it('keeps a title whole when it holds a bracket, and drops the break after it', function (): void {
         expect(accordionFlattened("[section title=\"Phase [1] results\"]<br />\nBody</p>\n<p>more[/section]"))
-            ->toBe("<h3>Phase [1] results</h3><p>Body</p>\n<p>more</p>");
+            ->toBe("</p><h3>Phase [1] results</h3><p>Body</p>\n<p>more</p><p>");
     });
 
     it('strips tags from a title, decodes its entities and escapes the text', function (): void {
         expect(accordionFlattened('[section title="<b>Q</b> &amp; <A>"]x[/section]'))
-            ->toBe("<h3>Q &amp;</h3><p>x</p>\n")
+            ->toBe("</p><h3>Q &amp;</h3><p>x</p>\n<p>")
             ->and(accordionFlattened('[section title="T &amp;amp; U"]x[/section]'))
-            ->toBe("<h3>T &amp;amp; U</h3><p>x</p>\n");
+            ->toBe("</p><h3>T &amp;amp; U</h3><p>x</p>\n<p>");
     });
 
-    it('ends a title at its first quote and escapes the rest', function (): void {
-        // The section pattern stops a title at either quote, as parse() does
-        expect(accordionFlattened("[section title='Say \"hi\"']x[/section]"))->toBe("<h3>Say</h3><p>x</p>\n")
-            ->and(accordionFlattened('[section title="It\'s"]x[/section]'))->toBe("<h3>It</h3><p>x</p>\n")
-            ->and(accordionFlattened('[section title="a > b"]x[/section]'))->toBe("<h3>a &gt; b</h3><p>x</p>\n");
+    it('reads a title to its matching quote and escapes it', function (): void {
+        // A quote of the other kind, or a decoded &quot;, does not end the title
+        expect(accordionFlattened("[section title='Say \"hi\"']x[/section]"))->toBe("</p><h3>Say &quot;hi&quot;</h3><p>x</p>\n<p>")
+            ->and(accordionFlattened('[section title="It\'s"]x[/section]'))->toBe("</p><h3>It&#039;s</h3><p>x</p>\n<p>")
+            ->and(accordionFlattened('[section title="He said "hi" there"]x[/section]'))->toBe("</p><h3>He said &quot;hi&quot; there</h3><p>x</p>\n<p>")
+            ->and(accordionFlattened('[section title="a > b"]x[/section]'))->toBe("</p><h3>a &gt; b</h3><p>x</p>\n<p>");
+    });
+
+    it('keeps the words of a linked title', function (): void {
+        // The shape of ortho.uams.edu post 118205
+        expect(accordionFlattened("[section title='<a href=\"https://example.test/away\">Visiting Scholarships</a>']x[/section]"))
+            ->toBe("</p><h3>Visiting Scholarships</h3><p>x</p>\n<p>");
+    });
+
+    it('ends a title at its closing quote when another attribute follows', function (): void {
+        expect(accordionFlattened('[section title="A" class="b c" open=1]x[/section]'))->toBe("</p><h3>A</h3><p>x</p>\n<p>")
+            ->and(accordionFlattened("[section title='A' data-x='y']x[/section]"))->toBe("</p><h3>A</h3><p>x</p>\n<p>");
+    });
+
+    it('does not run a title across another section tag', function (): void {
+        // The first tag never closes its quote, so only the second section converts
+        expect(accordionFlattened('[section title="A]one[/section][section title="B"]two[/section]'))
+            ->toBe("</p>[section title=\"A]one[/section]<h3>B</h3><p>two</p>\n<p>");
     });
 
     it('keeps the body alone for a section whose title is empty or only whitespace', function (string $title): void {
-        expect(accordionFlattened('[section title="'.$title.'"]x[/section]'))->toBe("<p>x</p>\n");
+        expect(accordionFlattened('[section title="'.$title.'"]x[/section]'))->toBe("</p><p>x</p>\n<p>");
     })->with(['empty' => [''], 'whitespace' => ['  ']]);
 
     it('keeps text outside any section', function (): void {
         expect(accordionFlattened('Lead in. [section title="A"]one[/section] tail'))
-            ->toBe("Lead in.<h3>A</h3><p>one</p>\ntail");
+            ->toBe("</p>Lead in.<h3>A</h3><p>one</p>\ntail<p>");
     });
 
     it('keeps the content of an accordion without sections', function (string $content, string $expected): void {
         expect(accordionFlattened($content))->toBe($expected);
     })->with([
-        'text' => ["<br />\nLoose text.<br />\n", 'Loose text.'],
-        'empty' => ['', ''],
+        'text' => ["<br />\nLoose text.<br />\n", '</p>Loose text.<p>'],
+        'empty' => ['', '</p><p>'],
     ]);
 
     it('reads content that is not a string as empty', function (): void {
-        expect(accordionFlattened(['not', 'a', 'string']))->toBe('');
+        expect(accordionFlattened(['not', 'a', 'string']))->toBe('</p><p>');
     });
 
     it('keeps the content as it was when a replacement fails', function (): void {
@@ -400,7 +418,7 @@ describe('toTiptapHtml', function (): void {
     it('processes the shortcodes inside a section', function (): void {
         // A dropped shortcode renders as nothing, so it shows the nested call ran
         expect(accordionFlattened('[section title="A"]see [subpage-list link=""] here[/section]'))
-            ->toBe("<h3>A</h3><p>see  here</p>\n");
+            ->toBe("</p><h3>A</h3><p>see  here</p>\n<p>");
     });
 });
 
@@ -427,6 +445,36 @@ describe('in Bard content', function (): void {
             'heading3: T',
             'paragraph: Line one.',
             'paragraph: Line two.',
+        ]);
+    });
+
+    it('keeps the text after an accordion in a paragraph of its own', function (): void {
+        // The news exports' shape: a download link, the accordion, then more text on
+        // the same wpautop paragraph
+        $html = "<a href=\"https://example.test/episode\">Download</a>\n[accordion]\n[section title=\"Transcript\"]Line one.[/section]\n[/accordion]\nTrailing text.";
+        $nodes = accordionSectionContent($html);
+
+        expect(accordionBardOutline($nodes))->toBe([
+            'paragraph: Download',
+            'heading3: Transcript',
+            'paragraph: Line one.',
+            'paragraph: Trailing text.',
+        ])->and(array_column(\is_array($nodes) ? $nodes : [], 'type'))->each->toBeIn(['paragraph', 'heading']);
+    });
+
+    it('keeps every section of an accordion in a wp:shortcode block among other blocks', function (): void {
+        $html = "<!-- wp:paragraph --><p>Intro</p><!-- /wp:paragraph -->\n<!-- wp:shortcode -->\n[accordion][section title=\"Q\"]Answer text.\n\nSecond answer para.[/section][/accordion]\n<!-- /wp:shortcode -->\n<!-- wp:paragraph --><p>Outro</p><!-- /wp:paragraph -->";
+
+        // The block path reads the importer's upload setting, which the
+        // constructor-less importer leaves unset
+        $nodes = TextProcessor::processForBard($html, 'default', new AssetImporter, new BufferedOutput, false, false, [], [], 'slug');
+
+        expect(accordionBardOutline($nodes))->toBe([
+            'paragraph: Intro',
+            'heading3: Q',
+            'paragraph: Answer text.',
+            'paragraph: Second answer para.',
+            'paragraph: Outro',
         ]);
     });
 

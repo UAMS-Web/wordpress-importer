@@ -25,9 +25,20 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
 {
     /**
-     * Matches one [section title="..."]...[/section], capturing the title and body.
+     * Matches a [section title="..."] opening tag, capturing the title as `title`.
+     *
+     * The title runs to the matching quote that is followed by the end of the tag
+     * or by another attribute, so a quote of the other kind (a link's href in a
+     * single-quoted title) or a decoded &quot; inside it does not end it early.
+     * A title never runs across another [section] tag. The group is atomic: once
+     * the tag has matched, a later failure cannot stretch the title further.
      */
-    private const string SECTION_PATTERN = '/\[section\s+title=["\']([^"\']*)["\'][^]]*\]((?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
+    private const string OPEN_TAG = '(?>\[section\s+title=(?<quote>["\'])(?<title>(?:(?!\[\/?section\b).)*?)\k<quote>(?:\s+[\w-]+=(?:"[^"]*"|\'[^\']*\'|[^\s\]"\']*))*\s*\])';
+
+    /**
+     * Matches one [section title="..."]...[/section], capturing `title` and `body`.
+     */
+    private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
 
     /**
      * Matches one line break or whitespace character, the residue wpautop leaves
@@ -77,13 +88,13 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Process each matched section to extract title and content
         foreach ($matches as $match) {
             // Extract and strip HTML tags from the section title
-            $title = HtmlTagStripper::strip($match[1]);
+            $title = HtmlTagStripper::strip($match['title']);
 
             // Extract and clean the section content from the second capture group.
             // TextProcessor::processForBard() trims its input too, so this trim
             // does not change the result.
             // @pest-mutate-ignore: UnwrapTrim
-            $sectionContent = \trim($match[2]);
+            $sectionContent = \trim($match['body']);
 
             // Process section content with wpautop using TextProcessor directly
             $processedContent = TextProcessor::processForBard(
@@ -176,8 +187,11 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
      * wpautop, as WordPress renders a shortcode's content. Text outside any
      * section is kept, so an accordion without sections keeps its content.
      * Shortcodes inside the sections are processed, since the outer extraction
-     * consumed them along with the accordion. When a pattern fails, the content
-     * is kept as it was and an import warning names the page.
+     * consumed them along with the accordion. The output closes any open
+     * paragraph before the headings and opens one after the sections. When one
+     * of this method's own patterns fails, the content is kept as it was and an
+     * import warning names the page; an accordion the outer extraction fails to
+     * match never reaches this method.
      *
      * @param  array<int|string, mixed>  $shortcode  Shortcode data (['name' => '...', 'attributes' => [...], 'content' => '...'])
      * @param  string  $site  The site handle for context
@@ -215,9 +229,9 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
                 '/^'.$break.'+|'.$break.'+$/',
                 '/'.$break.'+(?=\[\/?section\b)/',
                 '/(?<=\[\/section\])'.$break.'+/',
-                '/(\[section\s+title=["\'][^"\']*["\'][^\]]*\])'.$break.'+/',
+                '/(?<tag>'.self::OPEN_TAG.')'.$break.'+/s',
             ],
-            ['', '', '', '$1'],
+            ['', '', '', '${1}'],
             $content
         );
 
@@ -227,16 +241,16 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
                 self::SECTION_PATTERN,
                 static function (array $match): string {
                     // The stripper decodes entities and trims, so the title is plain text
-                    $title = HtmlTagStripper::strip($match[1]);
+                    $title = HtmlTagStripper::strip($match['title']);
 
                     $heading = $title === ''
                         ? ''
                         : '<h3>'.\htmlspecialchars($title).'</h3>';
 
                     // A body wpautop already split is wrapped; plain text gets paragraphs
-                    $body = \preg_match('/<\/?p[\s>]/i', $match[2]) === 1
-                        ? '<p>'.$match[2].'</p>'
-                        : (new WpAutoP)->process($match[2]);
+                    $body = \preg_match('/<\/?p[\s>]/i', $match['body']) === 1
+                        ? '<p>'.$match['body'].'</p>'
+                        : (new WpAutoP)->process($match['body']);
 
                     return $heading.$body;
                 },
@@ -259,6 +273,15 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
             );
 
             $flattened = $content;
+        } else {
+            // ---
+            // An accordion in Classic content sits inside a wpautop paragraph. Close
+            // that paragraph before the headings and open one after the sections, so
+            // text that follows the accordion lands in a paragraph rather than at the
+            // top level of the document. Where no paragraph is open, the parser
+            // drops the stray close and the empty one is filtered out.
+            // ---
+            $flattened = '</p>'.$flattened.'<p>';
         }
 
         // Process the shortcodes inside the sections

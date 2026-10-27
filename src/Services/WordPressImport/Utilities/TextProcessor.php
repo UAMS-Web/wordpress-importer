@@ -992,12 +992,12 @@ class TextProcessor
                                     );
                                 } elseif (\is_string($resultHtml)) { // Check if the result contains HTML content
 
-                                    // Parse the HTML and keep its first node
-                                    $parsedContent = $bardParser->parse($resultHtml)[0] ?? null;
-
-                                    // Add it when the HTML parsed to something; HTML that parses
-                                    // to nothing adds no node
-                                    if ($parsedContent !== null) {
+                                    // ---
+                                    // Parse the HTML and keep every node it holds: a flattened
+                                    // accordion in a wp:shortcode block is a heading followed by
+                                    // paragraphs. HTML that parses to nothing adds no node.
+                                    // ---
+                                    foreach ($bardParser->parse($resultHtml) as $parsedContent) {
                                         $bardContent[] = $parsedContent;
                                     }
                                 }
@@ -1036,11 +1036,11 @@ class TextProcessor
                                 $parsedResult = $bardParser->parse($result);
 
                                 // Check if parsing produced valid content
-                                $firstParsed = $parsedResult[0] ?? null;
-
-                                if ($firstParsed !== null) {
-                                    // Add parsed content to Bard content
-                                    $bardContent[] = $firstParsed;
+                                if ($parsedResult !== []) {
+                                    // Add every parsed node to Bard content
+                                    foreach ($parsedResult as $parsedNode) {
+                                        $bardContent[] = $parsedNode;
+                                    }
                                 } elseif ( // Check if HTML string is not empty but parsing failed
                                     // A processor returns a string only with content in it, or empty,
                                     // so no whitespace-only string reaches this check
