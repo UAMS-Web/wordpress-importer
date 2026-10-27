@@ -22,8 +22,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  *     Progress: page 312 of 312 (100%)
  *
  * A line is written before the first item, each time another tenth of the items
- * completes, when an item completes INTERVAL_SECONDS or more after the last line,
- * and when the last item completes. Nothing is written while one item is still
+ * completes (the last item always completes the tenth tenth), and when an item
+ * completes INTERVAL_SECONDS or more after the last line. Nothing is written while one item is still
  * being processed, however long it takes. An item counts as complete when the loop asks for the next one, so
  * an item the loop skips with `continue` still counts, and the count reaches the
  * total whenever the loop runs to its end.
@@ -40,7 +40,10 @@ final class ImportProgress
      *
      * Nothing is written for a loop of one item or none: it finishes in one item's
      * time, and a call that imports one table at a time would otherwise print a pair
-     * of lines per table.
+     * of lines per table. Nothing is written either when the output is quiet or
+     * silent (`--quiet`, a `NullOutput`), and then a total given as a closure is
+     * never called, so a streamed loop does not read its export a second time to
+     * count lines nobody will see.
      *
      * @template TKey
      * @template TValue
@@ -48,7 +51,7 @@ final class ImportProgress
      * @param  OutputInterface  $output  The console output the import writes to
      * @param  string  $label  What is being imported, usually the content type (e.g., `page`)
      * @param  iterable<TKey, TValue>  $items  The loop's source
-     * @param  ?int  $total  The number of items, required when `$items` is not an array
+     * @param  int|(Closure(): int)|null  $total  The number of items, or a closure that counts them, required when `$items` is not an array
      * @param  ?Closure(): float  $clock  Seconds on a monotonic clock; tests pass their own
      * @return \Generator<TKey, TValue, mixed, void>
      */
@@ -56,7 +59,7 @@ final class ImportProgress
         OutputInterface $output,
         string $label,
         iterable $items,
-        ?int $total = null,
+        int|Closure|null $total = null,
         ?Closure $clock = null
     ): \Generator {
         // An array knows its own size; any other source must be told it
@@ -64,6 +67,18 @@ final class ImportProgress
 
         if ($total === null) {
             throw new \InvalidArgumentException("A total is required to track progress over a streamed source ({$label}).");
+        }
+
+        // A line at normal verbosity would not print, so neither count nor report
+        if ($output->getVerbosity() < OutputInterface::VERBOSITY_NORMAL) {
+            yield from $items;
+
+            return;
+        }
+
+        // Count a streamed source only now that its lines will print
+        if ($total instanceof Closure) {
+            $total = $total();
         }
 
         // A single item finishes in one item's time, so a line about it would add nothing
@@ -86,10 +101,9 @@ final class ImportProgress
 
             $done++;
 
-            // Report on a new tenth, on the last item, or after a long quiet stretch
+            // Report on a new tenth, which the last item always starts, or after a long quiet stretch
             if (
                 self::tenth($done, $total) > self::tenth($reported, $total)
-                || $done === $total
                 || $clock() - $reportedAt >= self::INTERVAL_SECONDS
             ) {
                 self::report($output, $label, $done, $total);

@@ -182,8 +182,9 @@ class TablePressEntryCreator extends BaseEntryCreator
             $tablesToProcess = $xmlStreamParser->streamItems('tablepress_table');
         }
 
+        // A stream is counted only if its progress will print
         $tableCount = $xmlStreamParser instanceof XmlStreamParser
-            ? $xmlStreamParser->countItems('tablepress_table')
+            ? static fn (): int => $xmlStreamParser->countItems('tablepress_table')
             : null;
 
         // Loop through each table item to process and create entries
