@@ -38,6 +38,10 @@ class GuardedHttpFetcher
      * `TIMEOUT_SECONDS * (MAX_REDIRECT_HOPS + 1)` seconds, a six-fold worst case
      * for an importer that resolves thousands of links in one process.
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Changing the value by hand fails the "an exhausted
+    // budget" row of GuardedHttpFetcherReportingTest.
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     public const TIMEOUT_SECONDS = 10;
 
     /**

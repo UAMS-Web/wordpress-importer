@@ -156,3 +156,120 @@ it('merges faces before hotspots so the bounding box spans both', function (): v
 
     expect($focus)->toBe('50-50-1');
 });
+
+/**
+ * A class whose unserializing would be visible, to show metadata never instantiates one.
+ */
+class AttachmentFocalPointWakeProbe
+{
+    /**
+     * Whether any instance has been woken by unserialize().
+     */
+    public static bool $woken = false;
+
+    /**
+     * Record that unserialize() built an instance.
+     */
+    public function __wakeup(): void
+    {
+        self::$woken = true;
+    }
+
+    /**
+     * Whether any instance has been woken since the flag was last cleared.
+     */
+    public static function woken(): bool
+    {
+        return self::$woken;
+    }
+}
+
+it('never instantiates a class named in serialized metadata', function (Closure $read): void {
+    // Both readers pass allowed_classes false, so an object in the export stays an
+    // incomplete class and no constructor or wakeup hook of the importer's runs
+    AttachmentFocalPointWakeProbe::$woken = false;
+    $payload = serialize([new AttachmentFocalPointWakeProbe]);
+    AttachmentFocalPointWakeProbe::$woken = false;
+
+    $read($payload);
+
+    expect(AttachmentFocalPointWakeProbe::woken())->toBeFalse();
+})->with([
+    'the dimensions reader' => [static fn (string $payload): mixed => AttachmentFocalPointCalculator::parseFullImageDimensions($payload)],
+    'the point reader' => [static fn (string $payload): mixed => AttachmentFocalPointCalculator::parseSerializedPointList($payload)],
+]);
+
+it('reads no dimensions from empty, non-array or unusable metadata', function (string $serialized): void {
+    expect(AttachmentFocalPointCalculator::parseFullImageDimensions($serialized))->toBeNull();
+})->with([
+    'empty' => [''],
+    'a serialized string' => [serialize('not an array')],
+    'a serialized object' => [serialize(new AttachmentFocalPointWakeProbe)],
+    'a zero width' => [serialize(['width' => 0, 'height' => 10])],
+    'a zero height' => [serialize(['width' => 10, 'height' => 0])],
+    'a width under one pixel' => [serialize(['width' => '0.5', 'height' => 10])],
+    'a height under one pixel' => [serialize(['width' => 10, 'height' => '0.5'])],
+    'a width with units' => [serialize(['width' => '5px', 'height' => 10])],
+    'a height with units' => [serialize(['width' => 10, 'height' => '5px'])],
+]);
+
+it('reads one-pixel dimensions as integers', function (): void {
+    expect(AttachmentFocalPointCalculator::parseFullImageDimensions(serialize(['width' => '1', 'height' => '1'])))
+        ->toBe(['width' => 1, 'height' => 1]);
+});
+
+it('reads no points from empty or non-array metadata', function (string $serialized): void {
+    expect(AttachmentFocalPointCalculator::parseSerializedPointList($serialized))->toBe([]);
+})->with([
+    'empty' => [''],
+    'a serialized string' => [serialize('not a list')],
+    'an object whose property is a row' => ['O:3:"Foo":1:{s:1:"a";a:2:{s:1:"x";i:1;s:1:"y";i:2;}}'],
+]);
+
+it('skips unusable point rows and keeps reading', function (): void {
+    // Each unusable row comes before a usable one, so stopping at it would lose the rest
+    $serialized = serialize([
+        'not a row',
+        ['x' => 5],
+        ['y' => 5],
+        ['x' => 10, 'y' => 'top'],
+        ['x' => 'left', 'y' => 10],
+        ['x' => '3', 'y' => 4],
+    ]);
+
+    expect(AttachmentFocalPointCalculator::parseSerializedPointList($serialized))->toBe([['x' => 3.0, 'y' => 4.0]]);
+});
+
+it('returns the default focus for a dimension of zero, and computes it from one pixel', function (int $width, int $height, string $focus): void {
+    expect(AttachmentFocalPointCalculator::buildFocusString(['width' => $width, 'height' => $height], [['x' => 1.0, 'y' => 1.0]]))
+        ->toBe($focus);
+})->with([
+    'a zero width' => [0, 10, '50-50-1'],
+    'a zero height' => [10, 0, '50-50-1'],
+    'one pixel each way' => [1, 1, '100-100-1'],
+]);
+
+it('clamps a focus outside the image to its edges', function (): void {
+    $dimensions = ['width' => 1000, 'height' => 1000];
+
+    expect(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => 2000.0, 'y' => -50.0]]))->toBe('100-0-1')
+        ->and(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => 0.0, 'y' => 1000.0]]))->toBe('0-100-1')
+        ->and(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => -50.0, 'y' => 2000.0]]))->toBe('0-100-1');
+});
+
+it('reads a focus between infinite coordinates as zero', function (): void {
+    // Characterization: '1e999' and '-1e999' are numeric and read as INF and -INF,
+    // so the center is NAN, which the integer cast turns into 0 (#138)
+    $points = AttachmentFocalPointCalculator::parseSerializedPointList(serialize([
+        ['x' => '1e999', 'y' => '1e999'],
+        ['x' => '-1e999', 'y' => '-1e999'],
+    ]));
+
+    expect(AttachmentFocalPointCalculator::buildFocusString(['width' => 10, 'height' => 10], $points))->toBe('0-0-1');
+});
+
+it('rounds a focus to the nearest percent', function (): void {
+    // 0.4 percent rounds down and 0.6 percent rounds up
+    expect(AttachmentFocalPointCalculator::buildFocusString(['width' => 1000, 'height' => 1000], [['x' => 4.0, 'y' => 6.0]]))
+        ->toBe('0-1-1');
+});
