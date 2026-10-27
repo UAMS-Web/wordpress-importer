@@ -203,6 +203,9 @@ class ModulesParser
     ): ?array {
         // Check if module type is supported
         if (! isset(self::SUPPORTED_MODULES[$moduleType])) {
+            // Loose and strict comparison agree here: the type is a string and
+            // no listed type is numeric, so the strict flag cannot be observed.
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 \in_array(
                     $moduleType,
