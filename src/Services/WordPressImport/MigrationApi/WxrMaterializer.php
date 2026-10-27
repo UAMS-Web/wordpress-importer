@@ -364,7 +364,7 @@ class WxrMaterializer
         // Tell the readers that look items up in this export what it covers, so a miss caused
         // by the scope is reported rather than read as a broken link (wordpress-importer-archive#1179). A whole-site
         // read records null, which is also what clears a previous run's scope.
-        MaterializationScope::set($contentType === null ? null : $postTypes);
+        MaterializationScope::set($contentType === null ? null : $postTypes, $redirectDomain);
 
         return $paths;
     }
