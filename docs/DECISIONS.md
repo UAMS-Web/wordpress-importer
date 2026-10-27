@@ -1440,3 +1440,19 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 **Rejected: keep emitting the `accordion` set and define the set in the host app.** It keeps the accordion's structure, but the content stays hidden until a host change ships, and the change would cover only an accordion set, not the importer.
 
 **Rejected: hold the bare form at `main`'s behavior and decide accordions on a ticket of their own.** It keeps #118 small, but it leaves the bare form as raw shortcode text and the attributed form as an undisplayed set, both of them wrong today.
+
+## `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
+
+**Decided 2026-10-27, on #163, by the project owner.** A ruleset that reaches this repository alone requires three status check contexts on `main`: `CI`, `Attribution footer` and `Closing keywords`. These are the three that the shared `required-checks-ruleset.json` template in the `code-quality` skill requires, and that the Statamic add-ons and `UAMS-Web/uamswp-migration-api` already require. The ruleset carries only the `required_status_checks` rule and layers on the two organization rulesets, `main: no deletion or force push` and `main: pull request required`. The builder applies it with `apply-required-checks-ruleset.mjs` once the workflows are on `main`, so no open pull request waits on a check its branch cannot report.
+
+**`CI` is an aggregate.** It is the last job in `.github/workflows/ci.yml`. It `needs:` the other eight jobs, runs `if: always()`, and fails unless every needed job reports `success`. `scripts/ci-local.test.mjs` fails when a job is missing from that list or when `CI` carries the `RUN_REMOTE_CI` gate. The other two contexts are the jobs of `check-attribution-footer.yml` and `check-closing-keyword-across-lines.yml`, copied from the current `writing-pull-requests` templates in `UAMS-Web/uams-claude-skills`.
+
+**The `RUN_REMOTE_CI` gate stays** on every job but `CI`. The organization variable is scoped to private repositories and does not reach this one. On 2026-10-27, `GET repos/UAMS-Web/wordpress-importer/actions/organization-variables` returned `total_count` 0, while the same call on `wordpress-importer-archive` returned `RUN_REMOTE_CI`. Only a repository variable switches the jobs off here, and `CI` then fails rather than passing.
+
+**Not changed: whether the local chain gates a merge.** That stays as it was.
+
+**Rejected: requiring the eight jobs by name.** A renamed job silently drops out of the ruleset, and a job skipped by its `if:` reports success to a required check.
+
+**Rejected: leaving `main` with no required check.** A pull request could then merge with a red or missing remote run, though the chain runs on every pull request here.
+
+**Rejected: removing the `RUN_REMOTE_CI` gate.** It changes every job for no gain once `CI` fails when the switch skips them.
