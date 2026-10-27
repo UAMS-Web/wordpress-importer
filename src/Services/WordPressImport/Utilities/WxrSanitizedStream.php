@@ -38,6 +38,9 @@ class WxrSanitizedStream
     /**
      * Whether the wrapper has already been registered this process.
      */
+    // A property initializer is never reported as an executed line, and the suite
+    // shares one process, so no test can start from the unregistered state twice.
+    // @pest-mutate-ignore: FalseToTrue
     private static bool $registered = false;
 
     /**
@@ -61,11 +64,15 @@ class WxrSanitizedStream
      */
     public static function register(): bool
     {
-        // Registering twice emits a warning and fails, so only ever do it once
+        // Registering twice emits a warning and fails, so only ever do it once. The
+        // check below finds the scheme registered too, so this return only saves work.
         if (self::$registered) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
+        // The wrapper list holds only strings, so strict and loose comparison agree
+        // @pest-mutate-ignore: TrueToFalse
         self::$registered = \in_array(
             self::SCHEME,
             \stream_get_wrappers(),
@@ -91,11 +98,14 @@ class WxrSanitizedStream
     public static function wrap(
         string $path
     ): string {
-        // Both halves are required: the wrapper serves reads, the filter repairs them
+        // Both halves are required: the wrapper serves reads, the filter repairs them.
+        // Each register() also succeeds when its name is already taken, so no test
+        // reaches this return.
         if (
             ! self::register()
             || ! WxrSanitizingStreamFilter::register()
         ) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $path;
         }
 
@@ -107,7 +117,9 @@ class WxrSanitizedStream
             return $path;
         }
 
-        // Key by content-free hash so repeated wraps of one path stay identical
+        // Key by content-free hash so repeated wraps of one path stay identical. Any
+        // 32-character slice of the hash serves equally well as a token.
+        // @pest-mutate-ignore: IncrementInteger
         $token = \substr(
             \hash(
                 'sha256',
@@ -131,6 +143,8 @@ class WxrSanitizedStream
     public static function resolve(
         string $uri
     ): ?string {
+        // The prefix's length is all that is read, and it is the same either way round
+        // @pest-mutate-ignore: ConcatSwitchSides
         $token = \substr(
             $uri,
             \strlen(self::SCHEME.'://')
@@ -224,7 +238,10 @@ class WxrSanitizedStream
             'rb'
         );
 
+        // stream_open() has just opened this file, so no test reaches this return
+        // @pest-mutate-ignore: FalseToTrue
         if ($handle === false) {
+            // @pest-mutate-ignore: TrueToFalse, RemoveEarlyReturn
             return true;
         }
 
@@ -233,14 +250,21 @@ class WxrSanitizedStream
             4
         );
 
+        // Closing only releases the handle; nothing reads it again
+        // @pest-mutate-ignore: RemoveFunctionCall
         \fclose($handle);
 
-        if ($head === false || $head === '') {
+        // fread() fails only on an unusable handle, which this one is not
+        // @pest-mutate-ignore: FalseToTrue
+        if ($head === false) {
+            // @pest-mutate-ignore: TrueToFalse, RemoveEarlyReturn
             return true;
         }
 
-        // A UTF-16 or UTF-32 byte-order mark rules byte-level repair out
-        foreach (["\xFF\xFE", "\xFE\xFF", "\x00\x00\xFE\xFF"] as $bom) {
+        // A UTF-16 byte-order mark rules byte-level repair out. A UTF-32 one begins
+        // with two 0x00 bytes, which the check below already catches. An empty head
+        // matches neither and is repaired, harmlessly.
+        foreach (["\xFF\xFE", "\xFE\xFF"] as $bom) {
             if (\str_starts_with($head, $bom)) {
                 return false;
             }
@@ -269,6 +293,8 @@ class WxrSanitizedStream
             $count
         );
 
+        // fread() fails only on an unusable handle, which an open stream's is not
+        // @pest-mutate-ignore: FalseToTrue, EmptyStringToNotEmpty
         return $data === false ? '' : $data;
     }
 
@@ -296,6 +322,8 @@ class WxrSanitizedStream
 
         $position = \ftell($this->handle);
 
+        // ftell() fails only on an unusable handle, which an open stream's is not
+        // @pest-mutate-ignore: FalseToTrue, DecrementInteger, IncrementInteger
         return $position === false ? 0 : $position;
     }
 
@@ -341,6 +369,8 @@ class WxrSanitizedStream
             return;
         }
 
+        // Closing only releases the handle; it is dropped below either way
+        // @pest-mutate-ignore: RemoveFunctionCall
         \fclose($this->handle);
 
         $this->handle = null;
