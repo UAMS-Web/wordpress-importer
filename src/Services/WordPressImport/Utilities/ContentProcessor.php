@@ -7,10 +7,12 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 use App\Services\BardContentSanitizer;
 use DOMComment;
 use DOMDocument;
+use DOMNode;
+use DOMNodeList;
+use DOMText;
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry as StatamicEntry;
-use Statamic\Facades\Entry;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\PageBuilderParser;
@@ -224,7 +226,6 @@ class ContentProcessor
             if ($tableId !== null && $tableId !== '') {
                 $tableIdToPostId[$tableId] = [
                     'postId' => $postId,
-                    'options' => [],
                 ];
                 // Retrieve table options
                 $optionsMeta = $item->xpath('wp:postmeta[wp:meta_key="_tablepress_table_options"]/wp:meta_value');
@@ -244,315 +245,31 @@ class ContentProcessor
         }
 
         // Determine if using filesystem lookup (for landing_page blueprint)
-        $useFilesystem = ($data['blueprint'] ?? '') === 'landing_page';
+        $useFilesystem = ($data['blueprint'] ?? null) === 'landing_page';
 
-        // Recursive function to update table sets in content arrays
-        $updateSets = function (
-            array $sets,
-            &$tableIdIndex
-        ) use (
+        // Update both Bard and page builder content arrays
+        $tableIdIndex = 0;
+        $updatedBardContent = $this->updateTableSets(
+            $bardContent,
+            $tableIdIndex,
             $site,
             $tableIds,
             $tableIdToPostId,
             $data,
             $collectionHandle,
-            $useFilesystem,
-            &$updateSets
-        ): array {
-            $updatedSets = $sets;
-            $tableIdIndex = \is_int($tableIdIndex) ? $tableIdIndex : 0;
-
-            // Iterate through sets to find table sets or nested body fields
-            foreach ($updatedSets as &$set) {
-                // Skip non-array sets
-                if (! \is_array($set)) {
-                    continue;
-                }
-
-                // Read set metadata used for table-set matching
-                $setType = $set['type'] ?? null;
-                $setType = \is_string($setType) ? $setType : null;
-                $setAttrs = $set['attrs'] ?? [];
-                $setAttrs = \is_array($setAttrs) ? $setAttrs : [];
-                $setValues = $setAttrs['values'] ?? [];
-                $setValues = \is_array($setValues) ? $setValues : [];
-                $setValueType = $setValues['type'] ?? null;
-                $setValueType = \is_string($setValueType) ? $setValueType : null;
-                $setCreateQuery = $setValues['create_query'] ?? null;
-                $setCreateQuery = \is_string($setCreateQuery) ? $setCreateQuery : null;
-
-                // Check for table set with create_query: collection
-                if (
-                    $setType === 'set'
-                    && $setValueType === 'table'
-                    && $setCreateQuery === 'collection'
-                ) {
-                    // Normalize the current table index before using it as an array offset
-                    $currentTableIdIndex = \is_int($tableIdIndex) ? $tableIdIndex : 0;
-                    $tableId = '';
-
-                    // Get the next table ID in order
-                    if ($currentTableIdIndex < \count($tableIds)) {
-                        $tableIdValue = $tableIds[$currentTableIdIndex];
-                        $tableId = \is_scalar($tableIdValue) ? (string) $tableIdValue : '';
-                        $tableIdIndex = $currentTableIdIndex + 1;
-                    } else {
-                        // Enhance log context with entry information
-                        $logData = LogContextHelper::enhanceWithEntryContext(
-                            [
-                                'site' => $site,
-                                'set' => $set,
-                            ]
-                        );
-
-                        // Log warning about no more table IDs available
-                        Log::warning(
-                            LogContextHelper::formatMessageWithEntry(
-                                'ContentProcessor::linkTableEntries: No more table IDs available to link table set',
-                                $logData['page_url']
-                            ),
-                            $logData['context']
-                        );
-
-                        continue;
-                    }
-
-                    // Get postId and options from mapping
-                    $tableMeta = $tableIdToPostId[$tableId] ?? [];
-                    $postId = $tableMeta['postId'] ?? null;
-                    $postId = \is_string($postId) ? $postId : null;
-                    $options = $tableMeta['options'] ?? [];
-
-                    // Retrieve table entry
-                    $entry = null;
-
-                    // Check if we have a valid WordPress post ID for the table
-                    if ($postId !== null && $postId !== '') {
-                        // ---
-                        // Find existing table entry by base slug and post ID to avoid generating new
-                        // random ID
-                        // ---
-                        $baseSlug = "{$site}_tablepress-{$tableId}";
-
-                        // Check if we should use database queries instead of filesystem lookup
-                        if (! $useFilesystem) {
-                            // Initialize query builder for entry lookup
-                            $entryQuery = EntryQueryHelper::query();
-
-                            // ---
-                            // Try querying the entry for non-landing_page blueprints. Search by slug first,
-                            // then by post ID pattern to find the existing entry.
-                            // ---
-                            $entryQuery->where(
-                                'slug',
-                                $baseSlug
-                            );
-                            $entryQuery->where(
-                                'site',
-                                $site
-                            );
-                            $entryQuery->where(
-                                'collection',
-                                'tables'
-                            );
-                            $entry = $entryQuery->first();
-
-                            // Normalize non-entry lookup results
-                            if (! $entry instanceof StatamicEntry) {
-                                $entry = null;
-                            }
-
-                            // Check if slug-based lookup failed and try ID pattern matching
-                            if (! $entry instanceof StatamicEntry) {
-                                // Initialize fallback query builder for ID pattern lookup
-                                $fallbackEntryQuery = EntryQueryHelper::query();
-
-                                // Search by ID pattern as fallback when slug lookup fails
-                                $fallbackEntryQuery->where(
-                                    'site',
-                                    $site
-                                );
-                                $fallbackEntryQuery->where(
-                                    'collection',
-                                    'tables'
-                                );
-                                $fallbackEntryQuery->where(
-                                    'id',
-                                    'like',
-                                    "{$baseSlug}-{$postId}-%"
-                                );
-                                $entry = $fallbackEntryQuery->first();
-
-                                // Normalize non-entry lookup results
-                                if (! $entry instanceof StatamicEntry) {
-                                    $entry = null;
-                                }
-                            }
-                        }
-
-                        // Check if database lookup failed and try filesystem lookup
-                        if (! $entry instanceof StatamicEntry) {
-                            // Use filesystem lookup (primary for landing_page, fallback otherwise)
-                            $entryPath = ContentRoot::collectionEntry(
-                                'tables',
-                                $site,
-                                "{$site}_tablepress-{$tableId}"
-                            );
-
-                            // Check if the table entry file exists on the filesystem
-                            if (LaravelFileFacade::exists($entryPath)) {
-                                // Read the file to get the actual entry ID
-                                $fileContent = LaravelFileFacade::get($entryPath);
-
-                                // Check if we can extract the entry ID from the file content
-                                if (
-                                    \preg_match(
-                                        '/^id:\s*(.+)$/m',
-                                        $fileContent,
-                                        $matches
-                                    ) === 1
-                                ) {
-                                    // Extract and clean the entry ID from the file
-                                    $actualEntryId = \trim($matches[1]);
-
-                                    // Create entry object with the actual ID from the file
-                                    $entry = Entry::make();
-                                    if (! $entry instanceof StatamicEntry) {
-                                        continue;
-                                    }
-
-                                    $entry->id($actualEntryId);
-                                    $entry->collection('tables');
-                                    $entry->locale($site);
-                                    $entry->slug("{$site}_tablepress-{$tableId}");
-                                    $entry->data($fileContent);
-                                } else { // Otherwise, log error if ID extraction failed
-                                    // Enhance log context with entry information
-                                    $logData = LogContextHelper::enhanceWithEntryContext(
-                                        [
-                                            'site' => $site,
-                                            'tableId' => $tableId,
-                                            'postId' => $postId,
-                                            'path' => $entryPath,
-                                        ]
-                                    );
-
-                                    // Log warning when entry ID cannot be extracted from file
-                                    Log::warning(
-                                        LogContextHelper::formatMessageWithEntry(
-                                            'ContentProcessor::linkTableEntries: Could not extract entry ID from file',
-                                            $logData['page_url']
-                                        ),
-                                        $logData['context']
-                                    );
-                                }
-                            } else { // Otherwise, log error if file doesn't exist
-                                // Enhance log context with entry information
-                                $logData = LogContextHelper::enhanceWithEntryContext(
-                                    [
-                                        'site' => $site,
-                                        'tableId' => $tableId,
-                                        'postId' => $postId,
-                                        'path' => $entryPath,
-                                    ]
-                                );
-
-                                // Log warning when table entry file is not found on filesystem
-                                Log::warning(
-                                    LogContextHelper::formatMessageWithEntry(
-                                        'ContentProcessor::linkTableEntries: Table entry file not found',
-                                        $logData['page_url']
-                                    ),
-                                    $logData['context']
-                                );
-                            }
-                        }
-                    } else { // Otherwise, log error if no post ID is available
-                        // Enhance log context with entry information
-                        $logData = LogContextHelper::enhanceWithEntryContext(
-                            [
-                                'site' => $site,
-                                'tableId' => $tableId,
-                            ]
-                        );
-
-                        // Log warning when no WordPress post ID is found for the table
-                        Log::warning(
-                            LogContextHelper::formatMessageWithEntry(
-                                "ContentProcessor::linkTableEntries: No postId found for table ID '$tableId'",
-                                $logData['page_url']
-                            ),
-                            $logData['context']
-                        );
-                    }
-
-                    // Assign table entry ID or null if not found
-                    $set['attrs'] = $setAttrs;
-                    $set['attrs']['values'] = $setValues;
-                    $set['attrs']['values']['table_entry'] = $entry instanceof StatamicEntry
-                        ? $entry->id()
-                        : null;
-
-                    // Set heading_query based on table options
-                    $set['attrs']['values']['heading_query'] = ($options['print_name'] ?? false) === true;
-
-                    // Set description_query based on table options
-                    $set['attrs']['values']['description_query'] = ($options['print_description'] ?? false) === true;
-
-                    // Check if heading should be displayed and set appropriate heading level
-                    if ($set['attrs']['values']['heading_query']) {
-                        // Set heading level based on blueprint type (h3 for landing_page, h2 for others)
-                        $set['attrs']['values']['heading_level'] = ($collectionHandle === 'pages' && ($data['blueprint'] ?? '') === 'landing_page') ? 'h3' : 'h2';
-                    } else { // Otherwise, remove heading_level if heading is not displayed
-                        // Remove heading_level field when heading_query is false
-                        unset(
-                            $set['attrs']['values']['heading_level']
-                        );
-                    }
-                } elseif ($setType === 'uamsweb_block_table') {
-                    // ---
-                    // The page_builder path emits a self-contained table block that already
-                    // carries its own table_id (no Bard set to link), so it needs no further
-                    // processing here. It still consumes one of the page's table ids, though,
-                    // so advance the index to avoid falsely reporting a fully-imported
-                    // `[table id=N /]` shortcode as unlinked.
-                    // ---
-                    if ($tableIdIndex < \count($tableIds)) {
-                        $tableIdIndex = \is_int($tableIdIndex) ? $tableIdIndex + 1 : 1;
-                    }
-                }
-
-                // Check if set has nested body content to process recursively
-                if (
-                    isset($set['body'])
-                    && \is_array($set['body'])
-                ) {
-                    // Recursively process nested body fields for table sets
-                    $set['body'] = $updateSets(
-                        $set['body'],
-                        $tableIdIndex
-                    );
-                }
-            }
-
-            // Unset reference to avoid unintended modifications
-            unset($set);
-
-            // Return the updated sets array
-            return $updatedSets;
-        };
-
-        // Update both Bard and page builder content arrays
-        $tableIdIndex = 0;
-        $updatedBardContent = $updateSets(
-            $bardContent,
-            $tableIdIndex
+            $useFilesystem
         );
         $bardTableIdIndex = $tableIdIndex;
         $tableIdIndex = 0;
-        $updatedPageBuilderContent = $updateSets(
+        $updatedPageBuilderContent = $this->updateTableSets(
             $pageBuilderContent,
-            $tableIdIndex
+            $tableIdIndex,
+            $site,
+            $tableIds,
+            $tableIdToPostId,
+            $data,
+            $collectionHandle,
+            $useFilesystem
         );
         $pageBuilderTableIdIndex = $tableIdIndex;
 
@@ -561,16 +278,13 @@ class ContentProcessor
 
         // Log warning if table IDs remain unlinked
         if ($finalTableIdIndex < \count($tableIds)) {
-            // Normalize index for array slicing
-            $sliceOffset = \is_int($finalTableIdIndex) ? $finalTableIdIndex : 0;
-
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
                     'site' => $site,
                     'unlinkedTableIds' => \array_slice(
                         $tableIds,
-                        $sliceOffset
+                        $finalTableIdIndex
                     ),
                 ]
             );
@@ -590,6 +304,293 @@ class ContentProcessor
             'bardContent' => $updatedBardContent,
             'pageBuilderContent' => $updatedPageBuilderContent,
         ];
+    }
+
+    /**
+     * Updates the table sets in a content array, recursing into nested bodies.
+     *
+     * @param  array<int|string, mixed>  $sets  The sets to update
+     * @param  int  $tableIdIndex  The index of the next table ID to link, advanced as IDs are used
+     * @param  string  $site  The site handle
+     * @param  array<int|string, mixed>  $tableIds  The table IDs in content order
+     * @param  array<int|string, array{postId: string, options?: array<int|string, mixed>}>  $tableIdToPostId  Post ID and options by table ID
+     * @param  array<int|string, mixed>  $data  Entry data including blueprint
+     * @param  string  $collectionHandle  The collection handle
+     * @param  bool  $useFilesystem  Whether to look entries up on the filesystem only
+     * @return array<int|string, mixed> The updated sets
+     */
+    private function updateTableSets(
+        array $sets,
+        int &$tableIdIndex,
+        string $site,
+        array $tableIds,
+        array $tableIdToPostId,
+        array $data,
+        string $collectionHandle,
+        bool $useFilesystem
+    ): array {
+        $updatedSets = $sets;
+
+        // Iterate through sets to find table sets or nested body fields
+        foreach ($updatedSets as &$set) {
+            // Skip non-array sets
+            if (! \is_array($set)) {
+                continue;
+            }
+
+            // Read set metadata used for table-set matching
+            $setType = $set['type'] ?? null;
+            $setType = \is_string($setType) ? $setType : null;
+            $setAttrs = $set['attrs'] ?? [];
+            $setAttrs = \is_array($setAttrs) ? $setAttrs : [];
+            $setValues = $setAttrs['values'] ?? [];
+            $setValues = \is_array($setValues) ? $setValues : [];
+            $setValueType = $setValues['type'] ?? null;
+            $setValueType = \is_string($setValueType) ? $setValueType : null;
+            $setCreateQuery = $setValues['create_query'] ?? null;
+            $setCreateQuery = \is_string($setCreateQuery) ? $setCreateQuery : null;
+
+            // Check for table set with create_query: collection
+            if (
+                $setType === 'set'
+                && $setValueType === 'table'
+                && $setCreateQuery === 'collection'
+            ) {
+                // Get the next table ID in order
+                if ($tableIdIndex < \count($tableIds)) {
+                    $tableIdValue = $tableIds[$tableIdIndex];
+                    $tableId = \is_scalar($tableIdValue) ? (string) $tableIdValue : '';
+                    $tableIdIndex++;
+                } else {
+                    // Enhance log context with entry information
+                    $logData = LogContextHelper::enhanceWithEntryContext(
+                        [
+                            'site' => $site,
+                            'set' => $set,
+                        ]
+                    );
+
+                    // Log warning about no more table IDs available
+                    Log::warning(
+                        LogContextHelper::formatMessageWithEntry(
+                            'ContentProcessor::linkTableEntries: No more table IDs available to link table set',
+                            $logData['page_url']
+                        ),
+                        $logData['context']
+                    );
+
+                    continue;
+                }
+
+                // Get postId and options from mapping
+                $tableMeta = $tableIdToPostId[$tableId] ?? [];
+                $postId = $tableMeta['postId'] ?? null;
+                $postId = \is_string($postId) ? $postId : null;
+                $options = $tableMeta['options'] ?? [];
+
+                // Retrieve table entry, or the id read from its file
+                $entry = null;
+                $fileEntryId = null;
+
+                // Check if we have a valid WordPress post ID for the table
+                if ($postId !== null && $postId !== '') {
+                    // ---
+                    // Find existing table entry by base slug and post ID to avoid generating new
+                    // random ID
+                    // ---
+                    $baseSlug = "{$site}_tablepress-{$tableId}";
+
+                    // Check if we should use database queries instead of filesystem lookup
+                    if (! $useFilesystem) {
+                        // Initialize query builder for entry lookup
+                        $entryQuery = EntryQueryHelper::query();
+
+                        // ---
+                        // Try querying the entry for non-landing_page blueprints. Search by slug first,
+                        // then by post ID pattern to find the existing entry.
+                        // ---
+                        $entryQuery->where(
+                            'slug',
+                            $baseSlug
+                        );
+                        $entryQuery->where(
+                            'site',
+                            $site
+                        );
+                        $entryQuery->where(
+                            'collection',
+                            'tables'
+                        );
+                        $entry = $entryQuery->first();
+
+                        // Check if slug-based lookup failed and try ID pattern matching
+                        if (! $entry instanceof StatamicEntry) {
+                            // Initialize fallback query builder for ID pattern lookup
+                            $fallbackEntryQuery = EntryQueryHelper::query();
+
+                            // Search by ID pattern as fallback when slug lookup fails
+                            $fallbackEntryQuery->where(
+                                'site',
+                                $site
+                            );
+                            $fallbackEntryQuery->where(
+                                'collection',
+                                'tables'
+                            );
+                            $fallbackEntryQuery->where(
+                                'id',
+                                'like',
+                                "{$baseSlug}-{$postId}-%"
+                            );
+                            $entry = $fallbackEntryQuery->first();
+                        }
+                    }
+
+                    // Check if database lookup failed and try filesystem lookup
+                    if (! $entry instanceof StatamicEntry) {
+                        // Use filesystem lookup (primary for landing_page, fallback otherwise)
+                        $entryPath = ContentRoot::collectionEntry(
+                            'tables',
+                            $site,
+                            "{$site}_tablepress-{$tableId}"
+                        );
+
+                        // Check if the table entry file exists on the filesystem
+                        if (LaravelFileFacade::exists($entryPath)) {
+                            // Read the file to get the actual entry ID
+                            $fileContent = LaravelFileFacade::get($entryPath);
+
+                            // Check if we can extract the entry ID from the file content
+                            if (
+                                \preg_match(
+                                    '/^id:\s*(.+)$/m',
+                                    $fileContent,
+                                    $matches
+                                ) === 1
+                            ) {
+                                // Extract and clean the entry ID from the file; only the id
+                                // is linked, so no entry is built from it
+                                $fileEntryId = \trim($matches[1]);
+                            } else { // Otherwise, log error if ID extraction failed
+                                // Enhance log context with entry information
+                                $logData = LogContextHelper::enhanceWithEntryContext(
+                                    [
+                                        'site' => $site,
+                                        'tableId' => $tableId,
+                                        'postId' => $postId,
+                                        'path' => $entryPath,
+                                    ]
+                                );
+
+                                // Log warning when entry ID cannot be extracted from file
+                                Log::warning(
+                                    LogContextHelper::formatMessageWithEntry(
+                                        'ContentProcessor::linkTableEntries: Could not extract entry ID from file',
+                                        $logData['page_url']
+                                    ),
+                                    $logData['context']
+                                );
+                            }
+                        } else { // Otherwise, log error if file doesn't exist
+                            // Enhance log context with entry information
+                            $logData = LogContextHelper::enhanceWithEntryContext(
+                                [
+                                    'site' => $site,
+                                    'tableId' => $tableId,
+                                    'postId' => $postId,
+                                    'path' => $entryPath,
+                                ]
+                            );
+
+                            // Log warning when table entry file is not found on filesystem
+                            Log::warning(
+                                LogContextHelper::formatMessageWithEntry(
+                                    'ContentProcessor::linkTableEntries: Table entry file not found',
+                                    $logData['page_url']
+                                ),
+                                $logData['context']
+                            );
+                        }
+                    }
+                } else { // Otherwise, log error if no post ID is available
+                    // Enhance log context with entry information
+                    $logData = LogContextHelper::enhanceWithEntryContext(
+                        [
+                            'site' => $site,
+                            'tableId' => $tableId,
+                        ]
+                    );
+
+                    // Log warning when no WordPress post ID is found for the table
+                    Log::warning(
+                        LogContextHelper::formatMessageWithEntry(
+                            "ContentProcessor::linkTableEntries: No postId found for table ID '$tableId'",
+                            $logData['page_url']
+                        ),
+                        $logData['context']
+                    );
+                }
+
+                // Assign table entry ID or null if not found
+                $set['attrs'] = $setAttrs;
+                $set['attrs']['values'] = $setValues;
+                $set['attrs']['values']['table_entry'] = $entry instanceof StatamicEntry
+                    ? $entry->id()
+                    : $fileEntryId;
+
+                // Set heading_query based on table options
+                $set['attrs']['values']['heading_query'] = ($options['print_name'] ?? false) === true;
+
+                // Set description_query based on table options
+                $set['attrs']['values']['description_query'] = ($options['print_description'] ?? false) === true;
+
+                // Check if heading should be displayed and set appropriate heading level
+                if ($set['attrs']['values']['heading_query']) {
+                    // Set heading level based on blueprint type (h3 for landing_page, h2 for others)
+                    $set['attrs']['values']['heading_level'] = ($collectionHandle === 'pages' && ($data['blueprint'] ?? null) === 'landing_page') ? 'h3' : 'h2';
+                } else { // Otherwise, remove heading_level if heading is not displayed
+                    // Remove heading_level field when heading_query is false
+                    unset(
+                        $set['attrs']['values']['heading_level']
+                    );
+                }
+            } elseif ($setType === 'uamsweb_block_table') {
+                // ---
+                // The page_builder path emits a self-contained table block that already
+                // carries its own table_id (no Bard set to link), so it needs no further
+                // processing here. It still consumes one of the page's table ids, though,
+                // so advance the index to avoid falsely reporting a fully-imported
+                // `[table id=N /]` shortcode as unlinked.
+                // ---
+                // Past the last id this matches the guard above, which reads the
+                // index only against the count
+                $tableIdIndex++;
+            }
+
+            // Check if set has nested body content to process recursively
+            if (
+                isset($set['body'])
+                && \is_array($set['body'])
+            ) {
+                // Recursively process nested body fields for table sets
+                $set['body'] = $this->updateTableSets(
+                    $set['body'],
+                    $tableIdIndex,
+                    $site,
+                    $tableIds,
+                    $tableIdToPostId,
+                    $data,
+                    $collectionHandle,
+                    $useFilesystem
+                );
+            }
+        }
+
+        // Unset reference to avoid unintended modifications
+        unset($set);
+
+        // Return the updated sets array
+        return $updatedSets;
     }
 
     /**
@@ -716,10 +717,8 @@ class ContentProcessor
         // Run the body with libxml warnings visible, as it did before wordpress-importer-archive#1354 when
         // the load below switched the mode back off. A caller may arrive with it
         // on (a direct Bard parse elsewhere leaves it on); process() restores the
-        // caller's mode afterwards, so only code inside the body can observe
-        // this call.
+        // caller's mode afterwards.
         // ---
-        // @pest-mutate-ignore: RemoveFunctionCall
         libxml_use_internal_errors(false);
 
         // Set the XML path in the processing context
@@ -777,7 +776,8 @@ class ContentProcessor
             'UTF-8'
         );
         // Wrap content in a full HTML structure to ensure valid parsing
-        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>'.$content.'</body></html>';
+        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>'.$content;
+        $html .= '</body></html>';
 
         // ---
         // LIBXML_PARSEHUGE stays because real content needs it (wordpress-importer-archive#1273): three
@@ -786,9 +786,16 @@ class ContentProcessor
         // 256, and without the flag their text is lost. Use LIBXML_NOCDATA only if
         // the content doesn't contain WordPress block comments.
         // ---
-        $flags = LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_PARSEHUGE;
+        // The wrapper above supplies the html and body elements and a doctype, so
+        // these two flags change nothing it builds
+        // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
+        $flags = LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD;
+        $flags |= LIBXML_PARSEHUGE;
 
-        // Check if content contains WordPress block comments that need CDATA preservation
+        // Check if content contains WordPress block comments that need CDATA
+        // preservation. libxml's HTML parser creates no CDATA sections, so the flag
+        // changes nothing it builds (measured in TextProcessor::loadHtml()).
+        // @pest-mutate-ignore: IfNegated, RemoveNot
         if (! TextProcessor::containsWordPressBlockComments($html)) {
             // Add LIBXML_NOCDATA flag to disable CDATA parsing for non-block content
             $flags |= LIBXML_NOCDATA;
@@ -800,6 +807,7 @@ class ContentProcessor
         // (wordpress-importer-archive#1354). The mode is process-wide; leaving it on would silence every
         // later libxml warning in the import.
         // ---
+        // Collect the load's errors internally, so they reach no error handler
         $previousInternalErrors = libxml_use_internal_errors(true);
 
         try {
@@ -809,7 +817,9 @@ class ContentProcessor
                 $flags
             );
 
-            // Handle parsing errors
+            // Handle parsing errors. A non-empty document with its own html and body
+            // elements always loads under @, so the body of this check never runs.
+            // @pest-mutate-ignore: RemoveMethodCall, CoalesceRemoveLeft, ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides, UnwrapArrayMap, UnwrapTrim, RemoveArrayItem, RemoveEarlyReturn
             if (! $loaded) {
                 Log::error(
                     "ContentProcessor::process: Failed to load HTML for site '$site' (slug: ".($pageSlug ?? 'none').') due to parsing errors',
@@ -825,21 +835,22 @@ class ContentProcessor
                 return ['content' => [], 'page_builder' => []];
             }
         } finally {
-            // Clear libxml errors to prevent interference with future operations
+            // Clear libxml errors, and the last error, to prevent interference with
+            // future operations
             libxml_clear_errors();
 
-            // Put back the mode the body had. process() restores the caller's mode
-            // in its own finally, so no test can observe this call except from
-            // inside the body; it keeps warnings visible for the rest of the page.
-            // @pest-mutate-ignore: RemoveFunctionCall
+            // Put back the mode the body had, which keeps warnings visible for the
+            // rest of the page
             libxml_use_internal_errors($previousInternalErrors);
         }
 
         // Read the body element from the parsed document
         $body = $doc->getElementsByTagName('body')->item(0);
 
-        // Return empty arrays when the body element is missing
+        // Return empty arrays when the body element is missing. The wrapper above
+        // always supplies one, so this never returns.
         if ($body === null) {
+            // @pest-mutate-ignore: RemoveArrayItem, RemoveEarlyReturn
             return ['content' => [], 'page_builder' => []];
         }
 
@@ -850,7 +861,7 @@ class ContentProcessor
         // Check if blueprint is landing_page (which may have ACF blocks in referenced
         // wp_block posts)
         // ---
-        $isLandingPage = ($data['blueprint'] ?? '') === 'landing_page';
+        $isLandingPage = ($data['blueprint'] ?? null) === 'landing_page';
 
         // Define blocks handled by Tiptap to exclude from unaddressed nodes
         $addressedBlocks = ['paragraph', 'heading', 'list', 'separator'];
@@ -880,7 +891,7 @@ class ContentProcessor
         // ---
         $isReusableContentLandingPage =
             $collectionHandle === 'reusable_content'
-            && ($data['blueprint'] ?? '') === 'reusable_content_landing_page';
+            && ($data['blueprint'] ?? null) === 'reusable_content_landing_page';
 
         // ---
         // Check if content should be processed with PageBuilderParser (has ACF blocks or
@@ -906,17 +917,9 @@ class ContentProcessor
             $unaddressedBlocks = [];
             // Process nodes for page_builder content
             $i = 0;
-            while ($i < $nodes->length) {
-                // Get the current node
-                $node = $nodes->item($i);
 
-                // Skip invalid node values
-                if (! $node instanceof \DOMNode) {
-                    $i++;
-
-                    continue;
-                }
-
+            // Visit each node in turn; the list returns null past its end
+            while (($node = $nodes->item($i)) instanceof DOMNode) {
                 // Parse node using PageBuilderParser to handle ACF blocks
                 $result = $this->pageBuilderParser->parseNode(
                     $node,
@@ -939,13 +942,15 @@ class ContentProcessor
                     && $node instanceof DOMComment
                     && \preg_match(
                         '/^wp:([^\s]+)/',
-                        \trim($node->nodeValue ?? ''),
+                        \trim($node->data),
                         $matches
                     ) === 1
                 ) {
                     // Extract block type (e.g., 'tablepress/table')
                     $blockType = $matches[1];
-                    // Skip blocks handled by Tiptap
+                    // Skip blocks handled by Tiptap. A block type and these names are
+                    // all non-numeric strings, so strict and loose comparison agree.
+                    // @pest-mutate-ignore: TrueToFalse
                     if (
                         \in_array(
                             $blockType,
@@ -953,9 +958,7 @@ class ContentProcessor
                             true
                         )
                     ) {
-                        $skipCount = $result['skipCount'] ?? 0;
-                        $skipCount = \is_int($skipCount) ? $skipCount : 0;
-                        $i += $skipCount !== 0 ? $skipCount : 1;
+                        $i += self::nodeStep($result);
 
                         continue;
                     }
@@ -975,10 +978,10 @@ class ContentProcessor
                             'page_slug' => $pageSlug,
                             'block_type' => $blockType,
                             'node_value' => \substr(
-                                $node->nodeValue ?? '',
+                                $node->data,
                                 0,
                                 100
-                            ).(\strlen($node->nodeValue ?? '') > 100 ? '...' : ''),
+                            ).(\strlen($node->data) > 100 ? '...' : ''),
                         ]
                     );
 
@@ -993,9 +996,7 @@ class ContentProcessor
                 }
 
                 // Increment index by skip count (for block pairs) or 1
-                $skipCount = $result['skipCount'] ?? 0;
-                $skipCount = \is_int($skipCount) ? $skipCount : 0;
-                $i += $skipCount !== 0 ? $skipCount : 1;
+                $i += self::nodeStep($result);
             }
 
             // ---
@@ -1014,94 +1015,79 @@ class ContentProcessor
             // to be duplicated. This check prevents the duplication issue while preserving
             // the mixed content finalization functionality.
             // ---
-            // ---
+            // Read the last node; an empty list has none
+            $finalNode = $nodes->item($nodes->length - 1);
             $isLastNodeAcf = false;
+            $isLastNodeProcessedBlock = false;
 
-            if ($nodes->length > 0) {
-                $finalNode = $nodes->item($nodes->length - 1);
-                $isLastNodeAcf = false;
-                $isLastNodeProcessedBlock = false;
-                $isLastNodeProcessedText = false;
-
-                // Check if the last node is an ACF block
-                if ($finalNode instanceof DOMComment) {
-                    $comment = \trim($finalNode->nodeValue ?? '');
-                    $isLastNodeAcf = \preg_match(
-                        '/^wp:acf\//',
-                        $comment
-                    ) === 1;
-                    // ---
-                    // Also check if it's a non-ACF block that would be processed and return
-                    // skipCount > 0
-                    //
-                    // Include wp:block, wp:minervakb/*, and wp:rss to prevent reprocessing when it's
-                    // the last node.
-                    // ---
-                    $isLastNodeProcessedBlock = \preg_match(
-                        '/^wp:(tablepress\/table|gravityforms\/form|formidable\/simple-form|shortcode|block|minervakb\/|rss)/',
-                        $comment
-                    ) === 1;
-                }
-
+            // Check if the last node is an ACF block
+            if ($finalNode instanceof DOMComment) {
+                $comment = \trim($finalNode->data);
+                $isLastNodeAcf = \preg_match(
+                    '/^wp:acf\//',
+                    $comment
+                ) === 1;
                 // ---
-                // Check if the last node is a text node that contains shortcodes (would be
-                // processed)
-                // ---
-                if (
-                    $finalNode instanceof \DOMNode
-                    && $finalNode->nodeType === XML_TEXT_NODE
-                    && \trim($finalNode->textContent) !== ''
-                ) {
-                    $textContent = \trim($finalNode->textContent);
-
-                    // Check if the text contains shortcodes that would be processed
-                    $isLastNodeProcessedText = \preg_match(
-                        '/\[(gravityform|formidable)\s+id=["\']?\d+["\']?[^]]*\]/',
-                        $textContent
-                    ) === 1;
-                }
-
-                // ---
-                // Only make the final call if the last node is not an ACF block AND not a
-                // processed non-ACF block AND not processed text.
+                // Also check if it's a non-ACF block that would be processed and return
+                // skipCount > 0
                 //
-                // This prevents duplication while ensuring proper finalization of mixed content.
+                // Include wp:block, wp:minervakb/*, and wp:rss to prevent reprocessing when it's
+                // the last node.
                 // ---
-                if (
-                    $isLastNodeAcf === false
-                    && $isLastNodeProcessedBlock === false
-                    && $isLastNodeProcessedText === false
-                    && $finalNode instanceof \DOMNode
-                ) {
-                    $this->pageBuilderParser->parseNode(
-                        $finalNode,
-                        $nodes->length - 1,
-                        $nodes,
-                        $pageBuilderContent,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $items,
-                        $unaddressedBlocks,
-                        $pageSlug
-                    );
-                } elseif ($isLastNodeAcf) {
-                    // ---
-                    // Ensure finalization happens even when last node is an ACF block
-                    // This ensures that sets accumulated in PageBuilderParser::$orderedSets
-                    // are appended to pageBuilderContent without reprocessing the node
-                    // ---
+                $isLastNodeProcessedBlock = \preg_match(
+                    '/^wp:(tablepress\/table|gravityforms\/form|formidable\/simple-form|shortcode|block|minervakb\/|rss)/',
+                    $comment
+                ) === 1;
+            }
 
-                    // Force finalization without reprocessing the node to avoid duplication
-                    $this->pageBuilderParser->forceFinalization(
-                        $pageBuilderContent,
-                        $site,
-                        $assetImporter,
-                        $output
-                    );
-                }
+            // Check if the last node is a text node that contains shortcodes (would be
+            // processed)
+            $isLastNodeProcessedText = $finalNode instanceof DOMText
+                && \preg_match(
+                    '/\[(gravityform|formidable)\s+id=["\']?\d+["\']?[^]]*\]/',
+                    $finalNode->textContent
+                ) === 1;
+
+            // ---
+            // Only make the final call if the last node is not an ACF block AND not a
+            // processed non-ACF block AND not processed text.
+            //
+            // This prevents duplication while ensuring proper finalization of mixed content.
+            // ---
+            if (
+                $isLastNodeAcf === false
+                && $isLastNodeProcessedBlock === false
+                && $isLastNodeProcessedText === false
+                && $finalNode instanceof DOMNode
+            ) {
+                $this->pageBuilderParser->parseNode(
+                    $finalNode,
+                    $nodes->length - 1,
+                    $nodes,
+                    $pageBuilderContent,
+                    $site,
+                    $assetImporter,
+                    $output,
+                    $attachments,
+                    $terms,
+                    $items,
+                    $unaddressedBlocks,
+                    $pageSlug
+                );
+            } elseif ($isLastNodeAcf) {
+                // ---
+                // Ensure finalization happens even when last node is an ACF block
+                // This ensures that sets accumulated in PageBuilderParser::$orderedSets
+                // are appended to pageBuilderContent without reprocessing the node
+                // ---
+
+                // Force finalization without reprocessing the node to avoid duplication
+                $this->pageBuilderParser->forceFinalization(
+                    $pageBuilderContent,
+                    $site,
+                    $assetImporter,
+                    $output
+                );
             }
 
             // ---
@@ -1134,19 +1120,7 @@ class ContentProcessor
         }
 
         // Detect Gutenberg block comments (e.g., <!-- wp:list -->, <!-- wp:paragraph -->)
-        $hasGutenbergBlocks = false;
-        foreach ($nodes as $node) {
-            if (
-                $node instanceof DOMComment
-                && \preg_match(
-                    '/^wp:[^\s]+/',
-                    \trim($node->nodeValue ?? '')
-                ) === 1
-            ) {
-                $hasGutenbergBlocks = true;
-                break;
-            }
-        }
+        $hasGutenbergBlocks = self::hasBlockComments($nodes);
 
         // ---
         // Only apply WpAutoP for Classic Editor content (no ACF blocks, no Gutenberg
@@ -1190,6 +1164,44 @@ class ContentProcessor
 
         // Return processed Bard content with empty page_builder array
         return ['content' => $bardContent, 'page_builder' => []];
+    }
+
+    /**
+     * The number of nodes to move past after a page builder parse.
+     *
+     * @param  array<int|string, mixed>  $result  The parse result
+     * @return int The result's skip count, or 1 when it has none
+     */
+    private static function nodeStep(
+        array $result
+    ): int {
+        $skipCount = $result['skipCount'] ?? null;
+
+        return \is_int($skipCount) && $skipCount !== 0 ? $skipCount : 1;
+    }
+
+    /**
+     * Checks whether any of the nodes is a Gutenberg block comment.
+     *
+     * @param  DOMNodeList<DOMNode>  $nodes  The nodes to check
+     * @return bool True when a `wp:` block comment is among them
+     */
+    private static function hasBlockComments(
+        DOMNodeList $nodes
+    ): bool {
+        foreach ($nodes as $node) {
+            if (
+                $node instanceof DOMComment
+                && \preg_match(
+                    '/^wp:[^\s]+/',
+                    \trim($node->data)
+                ) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
