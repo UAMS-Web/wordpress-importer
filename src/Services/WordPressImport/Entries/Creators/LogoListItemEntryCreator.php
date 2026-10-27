@@ -175,7 +175,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         $skippedCount = 0;
 
         // Loop through all logo-list-item posts from the XML stream
-        foreach (ImportProgress::track($output, 'logo-list-item', $xmlStreamParser->streamItems('logo-list-item'), $xmlStreamParser->countItems('logo-list-item')) as $logoListItem) {
+        foreach (ImportProgress::track($output, 'logo-list-item', $xmlStreamParser->streamItems('logo-list-item'), static fn (): int => $xmlStreamParser->countItems('logo-list-item')) as $logoListItem) {
             // Attempt to process the logo list item
             try {
                 // Process the current logo list item and get the result

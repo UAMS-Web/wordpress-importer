@@ -321,3 +321,20 @@ XML);
 
     return $path;
 }
+
+it('reports progress through the streamed posts (#182)', function (): void {
+    // A second post, so the streamed loop has a total its progress reports
+    $export = postReimportExport();
+    $xml = (string) \file_get_contents($export);
+    $second = \str_replace(
+        ['Hello World', 'hello-world', '<wp:post_id>501</wp:post_id>'],
+        ['Hello Again', 'hello-again', '<wp:post_id>502</wp:post_id>'],
+        \substr($xml, (int) \strpos($xml, '<item>'), (int) \strpos($xml, '</item>') + \strlen('</item>') - (int) \strpos($xml, '<item>'))
+    );
+    \file_put_contents($export, \str_replace('</channel>', $second."\n</channel>", $xml));
+
+    $console = postReimportRun($export)['console'];
+
+    expect($console)->toContain('Progress: post 0 of 2 (0%)'.\PHP_EOL)
+        ->and($console)->toContain('Progress: post 2 of 2 (100%)'.\PHP_EOL);
+});

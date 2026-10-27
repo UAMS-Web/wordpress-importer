@@ -347,6 +347,44 @@ it('names the entry being processed when it logs a skipped item', function (): v
     ]);
 });
 
+it('warns once about a part that cannot be opened, from the stream and not the count (#182)', function (): void {
+    $missing = $this->streamDirectory.DIRECTORY_SEPARATOR.'missing.xml';
+    $present = xmlStreamWrite($this->streamDirectory, 'present.xml', xmlStreamItem('After the gap'));
+    $parser = new XmlStreamParser([$missing, $present]);
+    $warnings = [];
+    $internalErrors = libxml_use_internal_errors(false);
+
+    // Record warnings as the framework's handler sees them, which skips a silenced one
+    set_error_handler(
+        function (int $severity, string $message) use (&$warnings): bool {
+            if ((error_reporting() & $severity) !== 0) {
+                $warnings[] = $message;
+            }
+
+            return true;
+        },
+        E_WARNING
+    );
+
+    try {
+        $count = $parser->countItems('post');
+        $warningsFromCount = $warnings;
+        $titles = [];
+
+        foreach ($parser->streamItems('post') as $item) {
+            $titles[] = (string) $item->title;
+        }
+    } finally {
+        restore_error_handler();
+        libxml_use_internal_errors($internalErrors);
+    }
+
+    expect($count)->toBe(1)
+        ->and($warningsFromCount)->toBe([])
+        ->and($titles)->toBe(['After the gap'])
+        ->and($warnings)->toBe(['XMLReader::open(): Unable to open source data']);
+});
+
 it('counts what the filtered stream yields, without logging the items it skips', function (): void {
     // Only the stream logs the item it cannot parse, so one warning in all
     Log::shouldReceive('warning')->once();
