@@ -7,6 +7,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
@@ -91,14 +92,20 @@ function scopedPost(
  *
  * `provider` and `condition` stand in for the bulk the measured run read and did not need.
  * Every companion type is exposed, so a test asserting one is read cannot pass because the
- * fixture simply lacked it.
+ * fixture simply lacked it. Every type `--content-type` accepts is exposed too, so each can
+ * be requested (#109).
+ *
+ * @param  string  $baseBlogUrl  The site's base blog URL; a listed vanity domain reads less
+ * @param  array<string, mixed>  $overrides  Responses to replace, keyed by the same patterns
  */
-function fakeScopedSite(): void
-{
-    Http::fake([
+function fakeScopedSite(
+    string $baseBlogUrl = 'https://example.test',
+    array $overrides = []
+): void {
+    Http::fake(\array_merge([
         '*/sites' => Http::response([[
-            'id' => 1, 'title' => 'Scoped', 'link' => 'https://example.test',
-            'base_blog_url' => 'https://example.test', 'wxr_version' => '1.2',
+            'id' => 1, 'title' => 'Scoped', 'link' => $baseBlogUrl,
+            'base_blog_url' => $baseBlogUrl, 'wxr_version' => '1.2',
         ]], 200),
         '*/post-types*' => Http::response([
             ['name' => 'post', 'exposed' => true],
@@ -107,6 +114,10 @@ function fakeScopedSite(): void
             ['name' => 'provider', 'exposed' => true],
             ['name' => 'condition', 'exposed' => true],
             ['name' => 'uamspeople', 'exposed' => true],
+            ['name' => 'tshowcase', 'exposed' => true],
+            ['name' => 'logo-list-item', 'exposed' => true],
+            ['name' => 'advert', 'exposed' => true],
+            ['name' => 'redirect_rule', 'exposed' => true],
             ['name' => 'attachment', 'exposed' => true],
             ['name' => 'wp_block', 'exposed' => true],
             ['name' => 'nav_menu_item', 'exposed' => true],
@@ -133,6 +144,13 @@ function fakeScopedSite(): void
         '*/posts/provider*' => scopedPage([scopedPost(401, 'provider')]),
         '*/posts/condition*' => scopedPage([scopedPost(501, 'condition')]),
         '*/posts/uamspeople*' => scopedPage([scopedPost(551, 'uamspeople')]),
+        '*/posts/tshowcase*' => scopedPage([scopedPost(561, 'tshowcase')]),
+        '*/posts/logo-list-item*' => scopedPage([scopedPost(571, 'logo-list-item')]),
+        '*/posts/advert*' => scopedPage([scopedPost(581, 'advert')]),
+        '*/posts/redirect_rule*' => scopedPage([scopedPost(591, 'redirect_rule', [
+            '_redirect_rule_from' => ['/old/'],
+            '_redirect_rule_to' => ['/about/'],
+        ])]),
         '*/posts/attachment*' => scopedPage([
             \array_merge(scopedPost(900, 'attachment'), [
                 'attachment' => ['url' => 'https://example.test/wp-content/uploads/photo.jpg'],
@@ -141,7 +159,9 @@ function fakeScopedSite(): void
         '*/posts/wp_block*' => scopedPage([scopedPost(600, 'wp_block')]),
         '*/posts/nav_menu_item*' => scopedPage([scopedPost(700, 'nav_menu_item')]),
         '*/posts/tablepress_table*' => scopedPage([scopedPost(800, 'tablepress_table')]),
-    ]);
+        '*/redirects/redirection*' => scopedPage([]),
+        '*/redirects/pretty-links*' => scopedPage([]),
+    ], $overrides));
 }
 
 /**
@@ -229,14 +249,18 @@ it('reads every exposed type when no content type is given', function (): void {
     scopedMaterializer($this->workingDirectory)->materialize(1);
 
     expect(scopedResourcesRead('posts/'))->toBe([
+        'posts/advert',
         'posts/attachment',
         'posts/condition',
         'posts/kb',
+        'posts/logo-list-item',
         'posts/nav_menu_item',
         'posts/page',
         'posts/post',
         'posts/provider',
+        'posts/redirect_rule',
         'posts/tablepress_table',
+        'posts/tshowcase',
         'posts/uamspeople',
         'posts/wp_block',
     ])->and(scopedResourcesRead('terms/'))->toBe([
@@ -440,4 +464,79 @@ it('clears the recorded scope on a whole-site read', function (): void {
 
     expect(MaterializationScope::isScoped())->toBeFalse()
         ->and(MaterializationScope::postTypes())->toBeNull();
+});
+
+it('reads the same endpoints as before #109 for every type with a body', function (string $contentType, array $expected): void {
+    // Each of these read the shared closure before #109, and still does: the body companions,
+    // the measured link targets, the type itself, and `page` for a knowledge base. Attachments
+    // are narrowed to what the items reference, so only the post, whose featured image is
+    // attachment 900, reads them.
+    fakeScopedSite();
+
+    scopedMaterializer($this->workingDirectory)->materialize(1, null, [], $contentType);
+
+    expect(scopedResourcesRead('posts/'))->toBe($expected)
+        ->and(scopedResourcesRead('redirects/'))->toBe([]);
+})->with([
+    'page' => ['page', ['posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+    'post' => ['post', ['posts/attachment', 'posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+    'uamspeople' => ['uamspeople', ['posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+    'tshowcase' => ['tshowcase', ['posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/tshowcase', 'posts/uamspeople', 'posts/wp_block']],
+    'kb' => ['kb', ['posts/kb', 'posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+    'logo-list-item' => ['logo-list-item', ['posts/logo-list-item', 'posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+    'advert' => ['advert', ['posts/advert', 'posts/nav_menu_item', 'posts/page', 'posts/post', 'posts/tablepress_table', 'posts/uamspeople', 'posts/wp_block']],
+]);
+
+it('reads no block, menu or table for redirect rules on a site, and keeps their link targets', function (): void {
+    // A rule has no body. Its target can be a page, post or person on the same site, which
+    // is why the link targets stay: 975 of 5,378 measured rules point at one.
+    fakeScopedSite();
+
+    scopedMaterializer($this->workingDirectory)->materialize(1, null, [], 'redirect_rule');
+
+    // The rule names no attachment, so the narrowed attachment read has nothing to fetch.
+    expect(scopedResourcesRead('posts/'))->toBe([
+        'posts/page',
+        'posts/post',
+        'posts/redirect_rule',
+        'posts/uamspeople',
+    ])
+        // The redirect plugins are a vanity domain's; this site is not one.
+        ->and(scopedResourcesRead('redirects/'))->toBe([])
+        ->and(scopedManifestScope($this->workingDirectory)['link_target_post_types'] ?? null)
+        ->toBe(['page', 'post', 'uamspeople']);
+});
+
+it('reads only the rules on a vanity redirect domain, and a failing page read cannot stop it', function (): void {
+    // The #93 run: gouams.com read its rules, then stopped on a `posts/page` 500 it never
+    // needed. `posts/page` still fails here, so a run that read it would throw.
+    fakeScopedSite('https://gouams.com', [
+        '*/posts/page*' => Http::response(['code' => 'internal_server_error'], 500),
+    ]);
+
+    $paths = scopedMaterializer($this->workingDirectory)->materialize(1, null, [], 'redirect_rule');
+
+    $parser = new XmlParser;
+    $parser->setFilePaths($paths);
+    $items = $parser->getItems('redirect_rule');
+
+    expect(scopedResourcesRead('posts/'))->toBe(['posts/redirect_rule'])
+        ->and(scopedResourcesRead('redirects/'))->toBe(['redirects/pretty-links', 'redirects/redirection'])
+        ->and($items)->toHaveCount(1)
+        ->and(scopedManifestScope($this->workingDirectory)['post_types'] ?? null)->toBe(['redirect_rule'])
+        ->and(scopedManifestScope($this->workingDirectory)['link_target_post_types'] ?? null)->toBe([]);
+});
+
+it('does not let a failing endpoint outside the declaration stop a scoped run', function (): void {
+    // `provider` is exposed and served badly. A `post` run does not declare it, so it never
+    // asks; the whole-site read below is the control that the failure is real.
+    fakeScopedSite(overrides: [
+        '*/posts/provider*' => Http::response(['code' => 'internal_server_error'], 500),
+    ]);
+
+    scopedMaterializer($this->workingDirectory)->materialize(1, null, [], 'post');
+
+    expect(scopedResourcesRead('posts/'))->not->toContain('posts/provider')
+        ->and(fn () => scopedMaterializer($this->workingDirectory)->materialize(1))
+        ->toThrow(MigrationApiException::class);
 });

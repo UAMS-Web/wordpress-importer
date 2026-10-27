@@ -32,6 +32,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganiz
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationOutcome;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client as MigrationApiClient;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\StdinKeyReader;
@@ -838,8 +839,9 @@ class ImportWordPress extends Command
 
             // `--content-type` narrows the READ as well as the import (wordpress-importer-archive#1089). Without it the
             // whole site is fetched to import one type, which measured at roughly 16,000
-            // records read for 25 imported. The materializer carries the type's companions,
-            // so this narrows the fetch without dropping what the import depends on.
+            // records read for 25 imported. The materializer reads what the type declares in
+            // `ContentTypeReads` (#109), so this narrows the fetch without dropping what the
+            // import depends on.
             $scopedContentType = $this->option('content-type');
 
             $parts = $materializer->materialize(
@@ -2298,8 +2300,15 @@ class ImportWordPress extends Command
         $this->info('Stache cache cleared before navigation import.');
 
         // Handle navigation menu import after all content types are imported
-        // This ensures all entries are fully processed and cached before navigation import
-        $this->handleNavigationMenuImport();
+        // This ensures all entries are fully processed and cached before navigation import.
+        // A run whose imported types none declare the pass skips it, so a redirect run,
+        // scoped or picked interactively, neither reads the menus nor changes the site's
+        // navigation setting (#109).
+        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_NAVIGATION, $importedContentTypes)) {
+            $this->handleNavigationMenuImport();
+        } else {
+            $this->info('Skipping navigation menu import - no imported content type declares it.');
+        }
 
         // ---
         // Process final deferred operations after all content types are imported
@@ -2357,8 +2366,14 @@ class ImportWordPress extends Command
         $this->info('Laravel cache cleared.');
 
         // Sanitize Bard content (YAML separators and unquoted nbsp text) in all
-        // entries so YAML is formatted properly when the import is completed
-        $this->runBardContentSanitization();
+        // entries so YAML is formatted properly when the import is completed. The pass
+        // rewrites entries whichever run wrote them, so a run whose imported types none
+        // declare it, such as a redirect run, leaves them alone (#109).
+        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_BARD_SANITIZATION, $importedContentTypes)) {
+            $this->runBardContentSanitization();
+        } else {
+            $this->info('Skipping Bard content sanitization - no imported content type declares it.');
+        }
 
         // Rebuild search indexes once now that all content is imported. Live
         // search-index updates were disabled for the run (see handle()), so this
