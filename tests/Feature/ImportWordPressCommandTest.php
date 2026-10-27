@@ -312,18 +312,24 @@ function importCommandInteractive(TestCase $test, string $file): PendingCommand
  * @param  ?object  $assetImporter  An {@see AssetImporter} double, or null for the container's
  * @param  ?object  $treeBuilder  A {@see TreeBuilder} double, or null for the container's
  * @param  ?object  $siteManager  A {@see SiteManager} double, or null for the container's
+ * @param  ?object  $globalCreator  A {@see GlobalCreator} double, or null for the container's
+ * @param  ?object  $navigationMenuSelector  A {@see NavigationMenuSelector} double, or null for the container's
  */
 function importCommandRegisterWithDoubles(
     ?object $entryCreator = null,
     ?object $assetImporter = null,
     ?object $treeBuilder = null,
-    ?object $siteManager = null
+    ?object $siteManager = null,
+    ?object $globalCreator = null,
+    ?object $navigationMenuSelector = null
 ): void {
     // Fall back to the container's own collaborator wherever no double is supplied.
     $entryCreatorDouble = $entryCreator ?? app(EntryCreator::class);
     $assetImporterDouble = $assetImporter ?? app(AssetImporter::class);
     $treeBuilderDouble = $treeBuilder ?? app(TreeBuilder::class);
     $siteManagerDouble = $siteManager ?? app(SiteManager::class);
+    $globalCreatorDouble = $globalCreator ?? app(GlobalCreator::class);
+    $navigationMenuSelectorDouble = $navigationMenuSelector ?? app(NavigationMenuSelector::class);
 
     // Fail loudly here rather than at the constructor if a caller passes the wrong
     // double — the resulting TypeError deep in the kernel would be far harder to read.
@@ -331,6 +337,8 @@ function importCommandRegisterWithDoubles(
     Assert::assertInstanceOf(AssetImporter::class, $assetImporterDouble);
     Assert::assertInstanceOf(TreeBuilder::class, $treeBuilderDouble);
     Assert::assertInstanceOf(SiteManager::class, $siteManagerDouble);
+    Assert::assertInstanceOf(GlobalCreator::class, $globalCreatorDouble);
+    Assert::assertInstanceOf(NavigationMenuSelector::class, $navigationMenuSelectorDouble);
 
     // Every collaborator a double does not replace is the container's own, so the
     // command under test differs from production in exactly one place.
@@ -343,13 +351,13 @@ function importCommandRegisterWithDoubles(
         app(MinervaKbSettingsSelector::class),
         app(MinervaKbSettingsLoader::class),
         $entryCreatorDouble,
-        app(GlobalCreator::class),
+        $globalCreatorDouble,
         $treeBuilderDouble,
         $assetImporterDouble,
         app(KbEntryCreator::class),
         app(FormPluginCoordinator::class),
         $siteManagerDouble,
-        app(NavigationMenuSelector::class),
+        $navigationMenuSelectorDouble,
         app(NavigationMenuImporter::class),
         app(ReusableBlockCoordinator::class),
         app(CollectionStructureManager::class),
@@ -1391,6 +1399,55 @@ it('refuses --minerva-generation on a file-sourced run rather than ignoring it',
 
     $command->run();
 })->group('minerva-generation-option');
+
+// ---
+// Step 13 - the navigation and Bard passes run only for a type that declares them (#109)
+// ---
+
+it('runs the navigation pass for a scoped page run', function (): void {
+    // The control for the redirect case below: without it, a selector double that was
+    // never consulted would pass that test for a command that skipped the pass always.
+    $selector = Mockery::mock(NavigationMenuSelector::class)->shouldIgnoreMissing();
+    importCommandExpectation($selector, 'confirmActivePrimaryNavigation')->once()->andReturnFalse();
+    importCommandRegisterWithDoubles(null, null, null, null, null, $selector);
+
+    $xmlPath = $this->createTemporaryXmlFile($this->buildXmlContent([$this->getGutenbergPageItem()]));
+    importCommandTempFiles($xmlPath);
+
+    $result = importCommandRun($xmlPath, ['--content-type' => 'page']);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])
+        ->toContain('Skipping navigation menu import - no active menu in primary navigation position')
+        ->toContain('Sanitizing Bard content in entries...');
+});
+
+it('skips the navigation and Bard passes for a redirect rule run, and never consults the menus', function (): void {
+    // The export carries a page as well, so the skip is the declaration's and not the
+    // export's. The global creator is a double, so no redirects global is written.
+    $globals = Mockery::mock(GlobalCreator::class)->shouldIgnoreMissing();
+    importCommandExpectation($globals, 'createGlobals')->once();
+    $selector = Mockery::mock(NavigationMenuSelector::class)->shouldIgnoreMissing();
+    $selector->shouldNotReceive('confirmActivePrimaryNavigation');
+    $selector->shouldNotReceive('selectNavigationMenu');
+    importCommandRegisterWithDoubles(null, null, null, null, $globals, $selector);
+
+    $xmlPath = $this->createTemporaryXmlFile($this->buildXmlContent([
+        $this->getGutenbergPageItem(),
+        $this->generatePageItem(['post_id' => 124, 'title' => 'Old', 'slug' => 'old', 'post_type' => 'redirect_rule']),
+    ]));
+    importCommandTempFiles($xmlPath);
+
+    $result = importCommandRun($xmlPath, ['--content-type' => 'redirect_rule']);
+
+    expect($result['exit'])->toBe(0)
+        ->and($result['output'])
+        ->toContain("Selected content type: 'redirect_rule'")
+        ->toContain('Skipping navigation menu import - no imported content type declares it.')
+        ->toContain('Skipping Bard content sanitization - no imported content type declares it.')
+        ->not->toContain('no active menu in primary navigation position')
+        ->not->toContain('Sanitizing Bard content in entries...');
+});
 
 /**
  * An attachment `<item>` carrying a photo credit, matching `_thumbnail_id` 999.
