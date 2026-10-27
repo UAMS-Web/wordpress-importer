@@ -97,6 +97,22 @@ it('reads the IPv6 addresses out of an AAAA answer and nothing else', function (
     ],
 ]);
 
+it('reads a failed AAAA query without raising a warning', function (): void {
+    // The host app turns a warning into an exception, so iterating `false` would abort
+    // the fetch rather than refuse nothing
+    set_error_handler(static function (int $level, string $message): never {
+        throw new ErrorException($message, 0, $level);
+    });
+
+    try {
+        $addresses = outboundGuardPrivate('ipv6AddressesFrom', false);
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($addresses)->toBe([]);
+});
+
 it('answers an A lookup from the system resolver, and nothing for a failed one', function (): void {
     // localhost is answered by the hosts file, and a name over 255 characters is
     // refused before any query, so neither needs the network. The refusal raises a
