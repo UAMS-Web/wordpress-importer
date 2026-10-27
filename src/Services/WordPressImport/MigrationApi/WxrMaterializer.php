@@ -92,71 +92,6 @@ class WxrMaterializer
     private const int REPORTED_EXAMPLES = 20;
 
     /**
-     * Post types a scoped run reads in full whatever type was requested.
-     *
-     * **Scoping the read is a dependency closure, not `posts/<type>`** (wordpress-importer-archive#1089). Each of these
-     * is read out of the export by a type other than itself, and every one of those readers
-     * skips silently when its item is absent — so dropping one imports cleanly with a gap:
-     *
-     *   `attachment`        reached by id from featured images, image and file blocks, alt
-     *                       text and credits, and by URL from image `src` attributes; a
-     *                       missing one is media that silently fails
-     *   `wp_block`          pages inline reusable blocks by looking the item up
-     *   `nav_menu_item`     the navigation pass reads the menu from the export
-     *   `tablepress_table`  `importTables()` runs after every non-table content type
-     *
-     * `attachment` is narrowed to what the scoped items reference, by id and by file, and
-     * widened back to the whole collection whenever that cannot be shown to lose nothing
-     * (wordpress-importer-archive#1175). See `attachmentsByReference()`.
-     *
-     * @var list<string>
-     */
-    private const array COMPANION_POST_TYPES = [
-        'attachment',
-        'wp_block',
-        'nav_menu_item',
-        'tablepress_table',
-    ];
-
-    /**
-     * Companions a particular requested type needs beyond the shared set.
-     *
-     * `kb` resolves its knowledge-base home page from `page` items in the export.
-     *
-     * @var array<string, list<string>>
-     */
-    private const array TYPE_COMPANIONS = [
-        'kb' => ['page'],
-    ];
-
-    /**
-     * Post types a scoped run reads because internal links point at them (wordpress-importer-archive#1179).
-     *
-     * **This list is a measurement, not a code path, and that is why it is kept apart from the
-     * companions above.** `LinkProcessor` resolves a link by matching the target's URL against
-     * every item in the export, whatever its type, then finds the Statamic entry from that
-     * item's type and id. So a link whose target's type was not read stays unconverted, even
-     * when the entry already exists from an earlier run. The API cannot fill the gap on demand:
-     * `/posts/<type>` offers no lookup by slug or URL.
-     *
-     * Measured across the 259 WXR site exports, on Windows, by matching each internal `href`
-     * to an item in the same export: 905 source-to-target type pairs cross types, and **891**
-     * of them land on these three types or on types already read or deliberately skipped. The
-     * remaining 14 point at `sfwd-courses`, `kb`, `sfwd-lessons` and `tshowcase`. `provider`,
-     * the costliest type a scoped read avoids, appears as a link target nowhere.
-     *
-     * A link this list does not cover is reported through `MaterializationScope` rather than
-     * lost silently, which is also what keeps the list honest if the corpus changes.
-     *
-     * @var list<string>
-     */
-    private const array LINK_TARGET_POST_TYPES = [
-        'page',
-        'post',
-        'uamspeople',
-    ];
-
-    /**
      * Content that exists on the site but the API will not serve.
      *
      * @var list<array{kind: string, name: string, records: int}>
@@ -255,11 +190,23 @@ class WxrMaterializer
         $authors = $client->paginate('authors');
         $exposedPostTypes = $this->exposedPostTypes($client);
 
+        // A vanity redirect domain is not a Statamic site, so its redirect rules declare fewer
+        // reads than a site's do (#109).
+        $baseBlogUrl = $channel['base_blog_url'] ?? null;
+        $redirectDomain = \is_string($baseBlogUrl)
+            && RedirectRuleGlobalCreator::redirectDomainHost($baseBlogUrl) !== null;
+
         // With no content type every exposed type is read, which is the behavior a full run
-        // has always had. With one, only it and the types it depends on.
-        $postTypes = $contentType === null
-            ? $exposedPostTypes
-            : $this->scopedPostTypes($exposedPostTypes, $contentType);
+        // has always had. With one, only it and what it declares it reads besides itself.
+        $companions = null;
+        $linkTargets = null;
+        $postTypes = $exposedPostTypes;
+
+        if ($contentType !== null) {
+            $companions = ContentTypeReads::companions($contentType, $redirectDomain);
+            $linkTargets = ContentTypeReads::linkTargets($contentType, $redirectDomain);
+            $postTypes = $this->scopedPostTypes($exposedPostTypes, $contentType, $companions, $linkTargets);
+        }
 
         $terms = $this->termsByTaxonomy($client, $contentType === null ? null : $postTypes);
 
@@ -289,7 +236,6 @@ class WxrMaterializer
                 \in_array('attachment', $postTypes, true) ? ['attachment'] : []
             );
 
-            $baseBlogUrl = $channel['base_blog_url'] ?? null;
             $collector = new AttachmentReferenceCollector(\is_string($baseBlogUrl) ? $baseBlogUrl : '');
 
             // The items whose attachments get imported: the requested type and the companions
@@ -297,8 +243,7 @@ class WxrMaterializer
             // imported, so its media is not needed.
             $scannedTypes = \array_merge(
                 [$contentType],
-                \array_diff(self::COMPANION_POST_TYPES, ['attachment']),
-                self::TYPE_COMPANIONS[$contentType] ?? []
+                \array_diff($companions, ['attachment'])
             );
         }
 
@@ -412,7 +357,8 @@ class WxrMaterializer
             $paths,
             $itemsWritten,
             $contentType,
-            $contentType === null ? null : $postTypes
+            $contentType === null ? null : $postTypes,
+            $linkTargets
         );
 
         // Tell the readers that look items up in this export what it covers, so a miss caused
@@ -426,25 +372,28 @@ class WxrMaterializer
     /**
      * The post types a run scoped to one content type reads.
      *
-     * The requested type, then the shared companions, then the measured link targets, then any
-     * companion that type needs of its own — each kept only where the API exposes it, in the
-     * order the API lists them.
+     * The requested type, then the companions and link targets it declares in
+     * `ContentTypeReads`, each kept only where the API exposes it, in the order the API lists
+     * them.
      * Requesting an unexposed type 404s on every page, so a companion the site does not serve
      * is simply not read, exactly as a full run would not read it.
      *
      * @param  list<string>  $exposed  Every post type the API exposes
      * @param  string  $contentType  The requested content type
+     * @param  list<string>  $companions  The companion post types the type declares
+     * @param  list<string>  $linkTargets  The link-target post types the type declares
      * @return list<string> The post types to read
      */
     private function scopedPostTypes(
         array $exposed,
-        string $contentType
+        string $contentType,
+        array $companions,
+        array $linkTargets
     ): array {
         $wanted = \array_merge(
             [$contentType],
-            self::COMPANION_POST_TYPES,
-            self::LINK_TARGET_POST_TYPES,
-            self::TYPE_COMPANIONS[$contentType] ?? []
+            $companions,
+            $linkTargets
         );
 
         return \array_values(\array_filter(
@@ -491,6 +440,8 @@ class WxrMaterializer
      * @param  string|null  $contentType  The content type this run was scoped to, if any
      * @param  list<string>|null  $postTypes  The post types a scoped run read, or null when
      *                                        the run was not scoped or has not resolved them yet
+     * @param  list<string>|null  $linkTargets  The link targets a scoped run declared, or null
+     *                                          when the run was not scoped or has not resolved them yet
      *
      * @throws MigrationApiException When the manifest cannot be written
      */
@@ -502,7 +453,8 @@ class WxrMaterializer
         array $paths,
         int $items,
         ?string $contentType = null,
-        ?array $postTypes = null
+        ?array $postTypes = null,
+        ?array $linkTargets = null
     ): void {
         $written = \array_map(
             \basename(...),
@@ -531,8 +483,9 @@ class WxrMaterializer
                 'post_types' => $postTypes,
                 // The link targets are a corpus measurement rather than a code dependency, so
                 // they are named separately: a reader can then see which part of the closure
-                // could go stale if the content changes (wordpress-importer-archive#1179).
-                'link_target_post_types' => $contentType === null ? null : self::LINK_TARGET_POST_TYPES,
+                // could go stale if the content changes (wordpress-importer-archive#1179). Each type
+                // declares its own in `ContentTypeReads` (#109).
+                'link_target_post_types' => $linkTargets,
                 // Whether a scoped run's attachments are the ones its items reference or the
                 // whole site's, and why (wordpress-importer-archive#1175). Null for an unscoped run, which reads them all.
                 'attachments' => $this->attachmentResolution,
