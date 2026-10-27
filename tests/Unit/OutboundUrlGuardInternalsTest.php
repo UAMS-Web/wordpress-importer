@@ -110,6 +110,10 @@ it('answers an A lookup from the system resolver, and nothing for a failed one',
         restore_error_handler();
     }
 
-    expect(outboundGuardPrivate('lookUpRecords', 'localhost', DNS_A))->toBe(['127.0.0.1'])
+    // A hosts file may list localhost more than once (Ubuntu's does), so the
+    // distinct addresses are compared rather than the raw list
+    $resolved = outboundGuardPrivate('lookUpRecords', 'localhost', DNS_A);
+
+    expect(is_array($resolved) ? array_values(array_unique(array_map(static fn (mixed $ip): string => is_string($ip) ? $ip : '', $resolved))) : $resolved)->toBe(['127.0.0.1'])
         ->and($refused)->toBe([]);
 });
