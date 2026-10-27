@@ -11,6 +11,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningMa
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -27,6 +28,41 @@ uses(StatamicTestCase::class);
  *
  * @command  php vendor/bin/pest tests/Integration/ShortcodeBlockProcessorTest.php
  */
+/**
+ * A shortcode processor that counts its toTiptapHtml() calls by shortcode name.
+ */
+class ShortcodeBlockCountingShortcodeProcessor extends ShortcodeProcessor
+{
+    /**
+     * The number of toTiptapHtml() calls for each shortcode name.
+     *
+     * @var array<string, int>
+     */
+    public array $renders = [];
+
+    /**
+     * Count the call and render as the real processor does.
+     *
+     * @param  array<int|string, mixed>  $shortcode
+     * @param  array<int|string, mixed>  $attachments
+     * @param  array<int|string, mixed>  $terms
+     */
+    public function toTiptapHtml(
+        array $shortcode,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments = [],
+        array $terms = [],
+        ?string $pageSlug = null
+    ): string {
+        $name = \is_string($shortcode['name'] ?? null) ? $shortcode['name'] : '';
+        $this->renders[$name] = ($this->renders[$name] ?? 0) + 1;
+
+        return parent::toTiptapHtml($shortcode, $site, $assetImporter, $output, $attachments, $terms, $pageSlug);
+    }
+}
+
 beforeEach(function (): void {
     // Real ShortcodeBlockProcessor under test
     $this->processor = new ShortcodeBlockProcessor;
@@ -782,3 +818,21 @@ it('process keeps the rendered shortcodes and warns about one that renders nothi
             'shortcode_original' => '[caption id="attachment_2"]No image[/caption]',
         ]);
 });
+
+it('process renders a lone shortcode once, with or without a page builder block', function (string $inner, string $name): void {
+    // A lone shortcode is rendered either by the single-shortcode branch or by the
+    // loop, never by both, so its side effects (an audio import, a log line) run once
+    $counting = new ShortcodeBlockCountingShortcodeProcessor;
+    $processor = new ShortcodeBlockProcessor($counting);
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<!-- wp:shortcode --><div>'.$inner.'</div><!-- /wp:shortcode -->');
+
+    $processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($counting->renders)->toBe([$name => 1]);
+})->with([
+    'audio, no page builder block' => ['[audio mp3="https://example.com/a.mp3"]', 'audio'],
+    'accordion, no page builder block' => ['[accordion][section title="A"]x[/section][/accordion]', 'accordion'],
+    'table, a page builder block' => ['[table id=1 /]', 'table'],
+    'caption, html alone' => ['[caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption]', 'caption'],
+]);

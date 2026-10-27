@@ -480,10 +480,10 @@ class ShortcodeProcessor
         if ($outputType === 'page_builder') {
             // ---
             // For 'page_builder', delegate to the handler's toPageBuilderBlock() method.
-            // Handlers without a page builder block (audio, accordion, caption) return
-            // null, and the caller falls back to their Tiptap HTML: a caption lands as
-            // the same image set the Bard route makes, inside a content block, since
-            // the host app defines no caption block (#119).
+            // Handlers without a page builder block (audio, accordion, caption,
+            // ninja_form) return null, and the caller falls back to their Tiptap HTML:
+            // a caption lands as the same image set the Bard route makes, inside a
+            // content block, since the host app defines no caption block (#119).
             // ---
             $handler = $this->instantiateHandler($name);
             if (! \method_exists($handler, 'toPageBuilderBlock')) {

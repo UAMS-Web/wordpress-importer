@@ -226,8 +226,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
 
         // ---
         // When the block holds exactly one registered shortcode, try process(...,
-        // 'page_builder') and return its html, with the page builder set when the
-        // handler builds one
+        // 'page_builder'), and return the html with the page builder set when the
+        // handler builds one, or the html alone for a caption
         // ---
 
         // Check if block contains exactly one shortcode
@@ -270,33 +270,36 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 $hasPageBuilderSet = isset($pageBuilderBlock['type']);
 
                 // ---
-                // Generate Tiptap HTML so the Bard path (TextProcessor) can add this as
-                // content. Callers that need page_builder (e.g., NonAcfBlockParser) use
-                // page_builder_set when there is one, and the html otherwise.
-                // ---
-                $tiptapHtmlForBard = $this->shortcodeProcessor->toTiptapHtml(
-                    $single,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $attachments,
-                    $terms,
-                    $pageSlug
-                );
-
-                // ---
                 // Return the html with a skip count over the whole block, so the
-                // caller does not read the block's inner nodes a second time. A
-                // caption builds no page builder block (#119) but keeps the shape it
-                // had when it did, so the Bard route still adds its image once. The
-                // name and the list are strings, so in_array()'s strict flag, which
-                // phpstan-strict-rules requires, changes no result.
+                // caller does not read the block's inner nodes a second time, when
+                // the handler builds a page builder set, or for a caption, which
+                // builds none (#119) but keeps the shape it had when it did, so the
+                // Bard route still adds its image once. Any other shortcode falls to
+                // the loop below, which renders it itself. The name and the list are
+                // strings, so in_array()'s strict flag, which phpstan-strict-rules
+                // requires, changes no result.
                 // ---
                 // @pest-mutate-ignore: TrueToFalse
                 if (
                     $hasPageBuilderSet
                     || \in_array($name, self::HTML_ONLY_SHORTCODES, true)
                 ) {
+                    // ---
+                    // Generate Tiptap HTML so the Bard path (TextProcessor) can add
+                    // this as content. Callers that need page_builder (e.g.,
+                    // NonAcfBlockParser) use page_builder_set when there is one, and
+                    // the html otherwise.
+                    // ---
+                    $tiptapHtmlForBard = $this->shortcodeProcessor->toTiptapHtml(
+                        $single,
+                        $site,
+                        $assetImporter,
+                        $output,
+                        $attachments,
+                        $terms,
+                        $pageSlug
+                    );
+
                     $result = [
                         'html' => $tiptapHtmlForBard,
                         'skipCount' => self::blockSkipCount($node),
