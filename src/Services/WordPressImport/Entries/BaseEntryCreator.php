@@ -21,6 +21,7 @@ use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Facades\Term as TermFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Statamic\Support\Str;
+use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
@@ -1312,6 +1313,12 @@ abstract class BaseEntryCreator
 
                     break;
                 }
+            }
+
+            // The preload yields localized terms (Statamic 6's term query returns
+            // LocalizedTerm); work on the term each one localizes (#188)
+            if ($existingTerm instanceof LocalizedTerm) {
+                $existingTerm = $existingTerm->term();
             }
 
             if ($existingTerm !== null) {
