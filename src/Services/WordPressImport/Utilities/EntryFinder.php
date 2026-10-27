@@ -82,7 +82,10 @@ class EntryFinder
         );
         $result = $query->first();
 
-        // Return the resolved entry only when query returns an Entry instance
+        // Return the resolved entry only when query returns an Entry instance. An
+        // entry query's first() returns an Entry or null, and null passes through
+        // either branch, so the check only narrows the type.
+        // @pest-mutate-ignore: InstanceOfToTrue
         return $result instanceof Entry ? $result : null;
     }
 
@@ -147,7 +150,10 @@ class EntryFinder
         );
         $result = $query->first();
 
-        // Return the resolved entry only when query returns an Entry instance
+        // Return the resolved entry only when query returns an Entry instance. An
+        // entry query's first() returns an Entry or null, and null passes through
+        // either branch, so the check only narrows the type.
+        // @pest-mutate-ignore: InstanceOfToTrue
         return $result instanceof Entry ? $result : null;
     }
 
@@ -196,8 +202,10 @@ class EntryFinder
         // Get all entries and search for the one with matching WordPress ID
         $entries = $query->get();
 
-        // Return null when query result is not iterable
+        // Return null when query result is not iterable. An entry query's get()
+        // returns a collection, so no test reaches this return.
         if (! \is_iterable($entries)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -207,8 +215,11 @@ class EntryFinder
         // Find entry with matching WordPress ID in the entry ID
         // Entry IDs are formatted as: {slug}-{wordpress_id}-{randomString}
         foreach ($entries as $entry) {
-            // Skip items that are not valid Entry instances
+            // Skip items that are not valid Entry instances. The query yields only
+            // entries, so the check narrows the type and the skip is never taken.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $entry instanceof Entry) {
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -220,11 +231,15 @@ class EntryFinder
                 // Extract entry identifier for Stache invalidation
                 $entryIdentifier = $entry->id();
 
-                // Skip cache invalidation when identifiers are not strings
+                // Skip cache invalidation when identifiers are not strings. A queried
+                // entry always has a string collection handle and id, so neither half
+                // is ever true and the skip is never taken.
+                // @pest-mutate-ignore: BooleanOrToBooleanAnd
                 if (
                     ! \is_string($entryCollectionHandle)
                     || ! \is_string($entryIdentifier)
                 ) {
+                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -237,8 +252,9 @@ class EntryFinder
             // Extract WordPress ID from entry ID for pattern matching
             $entryId = $entry->id();
 
-            // Skip entries with non-string IDs
+            // Skip entries with non-string IDs; a queried entry's id is always a string
             if (! \is_string($entryId)) {
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -270,15 +286,20 @@ class EntryFinder
         // Resolve the top-level Stache entries store
         $entriesStore = StacheFacade::store('entries');
 
-        // Stop when the entries store object is unavailable
+        // Stop when the entries store object is unavailable. Statamic always
+        // registers the entries store as an aggregate store, so neither half is true.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd
         if (! \is_object($entriesStore) || ! \method_exists($entriesStore, 'store')) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return;
         }
 
         // Resolve the scoped store for the collection handle
         $collectionStore = $entriesStore->store($collectionHandle);
 
-        // Stop when the collection store does not support entry invalidation
+        // Stop when the collection store does not support entry invalidation. The
+        // aggregate store always returns a child store with forgetItem().
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd
         if (! \is_object($collectionStore) || ! \method_exists($collectionStore, 'forgetItem')) {
             return;
         }
