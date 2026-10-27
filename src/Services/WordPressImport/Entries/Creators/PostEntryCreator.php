@@ -22,6 +22,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ExcerptResolver
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FeaturedImageCreditResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
@@ -318,7 +319,7 @@ class PostEntryCreator extends BaseEntryCreator
         // Loop through all post items to process each post entry
         $audioSeriesConfig = null;
 
-        foreach ($xmlStreamParser->streamItems('post') as $post) {
+        foreach (ImportProgress::track($output, 'post', $xmlStreamParser->streamItems('post'), $xmlStreamParser->countItems('post')) as $post) {
             // Decode HTML entities and strip HTML tags from the post title
             $title = HtmlTagStripper::strip(
                 html_entity_decode(

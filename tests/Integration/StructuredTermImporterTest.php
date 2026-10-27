@@ -461,6 +461,34 @@ it('claims each destination and site pair it writes into', function (): void {
     ]);
 });
 
+it('reports progress as it saves the terms (#103)', function (): void {
+    structuredTermCollectionExists();
+
+    $output = new BufferedOutput;
+
+    (new StructuredTermImporterProbe)->import(
+        [
+            structuredTerm('10', 'health', 'Health'),
+            structuredTerm('20', 'cardiology', 'Cardiology', parentSlug: 'health'),
+        ],
+        'category',
+        'post_categories',
+        'default',
+        $output
+    );
+
+    $lines = \array_values(\array_filter(
+        \explode(\PHP_EOL, $output->fetch()),
+        static fn (string $line): bool => \str_starts_with($line, 'Progress: ')
+    ));
+
+    expect($lines)->toBe([
+        'Progress: post_categories terms saved 0 of 2 (0%)',
+        'Progress: post_categories terms saved 1 of 2 (50%)',
+        'Progress: post_categories terms saved 2 of 2 (100%)',
+    ]);
+});
+
 it('does not claim a site when the destination collection is missing', function (): void {
     CollectionFacade::shouldReceive('findByHandle')->andReturn(null);
 

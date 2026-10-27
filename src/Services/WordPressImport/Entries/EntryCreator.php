@@ -28,6 +28,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -650,7 +651,7 @@ class EntryCreator
             }
 
             // Process each table individually
-            foreach ($tablesToProcess as $table) {
+            foreach (ImportProgress::track($output, 'tablepress_table', $tablesToProcess) as $table) {
                 // Extract the WordPress post ID from the table item
                 $postId = XpathHelper::getStringValue(
                     $table,
