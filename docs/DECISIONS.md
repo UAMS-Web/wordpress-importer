@@ -1441,6 +1441,16 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **Rejected: hold the bare form at `main`'s behavior and decide accordions on a ticket of their own.** It keeps #118 small, but it leaves the bare form as raw shortcode text and the attributed form as an undisplayed set, both of them wrong today.
 
+## A page builder `[caption]` imports as an image set inside a content block (#119)
+
+**Decided 2026-10-27, on #119.** The importer builds no caption page builder block. `ShortcodeProcessor::process(..., 'page_builder')` returns none for a caption, as for accordion and audio, so a `wp:shortcode` block holding one `[caption]` gives its Tiptap HTML, the same `image` set the Bard route makes, and on a page builder page that set lands inside a `uamsweb_block_content` set.
+
+**Why.** The host app defines no `uamsweb_block_caption` set, so the block the importer built for this path could not render, and it was also built without the caption's content. The content block's body already accepts the `image` set.
+
+**Rejected: build the caption block with its content.** It would still not render.
+
+**Rejected: build it and define `uamsweb_block_caption` in the host app.** It renders only after a host change, and a page builder caption would then differ from the same caption in Bard content.
+
 ## `main` requires `CI`, `Attribution footer` and `Closing keywords` (#163)
 
 **Decided 2026-10-27, on #163, by the project owner.** A ruleset that reaches this repository alone requires three status check contexts on `main`: `CI`, `Attribution footer` and `Closing keywords`. These are the three that the shared `required-checks-ruleset.json` template in the `code-quality` skill requires, and that the Statamic add-ons and `UAMS-Web/uamswp-migration-api` already require. The ruleset carries only the `required_status_checks` rule and layers on the two organization rulesets, `main: no deletion or force push` and `main: pull request required`. The builder applies it with `apply-required-checks-ruleset.mjs` once the workflows are on `main`, so no open pull request waits on a check its branch cannot report.

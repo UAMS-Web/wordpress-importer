@@ -7,7 +7,6 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processor
 use DOMElement;
 use DOMNode;
 use Illuminate\Support\Facades\Log;
-use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
@@ -359,48 +358,6 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             $setType,
             '' // Empty content to prevent duplicate caption text
         );
-    }
-
-    /**
-     * Build a page builder block for a caption shortcode.
-     *
-     * @param  array<int|string, mixed>  $attributes  Shortcode attributes
-     * @param  string  $site  The Statamic site handle
-     * @param  AssetImporter  $assetImporter  Instance for importing images
-     * @param  OutputInterface  $output  Console output for logging
-     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML (unused)
-     * @param  ?string  $content  The shortcode content (e.g., '<img ...> Caption text')
-     * @param  ?string  $pageSlug  The page slug for logging
-     * @return array<int|string, mixed> The page builder block structure
-     */
-    public function toPageBuilderBlock(
-        array $attributes,
-        string $site,
-        AssetImporter $assetImporter,
-        OutputInterface $output,
-        array $terms = [],
-        ?string $content = null,
-        ?string $pageSlug = null
-    ): array {
-        $set = $this->parse(
-            $attributes,
-            $site,
-            $assetImporter,
-            $output,
-            $terms,
-            $pageSlug
-        );
-
-        // Extract values from parsed set for page builder mapping
-        $values = $this->extractSetValues($set);
-
-        return [
-            'id' => (new RowId)->generate(),
-            'type' => 'uamsweb_block_caption',
-            'enabled' => true,
-            'caption' => $values['caption'] ?? null,
-            'align' => $values['align'] ?? null,
-        ];
     }
 
     /**
