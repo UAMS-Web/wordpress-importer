@@ -18,6 +18,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\Creators\Redirect
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
@@ -219,7 +220,7 @@ it('writes one entry per published rule, carrying the vanity domain as its host'
             ->and($entry->locale())->toBe('default');
     }
 
-    expect($output)->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped.')
+    expect($output)->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.')
         ->toContain('1 rule(s) for uams.info use a response code');
 });
 
@@ -280,7 +281,7 @@ it('does not duplicate entries when the import runs again', function (): void {
 
     expect(\array_map(redirectDomainId(...), $second))->toBe($first)
         ->and($second['/give']->get('target_url'))->toBe('https://securelb.imodules.com/s/give-again')
-        ->and($output)->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped.');
+        ->and($output)->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.');
 });
 
 it('disables an entry whose rule was unpublished or deleted since the last run', function (): void {
@@ -306,12 +307,12 @@ it('disables an entry whose rule was unpublished or deleted since the last run',
         ->and($entries['^/covid(.*)$']->get('enabled'))->toBeTrue()
         ->and($entries['/clinic']->get('enabled'))->toBeTrue()
         ->and($entries['/gone']->get('enabled'))->toBeTrue()
-        ->and($output)->toContain('Redirect domain uams.info: 0 created, 3 updated, 2 disabled, 2 unpublished skipped.');
+        ->and($output)->toContain('Redirect domain uams.info: 0 created, 3 updated, 2 disabled, 2 unpublished skipped, 0 shadowed.');
 
     // A third run with the same source disables nothing more, because both are already off
     $again = redirectDomainRun(redirectDomainParser('https://uams.info', $rules));
 
-    expect($again)->toContain('0 created, 3 updated, 0 disabled, 2 unpublished skipped.');
+    expect($again)->toContain('0 created, 3 updated, 0 disabled, 2 unpublished skipped, 0 shadowed.');
 });
 
 it('re-enables an entry whose rule is published again', function (): void {
@@ -441,12 +442,38 @@ it('reports progress through the rules and the stale-entry pass, leaving the sum
     // Six rules, the draft among them, so the count reaches six
     expect($output)->toContain("Progress: redirect_rule (uams.info) 0 of 6 (0%)\n")
         ->toContain("Progress: redirect_rule (uams.info) 6 of 6 (100%)\n")
-        ->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped.');
+        ->toContain('Redirect domain uams.info: 5 created, 0 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.');
 
     // The second run passes over the five entries the first one wrote
     $again = \str_replace(\PHP_EOL, "\n", redirectDomainRun(redirectDomainParser('https://uams.info', redirectDomainRules())));
 
     expect($again)->toContain("Progress: stale redirect_rule entries (uams.info) 5 of 5 (100%)\n")
-        ->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped.')
+        ->toContain('Redirect domain uams.info: 0 created, 5 updated, 0 disabled, 1 unpublished skipped, 0 shadowed.')
         ->toMatch('/Progress: redirect_rule \(uams\.info\) 6 of 6 \(100%\)\n.*Redirect domain uams\.info:/s');
+});
+
+it('keeps the Safe Redirect Manager rule tried first when two share a source (#108)', function (): void {
+    ImportWarningManager::clearWarnings();
+
+    $parser = redirectDomainParser('https://uams.info', [
+        ['id' => 31, 'from' => '/give', 'to' => 'https://uams.edu/later/', 'order' => 5],
+        ['id' => 32, 'from' => '/give', 'to' => 'https://uams.edu/first/', 'order' => 2],
+        ['id' => 10, 'from' => '/tie', 'to' => 'https://uams.edu/higher-id/', 'order' => 3],
+        ['id' => 9, 'from' => '/tie', 'to' => 'https://uams.edu/lower-id/', 'order' => 3],
+    ]);
+
+    // Safe Redirect Manager orders its rules by `menu_order ID`, ascending
+    $output = redirectDomainRun($parser);
+    $entries = redirectDomainEntries();
+
+    expect($entries)->toHaveCount(2)
+        ->and($entries['/give']->get('wordpress_post_id'))->toBe('32')
+        ->and($entries['/tie']->get('wordpress_post_id'))->toBe('9')
+        ->and($output)->toContain('Redirect domain uams.info: 2 created, 0 updated, 0 disabled, 0 unpublished skipped, 2 shadowed.')
+        ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([
+            ['host' => 'uams.info', 'source' => '/give', 'served' => '32', 'shadowed' => '31'],
+            ['host' => 'uams.info', 'source' => '/tie', 'served' => '9', 'shadowed' => '10'],
+        ]);
+
+    ImportWarningManager::clearWarnings();
 });
