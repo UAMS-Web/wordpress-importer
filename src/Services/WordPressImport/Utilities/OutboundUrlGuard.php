@@ -437,10 +437,9 @@ class OutboundUrlGuard
      */
     private static function ipv6AddressesFrom(mixed $records): array
     {
-        // Iterating a non-array yields no record, so this return only spares the
-        // warning foreach would raise
+        // A failed query answers false, and iterating it raises a warning, which the
+        // host app turns into an exception
         if (! \is_array($records)) {
-            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
