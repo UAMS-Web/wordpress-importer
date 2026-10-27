@@ -22,8 +22,11 @@ class KeyTracker
     // A property initializer is never reported as an executed line, so Pest runs no
     // test against a mutant here. Removing an entry that does not start with `_` by
     // hand fails its row of KeyTrackerAddressedKeysTest, which lists every such entry
-    // in tests/Fixtures/key-tracker/; one that starts with `_` changes nothing, since
-    // trackKeys() leaves every underscore key out of the report.
+    // in tests/Fixtures/key-tracker/, except the uamswp_modules_N_geo_valid entries,
+    // which trackKeys() re-adds from the module-key pattern whenever they appear. One
+    // that starts with `_` changes no report, since trackKeys() leaves every underscore
+    // key out of it; getIgnoredMetaKeys() would list one fewer, and nothing in this
+    // package or the host app reads it.
     // @pest-mutate-ignore: RemoveArrayItem
     protected $ignoredMetaKeys = [
         '__thumbnail_id',
@@ -537,7 +540,8 @@ class KeyTracker
      */
     // Annotated for the same reason as $ignoredMetaKeys, against the same test.
     // trackKeys() collects only unprefixed and `wp:` children, so removing the
-    // content:, dc: or excerpt: entry changes nothing.
+    // content:, dc: or excerpt: entry changes nothing for an export that declares its
+    // namespace prefixes, as WXR does.
     // @pest-mutate-ignore: RemoveArrayItem
     protected $topLevelXmlKeys = [
         'category',

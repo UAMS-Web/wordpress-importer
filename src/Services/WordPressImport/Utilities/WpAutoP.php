@@ -306,11 +306,11 @@ class WpAutoP
 
         // Handle line breaks if enabled
         if ($br) {
-            // The wpnl pass above has already replaced every newline inside these
-            // elements, so this pass and its restore below find none; they are kept
-            // to match WordPress's wpautop(). A fuzz of 40,000 inputs found no output
-            // change with either removed.
-            // @pest-mutate-ignore: UnwrapStrReplace
+            // The wpnl pass above normally leaves no newline inside these elements,
+            // so this pass usually finds none. It does find them when that pass hit
+            // the PCRE backtrack limit on a large element and left the text unchanged
+            // while the clean-up since has shrunk it under the limit; its restore then
+            // writes `<br />` inside the element, unlike wpautop()'s plain newline (#146).
             $text = self::pregReplaceCallback(
                 '#<(script|style|svg|math)([^>]*)>(.*?)</\1>#si',
                 fn ($matches): string => \str_replace(
@@ -331,7 +331,6 @@ class WpAutoP
                 "<br />\n",
                 $text
             );
-            // @pest-mutate-ignore: UnwrapStrReplace
             $text = \str_replace(
                 '<WPPreserveNewline />',
                 "<br />\n",

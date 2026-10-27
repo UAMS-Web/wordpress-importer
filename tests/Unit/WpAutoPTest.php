@@ -8,10 +8,11 @@ declare(strict_types=1);
  * protection, block-level tags, and the clean-up passes that remove stray `<p>` and
  * `<br />` around blocks.
  *
- * The expected strings are what the class returns today, each read for sense before
- * it was pinned; they were not run against WordPress's own `wpautop()`. Two rows pin
- * a known divergence from WordPress as characterization: a bare block tag directly
- * after text stays inside an open paragraph (#145).
+ * The expected strings are what the class returns today, pinned as characterization.
+ * Compared with WordPress 7.1.2's `wpautop()`, most rows agree; those that do not are
+ * named in #145 (a bare block tag after text stays inside an open paragraph) and #146
+ * (a single block returned early, an image split out of its paragraph, list and table
+ * newlines, and the spaces around a script newline).
  *
  * @command  php vendor/bin/pest tests/Unit/WpAutoPTest.php
  */
@@ -25,7 +26,7 @@ it('returns nothing for blank text', function (string $text): void {
     'whitespace only' => ["  \n\t "],
 ]);
 
-it('wraps text in paragraphs and breaks as WordPress does', function (string $text, bool $br, string $html): void {
+it('wraps text in paragraphs and breaks as the port does today', function (string $text, bool $br, string $html): void {
     expect((new WpAutoP)->process($text, $br))->toBe($html);
 })->with([
     'one line' => ['Hello', true, "<p>Hello</p>\n"],
@@ -61,7 +62,7 @@ it('turns single line breaks into br tags by default', function (): void {
     expect((new WpAutoP)->process("One\nTwo"))->toBe("<p>One<br />\nTwo</p>\n");
 });
 
-it('handles the edge cases its clean-up passes exist for', function (string $text, string $html): void {
+it('handles the edge cases its clean-up passes exist for, as the port does today', function (string $text, string $html): void {
     expect((new WpAutoP)->process($text))->toBe($html);
 })->with([
     'a single CRLF' => ["One\r\nTwo", "<p>One<br />\nTwo</p>\n"],
@@ -72,6 +73,23 @@ it('handles the edge cases its clean-up passes exist for', function (string $tex
     'a leading newline' => ["\nOne\n\nTwo", "<p>One</p>\n<p>Two</p>\n"],
     'an empty paragraph' => ["One\n\n<p> </p>\n\nTwo", "<p>One</p>\n<p>Two</p>\n"],
 ]);
+
+it('protects a large element whose first protection pass fails, the second way', function (): void {
+    // Characterization (#146): the first pass gives up on this element at the backtrack
+    // limit, the clean-up shrinks the text, and the second pass then protects it
+    $limit = ini_get('pcre.backtrack_limit');
+    ini_set('pcre.backtrack_limit', '1000000');
+
+    try {
+        $unit = "a  \nb".str_repeat("\n ", 20)."\n";
+        $html = (new WpAutoP)->process("Intro\n\n<svg>".str_repeat($unit, 28000)."</svg>\n\nOutro");
+    } finally {
+        ini_set('pcre.backtrack_limit', $limit === false ? '1000000' : $limit);
+    }
+
+    expect($html)->toContain("<svg>a  <br />\nb")
+        ->and($html)->not->toContain('<WPPreserveNewline');
+});
 
 it('leaves a bare block tag after text inside the paragraph', function (string $text, bool $br, string $html): void {
     // Characterization: the opening-tag pattern needs a character before `>`, so a
