@@ -442,6 +442,18 @@ it('converts nothing for an attachment with no file URL', function (): void {
         ->and(LinkProcessor::getDeferredInternalLinks())->toBe([]);
 });
 
+it('converts nothing for an attachment whose item the lookup by ID and type misses', function (): void {
+    // The link match reads the ID's whole value, a newline and 30, while the
+    // lookup compares single text nodes, so it finds no item
+    ProcessingContext::setXmlPath(internalExport(
+        $this,
+        "<item><link>http://93.184.216.34/site/brochure/</link><wp:post_id>\n<![CDATA[30]]></wp:post_id><wp:post_name>brochure</wp:post_name>"
+        .'<wp:post_type>attachment</wp:post_type><wp:attachment_url>http://93.184.216.34/site/wp-content/uploads/brochure.pdf</wp:attachment_url></item>'
+    ));
+
+    expect(internalConvert('http://93.184.216.34/site/brochure/')['result'])->toBeNull();
+});
+
 it('converts nothing, saying why, when converting throws', function (): void {
     ProcessingContext::setXmlPath(internalExport($this, internalItem('30', 'brochure', 'http://93.184.216.34/site/brochure/', 'attachment', '<wp:attachment_url>http://93.184.216.34/site/wp-content/uploads/brochure.pdf</wp:attachment_url>')));
     $errors = internalLogged('error');
@@ -498,6 +510,19 @@ it('looks a post with no slug up by its WordPress ID, not by an empty slug', fun
     internalEntry('pages', 'draft', 'draft-12-abc');
 
     expect(internalConvert('http://93.184.216.34/site/?page_id=12')['result'])->toBe('statamic://entry::draft-12-abc?page_id=12');
+});
+
+it('looks a redirected post with no slug up by its WordPress ID, not by an empty slug', function (): void {
+    ProcessingContext::setXmlPath(internalExport($this, '<item><wp:post_id>12</wp:post_id><wp:post_name></wp:post_name><wp:post_type>page</wp:post_type></item>'));
+    LinkProcessor::registerUrlMapping('http://93.184.216.34/site/?page_id=12', '12');
+    internalEntry('pages', '', 'blank-99-abc');
+    internalEntry('pages', 'draft', 'draft-12-abc');
+    Http::fake([
+        'http://93.184.216.34/site/old/' => Http::response('', 301, ['Location' => 'http://93.184.216.34/site/?page_id=12']),
+        '*' => Http::response(''),
+    ]);
+
+    expect(internalConvert('http://93.184.216.34/site/old/')['result'])->toBe('statamic://entry::draft-12-abc');
 });
 
 it('keeps and reports a link it cannot resolve', function (?string $redirect): void {

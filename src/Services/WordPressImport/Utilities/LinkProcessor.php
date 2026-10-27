@@ -1092,11 +1092,9 @@ class LinkProcessor
                 'attachment'
             );
 
-            // Extract the attachment URL from the XML item. Every route to the
-            // post reads these parts with this query less the type, and the type
-            // read was attachment, so the item is always found; the check only
-            // narrows its type.
-            // @pest-mutate-ignore: InstanceOfToTrue, EmptyStringToNotEmpty
+            // Extract the attachment URL from the XML item (the item can be
+            // missing: an exact link match reads the post ID's whole value, and
+            // this query compares single text nodes)
             $attachmentUrl = $attachmentItem instanceof SimpleXMLElement
                 ? XpathHelper::getStringValue(
                     $attachmentItem,
@@ -1195,11 +1193,9 @@ class LinkProcessor
     /**
      * Extracts the page slug from a WordPress URL.
      *
-     * Removes the base blog URL and any query parameters to extract the clean
-     * page slug. For hierarchical URLs, tries both the full path and the final
-     * slug segment since Statamic entries can be stored with either format.
-     * Handles various URL formats including trailing slashes, query parameters,
-     * and URL encoding.
+     * Removes the base blog URL, the query and fragment, and any trailing slashes,
+     * and returns the last path segment as written, percent-encoding included.
+     * Its only caller checks the slug for a dot, to tell a file from a page.
      *
      * @param  string  $wordPressUrl  The WordPress page URL
      * @param  string  $wordPressBaseBlogUrl  The base WordPress blog URL
