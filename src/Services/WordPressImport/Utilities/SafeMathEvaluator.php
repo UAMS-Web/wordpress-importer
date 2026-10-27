@@ -38,6 +38,11 @@ class SafeMathEvaluator
      * because every nesting level costs at least one character, it also bounds
      * recursion depth.
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Changing the value by hand fails "accepts an
+    // expression of exactly the maximum length" or "refuses an expression one
+    // character too long" in SafeMathEvaluatorTest.
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     public const MAX_EXPRESSION_LENGTH = 255;
 
     /**
@@ -45,6 +50,9 @@ class SafeMathEvaluator
      *
      * @var array<string, list<int>>
      */
+    // A constant initializer is never reported as an executed line. Changing either
+    // count or removing an entry by hand fails a round() row of SafeMathEvaluatorTest.
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger, RemoveArrayItem
     private const array ALLOWED_FUNCTIONS = ['round' => [1, 2]];
 
     /**
@@ -57,6 +65,9 @@ class SafeMathEvaluator
     /**
      * Index of the next token to consume.
      */
+    // evaluate() sets the position before every parse, so the initial value is
+    // never read
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private int $position = 0;
 
     /**
@@ -68,11 +79,9 @@ class SafeMathEvaluator
     public static function evaluate(
         string $expression
     ): ?float {
-        // Reject anything longer than the grammar is meant to serve
-        if (
-            $expression === ''
-            || \strlen($expression) > self::MAX_EXPRESSION_LENGTH
-        ) {
+        // Reject anything longer than the grammar is meant to serve; an empty
+        // expression fails to parse below
+        if (\strlen($expression) > self::MAX_EXPRESSION_LENGTH) {
             return null;
         }
 
@@ -171,6 +180,9 @@ class SafeMathEvaluator
                 $name = \strtolower($matches[0]);
 
                 if (! \array_key_exists($name, self::ALLOWED_FUNCTIONS)) {
+                    // evaluate() catches every InvalidArgumentException and returns null, so no
+                    // message leaves the class and none of its wording can be observed
+                    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
                     throw new InvalidArgumentException('Unknown function: '.$name);
                 }
 
@@ -190,6 +202,8 @@ class SafeMathEvaluator
                 ')' => 'rparen',
                 ',' => 'comma',
                 default => throw new InvalidArgumentException(
+                    // The message never leaves the class (see the identifier check)
+                    // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
                     'Unexpected character: '.$character
                 ),
             };
@@ -310,6 +324,9 @@ class SafeMathEvaluator
             return $this->parseFunctionCall($token['value']);
         }
 
+        // evaluate() catches every InvalidArgumentException and returns null, so no
+        // message leaves the class and none of its wording can be observed
+        // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
         throw new InvalidArgumentException('Unexpected token: '.$token['value']);
     }
 
@@ -336,8 +353,13 @@ class SafeMathEvaluator
 
         $this->expect('rparen');
 
-        // Enforce the arity the whitelist declares for this function
+        // Enforce the arity the whitelist declares for this function; both sides are
+        // integers, so strict and loose comparison agree
+        // @pest-mutate-ignore: TrueToFalse
         if (! \in_array(\count($arguments), self::ALLOWED_FUNCTIONS[$name], true)) {
+            // evaluate() catches every InvalidArgumentException and returns null, so no
+            // message leaves the class and none of its wording can be observed
+            // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
             throw new InvalidArgumentException(
                 'Wrong argument count for '.$name.'()'
             );
@@ -348,6 +370,8 @@ class SafeMathEvaluator
                 $arguments[0],
                 (int) ($arguments[1] ?? 0)
             ),
+            // The tokenizer admits only whitelisted names, so this arm is never reached
+            // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
             default => throw new InvalidArgumentException('Unknown function: '.$name),
         };
     }
@@ -372,9 +396,11 @@ class SafeMathEvaluator
     ): bool {
         $token = $this->peek();
 
-        return $token !== null
-            && $token['type'] === 'operator'
-            && \in_array($token['value'], $operators, true);
+        // The tokenizer gives the values `+`, `-`, `*` and `/` to operator tokens
+        // only, so the value alone identifies one, and past the end there is no
+        // value. Both sides are strings, so strict and loose comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
+        return \in_array($token['value'] ?? null, $operators, true);
     }
 
     /**
@@ -410,6 +436,9 @@ class SafeMathEvaluator
         $token = $this->consume();
 
         if ($token['type'] !== $type) {
+            // evaluate() catches every InvalidArgumentException and returns null, so no
+            // message leaves the class and none of its wording can be observed
+            // @pest-mutate-ignore: ConcatRemoveLeft, ConcatRemoveRight, ConcatSwitchSides
             throw new InvalidArgumentException(
                 'Expected '.$type.', got '.$token['value']
             );

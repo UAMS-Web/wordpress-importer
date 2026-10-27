@@ -36,21 +36,33 @@ class WxrSanitizer
     /**
      * Scanning ordinary element content or markup, where `]]>` is illegal.
      */
+    // Only the four states being distinct matters. A constant initializer is never
+    // reported as an executed line, so Pest runs no test against a mutant here;
+    // changing a value by hand so it equals another state's fails
+    // WxrSanitizerTest or WxrSanitizerBoundariesTest, and a value no other state
+    // holds changes nothing.
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private const int STATE_TEXT = 0;
 
     /**
      * Inside a CDATA section, where `]]>` is the legitimate terminator.
      */
+    // Distinct from the other states, as STATE_TEXT explains
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private const int STATE_CDATA = 1;
 
     /**
      * Inside a comment, whose literal text must survive untouched.
      */
+    // Distinct from the other states, as STATE_TEXT explains
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private const int STATE_COMMENT = 2;
 
     /**
      * Inside a processing instruction, whose literal text must survive untouched.
      */
+    // Distinct from the other states, as STATE_TEXT explains
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private const int STATE_PI = 3;
 
     /**
@@ -64,6 +76,9 @@ class WxrSanitizer
      *
      * @var list<string>
      */
+    // A constant initializer is never reported as an executed line. Removing any
+    // token by hand fails WxrSanitizerTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array TEXT_TOKENS = [
         '<![CDATA[',
         '<!--',
@@ -80,16 +95,25 @@ class WxrSanitizer
      * Trailing bytes withheld from the previous chunk because they may be the
      * start of a token that continues into the next chunk.
      */
+    // A property initializer is never reported as an executed line. A non-empty
+    // initial value by hand fails most of WxrSanitizerTest, since every feed()
+    // prepends it.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     private string $carry = '';
 
     /**
      * Count of C0 control bytes removed so far, for reporting.
      */
+    // Initializer: a different start by hand fails the repair counts in
+    // WxrSanitizerTest and WxrSanitizerBoundariesTest
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private int $strippedControlBytes = 0;
 
     /**
      * Count of stray `]]>` sequences escaped so far, for reporting.
      */
+    // Initializer, for the same reason as the stripped-byte count
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     private int $escapedCdataTerminators = 0;
 
     /**
@@ -133,11 +157,7 @@ class WxrSanitizer
      */
     public function flush(): string
     {
-        // Nothing was withheld, so there is nothing left to emit
-        if ($this->carry === '') {
-            return '';
-        }
-
+        // Process whatever was withheld; an empty carry processes to nothing
         return $this->process(
             $this->carry,
             true
@@ -227,6 +247,9 @@ class WxrSanitizer
         string $tail,
         array $tokens
     ): int {
+        // Every token is at least two bytes, so a start of 1 or -1 sets the same
+        // longest length
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         $longest = 0;
 
         foreach ($tokens as $token) {
@@ -236,12 +259,17 @@ class WxrSanitizer
             );
         }
 
+        // A wider bound only tries suffixes too long to be a partial token, which the
+        // length check below rejects, so these limits save work and change nothing
+        // @pest-mutate-ignore: MinToMax, MinusToPlus, DecrementInteger
         $max = \min(
             $longest - 1,
             \strlen($tail)
         );
 
-        // Prefer the longest ambiguous suffix so no shorter match truncates a token
+        // Prefer the longest ambiguous suffix so no shorter match truncates a token.
+        // A zero-length suffix is the whole tail, which can only answer 0 as well.
+        // @pest-mutate-ignore: DecrementInteger
         for ($length = $max; $length >= 1; $length--) {
             $suffix = \substr(
                 $tail,
@@ -249,6 +277,9 @@ class WxrSanitizer
             );
 
             foreach ($tokens as $token) {
+                // A suffix as long as a whole token never reaches here: a complete
+                // token is found before the tail is held
+                // @pest-mutate-ignore: SmallerToSmallerOrEqual
                 if (
                     \strlen($suffix) < \strlen($token)
                     && \str_starts_with(
@@ -286,6 +317,9 @@ class WxrSanitizer
         $offset = 0;
         $length = \strlen($data);
 
+        // At the end of the data the body finds no token and holds nothing, so one
+        // more pass changes no output
+        // @pest-mutate-ignore: SmallerToSmallerOrEqual
         while ($offset < $length) {
             // Inside a protected region, copy through to its terminator
             if ($this->state !== self::STATE_TEXT) {
@@ -336,7 +370,9 @@ class WxrSanitizer
                 $offset
             );
 
-            // No token remains, so the rest of the span is ordinary text
+            // No token remains, so the rest of the span is ordinary text. The two are
+            // null together; checking both only narrows the types.
+            // @pest-mutate-ignore: BooleanOrToBooleanAnd
             if ($position === null || $token === null) {
                 $tail = $this->emitTail(
                     \substr(
@@ -396,8 +432,11 @@ class WxrSanitizer
     ): string {
         $span = $this->stripControlBytes($span);
 
-        // Removing a control byte can leave a `]]>` that was not there before
+        // Removing a control byte can leave a `]]>` that was not there before. With
+        // none present, the replacements below change nothing, so this return only
+        // saves work.
         if (! str_contains($span, ']]>')) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $span;
         }
 
@@ -443,8 +482,12 @@ class WxrSanitizer
     private function stripControlBytes(
         string $data
     ): string {
+        // preg_replace() writes the count, and any negative limit means no limit,
+        // so neither literal can change the result
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         $count = 0;
 
+        // @pest-mutate-ignore: DecrementInteger
         $filtered = \preg_replace(
             '/[\x00-\x08\x0B\x0C\x0E-\x1F]/',
             '',
@@ -453,8 +496,10 @@ class WxrSanitizer
             $count
         );
 
-        // Leave the span untouched if the engine failed rather than corrupt it
+        // Leave the span untouched if the engine failed rather than corrupt it. A
+        // single character class cannot exhaust the engine, so no test reaches this.
         if ($filtered === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $data;
         }
 
@@ -480,6 +525,9 @@ class WxrSanitizer
     ): array {
         $length = \strlen($data);
 
+        // At the end of the data strcspn() moves nothing and the break below exits,
+        // so one more pass changes nothing
+        // @pest-mutate-ignore: SmallerToSmallerOrEqual
         while ($offset < $length) {
             // Skip ahead to the next byte that could open one of the tokens
             $offset += \strcspn(
@@ -488,7 +536,11 @@ class WxrSanitizer
                 $offset
             );
 
+            // At exactly the end, no token compares equal and the loop condition exits
+            // next, so `>` and continuing would change nothing
+            // @pest-mutate-ignore: GreaterOrEqualToGreater
             if ($offset >= $length) {
+                // @pest-mutate-ignore: BreakToContinue
                 break;
             }
 
