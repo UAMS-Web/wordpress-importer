@@ -1463,8 +1463,8 @@ The cleaner is small (53 commits, one pull request, no issues), so its review is
 
 **The order, and the evidence for it.** WordPress answers a path with the first rule that matches it:
 
-- **Pretty Links** dispatches on `init` at priority 1: `src/Bootstrap.php` in 4.0.15 (the local `uamshealthmu` install), and `app/controllers/PrliAppController.php` line 35 in 3.6.18 (plugins.svn.wordpress.org).
-- **Redirection** runs its loop on `init` at the default priority 10: `modules/wordpress.php` in 5.0 and 5.10.1 (`johngodley/redirection`). Its `Red_Item::get_for_matched_url()` reads the enabled rules matching the URL and sorts them by `position`, then by id (`sort_urls()`), and the first match redirects.
+- **Pretty Links** dispatches on `init` at priority 1: `src/Bootstrap.php` in 4.0.15 (the local `uamshealthmu` install), and the plugin's application controller (`app/controllers/`, line 35) in 3.6.18 (plugins.svn.wordpress.org).
+- **Redirection** runs its loop on `init` at the default priority 10: `modules/wordpress.php` in 5.0 and 5.10.1 (the plugin's GitHub repository). Its `Red_Item::get_for_matched_url()` reads the enabled rules matching the URL and sorts them by `position`, then by id (`sort_urls()`), and the first match redirects.
 - **Safe Redirect Manager** matches on `parse_request` or `template_redirect`, both after `init`, and orders its rules by `menu_order ID`, ascending: `inc/classes/class-srm-redirect.php` and `inc/functions.php` in 1.9.3 (the local install).
 
 So Pretty Links answers before Redirection, and within one plugin the lowest position wins, then the lowest id. Sources are compared ignoring case, because the importer finds an entry through a Stache `where()`, which compares in lower case (`Statamic\Query\Builder::filterTestEquals()`), so case variants of a source can only ever be one entry. Pretty Links slugs are unique, so two of its links never share a source. The plugin versions go.uams.edu and gouams.com run were not read; the order above held in every version read.
