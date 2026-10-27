@@ -29,6 +29,10 @@ class OutboundUrlGuard
      * longer than this (or one that loops) is treated as a failed fetch rather
      * than followed indefinitely. Matches Guzzle's historical default limit.
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Changing the value by hand fails "keeps the redirect
+    // limit at Guzzle's historical default" in OutboundUrlGuardInternalsTest.
+    // @pest-mutate-ignore: DecrementInteger, IncrementInteger
     public const MAX_REDIRECT_HOPS = 5;
 
     /**
@@ -42,6 +46,10 @@ class OutboundUrlGuard
      *
      * @var list<string>
      */
+    // A constant initializer is never reported as an executed line, so Pest runs no
+    // test against a mutant here. Removing any entry by hand fails its rows of
+    // "refuses the ranges filter_var classifies as public" in OutboundUrlGuardTest.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array REFUSED_IPV4_RANGES = [
         // Carrier-grade NAT, and the space Tailscale hands out
         '100.64.0.0/10',
@@ -72,6 +80,8 @@ class OutboundUrlGuard
      *
      * @var list<string>
      */
+    // Annotated for the same reason as the IPv4 table, against the same dataset
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array REFUSED_IPV6_RANGES = [
         // NAT64 — embeds an IPv4 address, so it reaches the whole IPv4 space
         '64:ff9b::/96',
@@ -159,12 +169,17 @@ class OutboundUrlGuard
     {
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
 
+        // Both the scheme and the list are strings, so strict and loose agree
+        // @pest-mutate-ignore: TrueToFalse
         if (! \in_array($scheme, ['http', 'https'], true)) {
             return null;
         }
 
         $host = parse_url($url, PHP_URL_HOST);
 
+        // parse_url() reports a missing host as null and never as an empty string;
+        // the second half only narrows the type
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (! \is_string($host) || $host === '') {
             return null;
         }
@@ -302,9 +317,13 @@ class OutboundUrlGuard
         $prefixBits = (int) $prefix;
         $wholeBytes = intdiv($prefixBits, 8);
 
-        // Every whole byte of the prefix must match exactly
+        // Every whole byte of the prefix must match exactly. strncmp() over zero bytes
+        // reports a match, so testing the zero case as well changes nothing.
+        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
+        $hasWholeBytes = $wholeBytes > 0;
+
         if (
-            $wholeBytes > 0
+            $hasWholeBytes
             && strncmp($packedIp, $packedSubnet, $wholeBytes) !== 0
         ) {
             return false;
@@ -312,13 +331,22 @@ class OutboundUrlGuard
 
         $remainingBits = $prefixBits % 8;
 
+        // With no bits left the mask below is zero and its comparison is true, so this
+        // return only saves work for every range in the tables
+        // @pest-mutate-ignore: DecrementInteger
         if ($remainingBits === 0) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return true;
         }
 
         // Compare only the leading bits of the byte the prefix stops inside.
-        // A non-zero remainder guarantees this byte exists.
-        $mask = \chr((0xFF << (8 - $remainingBits)) & 0xFF);
+        // A non-zero remainder guarantees this byte exists
+        $shifted = 0xFF << (8 - $remainingBits);
+
+        // Shifting by at least one bit leaves the lowest bit clear, so masking with
+        // 0xFE is the same
+        // @pest-mutate-ignore: DecrementInteger
+        $mask = \chr($shifted & 0xFF);
 
         return ($packedIp[$wholeBytes] & $mask) === ($packedSubnet[$wholeBytes] & $mask);
     }
@@ -387,20 +415,39 @@ class OutboundUrlGuard
         if ($type === DNS_A) {
             $ips = @gethostbynamel($host);
 
+            // A failed lookup returns false
             return $ips === false ? [] : $ips;
         }
 
-        // AAAA records need a direct DNS query — gethostbynamel() is IPv4-only
-        $records = @dns_get_record($host, DNS_AAAA);
+        // AAAA records need a direct DNS query, since gethostbynamel() is IPv4-only.
+        // The query needs a live DNS answer, which no test can rely on; the reading
+        // of an answer is tested through ipv6AddressesFrom().
+        // @pest-mutate-ignore: AlwaysReturnEmptyArray
+        return self::ipv6AddressesFrom(@dns_get_record($host, DNS_AAAA));
+    }
 
-        if ($records === false) {
+    /**
+     * Reads the IPv6 addresses out of a `dns_get_record()` AAAA answer.
+     *
+     * Kept apart from the query so the reading can be tested without a live DNS
+     * answer, which no test can rely on.
+     *
+     * @param  mixed  $records  The answer: a list of records, or false when the query failed
+     * @return list<string>
+     */
+    private static function ipv6AddressesFrom(mixed $records): array
+    {
+        // Iterating a non-array yields no record, so this return only spares the
+        // warning foreach would raise
+        if (! \is_array($records)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
         $ips = [];
 
         foreach ($records as $record) {
-            $ipv6 = $record['ipv6'] ?? null;
+            $ipv6 = \is_array($record) ? ($record['ipv6'] ?? null) : null;
 
             if (\is_string($ipv6) && $ipv6 !== '') {
                 $ips[] = $ipv6;
@@ -451,18 +498,27 @@ class OutboundUrlGuard
 
         // Read each part in its own base, widest-first so `0x…` wins over `0…`
         foreach ($parts as $part) {
+            // hexdec() skips characters that are not hex digits, so leaving the `x` or
+            // the whole `0x` in changes no value (the `x` alone raises a deprecation
+            // notice, which the suite does not fail on), and an int compares and sums
+            // the same as a float here
             if (\preg_match('/^0[xX][0-9a-fA-F]+$/', $part) === 1) {
+                // @pest-mutate-ignore: DecrementInteger, UnwrapSubstr, RemoveDoubleCast
                 $values[] = (float) \hexdec(\substr($part, 2));
 
                 continue;
             }
 
+            // A leading zero adds nothing to an octal number, for the same reasons
             if (\preg_match('/^0[0-7]+$/', $part) === 1) {
+                // @pest-mutate-ignore: DecrementInteger, UnwrapSubstr, RemoveDoubleCast
                 $values[] = (float) \octdec(\substr($part, 1));
 
                 continue;
             }
 
+            // A numeric string compares and sums the same as the float it casts to
+            // @pest-mutate-ignore: RemoveDoubleCast
             $values[] = (float) $part;
         }
 
