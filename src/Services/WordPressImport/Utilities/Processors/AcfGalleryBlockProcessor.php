@@ -271,16 +271,16 @@ class AcfGalleryBlockProcessor implements BlockProcessorInterface
         foreach ($values as $key => $value) {
             // Handle array values by converting to JSON
             if (\is_array($value)) {
-                // Convert array to JSON; the values are strings and nested
-                // arrays of strings, which always encode
-                $jsonValue = \json_encode($value, JSON_THROW_ON_ERROR);
+                // Convert array to JSON. A string that is not valid UTF-8 cannot
+                // encode, and the field is then written empty so the import carries on.
+                $jsonValue = \json_encode($value);
 
                 // Build attribute with proper escaping
                 $attrs .= \sprintf(
                     " data-set-attr-%s='%s'",
                     $key,
                     \htmlspecialchars(
-                        $jsonValue,
+                        $jsonValue === false ? '' : $jsonValue,
                         ENT_QUOTES,
                         'UTF-8'
                     )

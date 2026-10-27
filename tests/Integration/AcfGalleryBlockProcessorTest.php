@@ -280,6 +280,18 @@ it('reads comma-separated image ids', function (): void {
     expect($result['html'] ?? null)->toBe(acfGallerySet(['images' => '[&quot;a.jpg&quot;,&quot;b.jpg&quot;,&quot;c.jpg&quot;]']));
 });
 
+it('writes a description that is not valid UTF-8 as empty and still builds the gallery', function (): void {
+    $output = new BufferedOutput;
+
+    $result = processAcfGallery(
+        ['data' => ['gallery_images' => [1, 2], 'gallery_description' => "Caf\xE9"]],
+        acfGalleryImporter(['1' => 'a.jpg', '2' => 'b.jpg'], [], $output),
+        $output
+    );
+
+    expect($result['html'] ?? null)->toBe(acfGallerySet(['description' => '']));
+});
+
 it('warns and returns an empty gallery when there are no image ids', function (array $attributes): void {
     ProcessingContext::setWordPressPageLink('https://example.test/about/');
     $warnings = acfGalleryWarnings();
