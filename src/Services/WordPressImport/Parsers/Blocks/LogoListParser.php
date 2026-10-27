@@ -122,13 +122,14 @@ class LogoListParser
         // Handle attributes with or without 'data' key
         $data = $this->resolveDataAttributes($attributes);
 
-        // Build term map for category and label taxonomies using shared builder
+        // ---
+        // Build the term map for the category taxonomy alone. Labels resolve
+        // through TermDestinationRegistry below, so a label term in this map
+        // could only let a label id in the category filter pass as a category.
+        // ---
         $termMap = TermMapBuilder::buildTermMap(
             $terms,
-            [
-                'logo-list-category',
-                'logo-list-label',
-            ]
+            ['logo-list-category']
         );
 
         // Map basic fields
