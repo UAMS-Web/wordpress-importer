@@ -602,6 +602,8 @@ it('skips a block to its closing comment, however its processor counts whitespac
 })->with([
     'a spacer with whitespace, then tight content' => ["<!-- wp:spacer -->\n<div class=\"wp-block-spacer\"></div>\n<!-- /wp:spacer --><p>After</p>", ['paragraph:After']],
     'a quote whose processor counts the paragraph inside it' => ["<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\"></blockquote><p>Para</p><!-- /wp:quote --><p>After</p>", ['set:pull_quote', 'paragraph:After']],
+    'a spacer left open before a closed one' => ["<!-- wp:spacer {\"height\":70} -->\n<p>&nbsp;</p>\n<!-- wp:spacer -->\n<div class=\"wp-block-spacer\"></div>\n<!-- /wp:spacer -->\n<p>Kept</p>\n<p>Also</p>", ['paragraph:Kept', 'paragraph:Also']],
+    'a group nested as a sibling, with whitespace between' => ["<!-- wp:group -->\n<!-- wp:group -->\n<p>In</p>\n<!-- /wp:group -->\n<p>Outer</p>\n<!-- /wp:group -->\n<p>After</p>", ['paragraph:In', 'paragraph:Outer', 'paragraph:After']],
     'a group nested as a sibling inside a group' => ['<!-- wp:group --><!-- wp:group --><p>In</p><!-- /wp:group --><p>Outer</p><!-- /wp:group --><p>After</p>', ['paragraph:In', 'paragraph:Outer', 'paragraph:After']],
     'a group nested in a group' => ["<!-- wp:group -->\n<div class=\"wp-block-group\"><!-- wp:group -->\n<div class=\"wp-block-group\"><p>In</p></div>\n<!-- /wp:group --></div>\n<!-- /wp:group --><p>After</p>", ['paragraph:In', 'paragraph:After']],
 ]);
@@ -611,9 +613,9 @@ it('keeps a later node whose markup matches a node a block skipped', function ()
 
     // The spacer's div is skipped by identity, so the same div outside the block is
     // read as content (#152)
-    $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer">X</div><!-- /wp:spacer --><div class="wp-block-spacer">X</div>');
+    $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer">X</div><!-- /wp:spacer --><div class="wp-block-spacer">X</div><p>End</p>');
 
-    expect($content)->toBe([['type' => 'text', 'text' => 'X', 'attrs' => []]]);
+    expect($content)->toBe([['type' => 'text', 'text' => 'X', 'attrs' => []], textProcessorForBardParagraph('End')]);
 });
 
 it('keeps the text on either side of a spacer apart', function (): void {

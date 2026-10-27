@@ -27,6 +27,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Shor
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\UnwrappingBlockProcessorTrait;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGalleryBlockProcessor;
@@ -1024,11 +1025,16 @@ class TextProcessor
 
                                 // Skip the block's nodes after its opening comment (#152)
                                 if (\is_int($skipCount)) {
+                                    // A class name and the trait name are strings, so in_array()'s
+                                    // strict flag, which phpstan-strict-rules requires, changes no
+                                    // result.
+                                    // @pest-mutate-ignore: TrueToFalse
                                     $node = self::consumeBlockNodes(
                                         $node,
                                         $skipCount,
                                         $blockType,
-                                        $consumedNodes
+                                        $consumedNodes,
+                                        \in_array(UnwrappingBlockProcessorTrait::class, \class_uses($processor), true)
                                     );
                                 }
                             } elseif (\is_string($result)) { // Check if the result is a string
@@ -1582,20 +1588,25 @@ class TextProcessor
      * fewer sibling follows it. The processors differ on the whitespace between a block's
      * nodes: some count it and some do not. So whitespace-only text is consumed without
      * counting, and the walk never passes the block's own closing comment, which ends any
-     * count that included the whitespace. A same-type block nested inside is passed over
-     * whole. Before #152 the walk took `$skipCount` siblings, one past the block.
+     * count that included the whitespace. Which closing comment that is follows the
+     * processor's own count: the group and details processors count a same-type block
+     * nested among the siblings, so it is passed over whole for them, and every other
+     * processor counts to the first closing comment of its type, so the walk stops there.
+     * Before #152 the walk took `$skipCount` siblings, one past the block.
      *
      * @param  DOMNode  $comment  The block's opening comment
      * @param  int  $skipCount  The processor's count, the opening comment included
      * @param  string  $blockType  The block type from the opening comment, such as `spacer`
      * @param  SplObjectStorage<DOMNode, null>  $consumedNodes  The nodes consumed so far
+     * @param  bool  $tracksNesting  Whether the processor's count passes over a nested block of the same type
      * @return DOMNode The last node consumed, or `$comment` when none is
      */
     private static function consumeBlockNodes(
         DOMNode $comment,
         int $skipCount,
         string $blockType,
-        SplObjectStorage $consumedNodes
+        SplObjectStorage $consumedNodes,
+        bool $tracksNesting
     ): DOMNode {
         $node = $comment;
         $remaining = $skipCount - 1;
@@ -1621,7 +1632,7 @@ class TextProcessor
             $data = \trim($node->data);
 
             // A nested block of the same type closes with the same comment as this one
-            if (\preg_match('/^wp:'.\preg_quote($blockType, '/').'(?:\s|$)(?!.*\/$)/s', $data) === 1) {
+            if ($tracksNesting && \preg_match('/^wp:'.\preg_quote($blockType, '/').'(?:\s|$)(?!.*\/$)/s', $data) === 1) {
                 $depth++;
 
                 continue;
