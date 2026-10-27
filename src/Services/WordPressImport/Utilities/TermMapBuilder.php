@@ -101,10 +101,12 @@ class TermMapBuilder
             // Convert parent slug to parent ID if parent exists
             if ($termParent !== '') {
                 // ---
-                // Search the terms for the parent by slug. WordPress slugs are unique
-                // only within a taxonomy, and a parent always shares its child's
-                // taxonomy, so a term in another taxonomy is never the parent, even
-                // when it carries the same slug and comes first in the export.
+                // Search the terms for the parent by slug, within the child's
+                // taxonomy. WordPress slugs are unique only within a taxonomy, so a
+                // term in another taxonomy can carry the same slug and come first in
+                // the export. The WordPress Importer plugin resolves a parent slug
+                // within the child's taxonomy too, so a stored parent in another
+                // taxonomy, which core does not refuse, is dropped there as here.
                 // ---
                 foreach ($terms as $parentTerm) {
                     if (! ($parentTerm instanceof SimpleXMLElement)) {
@@ -117,16 +119,13 @@ class TermMapBuilder
                         'wp:term_slug'
                     );
 
-                    // Extract parent term taxonomy from XML
-                    $parentTermTaxonomy = XpathHelper::getStringValue(
-                        $parentTerm,
-                        'wp:term_taxonomy'
-                    );
-
                     // Check if this term matches the parent slug in the child's taxonomy
                     if (
                         $parentTermSlug === $termParent
-                        && $parentTermTaxonomy === $termTaxonomy
+                        && XpathHelper::getStringValue(
+                            $parentTerm,
+                            'wp:term_taxonomy'
+                        ) === $termTaxonomy
                     ) {
                         // Extract parent term ID and break the loop
                         $parentId = XpathHelper::getStringValue(
