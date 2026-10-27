@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
 
-it('declares the body companions, the link targets and the navigation pass for every type with a body', function (string $contentType): void {
+it('declares the body companions, the link targets and both passes for every type with a body', function (string $contentType): void {
     // On a vanity domain too: only redirect rules read less there
     foreach ([false, true] as $redirectDomain) {
         expect(ContentTypeReads::companions($contentType, $redirectDomain))
@@ -20,15 +20,14 @@ it('declares the body companions, the link targets and the navigation pass for e
             ->toBe(['page', 'post', 'uamspeople']);
     }
 
-    expect(ContentTypeReads::passes($contentType))->toBe(['navigation'])
-        ->and(ContentTypeReads::runsNavigation($contentType))->toBeTrue();
+    expect(ContentTypeReads::passes($contentType))->toBe(['navigation', 'bard_sanitization']);
 })->with(['page', 'post', 'uamspeople', 'tshowcase', 'logo-list-item', 'advert']);
 
 it('adds pages to a knowledge base, after the body companions and once', function (): void {
     expect(ContentTypeReads::companions('kb', false))
         ->toBe(['attachment', 'wp_block', 'nav_menu_item', 'tablepress_table', 'page'])
         ->and(ContentTypeReads::linkTargets('kb', false))->toBe(['page', 'post', 'uamspeople'])
-        ->and(ContentTypeReads::runsNavigation('kb'))->toBeTrue();
+        ->and(ContentTypeReads::passes('kb'))->toBe(['navigation', 'bard_sanitization']);
 });
 
 it('reads only attachments and the link targets for redirect rules on a site', function (): void {
@@ -41,7 +40,21 @@ it('reads nothing besides the rules for redirect rules on a vanity domain', func
         ->and(ContentTypeReads::linkTargets('redirect_rule', true))->toBe([]);
 });
 
-it('runs no pass after the loop for redirect rules', function (): void {
-    expect(ContentTypeReads::passes('redirect_rule'))->toBe([])
-        ->and(ContentTypeReads::runsNavigation('redirect_rule'))->toBeFalse();
+it('declares no pass after the loop for redirect rules', function (): void {
+    expect(ContentTypeReads::passes('redirect_rule'))->toBe([]);
 });
+
+it('runs a pass when any imported type declares it', function (string $pass, array $contentTypes, bool $runs): void {
+    $types = \array_values(\array_filter($contentTypes, \is_string(...)));
+
+    expect(ContentTypeReads::runsPass($pass, $types))->toBe($runs);
+})->with([
+    'a page run, navigation' => [ContentTypeReads::PASS_NAVIGATION, ['page'], true],
+    'a page run, Bard' => [ContentTypeReads::PASS_BARD_SANITIZATION, ['page'], true],
+    'a redirect run, navigation' => [ContentTypeReads::PASS_NAVIGATION, ['redirect_rule'], false],
+    'a redirect run, Bard' => [ContentTypeReads::PASS_BARD_SANITIZATION, ['redirect_rule'], false],
+    'redirects then pages' => [ContentTypeReads::PASS_NAVIGATION, ['redirect_rule', 'page'], true],
+    'pages then redirects' => [ContentTypeReads::PASS_NAVIGATION, ['page', 'redirect_rule'], true],
+    'nothing imported' => [ContentTypeReads::PASS_NAVIGATION, [], true],
+    'an undeclared pass' => ['unknown', ['page'], false],
+]);

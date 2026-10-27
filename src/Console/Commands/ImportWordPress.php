@@ -2301,15 +2301,13 @@ class ImportWordPress extends Command
 
         // Handle navigation menu import after all content types are imported
         // This ensures all entries are fully processed and cached before navigation import.
-        // A run scoped to a type that does not declare the pass skips it, so a redirect run
-        // neither reads the menus nor changes the site's navigation setting (#109).
-        if (
-            $requestedContentType === null
-            || ContentTypeReads::runsNavigation($requestedContentType)
-        ) {
+        // A run whose imported types none declare the pass skips it, so a redirect run,
+        // scoped or picked interactively, neither reads the menus nor changes the site's
+        // navigation setting (#109).
+        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_NAVIGATION, $importedContentTypes)) {
             $this->handleNavigationMenuImport();
         } else {
-            $this->info("Skipping navigation menu import - '$requestedContentType' does not declare it.");
+            $this->info('Skipping navigation menu import - no imported content type declares it.');
         }
 
         // ---
@@ -2368,8 +2366,14 @@ class ImportWordPress extends Command
         $this->info('Laravel cache cleared.');
 
         // Sanitize Bard content (YAML separators and unquoted nbsp text) in all
-        // entries so YAML is formatted properly when the import is completed
-        $this->runBardContentSanitization();
+        // entries so YAML is formatted properly when the import is completed. The pass
+        // rewrites entries whichever run wrote them, so a run whose imported types none
+        // declare it, such as a redirect run, leaves them alone (#109).
+        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_BARD_SANITIZATION, $importedContentTypes)) {
+            $this->runBardContentSanitization();
+        } else {
+            $this->info('Skipping Bard content sanitization - no imported content type declares it.');
+        }
 
         // Rebuild search indexes once now that all content is imported. Live
         // search-index updates were disabled for the run (see handle()), so this

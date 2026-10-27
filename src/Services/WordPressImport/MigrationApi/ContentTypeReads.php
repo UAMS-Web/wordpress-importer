@@ -25,11 +25,13 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
  *                 `MaterializationScope` and left as a URL, never dropped
  *   passes        the passes after the content-type loop that the type needs
  *
- * **Only the navigation pass is declared.** The other passes after the loop (deferred links,
- * Bard sanitization, the search reindex and the dataless sweep) work only on what the run
- * wrote, so each is a no-op for a type that did not produce what it works on. The navigation
- * pass is the one that reads the export's menus and writes a site setting
- * (`manual_primary_navigation`) whatever the run imported.
+ * **Two passes are declared: navigation and Bard sanitization.** Each works on more than the
+ * run wrote. The navigation pass reads the export's menus and writes a site setting
+ * (`manual_primary_navigation`); Bard sanitization reads every entry in every collection and
+ * rewrites the files it flags. The other passes after the loop run on every run, for a
+ * reason each: deferred links and the dataless sweep work only on what the run queued or
+ * wrote, and the search reindex rebuilds the indexes that live updating was switched off for
+ * during the import, which a redirect domain run's entries need as much as any other.
  *
  * A type with no declaration of its own carries a body, and gets the body declaration, which
  * is exactly what every scoped run read before #109.
@@ -40,6 +42,11 @@ final class ContentTypeReads
      * The navigation pass: imports the primary menu and sets `manual_primary_navigation`.
      */
     public const string PASS_NAVIGATION = 'navigation';
+
+    /**
+     * The Bard sanitization pass: rewrites any entry file whose Bard text needs quoting.
+     */
+    public const string PASS_BARD_SANITIZATION = 'bard_sanitization';
 
     /**
      * Companions of every type with a body.
@@ -165,8 +172,8 @@ final class ContentTypeReads
     /**
      * The passes after the content-type loop that a run importing this type runs.
      *
-     * Redirect rules run none: their import writes the redirects global set or the redirect
-     * domains collection and nothing a menu or a site setting depends on.
+     * Redirect rules run neither: their import writes the redirects global set or the
+     * redirect domains collection, which carry no menu, no site setting and no Bard text.
      *
      * @param  string  $contentType  The requested content type
      * @return list<string> The declared passes
@@ -174,18 +181,36 @@ final class ContentTypeReads
     public static function passes(
         string $contentType
     ): array {
-        return $contentType === self::REDIRECT_RULE ? [] : [self::PASS_NAVIGATION];
+        return $contentType === self::REDIRECT_RULE
+            ? []
+            : [self::PASS_NAVIGATION, self::PASS_BARD_SANITIZATION];
     }
 
     /**
-     * Whether a run importing this type runs the navigation pass.
+     * Whether a run that imported these types runs a declared pass.
      *
-     * @param  string  $contentType  The requested content type
-     * @return bool True when the type declares the navigation pass
+     * The pass runs when any imported type declares it, so a run that imported pages and
+     * redirect rules still runs it. A run that imported nothing runs it as it did before
+     * #109, since there is no declaration to read.
+     *
+     * @param  string  $pass  One of the `PASS_*` constants
+     * @param  list<string>  $contentTypes  The types the run imported
+     * @return bool True when the pass runs
      */
-    public static function runsNavigation(
-        string $contentType
+    public static function runsPass(
+        string $pass,
+        array $contentTypes
     ): bool {
-        return \in_array(self::PASS_NAVIGATION, self::passes($contentType), true);
+        if ($contentTypes === []) {
+            return true;
+        }
+
+        foreach ($contentTypes as $contentType) {
+            if (\in_array($pass, self::passes($contentType), true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

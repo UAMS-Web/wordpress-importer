@@ -1401,7 +1401,7 @@ it('refuses --minerva-generation on a file-sourced run rather than ignoring it',
 })->group('minerva-generation-option');
 
 // ---
-// Step 13 - the navigation pass runs only for a type that declares it (#109)
+// Step 13 - the navigation and Bard passes run only for a type that declares them (#109)
 // ---
 
 it('runs the navigation pass for a scoped page run', function (): void {
@@ -1417,10 +1417,12 @@ it('runs the navigation pass for a scoped page run', function (): void {
     $result = importCommandRun($xmlPath, ['--content-type' => 'page']);
 
     expect($result['exit'])->toBe(0)
-        ->and($result['output'])->toContain('Skipping navigation menu import - no active menu in primary navigation position');
+        ->and($result['output'])
+        ->toContain('Skipping navigation menu import - no active menu in primary navigation position')
+        ->toContain('Sanitizing Bard content in entries...');
 });
 
-it('skips the navigation pass for a redirect rule run, and never consults the menus', function (): void {
+it('skips the navigation and Bard passes for a redirect rule run, and never consults the menus', function (): void {
     // The export carries a page as well, so the skip is the declaration's and not the
     // export's. The global creator is a double, so no redirects global is written.
     $globals = Mockery::mock(GlobalCreator::class)->shouldIgnoreMissing();
@@ -1441,8 +1443,10 @@ it('skips the navigation pass for a redirect rule run, and never consults the me
     expect($result['exit'])->toBe(0)
         ->and($result['output'])
         ->toContain("Selected content type: 'redirect_rule'")
-        ->toContain("Skipping navigation menu import - 'redirect_rule' does not declare it.")
-        ->not->toContain('no active menu in primary navigation position');
+        ->toContain('Skipping navigation menu import - no imported content type declares it.')
+        ->toContain('Skipping Bard content sanitization - no imported content type declares it.')
+        ->not->toContain('no active menu in primary navigation position')
+        ->not->toContain('Sanitizing Bard content in entries...');
 });
 
 /**
