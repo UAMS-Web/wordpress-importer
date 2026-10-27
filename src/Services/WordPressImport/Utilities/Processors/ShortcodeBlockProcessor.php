@@ -21,6 +21,14 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelpe
 class ShortcodeBlockProcessor implements BlockProcessorInterface
 {
     /**
+     * Shortcodes whose lone block returns html and a skip count with no page
+     * builder set, the shape it had when the handler built one.
+     *
+     * @var list<string>
+     */
+    private const array HTML_ONLY_SHORTCODES = ['caption'];
+
+    /**
      * The shortcode processor instance.
      */
     private ShortcodeProcessor $shortcodeProcessor;
@@ -72,8 +80,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @param  array<int|string, mixed>  $attachments  Media attachments (unused)
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
      * @param  ?string  $pageSlug  The page slug for shortcode processing (optional)
-     * @return array<int|string, mixed>|string|null Tiptap HTML string, or array with 'page_builder_set' and 'skipCount' when a
-     *                                              single shortcode returns a replicator block, or null if no valid content
+     * @return array<int|string, mixed>|string|null Tiptap HTML string; or an array with 'html', 'skipCount' and 'page_builder_set'
+     *                                              when a single shortcode returns a replicator block, and with 'html' and 'skipCount'
+     *                                              alone for a single [caption]; or null if no valid content
      */
     public function process(
         DOMNode $node,
@@ -216,8 +225,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // ---
-        // When block contains exactly one shortcode that supports page_builder, try
-        // process(..., 'page_builder') and return as direct set if a block is returned
+        // When the block holds exactly one registered shortcode, try process(...,
+        // 'page_builder'), and return the html with the page builder set when the
+        // handler builds one, or the html alone for a caption
         // ---
 
         // Check if block contains exactly one shortcode
@@ -256,48 +266,29 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     $pageSlug
                 );
 
-                // ---
-                // Only treat as page_builder set when result is a replicator block (has type)
-                // ---
+                // A replicator block (it has a type) is the page builder set
+                $hasPageBuilderSet = isset($pageBuilderBlock['type']);
 
-                // Check if result is a replicator block (has type)
+                // ---
+                // Return the html with a skip count over the whole block, so the
+                // caller does not read the block's inner nodes a second time, when
+                // the handler builds a page builder set, or for a caption, which
+                // builds none (#119) but keeps the shape it had when it did, so the
+                // Bard route still adds its image once. Any other shortcode falls to
+                // the loop below, which renders it itself. The name and the list are
+                // strings, so in_array()'s strict flag, which phpstan-strict-rules
+                // requires, changes no result.
+                // ---
+                // @pest-mutate-ignore: TrueToFalse
                 if (
-                    \is_array($pageBuilderBlock)
-                    && $pageBuilderBlock !== []
-                    && isset($pageBuilderBlock['type'])
+                    $hasPageBuilderSet
+                    || \in_array($name, self::HTML_ONLY_SHORTCODES, true)
                 ) {
                     // ---
-                    // Compute skipCount for wp:shortcode ... <!-- /wp:shortcode -->
-                    // ---
-
-                    // Start skip count with the wp:shortcode comment node
-                    $skipCount = 1;
-
-                    // Start at first sibling after wp:shortcode
-                    $currentNode = $node->nextSibling;
-
-                    // Walk siblings until closing comment
-                    while (
-                        $currentNode instanceof DOMNode
-                        && ! self::matchesClosingShortcodeComment($currentNode)
-                    ) {
-                        // Increment skip count for each node before closing comment
-                        $skipCount++;
-
-                        // Advance to next sibling
-                        $currentNode = $currentNode->nextSibling;
-                    }
-
-                    // Check if closing comment was found
-                    if ($currentNode instanceof DOMNode) {
-                        // Include closing comment in skip count
-                        $skipCount++;
-                    }
-
-                    // ---
-                    // Generate Tiptap HTML so Bard path (TextProcessor) can add this as
-                    // content. Callers that need page_builder (e.g., NonAcfBlockParser)
-                    // use page_builder_set; callers that need Bard use html.
+                    // Generate Tiptap HTML so the Bard path (TextProcessor) can add
+                    // this as content. Callers that need page_builder (e.g.,
+                    // NonAcfBlockParser) use page_builder_set when there is one, and
+                    // the html otherwise.
                     // ---
                     $tiptapHtmlForBard = $this->shortcodeProcessor->toTiptapHtml(
                         $single,
@@ -309,15 +300,17 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                         $pageSlug
                     );
 
-                    // ---
-                    // Return both so TextProcessor adds html to Bard and
-                    // NonAcfBlockParser can use page_builder_set
-                    // ---
-                    return [
+                    $result = [
                         'html' => $tiptapHtmlForBard,
-                        'page_builder_set' => $pageBuilderBlock,
-                        'skipCount' => $skipCount,
+                        'skipCount' => self::blockSkipCount($node),
                     ];
+
+                    // Return the page builder set beside the html when there is one
+                    if ($hasPageBuilderSet) {
+                        $result['page_builder_set'] = $pageBuilderBlock;
+                    }
+
+                    return $result;
                 }
             }
         }
@@ -459,6 +452,41 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 self::extractNodeValueString($node->nodeValue)
             )
         ) === 1;
+    }
+
+    /**
+     * Counts the nodes from a wp:shortcode comment through its closing comment.
+     *
+     * @param  DOMNode  $node  The opening wp:shortcode comment
+     * @return int The number of nodes to skip, the opening comment included
+     */
+    private static function blockSkipCount(
+        DOMNode $node
+    ): int {
+        // Start skip count with the wp:shortcode comment node
+        $skipCount = 1;
+
+        // Start at first sibling after wp:shortcode
+        $currentNode = $node->nextSibling;
+
+        // Walk siblings until closing comment
+        while (
+            $currentNode instanceof DOMNode
+            && ! self::matchesClosingShortcodeComment($currentNode)
+        ) {
+            // Increment skip count for each node before closing comment
+            $skipCount++;
+
+            // Advance to next sibling
+            $currentNode = $currentNode->nextSibling;
+        }
+
+        // Include the closing comment when it was found
+        if ($currentNode instanceof DOMNode) {
+            $skipCount++;
+        }
+
+        return $skipCount;
     }
 
     /**
