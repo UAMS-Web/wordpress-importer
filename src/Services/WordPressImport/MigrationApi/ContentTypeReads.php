@@ -205,12 +205,6 @@ final class ContentTypeReads
             return true;
         }
 
-        foreach ($contentTypes as $contentType) {
-            if (\in_array($pass, self::passes($contentType), true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($contentTypes, fn (string $contentType): bool => \in_array($pass, self::passes($contentType), true));
     }
 }
