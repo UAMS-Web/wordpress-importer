@@ -309,12 +309,21 @@ it('maps an additional confirmation with its view fields, settings and condition
 });
 
 it('names an action only from its title, never from a post title', function (): void {
-    $configs = ffcmTable(ffcmCall($this->manager, 'mapNotificationsToEmailConfigurations', ['views' => [
-        ffcmEmailView(['email_to' => 'a@uams.edu'], ['title' => null, 'post_title' => 'A post title']),
-    ]], 'default'));
-    $config = ffcmTable($configs[0] ?? null);
+    // The view-level email mapping is the path that reads the title, so a post title
+    // read there would surface as the email's name.
+    $form = ffcmForm('frm_contact');
 
-    expect(\array_key_exists('name', $config))->toBeFalse();
+    ffcmCall($this->manager, 'mapConfirmationFields', $form, ['views' => [
+        ffcmEmailView(['email_to' => 'a@uams.edu'], ['title' => null, 'post_title' => 'A post title']),
+    ]], 'default', $this->importer);
+
+    $data = ffcmFormData($form);
+    $email = ffcmTable(ffcmTable($data['email'] ?? null)[0] ?? null);
+
+    expect($email['to'] ?? null)->toBe('a@uams.edu')
+        ->and(\array_key_exists('name', $email))->toBeFalse()
+        ->and(ffcmCall($this->manager, 'processSingleConfirmationView', ffcmConfirmationView(['success_action' => 'message'], ['title' => null, 'post_title' => 'A post title']), [], 'default', null, true))
+        ->not->toHaveKey('confirmation_name');
 });
 
 it('maps an empty default confirmation to nothing, and an empty additional one to its type', function (): void {
