@@ -1013,7 +1013,7 @@ class FormPluginCoordinator
                         ...$nestedUnresolved,
                     ];
 
-                    // Store the nested result, which equals the original when nothing in it changed
+                    // Store the nested result, which is the original array itself when nothing in it resolved
                     $result[$key] = $nestedResult;
                 }
             } else { // Otherwise, store non-array value unchanged
@@ -1022,10 +1022,13 @@ class FormPluginCoordinator
             }
         }
 
-        // An array with no resolved set comes back equal to the original with no updates, while
-        // its unresolved notes still travel up: an entry whose only form set is unresolved must
-        // still be reported.
-        return [$result, $formUpdates, $unresolvedNotes];
+        // An array with no resolved set comes back as the original array itself, so the caller's
+        // `!==` check is a reference comparison rather than a deep one, and a value that never
+        // equals itself (NAN) cannot mark an untouched entry as rewritten. Its unresolved notes
+        // still travel up: an entry whose only form set is unresolved must still be reported.
+        return $formUpdates === []
+            ? [$array, [], $unresolvedNotes]
+            : [$result, $formUpdates, $unresolvedNotes];
     }
 
     /**

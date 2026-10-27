@@ -310,8 +310,8 @@ it('clears every plugin\'s data and every created-handle cache', function (): vo
 it('creates each referenced form the supplied export contains, and caches its handle', function (): void {
     Site::setSites(['default' => ['name' => 'Main Site', 'url' => '/', 'locale' => 'en_US']]);
 
-    // Each plugin has a form only a shortcode references, one both reference, and one (99, 50
-    // and 70) the export lacks, which is filtered out before creation.
+    // Each plugin has a form only a shortcode references (5, 3 and 9), one both reference, and
+    // one (99, 50 and 70) the export lacks, which is filtered out before creation.
     fpcoSeedFormIds(GravityFormsShortcodeProcessor::class, ['7', '5']);
     fpcoSeedFormIds(GravityFormsBlockProcessor::class, ['7', '8', '99']);
     fpcoSeedFormIds(FormidableFormsShortcodeProcessor::class, ['3', '4']);
@@ -533,6 +533,13 @@ it('rewrites an entry whose only resolved set is in its content, and skips field
 
     expect(\array_keys($updated))->toBe([$id])
         ->and($entry instanceof Entry ? $entry->id() : null)->toBe($id);
+});
+
+it('leaves out an entry with nothing resolved even when its data holds a value unequal to itself', function (): void {
+    fpcoHandles('createdGravityFormsHandles', ['7' => 'created_seven']);
+    fpcoEntry('pages', 'chart', ['content' => [['type' => 'chart', 'attrs' => ['ratio' => \NAN]]], 'page_builder' => [['type' => 'section', 'ratio' => \NAN]]]);
+
+    expect($this->coordinator->updateAllFormHandlesInEntries('default', $this->output))->toBe([]);
 });
 
 it('rebuilds a resolved set, keeps every nested update, and reads past an unresolved one', function (): void {
