@@ -81,6 +81,10 @@ function xmlParserCollectingWarnings(callable $call): array
 {
     $warnings = [];
 
+    // Report libxml errors as PHP warnings whatever an earlier test left the
+    // mode at, so the recorded warnings do not depend on test order
+    $internalErrors = libxml_use_internal_errors(false);
+
     set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
         $warnings[] = $message;
 
@@ -91,6 +95,7 @@ function xmlParserCollectingWarnings(callable $call): array
         return [$call(), $warnings];
     } finally {
         restore_error_handler();
+        libxml_use_internal_errors($internalErrors);
     }
 }
 

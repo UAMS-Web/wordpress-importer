@@ -100,6 +100,10 @@ function xmlStreamTitles(
     $titles = [];
     $warnings = [];
 
+    // Report libxml errors as PHP warnings whatever an earlier test left the
+    // mode at, so the recorded warnings do not depend on test order
+    $internalErrors = libxml_use_internal_errors(false);
+
     // Record warnings rather than letting them fail the test
     set_error_handler(
         function (int $severity, string $message) use (&$warnings): bool {
@@ -116,6 +120,7 @@ function xmlStreamTitles(
         }
     } finally {
         restore_error_handler();
+        libxml_use_internal_errors($internalErrors);
     }
 
     return [$titles, $warnings];
