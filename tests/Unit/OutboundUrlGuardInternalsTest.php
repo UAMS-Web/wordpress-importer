@@ -78,6 +78,8 @@ it('matches an address against a range by its prefix bits', function (string $ip
     'just below a ten-bit prefix' => ['100.63.255.255', '100.64.0.0/10', false],
     'past a nine-bit prefix, inside its whole byte' => ['10.128.0.1', '10.0.0.0/9', false],
     'inside a nine-bit prefix' => ['10.127.0.1', '10.0.0.0/9', true],
+    'below a whole-byte prefix' => ['9.255.255.255', '10.0.0.0/8', false],
+    'above a whole-byte prefix' => ['11.0.0.0', '10.0.0.0/8', false],
     'a malformed address' => ['not-an-ip', '10.0.0.0/8', false],
     'a malformed range' => ['10.0.0.1', 'not-a-range/8', false],
     'an IPv4 address against an IPv6 range' => ['100.64.0.1', '64:ff9b::/96', false],

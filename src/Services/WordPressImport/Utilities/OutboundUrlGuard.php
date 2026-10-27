@@ -320,8 +320,10 @@ class OutboundUrlGuard
         // Every whole byte of the prefix must match exactly. strncmp() over zero bytes
         // reports a match, so testing the zero case as well changes nothing.
         // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
+        $hasWholeBytes = $wholeBytes > 0;
+
         if (
-            $wholeBytes > 0
+            $hasWholeBytes
             && strncmp($packedIp, $packedSubnet, $wholeBytes) !== 0
         ) {
             return false;
