@@ -235,24 +235,18 @@ class GalleryParser
      * converts single values to arrays, and ensures the result is always an array.
      *
      * @param  mixed  $imageIds  The gallery_images value (may be array, string, or serialized string)
-     * @return array<int|string, mixed> Array of image IDs, or empty array if invalid
+     * @return array<int|string, mixed> Array of image IDs, with a single value wrapped
      */
     private function normalizeGalleryImages(
         mixed $imageIds
     ): array {
         // Check if imageIds is a serialized string and unserialize it
-        if (
-            \is_string($imageIds)
-            && $imageIds !== ''
-        ) {
+        if (\is_string($imageIds)) {
             // Attempt to unserialize the string value
             $unserialized = @\unserialize($imageIds, ['allowed_classes' => false]);
 
-            // Check if unserialization was successful and result is an array
-            if (
-                $unserialized !== false
-                && \is_array($unserialized)
-            ) {
+            // Check if unserialization produced an array
+            if (\is_array($unserialized)) {
                 // Use the unserialized array
                 $imageIds = $unserialized;
             }
@@ -263,14 +257,9 @@ class GalleryParser
         // single values)
         // ---
 
-        // Check if imageIds is not an array
-        if (! \is_array($imageIds)) {
-            // Convert single value to array or empty string to empty array
-            return ($imageIds === null || $imageIds === '') ? [] : [$imageIds];
-        }
-
-        // Return the normalized array of image IDs
-        return $imageIds;
+        // Wrap a single value; processImages() drops any id that is not numeric, an
+        // empty string among them
+        return \is_array($imageIds) ? $imageIds : [$imageIds];
     }
 
     /**
@@ -412,20 +401,11 @@ class GalleryParser
                     ),
                     $logData['context']
                 );
-
-                // Clean up variables to free up memory
-                unset(
-                    $imageIds,
-                    $imageId,
-                    $assetPath
-                );
-
-                // Return empty array if no valid images when uploads are enabled
-                return [];
             }
 
-            // When uploads are disabled, missing images are expected.
-            // Continue processing with whatever images we have.
+            // When uploads are disabled, missing images are expected. Either way the
+            // empty list is returned below, and parse() skips the block only when
+            // uploads are enabled.
         }
 
         // Clean up variables to free up memory
@@ -502,6 +482,8 @@ class GalleryParser
         // Adding zero preserves that split — `'1'` yields int 1, `'1.7778'` float —
         // where an explicit (int) or (float) cast would flatten one of them.
         // ---
+        // Subtracting zero gives the same key as adding it, so PlusToMinus cannot be killed.
+        // @pest-mutate-ignore: PlusToMinus
         return $cropValue + 0;
     }
 
@@ -644,7 +626,7 @@ class GalleryParser
             );
 
             // Extract more button target using LinkHelper
-            $moreButtonTarget = LinkHelper::getTarget($normalizedData['gallery_more_button_url'] ?? '');
+            $moreButtonTarget = LinkHelper::getTarget($normalizedData['gallery_more_button_url'] ?? null);
         } else { // Otherwise
             // Extract more button URL data array
             $moreButtonUrlData = $normalizedData['gallery_more_button_url'] ?? [];
@@ -1011,7 +993,7 @@ class GalleryParser
             [
                 'block_type' => 'uamsweb_block_gallery',
                 'page_url' => $pageUrl,
-                'heading' => $result['block_heading'] ?? '',
+                'heading' => $result['block_heading'],
                 'missing_fields' => $missing,
                 'image_count' => $imageCount,
                 'reason' => 'The gallery block renders only when every required field '
@@ -1420,12 +1402,7 @@ class GalleryParser
             return $default;
         }
 
-        // Return the value when it is already a string
-        if (\is_string($data[$key])) {
-            return $data[$key];
-        }
-
-        // Convert scalar values to strings for downstream processing
+        // Convert scalar values, strings among them, to strings for downstream processing
         if (\is_scalar($data[$key])) {
             return (string) $data[$key];
         }
