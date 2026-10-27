@@ -593,6 +593,29 @@ it('keeps the node right after a block whose processor skips nodes', function ()
     expect($content)->toBe([textProcessorForBardParagraph('After'), textProcessorForBardParagraph('Next')]);
 });
 
+it('skips a block to its closing comment, however its processor counts whitespace', function (string $html, array $summary): void {
+    textProcessorForBardFakes();
+
+    // Whitespace text between a block's nodes does not count toward its skip, and the
+    // skip never passes the block's closing comment (#152)
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard($html)))->toBe($summary);
+})->with([
+    'a spacer with whitespace, then tight content' => ["<!-- wp:spacer -->\n<div class=\"wp-block-spacer\"></div>\n<!-- /wp:spacer --><p>After</p>", ['paragraph:After']],
+    'a quote whose processor counts the paragraph inside it' => ["<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\"></blockquote><p>Para</p><!-- /wp:quote --><p>After</p>", ['set:pull_quote', 'paragraph:After']],
+    'a group nested as a sibling inside a group' => ['<!-- wp:group --><!-- wp:group --><p>In</p><!-- /wp:group --><p>Outer</p><!-- /wp:group --><p>After</p>', ['paragraph:In', 'paragraph:Outer', 'paragraph:After']],
+    'a group nested in a group' => ["<!-- wp:group -->\n<div class=\"wp-block-group\"><!-- wp:group -->\n<div class=\"wp-block-group\"><p>In</p></div>\n<!-- /wp:group --></div>\n<!-- /wp:group --><p>After</p>", ['paragraph:In', 'paragraph:After']],
+]);
+
+it('keeps a later node whose markup matches a node a block skipped', function (): void {
+    textProcessorForBardFakes();
+
+    // The spacer's div is skipped by identity, so the same div outside the block is
+    // read as content (#152)
+    $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer">X</div><!-- /wp:spacer --><div class="wp-block-spacer">X</div>');
+
+    expect($content)->toBe([['type' => 'text', 'text' => 'X', 'attrs' => []]]);
+});
+
 it('keeps the text on either side of a spacer apart', function (): void {
     textProcessorForBardFakes();
 
@@ -802,6 +825,7 @@ it('hands each block type to its processor', function (string $html, array $summ
     'TablePress' => ["<!-- wp:tablepress/table {\"id\":\"1\"} -->\n[table id=1 /]\n<!-- /wp:tablepress/table -->", ['set:table'], []],
     'Gravity Forms' => ['<!-- wp:gravityforms/form {"formId":"3"} /-->', ['set:form'], []],
     'Formidable' => ['<!-- wp:formidable/simple-form {"formId":"4"} /-->', ['set:form'], []],
+    'Formidable with its inner div' => ["<!-- wp:formidable/simple-form {\"formId\":\"2\"} -->\n<div>[formidable id=\"2\"]</div>\n<!-- /wp:formidable/simple-form --><p>After</p>", ['set:form', 'paragraph:After'], []],
     'Ninja Forms' => ['<!-- wp:ninja-forms/form {"formID":5} /-->', ['set:form'], []],
 ]);
 

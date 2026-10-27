@@ -1022,26 +1022,14 @@ class TextProcessor
                                     $consumedNodes->attach($processedNode);
                                 }
 
-                                // ---
-                                // Check if the result specifies nodes to skip. Every processor
-                                // counts the opening comment, which is this node, so the
-                                // siblings to skip are one fewer (#152).
-                                // ---
+                                // Skip the block's nodes after its opening comment (#152)
                                 if (\is_int($skipCount)) {
-                                    // Skip the block's nodes after its opening comment
-                                    for ($j = 1; $j < $skipCount; $j++) {
-                                        // Get the next sibling node
-                                        $nextNode = $node->nextSibling;
-
-                                        // Check if the next node exists
-                                        if ($nextNode instanceof DOMNode) {
-                                            // Mark the next node as processed
-                                            $consumedNodes->attach($nextNode);
-
-                                            // Move to the next node
-                                            $node = $nextNode;
-                                        }
-                                    }
+                                    $node = self::consumeBlockNodes(
+                                        $node,
+                                        $skipCount,
+                                        $blockType,
+                                        $consumedNodes
+                                    );
                                 }
                             } elseif (\is_string($result)) { // Check if the result is a string
                                 // Parse the HTML string to ProseMirror JSON
@@ -1585,6 +1573,71 @@ class TextProcessor
         // Return the HTML, or '' for no node. saveHTML() throws for a node from another
         // document rather than returning false, and every caller passes $doc's own.
         return $html === false ? '' : $html;
+    }
+
+    /**
+     * Marks the nodes a block's skip count covers as consumed, and returns the last one.
+     *
+     * Every processor counts the block's opening comment, which is `$comment`, so one
+     * fewer sibling follows it. The processors differ on the whitespace between a block's
+     * nodes: some count it and some do not. So whitespace-only text is consumed without
+     * counting, and the walk never passes the block's own closing comment, which ends any
+     * count that included the whitespace. A same-type block nested inside is passed over
+     * whole. Before #152 the walk took `$skipCount` siblings, one past the block.
+     *
+     * @param  DOMNode  $comment  The block's opening comment
+     * @param  int  $skipCount  The processor's count, the opening comment included
+     * @param  string  $blockType  The block type from the opening comment, such as `spacer`
+     * @param  SplObjectStorage<DOMNode, null>  $consumedNodes  The nodes consumed so far
+     * @return DOMNode The last node consumed, or `$comment` when none is
+     */
+    private static function consumeBlockNodes(
+        DOMNode $comment,
+        int $skipCount,
+        string $blockType,
+        SplObjectStorage $consumedNodes
+    ): DOMNode {
+        $node = $comment;
+        $remaining = $skipCount - 1;
+        $depth = 0;
+
+        while ($remaining > 0 && $node->nextSibling instanceof DOMNode) {
+            // Consume the next sibling
+            $node = $node->nextSibling;
+            $consumedNodes->attach($node);
+
+            // Whitespace between a block's nodes does not count toward the skip
+            if ($node instanceof DOMText && \trim($node->data) === '') {
+                continue;
+            }
+
+            $remaining--;
+
+            // Only a block comment can open a nested block or close this one
+            if (! $node instanceof DOMComment) {
+                continue;
+            }
+
+            $data = \trim($node->data);
+
+            // A nested block of the same type closes with the same comment as this one
+            if (\preg_match('/^wp:'.\preg_quote($blockType, '/').'(?:\s|$)(?!.*\/$)/s', $data) === 1) {
+                $depth++;
+
+                continue;
+            }
+
+            // The block's own closing comment ends the walk, whatever is left of the count
+            if ($data === '/wp:'.$blockType) {
+                if ($depth === 0) {
+                    break;
+                }
+
+                $depth--;
+            }
+        }
+
+        return $node;
     }
 
     /**
