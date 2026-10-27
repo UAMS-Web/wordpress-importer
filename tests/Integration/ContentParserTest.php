@@ -409,10 +409,18 @@ it('keeps block-comment text inside the content, which is not inner blocks', fun
     expect(json_encode($body))->toContain('"title":"x <!-- wp:x --> y"');
 })->with('contentEntries');
 
-it('converts a supported iframe after one it leaves alone', function (): void {
-    expect(contentConvert('<iframe src="https://example.com/x"></iframe><iframe src="https://vimeo.com/7"></iframe>'))
-        ->toBe('<iframe src="https://example.com/x"></iframe>'.contentVideoDiv('vimeo', 'https://vimeo.com/7'));
-});
+it('converts a supported iframe beside one it leaves alone', function (string $html, string $expected): void {
+    expect(contentConvert($html))->toBe($expected);
+})->with([
+    'after it' => [
+        '<iframe src="https://example.com/x"></iframe><iframe src="https://vimeo.com/7"></iframe>',
+        '<iframe src="https://example.com/x"></iframe>'.contentVideoDiv('vimeo', 'https://vimeo.com/7'),
+    ],
+    'before it' => [
+        '<iframe src="https://vimeo.com/7"></iframe><iframe src="https://example.com/x"></iframe>',
+        contentVideoDiv('vimeo', 'https://vimeo.com/7')."\n".'<iframe src="https://example.com/x"></iframe>',
+    ],
+]);
 
 it('centers a video whose parent div is aligned left or right', function (string $class): void {
     expect(contentConvert("<div class=\"{$class}\"><iframe src=\"https://vimeo.com/7\"></iframe></div>"))
