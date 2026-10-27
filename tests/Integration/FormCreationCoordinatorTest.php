@@ -263,11 +263,19 @@ it('passes the page data mapping on to the configuration manager', function (str
 })->with('form plugins');
 
 it('accepts only its own plugin coordinator, and hands it to FormCreator', function (string $plugin): void {
-    // A real FormCreator, so the reflection write into it can be read back.
-    $creator = new FormCreator;
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)), $creator);
-    $own = $plugin === 'formidable' ? $this->createMock(FormidableFormsCoordinator::class) : $this->createMock(GravityFormsCoordinator::class);
-    $other = $plugin === 'formidable' ? $this->createMock(GravityFormsCoordinator::class) : $this->createMock(FormidableFormsCoordinator::class);
+    // Built without a coordinator; the FormCreator its constructor made is the one read back.
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)));
+    $creator = (new ReflectionProperty($coordinator, 'formCreator'))->getValue($coordinator);
+    $own = match ($plugin) {
+        'formidable' => $this->createMock(FormidableFormsCoordinator::class),
+        'gravity' => $this->createMock(GravityFormsCoordinator::class),
+        default => $this->createMock(NinjaFormsCoordinator::class),
+    };
+    $other = $plugin === 'gravity' ? $this->createMock(FormidableFormsCoordinator::class) : $this->createMock(GravityFormsCoordinator::class);
+
+    if (! $creator instanceof FormCreator) {
+        throw new LogicException('The constructor built no FormCreator.');
+    }
 
     $coordinator->setCoordinator($other);
 
@@ -278,20 +286,7 @@ it('accepts only its own plugin coordinator, and hands it to FormCreator', funct
 
     expect($coordinator->getCoordinator())->toBe($own)
         ->and((new ReflectionProperty(FormCreator::class, 'coordinator'))->getValue($creator))->toBe($own);
-})->with(['formidable', 'gravity']);
-
-it('accepts only a Ninja Forms coordinator', function (): void {
-    $coordinator = fccCoordinator('ninja', $this->dataManager, $this->createMock(NinjaFormConfigurationManager::class));
-    $own = $this->createMock(NinjaFormsCoordinator::class);
-
-    $coordinator->setCoordinator($this->createMock(GravityFormsCoordinator::class));
-
-    expect($coordinator->getCoordinator())->toBeNull();
-
-    $coordinator->setCoordinator($own);
-
-    expect($coordinator->getCoordinator())->toBe($own);
-});
+})->with('form plugins');
 
 it('starts with the coordinator it was constructed with', function (string $plugin): void {
     $coordinator = match ($plugin) {
