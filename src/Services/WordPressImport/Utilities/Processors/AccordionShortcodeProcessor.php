@@ -7,8 +7,11 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processor
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 
 /**
  * Processes WordPress [accordion] and [section] shortcodes.
@@ -167,11 +170,14 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * Flatten a WordPress [accordion] shortcode into Bard-ready HTML.
      *
-     * Each section becomes an <h3> holding its title, followed by its content in
-     * a paragraph; a section with an empty title keeps its content alone. Text
-     * outside any section is kept, so an accordion without sections keeps its
-     * content. Shortcodes inside the sections are processed, since the outer
-     * extraction consumed them along with the accordion.
+     * Each section becomes an <h3> holding its title, followed by its content; a
+     * section with an empty title keeps its content alone. Content that already
+     * carries paragraphs is wrapped in one, and plain text is given paragraphs by
+     * wpautop, as WordPress renders a shortcode's content. Text outside any
+     * section is kept, so an accordion without sections keeps its content.
+     * Shortcodes inside the sections are processed, since the outer extraction
+     * consumed them along with the accordion. When a pattern fails, the content
+     * is kept as it was and an import warning names the page.
      *
      * @param  array<int|string, mixed>  $shortcode  Shortcode data (['name' => '...', 'attributes' => [...], 'content' => '...'])
      * @param  string  $site  The site handle for context
@@ -200,35 +206,60 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Drop the line breaks wpautop leaves at the edges, between sections and at
         // the ends of each section body, so none is left standing outside or at the
         // edge of a paragraph once the sections are replaced.
-        // A failed replacement keeps the content as it was rather than losing it.
+        // The opening tag is matched as SECTION_PATTERN matches it, so a "]" inside
+        // a quoted title does not end it.
         // ---
         $break = self::BREAK_PATTERN;
-        $content = \preg_replace(
+        $trimmed = \preg_replace(
             [
                 '/^'.$break.'+|'.$break.'+$/',
                 '/'.$break.'+(?=\[\/?section\b)/',
                 '/(?<=\[\/section\])'.$break.'+/',
-                '/(\[section\b[^\]]*\])'.$break.'+/',
+                '/(\[section\s+title=["\'][^"\']*["\'][^\]]*\])'.$break.'+/',
             ],
             ['', '', '', '$1'],
             $content
-        ) ?? $content;
+        );
 
-        // Replace each section with its title as a heading and its body as a paragraph
-        $flattened = \preg_replace_callback(
-            self::SECTION_PATTERN,
-            static function (array $match): string {
-                // The stripper decodes entities and trims, so the title is plain text
-                $title = HtmlTagStripper::strip($match[1]);
+        // Replace each section with its title as a heading followed by its body
+        $flattened = \is_string($trimmed)
+            ? \preg_replace_callback(
+                self::SECTION_PATTERN,
+                static function (array $match): string {
+                    // The stripper decodes entities and trims, so the title is plain text
+                    $title = HtmlTagStripper::strip($match[1]);
 
-                $heading = $title === ''
-                    ? ''
-                    : '<h3>'.\htmlspecialchars($title).'</h3>';
+                    $heading = $title === ''
+                        ? ''
+                        : '<h3>'.\htmlspecialchars($title).'</h3>';
 
-                return $heading.'<p>'.$match[2].'</p>';
-            },
-            $content
-        ) ?? $content;
+                    // A body wpautop already split is wrapped; plain text gets paragraphs
+                    $body = \preg_match('/<\/?p[\s>]/i', $match[2]) === 1
+                        ? '<p>'.$match[2].'</p>'
+                        : (new WpAutoP)->process($match[2]);
+
+                    return $heading.$body;
+                },
+                $trimmed
+            )
+            : null;
+
+        // Keep the content as it was when a pattern failed, and say so
+        if ($flattened === null) {
+            ImportWarningManager::addWarning(
+                'content',
+                'unflattened_accordions',
+                [
+                    'site' => $site,
+                    'page_slug' => $pageSlug,
+                    'error' => \preg_last_error_msg(),
+                    'content_snippet' => \substr($content, 0, 100),
+                    'page_url' => LogContextHelper::enhanceWithEntryContext([])['page_url'],
+                ]
+            );
+
+            $flattened = $content;
+        }
 
         // Process the shortcodes inside the sections
         return (new ShortcodeProcessor)->processShortcodesInContent(
