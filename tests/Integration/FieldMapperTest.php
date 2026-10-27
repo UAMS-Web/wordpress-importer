@@ -515,3 +515,11 @@ it('skips a direct-map target that is not a field handle, and keeps reading', fu
     expect($data)->toBe(['site' => 'default', 'scripts_body_position' => 'top'])
         ->and($keys)->toBe(['genesis_scripts_body_position']);
 });
+
+it('skips a hero field key that is not a string, and keeps reading', function (): void {
+    $data = [];
+
+    (new FieldMapper)->processHeroFields([5 => 'x', 'heading' => 'Hi'], 0, $data, 'default', app(AssetImporter::class), [], new BufferedOutput);
+
+    expect(fieldMapperSlide($data, 0))->toBe(['type' => 'new_set', 'enabled' => true, 'heading' => 'Hi']);
+});
