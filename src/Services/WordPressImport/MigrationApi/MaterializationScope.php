@@ -35,6 +35,13 @@ final class MaterializationScope
     private static ?array $postTypes = null;
 
     /**
+     * Whether the scoped run read a listed vanity redirect domain, which is not a Statamic site.
+     *
+     * Read only while a scope is set, and `set()` always assigns it, so `clear()` leaves it.
+     */
+    private static bool $redirectDomain = false;
+
+    /**
      * Links already reported this run, keyed by URL.
      *
      * One unresolved URL is often linked from several fields or entries, and each occurrence
@@ -51,11 +58,14 @@ final class MaterializationScope
      * Record that this run read only the given post types.
      *
      * @param  list<string>|null  $postTypes  The post types read, or null for a whole-site read
+     * @param  bool  $redirectDomain  Whether the site is a listed vanity redirect domain
      */
     public static function set(
-        ?array $postTypes
+        ?array $postTypes,
+        bool $redirectDomain = false
     ): void {
         self::$postTypes = $postTypes;
+        self::$redirectDomain = $redirectDomain;
         self::$reportedLinks = [];
     }
 
@@ -98,6 +108,11 @@ final class MaterializationScope
      *
      * Each URL is reported once per run, however many times it occurs.
      *
+     * On a vanity redirect domain the consequence is narrower. Its pages are never imported as
+     * entries, so a link to a page or post there stays a URL in any run; only an attachment
+     * page, which resolves through its attachment item to an asset, converts in an unscoped
+     * run, and a vanity read of redirect rules reads no attachments.
+     *
      * @param  string  $url  The link that could not be resolved
      */
     public static function reportUnresolvedLink(
@@ -115,8 +130,12 @@ final class MaterializationScope
             [
                 'url' => $url,
                 'read_post_types' => self::$postTypes,
-                'consequence' => 'the link was left unconverted; if its target is of a type '
-                    .'this run did not read, an unscoped run converts it',
+                'consequence' => self::$redirectDomain
+                    ? 'the link was left unconverted; this site is a vanity redirect domain, whose '
+                        .'pages are never imported, so an unscoped run converts it only if its target '
+                        .'is an attachment page'
+                    : 'the link was left unconverted; if its target is of a type this run did not '
+                        .'read, an unscoped run converts it',
             ]
         );
     }
