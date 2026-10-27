@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Statamic\Forms\Form;
@@ -164,7 +165,14 @@ trait FormConfigurationManagerTrait
                     $siteHandle, // The Statamic site handle
                     $assetImporter, // Instance for importing files
                     new NullOutput, // Console output for logging
-                    false, // Don't apply WpAutoP formatting again since we already did it
+                    // Don't apply WpAutoP formatting again since we already did it. A second
+                    // pass finds nothing left to change: the text above is already decoded and
+                    // wrapped, so escaped markup and entities above U+00FF come out the same.
+                    // @pest-mutate-ignore: FalseToTrue
+                    false,
+                    // Not inner-block content. Treating it as such would only strip WordPress
+                    // block comments, which the Bard parser drops anyway.
+                    // @pest-mutate-ignore: FalseToTrue
                     false,
                     [],
                     []
@@ -234,29 +242,30 @@ trait FormConfigurationManagerTrait
         string $siteHandle,
         $assetImporter = null
     ): void {
-        // Check if form configuration mapping is defined
-        $reflection = new \ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_MAPPING')) {
+        // Read the form configuration mapping, if the class defines one. It is read through
+        // reflection, as processEmailContentMappings() reads its table, so the trait stays
+        // analyzable in a class that defines no table.
+        $mappingConfigs = (new \ReflectionClass(static::class))->getConstant('FORM_CONFIGURATION_MAPPING');
+        if (! \is_array($mappingConfigs)) {
             return;
         }
 
-        // Get the current form data
+        // Get the current form data. A Statamic form's data is always a collection; the check
+        // narrows the untyped accessor for PHPStan.
         $formDataStore = $form->data();
-        $currentFormDataFromForm = \is_object($formDataStore) && \method_exists(
-            $formDataStore,
-            'all'
-        )
-            ? $formDataStore->all()
-            : [];
-        $currentFormData = \is_array($currentFormDataFromForm)
-            ? $currentFormDataFromForm
-            : [];
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $currentFormData = $formDataStore instanceof Collection ? $formDataStore->all() : [];
 
         // Parse and prepare form data using plugin-specific logic
         $processedFormData = $this->parseFormData($formData);
 
         // Map each form configuration field according to the mapping
-        foreach (static::FORM_CONFIGURATION_MAPPING as $pluginKey => $mappingConfig) {
+        foreach ($mappingConfigs as $pluginKey => $mappingConfig) {
+            // Every usable mapping is a table or a plain attribute name
+            if (! \is_array($mappingConfig) && ! \is_string($mappingConfig)) {
+                continue;
+            }
+
             // Handle complex mapping configurations
             // Check if this is a multiple mapping configuration first
             if ($this->hasMultipleMappings($mappingConfig)) {
@@ -307,19 +316,14 @@ trait FormConfigurationManagerTrait
                         $formFields
                     );
 
-                    // Process multiple mappings
-                    $statamicAttributeConfig = $mappingConfig['statamic_attribute'] ?? null;
-                    $multipleResults = \is_array($statamicAttributeConfig)
-                        && isset($statamicAttributeConfig['multiple'])
-                        && \is_array($statamicAttributeConfig['multiple'])
-                        ? $this->processMultipleMappings(
-                            $value,
-                            $statamicAttributeConfig['multiple'],
-                            $formData,
-                            $siteHandle,
-                            $assetImporter
-                        )
-                        : [];
+                    // Process multiple mappings, which hasMultipleMappings() has just confirmed
+                    $multipleResults = $this->processMultipleMappingsAndGetResults(
+                        $value,
+                        $mappingConfig,
+                        $formData,
+                        $siteHandle,
+                        $assetImporter
+                    );
 
                     // ---
                     // Add all results to the current form data
@@ -349,10 +353,6 @@ trait FormConfigurationManagerTrait
                                     '.',
                                     $targetAttribute
                                 );
-
-                                if (\count($parts) < 2) {
-                                    continue;
-                                }
 
                                 // Extract the parent key (first part)
                                 $parentKey = $parts[0];
@@ -391,13 +391,8 @@ trait FormConfigurationManagerTrait
             }
 
             // Check if this is a conditional mapping with based_on_other_attribute_value
-            $statamicAttributeConfig = $mappingConfig['statamic_attribute'] ?? null;
-            if (
-                \is_array($statamicAttributeConfig)
-                && isset($statamicAttributeConfig['based_on_other_attribute_value'])
-                && \is_array($statamicAttributeConfig['based_on_other_attribute_value'])
-            ) {
-                $conditionalMapping = $statamicAttributeConfig['based_on_other_attribute_value'];
+            $conditionalMapping = data_get($mappingConfig, 'statamic_attribute.based_on_other_attribute_value');
+            if (\is_array($conditionalMapping)) {
                 $statamicKey = $this->processConditionalAttributeMapping(
                     $conditionalMapping,
                     $processedFormData
@@ -443,62 +438,6 @@ trait FormConfigurationManagerTrait
                     $formFields
                 );
 
-                // Check if this is a multiple mapping configuration
-                $statamicAttributeConfig = $mappingConfig['statamic_attribute'] ?? null;
-                if (
-                    \is_array($statamicAttributeConfig)
-                    && isset($statamicAttributeConfig['multiple'])
-                    && \is_array($statamicAttributeConfig['multiple'])
-                ) {
-                    // Process multiple mappings
-                    $multipleResults = $this->processMultipleMappings(
-                        $value,
-                        $statamicAttributeConfig['multiple'],
-                        $formData,
-                        $siteHandle,
-                        $assetImporter
-                    );
-
-                    // Add all results to the current form data
-                    foreach ($multipleResults as $targetAttribute => $processedValue) {
-                        if (! \is_string($targetAttribute)) {
-                            continue;
-                        }
-
-                        if ($processedValue !== null) {
-                            // Handle nested fields (like schedule_form.start_datetime)
-                            if (
-                                str_contains(
-                                    $targetAttribute,
-                                    '.'
-                                )
-                            ) {
-                                $parts = \explode(
-                                    '.',
-                                    $targetAttribute
-                                );
-                                $parentKey = $parts[0];
-                                $childKey = $parts[1];
-
-                                // Initialize the parent array if it doesn't exist
-                                if (
-                                    ! isset($currentFormData[$parentKey])
-                                    || ! \is_array($currentFormData[$parentKey])
-                                ) {
-                                    $currentFormData[$parentKey] = [];
-                                }
-
-                                $currentFormData[$parentKey][$childKey] = $processedValue;
-                            } else { // Otherwise
-                                $currentFormData[$targetAttribute] = $processedValue;
-                            }
-                        }
-                    }
-
-                    // Skip the rest of the processing for this field since we've handled it with multiple mappings
-                    continue;
-                }
-
                 // Handle special field types
                 $value = $this->processFieldValue(
                     $statamicKey,
@@ -530,9 +469,6 @@ trait FormConfigurationManagerTrait
                         '.',
                         $statamicKey
                     );
-                    if (\count($parts) < 2) {
-                        continue;
-                    }
 
                     $parentKey = $parts[0];
                     $childKey = $parts[1];
@@ -856,22 +792,26 @@ trait FormConfigurationManagerTrait
     ): array {
         $emailConfig = [];
 
-        // Check if email mapping is defined
-        $reflection = new \ReflectionClass(static::class);
-        if (! $reflection->hasConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL')) {
+        // Read the email mapping, if the class defines one, through reflection for the
+        // same reason as mapFormConfigurationFields()
+        $emailMapping = (new \ReflectionClass(static::class))->getConstant('FORM_CONFIGURATION_ACTION_MAPPING_EMAIL');
+        if (! \is_array($emailMapping)) {
             return $emailConfig;
         }
 
         // Map each notification field according to the mapping
-        foreach (static::FORM_CONFIGURATION_ACTION_MAPPING_EMAIL as $pluginKey => $mappingConfig) {
-            // Handle complex mapping configurations
-            // Check if this is a simple complex mapping with just statamic_attribute
-            if (isset($mappingConfig['statamic_attribute']) && \is_string($mappingConfig['statamic_attribute'])) {
-                $statamicKey = $mappingConfig['statamic_attribute'];
-            } else { // Otherwise
-                // Skip complex mappings that need special handling
+        foreach ($emailMapping as $pluginKey => $mappingConfig) {
+            // Only a table naming a single Statamic attribute is mapped here; anything else
+            // needs special handling
+            if (! \is_array($mappingConfig)) {
                 continue;
             }
+
+            if (! isset($mappingConfig['statamic_attribute']) || ! \is_string($mappingConfig['statamic_attribute'])) {
+                continue;
+            }
+
+            $statamicKey = $mappingConfig['statamic_attribute'];
 
             // ---
             // Special handling for the 'to' field: Gravity Forms notifications carry a
@@ -894,7 +834,7 @@ trait FormConfigurationManagerTrait
                 $pluginKey === 'to'
                 && \array_key_exists(
                     'toType',
-                    static::FORM_CONFIGURATION_ACTION_MAPPING_EMAIL
+                    $emailMapping
                 )
             ) {
                 $toType = $this->extractValueFromData(
@@ -1068,10 +1008,6 @@ trait FormConfigurationManagerTrait
 
         // Check if content mapping is defined
         $reflection = new \ReflectionClass(static::class);
-        if (! $reflection->hasConstant($contentMappingConstant)) {
-            return $contentMappings;
-        }
-
         $mappingConfigs = $reflection->getConstant($contentMappingConstant);
 
         if (! \is_array($mappingConfigs)) {
@@ -1293,15 +1229,13 @@ trait FormConfigurationManagerTrait
         // Check if we have page data mapping available
         if (
             \is_string($pageId)
-            && $this->pageDataMapping !== []
             && isset($this->pageDataMapping[$pageId])
         ) {
             $pageData = $this->pageDataMapping[$pageId];
 
             // Return the Statamic entry ID if available
-            if (\is_array($pageData) && isset($pageData['entry']) && \is_scalar($pageData['entry'])) {
-                $mappedPageId = $pageData['entry'];
-
+            $mappedPageId = data_get($pageData, 'entry');
+            if (\is_scalar($mappedPageId)) {
                 // Clean up variables to free up memory
                 unset(
                     $pageId,
@@ -1416,16 +1350,6 @@ trait FormConfigurationManagerTrait
         string|int $key
     ) {
         if (\is_int($key)) {
-            return $data[$key] ?? null;
-        }
-
-        // If the key doesn't contain dots, return the direct value
-        if (
-            ! str_contains(
-                $key,
-                '.'
-            )
-        ) {
             return $data[$key] ?? null;
         }
 
@@ -1840,37 +1764,27 @@ trait FormConfigurationManagerTrait
     private function convertToBoolean(
         $value
     ): bool {
-        // Handle string values
+        // Handle string values: the words for true, then the trimmed text for the numeric
+        // check below, which reads '0', ' 0 ' and '0.0' as false and true as numbers do. Any
+        // other word, 'false', 'no' and 'off' among them, is false.
         if (\is_string($value)) {
-            $lowerValue = \strtolower(\trim($value));
+            $value = \strtolower(\trim($value));
+
             if (
                 \in_array(
-                    $lowerValue,
+                    $value,
                     [
-                        '1',
                         'true',
                         'yes',
                         'on',
                     ],
+                    // A string is compared with words here, so a loose comparison matches
+                    // exactly what a strict one does.
+                    // @pest-mutate-ignore: TrueToFalse
                     true
                 )
             ) {
                 return true;
-            }
-
-            if (
-                \in_array(
-                    $lowerValue,
-                    [
-                        '0',
-                        'false',
-                        'no',
-                        'off',
-                    ],
-                    true
-                )
-            ) {
-                return false;
             }
         }
 
@@ -1879,13 +1793,8 @@ trait FormConfigurationManagerTrait
             return (bool) $value;
         }
 
-        // Handle boolean values
-        if (\is_bool($value)) {
-            return $value;
-        }
-
-        // Default to false for any other type
-        return false;
+        // A boolean is itself, and anything else is false
+        return $value === true;
     }
 
     /**
@@ -1897,29 +1806,17 @@ trait FormConfigurationManagerTrait
     private function convertToInteger(
         $value
     ): ?int {
-        // Handle string values
+        // Judge a string by its trimmed text
         if (\is_string($value)) {
-            $trimmedValue = \trim($value);
-            // Check if the string represents an integer
-            if (
-                \is_numeric($trimmedValue)
-                && floor((float) $trimmedValue) === (float) $trimmedValue
-            ) {
-                return (int) $trimmedValue;
-            }
+            $value = \trim($value);
         }
 
-        // Handle numeric values
-        if (\is_numeric($value)) {
-            // Check if it's an integer (not a float)
-            if (floor((float) $value) === (float) $value) {
-                return (int) $value;
-            }
-        }
-
-        // Handle integer values
-        if (\is_int($value)) {
-            return $value;
+        // A whole number, given as one or as text, is that integer. Rounding it down, up or to
+        // the nearest whole number all leave a whole number alone and move anything else, so
+        // the choice of rounding cannot change the answer.
+        // @pest-mutate-ignore: FloorToRound, FloorToCiel
+        if (\is_numeric($value) && floor((float) $value) === (float) $value) {
+            return (int) $value;
         }
 
         // Return null for any other type or non-integer values
@@ -2277,9 +2174,6 @@ trait FormConfigurationManagerTrait
     ): void {
         // Get the mapping configuration constant using reflection
         $reflection = new \ReflectionClass(static::class);
-        if (! $reflection->hasConstant($mappingConstant)) {
-            return;
-        }
 
         $mappingConfigs = $reflection->getConstant($mappingConstant);
         if (! \is_array($mappingConfigs)) {
@@ -2382,6 +2276,9 @@ trait FormConfigurationManagerTrait
     protected function hasMultipleMappings(
         array|string $mappingConfig
     ): bool {
+        // A plain attribute name has no 'statamic_attribute' entry, so the check below would
+        // answer false for it too; this narrows the parameter for PHPStan.
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($mappingConfig)) {
             return false;
         }
@@ -2411,6 +2308,9 @@ trait FormConfigurationManagerTrait
         string $siteHandle,
         $assetImporter
     ): array {
+        // As in hasMultipleMappings(), the checks below already reject a plain attribute name;
+        // this narrows the parameter for PHPStan.
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($mappingConfig)) {
             return [];
         }
@@ -2461,9 +2361,6 @@ trait FormConfigurationManagerTrait
                 '.',
                 $targetAttribute
             );
-            if (\count($parts) < 2) {
-                return;
-            }
 
             $parentKey = $parts[0];
             $childKey = $parts[1];
@@ -2496,8 +2393,6 @@ trait FormConfigurationManagerTrait
         $value,
         bool $isAdditional = false
     ): void {
-        $targetAttribute = (string) $targetAttribute;
-
         if ($isAdditional) {
             // For additional confirmations, add to confirmation_settings
             if (
@@ -2594,13 +2489,14 @@ trait FormConfigurationManagerTrait
                 continue;
             }
 
-            // Check if this field should be excluded from default confirmations
-            if ($isDefaultConfirmation && \is_array($mappingConfig) && isset($mappingConfig['exclude_from_default_confirmation']) && $mappingConfig['exclude_from_default_confirmation'] === true) {
-                continue;
-            }
-
             // Handle complex mapping configurations (arrays) vs simple string mappings
             if (\is_array($mappingConfig)) {
+                // Check if this field should be excluded from default confirmations, a flag only
+                // a table can carry
+                if ($isDefaultConfirmation && ($mappingConfig['exclude_from_default_confirmation'] ?? null) === true) {
+                    continue;
+                }
+
                 $statamicAttributeConfig = $mappingConfig['statamic_attribute'] ?? null;
 
                 // Check if this is a conditional mapping with based_on_other_attribute_value
@@ -2731,8 +2627,8 @@ trait FormConfigurationManagerTrait
             return false;
         }
 
-        // Handle other empty values
-        return $value !== '' && $value !== false;
+        // Handle false, the one other value that means nothing
+        return $value !== false;
     }
 
     /**
