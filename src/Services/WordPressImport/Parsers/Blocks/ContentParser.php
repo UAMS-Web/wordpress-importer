@@ -308,9 +308,9 @@ class ContentParser
             // A loaded iframe always has an element parent, at least the body; PHPStan needs the check.
             // @pest-mutate-ignore: InstanceOfToTrue
             $parentDiv = $parent instanceof DOMElement && $parent->nodeName === 'div' ? $parent : null;
-            $align = $parentDiv === null
-                ? 'aligncenter'
-                : Alignment::translate($parentDiv->getAttribute('class'), false);
+            $align = $parentDiv instanceof DOMElement
+                ? Alignment::translate($parentDiv->getAttribute('class'), false)
+                : 'aligncenter';
 
             // The caption is the iframe title, without a leading "Video: " prefix
             $caption = \trim($iframe->getAttribute('title'));
@@ -347,7 +347,7 @@ class ContentParser
             }
 
             // Replace an embed-responsive container whole, and the iframe otherwise
-            $replaced = $parentDiv !== null && str_contains($parentDiv->getAttribute('class'), 'embed-responsive')
+            $replaced = $parentDiv instanceof DOMElement && str_contains($parentDiv->getAttribute('class'), 'embed-responsive')
                 ? $parentDiv
                 : $iframe;
             $replaced->replaceWith($videoSetDiv);

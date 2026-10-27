@@ -346,29 +346,16 @@ it('replaces an embed-responsive container with the video set', function (): voi
 <p>b</p>');
 });
 
-it('replaces an iframe in any other parent with the video set', function (string $html, string $expected): void {
-    expect(contentConvert($html))->toBe($expected);
+it('replaces an iframe in any other parent with the video set', function (string $open, string $close, string $align): void {
+    // The expected markup is built here, not in the dataset, because the set nonce is read when it is built
+    expect(contentConvert($open.'<iframe src="https://www.youtube.com/embed/abc"></iframe>'.$close))
+        ->toBe($open.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc', $align).$close);
 })->with([
-    'a paragraph' => [
-        '<p>x<iframe src="https://www.youtube.com/embed/abc"></iframe></p>',
-        '<p>x'.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc').'</p>',
-    ],
-    'another div, whose alignment still counts' => [
-        '<div class="alignwide"><iframe src="https://www.youtube.com/embed/abc"></iframe></div>',
-        '<div class="alignwide">'.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc', 'alignwide').'</div>',
-    ],
-    'a div with no alignment' => [
-        '<div><iframe src="https://www.youtube.com/embed/abc"></iframe></div>',
-        '<div>'.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc').'</div>',
-    ],
-    'a span with an alignment class' => [
-        '<span class="alignwide"><iframe src="https://www.youtube.com/embed/abc"></iframe></span>',
-        '<span class="alignwide">'.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc').'</span>',
-    ],
-    'a span with an embed-responsive class' => [
-        '<span class="embed-responsive"><iframe src="https://www.youtube.com/embed/abc"></iframe></span>',
-        '<span class="embed-responsive">'.contentVideoDiv('youtube', 'https://www.youtube.com/watch?v=abc').'</span>',
-    ],
+    'a paragraph' => ['<p>x', '</p>', 'aligncenter'],
+    'another div, whose alignment still counts' => ['<div class="alignwide">', '</div>', 'alignwide'],
+    'a div with no alignment' => ['<div>', '</div>', 'aligncenter'],
+    'a span with an alignment class' => ['<span class="alignwide">', '</span>', 'aligncenter'],
+    'a span with an embed-responsive class' => ['<span class="embed-responsive">', '</span>', 'aligncenter'],
 ]);
 
 it('converts every iframe', function (): void {
