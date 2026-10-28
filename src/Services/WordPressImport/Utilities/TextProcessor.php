@@ -613,22 +613,14 @@ class TextProcessor
 
         // Check if WpAutoP should be applied
         if ($applyWpAutoP) {
-            // Convert numeric HTML entities for proper WpAutoP processing, as
-            // UTF-8 rather than one byte, so a code point above 127 keeps its
-            // character (#154). NUL, which HTML decodes to U+FFFD, and a
-            // surrogate or a value past U+10FFFF, which name no character, are
-            // left for the decode below.
+            // Convert numeric HTML entities for proper WpAutoP processing. Each
+            // is decoded as the content is decoded everywhere else, so a code
+            // point above 127 keeps its character rather than becoming one byte,
+            // and NUL or a code point that names no character becomes U+FFFD
+            // (#154).
             $formattedContent = preg_replace_callback(
-                '/&#(\d+);/',
-                static function (array $matches): string {
-                    $codePoint = (int) $matches[1];
-
-                    if ($codePoint === 0 || ($codePoint >= 0xD800 && $codePoint <= 0xDFFF) || $codePoint > 0x10FFFF) {
-                        return $matches[0];
-                    }
-
-                    return \mb_chr($codePoint, 'UTF-8');
-                },
+                '/&#\d+;/',
+                static fn (array $matches): string => self::decodeEntities($matches[0]),
                 $formattedContent
             );
 

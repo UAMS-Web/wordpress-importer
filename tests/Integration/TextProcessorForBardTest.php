@@ -896,8 +896,8 @@ it('decodes a double-encoded numeric entity to the same character with WpAutoP a
     textProcessorForBardFakes();
 
     // #154: the entity pass ahead of WpAutoP used chr(), which wrapped 8212 to
-    // U+0014 and turned 233 into a lone byte; it now writes UTF-8, and leaves
-    // NUL, surrogates and values past U+10FFFF to html_entity_decode()
+    // U+0014 and turned 233 into a lone byte; it now decodes each entity with
+    // html_entity_decode(), as the path without WpAutoP does
     $withAutoP = textProcessorForBard("<p>A {$entity} B</p>", autoP: true);
     $without = textProcessorForBard("<p>A {$entity} B</p>");
 
