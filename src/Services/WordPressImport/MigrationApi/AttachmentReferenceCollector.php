@@ -388,24 +388,22 @@ final class AttachmentReferenceCollector
         $this->collectPattern('/\[caption\b[^\]]*\bid\s*=\s*["\']?attachment_(\d+)/i', $text, 'shortcode:caption', $item);
         $this->collectPattern('/[?&]attachment_id=(\d+)/i', $text, 'link:attachment_id', $item);
 
-        // A count of zero leaves the match list empty, so the guard only skips an empty loop
-        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
-        if (\preg_match_all('/\[gallery\b[^\]]*\bids\s*=\s*["\']?([\d,\s]+)/i', $text, $galleries) > 0) {
-            foreach ($galleries[1] as $list) {
-                foreach ($this->integersIn($list) as $id) {
-                    $this->addId($id, 'shortcode:gallery', $item);
-                }
+        // No match leaves the list empty, so the loop does nothing
+        \preg_match_all('/\[gallery\b[^\]]*\bids\s*=\s*["\']?([\d,\s]+)/i', $text, $galleries);
+
+        foreach ($galleries[1] as $list) {
+            foreach ($this->integersIn($list) as $id) {
+                $this->addId($id, 'shortcode:gallery', $item);
             }
         }
 
         // Every absolute or protocol-relative URL. Relative URLs are left alone, because the
         // importer does not treat them as same-site either.
-        // A count of zero leaves the match list empty, so the guard only skips an empty loop
-        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
-        if (\preg_match_all('#(?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+#i', $text, $urls) > 0) {
-            foreach ($urls[0] as $url) {
-                $this->collectUrl(\rtrim($url, '.;:!?'), $item);
-            }
+        // No match leaves the list empty, so the loop does nothing
+        \preg_match_all('#(?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+#i', $text, $urls);
+
+        foreach ($urls[0] as $url) {
+            $this->collectUrl(\rtrim($url, '.;:!?'), $item);
         }
     }
 
@@ -474,12 +472,11 @@ final class AttachmentReferenceCollector
         string $shape,
         int $item
     ): void {
-        // A count of zero leaves the match list empty, so the guard only skips an empty loop
-        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
-        if (\preg_match_all($pattern, $text, $matches) > 0) {
-            foreach ($matches[1] as $id) {
-                $this->addId((int) $id, $shape, $item);
-            }
+        // No match leaves the list empty, so the loop does nothing
+        \preg_match_all($pattern, $text, $matches);
+
+        foreach ($matches[1] as $id) {
+            $this->addId((int) $id, $shape, $item);
         }
     }
 
@@ -576,11 +573,8 @@ final class AttachmentReferenceCollector
     ): bool {
         // Meta keys are strings, so the strict flag, which phpstan-strict-rules requires, changes no result
         // @pest-mutate-ignore: TrueToFalse
-        if (\in_array($key, self::NAMED_META_KEYS, true)) {
-            return true;
-        }
-
-        return array_any(self::NAMED_META_PATTERNS, fn (string $pattern): bool => \preg_match($pattern, $key) === 1);
+        return \in_array($key, self::NAMED_META_KEYS, true)
+            || array_any(self::NAMED_META_PATTERNS, fn (string $pattern): bool => \preg_match($pattern, $key) === 1);
     }
 
     /**
