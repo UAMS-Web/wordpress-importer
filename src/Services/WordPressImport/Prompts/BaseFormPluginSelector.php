@@ -196,14 +196,10 @@ abstract class BaseFormPluginSelector
         );
 
         // ---
-        // Return null when interactive helpers return a non-string/empty value
+        // Return null when no path was asked for: a run that is not interactive answers with
+        // no default. The validator above refuses a blank path, so any string is one (#100).
         // ---
-
-        // Check if the file path is empty
-        if (
-            ! \is_string($filePath)
-            || \trim($filePath) === ''
-        ) {
+        if (! \is_string($filePath)) {
             // Return null to skip the import
             return null;
         }
