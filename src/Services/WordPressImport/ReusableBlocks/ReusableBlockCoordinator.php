@@ -185,7 +185,7 @@ class ReusableBlockCoordinator
         $wpBlocks = $xmlParser->getItems('wp_block');
 
         // Create reusable block entry creator instance
-        $creator = new ReusableBlockEntryCreator;
+        $creator = $this->entryCreator();
 
         // ---
         // Track imported post IDs globally to avoid infinite loops
@@ -216,16 +216,14 @@ class ReusableBlockCoordinator
             // ---
             $wpBlockPostIds = WpBlockBlockProcessor::getWpBlockPostIds();
 
-            // Deduplicate wp_block post IDs for import
-            $uniqueWpBlockPostIds = array_unique($wpBlockPostIds);
-
             // ---
-            // Filter out already processed wp_blocks
+            // Filter out already processed wp_blocks. A repeated id needs no deduplicating
+            // here, since each block is queued once below however often it is named.
             // ---
 
             // Filter to only include wp_blocks that haven't been processed yet
             $newWpBlockPostIds = \array_diff(
-                $uniqueWpBlockPostIds,
+                $wpBlockPostIds,
                 $importedPostIds
             );
 
@@ -248,8 +246,10 @@ class ReusableBlockCoordinator
 
                 // ---
                 // Check if this wp_block's post ID is in our target list and hasn't been
-                // processed yet
+                // processed yet. Post ids are strings, so the strict flags, which
+                // phpstan-strict-rules requires, change no result.
                 // ---
+                // @pest-mutate-ignore: TrueToFalse
                 if (
                     \in_array(
                         $postId,
@@ -287,8 +287,10 @@ class ReusableBlockCoordinator
                 // Resolve the source XML file path before parsing
                 $filePath = $xmlParser->getFilePath();
 
-                // Skip this wp_block when the parser has no file path
+                // Skip this wp_block when the parser has no file path. Every block shares
+                // the parser, so each one after it would be skipped too.
                 if ($filePath === null) {
+                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -316,8 +318,8 @@ class ReusableBlockCoordinator
                 // Increment the count of successfully imported wp_blocks
                 $importedCount++;
 
-                // Add delay to ensure filesystem writes are complete
-                usleep(300000); // 300ms delay
+                // Wait for the filesystem writes to complete
+                $this->waitForWrites();
 
                 // Clean up variables to free up memory
                 unset($wpBlockXmlParser);
@@ -330,7 +332,6 @@ class ReusableBlockCoordinator
             unset(
                 $wpBlocksToProcess,
                 $wpBlockPostIds,
-                $uniqueWpBlockPostIds,
                 $newWpBlockPostIds
             );
         }
@@ -364,5 +365,30 @@ class ReusableBlockCoordinator
             $wpBlocks,
             $creator
         );
+    }
+
+    /**
+     * Make the creator that writes each reusable block's entry.
+     *
+     * A method rather than an inline `new` so a test can record what is written without
+     * writing it (#102).
+     *
+     * @return ReusableBlockEntryCreator A fresh creator
+     */
+    protected function entryCreator(): ReusableBlockEntryCreator
+    {
+        return new ReusableBlockEntryCreator;
+    }
+
+    /**
+     * Wait for the filesystem writes of the entry just created to complete.
+     *
+     * A method so a test need not wait 300ms for each block it imports (#102).
+     */
+    protected function waitForWrites(): void
+    {
+        // A pause has no outcome a test can read, only a duration
+        // @pest-mutate-ignore: RemoveFunctionCall, IncrementInteger, DecrementInteger
+        usleep(300000);
     }
 }
