@@ -67,7 +67,7 @@ it('keeps the alignment the context sets', function (): void {
 
 it('adds a non-empty caption and alt override', function (): void {
     expect(bardSetBuilderValues(['imagePath' => 'images/a.jpg', 'caption' => 'A clinic', 'altOverride' => 'A nurse']))
-        ->toBe(['type' => 'image', 'image' => 'images/a.jpg', 'align' => 'aligncenter', 'caption' => 'A clinic', 'altOverride' => 'A nurse']);
+        ->toBe(['type' => 'image', 'image' => 'images/a.jpg', 'align' => 'aligncenter', 'caption' => 'A clinic', 'alt_override' => 'A nurse']);
 });
 
 it('leaves out an empty caption and an empty or null alt override', function (array $context): void {

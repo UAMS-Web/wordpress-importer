@@ -209,13 +209,13 @@ it('renders InnerBlocks as InnerBlocks, stripping their block comments first', f
 
     \assert(\is_array($body) && \is_array($body[0]) && \is_array($body[0]['attrs'] ?? null));
 
-    // The InnerBlocks path keeps the camel-cased alt override key
+    // The InnerBlocks path writes the alt override under the blueprint's handle
     expect($body[0]['type'])->toBe('set')
         ->and($body[0]['attrs']['values'] ?? null)->toBe([
             'type' => 'image',
             'image' => 'https://example.org/a.jpg',
             'align' => 'aligncenter',
-            'altOverride' => 'Clinic',
+            'alt_override' => 'Clinic',
         ]);
 });
 
