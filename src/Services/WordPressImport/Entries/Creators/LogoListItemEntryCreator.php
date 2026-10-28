@@ -224,7 +224,11 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 $result
             );
 
-            // Check if we've processed 50 items
+            // ---
+            // Check if we've processed 50 items. Collecting garbage bounds memory over
+            // a large export and changes no output, so how often it runs cannot be seen.
+            // ---
+            // @pest-mutate-ignore: PlusToMinus, ModulusToMultiplication, IfNegated, IdenticalToNotIdentical, DecrementInteger, IncrementInteger, RemoveFunctionCall
             if (($processedCount + $skippedCount) % 50 === 0) {
                 // Force garbage collection every to prevent memory buildup
                 gc_collect_cycles();
@@ -248,7 +252,8 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $site
         );
 
-        // Force final garbage collection
+        // Force final garbage collection, which bounds memory and changes no output
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return the collected page data for tree building
@@ -376,7 +381,11 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 'wp:meta_key'
             );
 
-            // Check if the metadata key is for content fields
+            // ---
+            // Check if the metadata key is for content fields. The needles are not
+            // numeric, so a loose comparison matches exactly what the strict one does.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 \in_array(
                     $key,
@@ -657,11 +666,14 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $data['logo_link_target'] = $logoLinkTarget === '_blank';
         }
 
-        // Map logo category
-        $logoCategory = $metaData['logo_category'] ?? '';
-        if ($logoCategory !== '') {
-            // Parse serialized array if needed
-            $categories = $this->parseSerializedArray($logoCategory);
+        // ---
+        // Map logo category. An absent or blank value parses to no categories, so
+        // the default it falls back to cannot be told apart.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $categories = $this->parseSerializedArray($metaData['logo_category'] ?? '');
+
+        if ($categories !== []) {
             $categorySlugs = [];
 
             // Convert category IDs to slugs using TermLookupHelper
@@ -705,21 +717,13 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 }
             }
 
-            // Anything unresolved falls back to the flat taxonomy reference shape.
-            if ($categorySlugs !== []) {
-                // Use the utility class to add site prefix with proper sluggification
-                $siteSpecificCategorySlugs = TaxonomySlugProcessor::addSitePrefixToSlugs(
-                    $categorySlugs,
+            // Anything unresolved falls back to the flat taxonomy reference shape,
+            // site-prefixed with proper sluggification
+            foreach ($categorySlugs as $categorySlug) {
+                $mappedCategoryTerms[] = 'logos_item_categories::'.TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $categorySlug,
                     $site
                 );
-
-                // Map each site-specific slug to a Statamic taxonomy reference
-                foreach ($siteSpecificCategorySlugs as $slug) {
-                    // Add the taxonomy reference only for non-empty string slugs
-                    if (\is_string($slug) && $slug !== '') {
-                        $mappedCategoryTerms[] = "logos_item_categories::{$slug}";
-                    }
-                }
             }
 
             // Store mapped category references when at least one exists
@@ -728,11 +732,10 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Map logo label
-        $logoLabel = $metaData['logo_label'] ?? '';
-        if ($logoLabel !== '') {
-            // Normalize the label ID value before resolving it
-            $normalizedLabelId = $this->normalizeTermId($logoLabel);
+        // Map logo label, normalizing its ID value before resolving it
+        $normalizedLabelId = $this->normalizeTermId($metaData['logo_label'] ?? null);
+
+        if ($normalizedLabelId !== null) {
 
             // ---
             // `logos_item_labels` became a site-scoped structured collection in
@@ -743,14 +746,12 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             // written back as a slug, which would restore the dangling value this
             // replaces (wordpress-importer-archive#1220).
             // ---
-            $labelReference = $normalizedLabelId === null
-                ? null
-                : TermDestinationRegistry::referenceFor(
-                    'logo-list-label',
-                    $normalizedLabelId
-                );
+            $labelReference = TermDestinationRegistry::referenceFor(
+                'logo-list-label',
+                $normalizedLabelId
+            );
 
-            if ($labelReference !== null && $labelReference !== '') {
+            if ($labelReference !== null) {
                 $data['logos_item_labels'] = [$labelReference];
             }
         }
@@ -764,11 +765,9 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $logoLink,
             $logoLinkText,
             $logoLinkTarget,
-            $logoCategory,
             $categories,
             $categorySlugs,
-            $siteSpecificCategorySlugs,
-            $logoLabel
+            $normalizedLabelId
         );
     }
 
@@ -925,56 +924,46 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $metaData[$key] = $value;
         }
 
-        // Map logo category
-        $logoCategory = $metaData['logo_category'] ?? '';
+        // ---
+        // Map logo category. An absent or blank value parses to no categories, so
+        // the default it falls back to cannot be told apart.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $categories = $this->parseSerializedArray($metaData['logo_category'] ?? '');
 
-        // Check if the logo category is not empty
-        if ($logoCategory !== '') {
-            // Parse serialized array if needed
-            $categories = $this->parseSerializedArray($logoCategory);
+        // Loop through each category ID in the parsed array
+        foreach ($categories as $categoryId) {
+            // Normalize category ID value to a string before term map lookup
+            $normalizedCategoryId = $this->normalizeTermId($categoryId);
 
-            // Loop through each category ID in the parsed array
-            foreach ($categories as $categoryId) {
-                // Normalize category ID value to a string before term map lookup
-                $normalizedCategoryId = $this->normalizeTermId($categoryId);
+            // Skip category IDs that cannot be normalized to a string value
+            if ($normalizedCategoryId === null) {
+                continue;
+            }
 
-                // Skip category IDs that cannot be normalized to a string value
-                if ($normalizedCategoryId === null) {
-                    continue;
-                }
+            // ---
+            // Check if the category ID is set in the term map. The term map holds only
+            // terms with a slug, so each resolves to a full slug, its own when it has
+            // no parent.
+            // ---
+            if (
+                isset($termMap[$normalizedCategoryId])
+                && \is_array($termMap[$normalizedCategoryId])
+            ) {
+                // Use TermLookupHelper to get the full hierarchical slug using ID-based lookup
+                $fullSlug = TermLookupHelper::getFullSlugFromMapById(
+                    $termMap,
+                    $normalizedCategoryId
+                );
 
-                // Check if the category ID is set in the term map
-                if (
-                    isset($termMap[$normalizedCategoryId])
-                    && \is_array($termMap[$normalizedCategoryId])
-                ) {
-                    // Get category term
-                    $categoryTerm = $termMap[$normalizedCategoryId];
+                // Add site prefix to create the site-specific taxonomy slug
+                $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $fullSlug,
+                    $site
+                );
 
-                    // Get category slug
-                    $categorySlug = \is_string($categoryTerm['term_slug'] ?? null) ? $categoryTerm['term_slug'] : '';
-
-                    // ---
-                    // Check if the category slug is not empty. A term with a slug always
-                    // resolves to a full slug, its own when it has no parent.
-                    // ---
-                    if ($categorySlug !== '') {
-                        // Use TermLookupHelper to get the full hierarchical slug using ID-based lookup
-                        $fullSlug = TermLookupHelper::getFullSlugFromMapById(
-                            $termMap,
-                            $normalizedCategoryId
-                        );
-
-                        // Add site prefix to create the site-specific taxonomy slug
-                        $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
-                            $fullSlug,
-                            $site
-                        );
-
-                        // Add site-specific category slug to logo categories for validation
-                        $this->logoCategories[$siteSpecificSlug][] = $entrySlug;
-                    }
-                }
+                // Add site-specific category slug to logo categories for validation
+                $this->logoCategories[$siteSpecificSlug][] = $entrySlug;
             }
         }
 
@@ -988,11 +977,8 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         // Clean up variables to free up memory
         unset(
             $metaData,
-            $logoCategory,
             $categories,
             $categoryId,
-            $categoryTerm,
-            $categorySlug,
         );
     }
 
@@ -1005,10 +991,12 @@ class LogoListItemEntryCreator extends BaseEntryCreator
     private function normalizeTermId(
         mixed $termId
     ): ?string {
-        // Check if the term ID is already a string
+        // ---
+        // Return a string ID as-is. A blank one resolves to nothing: no destination
+        // and no term-map entry has a blank id.
+        // ---
         if (\is_string($termId)) {
-            // Return non-empty string IDs as-is
-            return $termId !== '' ? $termId : null;
+            return $termId;
         }
 
         // Check if the term ID is an integer value

@@ -31,6 +31,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\LogoListItemEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
@@ -215,6 +216,25 @@ final class LogoItemThrowingConverter extends ContentProcessor
         }
 
         return logoItemBody();
+    }
+}
+
+/**
+ * A class whose unserializing would be recorded, to show the import never builds one.
+ */
+final class LogoItemWakeupProbe
+{
+    /**
+     * Whether any instance has been unserialized.
+     */
+    public static bool $woken = false;
+
+    /**
+     * Record that an instance was unserialized.
+     */
+    public function __wakeup(): void
+    {
+        self::$woken = true;
     }
 }
 
@@ -780,5 +800,55 @@ describe('the content type\'s other answers', function (): void {
 
         expect($output->fetch())->toContain('All logos item category terms referenced in logo list entries exist')
             ->and($empty->fetch())->toContain('No logo list entries found that reference');
+    });
+});
+
+describe('what an item carries', function (): void {
+    it('stores no logo field and converts nothing for an item with no postmeta', function (): void {
+        $converter = LogoItemEntryTestConverter::returning(logoItemBody());
+        $run = logoItemRun(logoItemExport([['slug' => 'bare']]), $converter);
+
+        expect(logoItemData(logoItemEntry('bare')))->not->toHaveKeys([
+            'logo_title', 'logo_image', 'logo_link', 'logo_link_text', 'logo_link_target',
+            'logos_item_categories', 'logos_item_labels', 'logo_shortdescr', 'logo_longdescr', '_thumbnail_id',
+        ])
+            ->and($converter->calls)->toBe([])
+            ->and($run['creator']->getPostCategories())->toBe([])
+            ->and($run['output'])->toContain("Processing logo list item 'bare' with content length: 0".PHP_EOL);
+    });
+
+    it('goes on to the next category after one it cannot use', function (): void {
+        $run = logoItemRun(logoItemExport([['slug' => 'mixed', 'meta' => ['logo_category' => 'a:2:{i:0;b:1;i:1;s:2:"71";}']]]), LogoItemEntryTestConverter::returning(logoItemBody()));
+
+        expect(logoItemEntry('mixed')->get('logos_item_categories'))->toBe([TermDestinationRegistry::referenceFor('logo-list-category', '71')])
+            ->and($run['creator']->getPostCategories())->toBe(['default_partners' => ['mixed']]);
+    });
+
+    it('builds no object from a serialized category value', function (): void {
+        LogoItemWakeupProbe::$woken = false;
+
+        logoItemRun(logoItemExport([['slug' => 'objects', 'meta' => ['logo_category' => 'a:1:{i:0;O:19:"LogoItemWakeupProbe":0:{}}']]]), LogoItemEntryTestConverter::returning(logoItemBody()));
+
+        expect((new ReflectionProperty(LogoItemWakeupProbe::class, 'woken'))->getValue())->toBeFalse()
+            ->and(logoItemData(logoItemEntry('objects')))->not->toHaveKey('logos_item_categories');
+    });
+
+    it('imports an item that does not exist yet when told to skip existing ones', function (): void {
+        $creator = logoItemCreator();
+        $creator->setEntryOverwriteBehavior('Skip matching files');
+
+        $run = logoItemRun(logoItemExport([['slug' => 'new-item']]), LogoItemEntryTestConverter::returning(logoItemBody()), $creator);
+
+        expect(logoItemFind('new-item'))->not->toBeNull()
+            ->and($run['output'])->toContain('1 processed, 0 skipped');
+    });
+
+    it('clears the taxonomy validator cache, so validation sees the terms just imported', function (): void {
+        $cache = new ReflectionProperty(BaseTaxonomyValidator::class, 'existingTermsCache');
+        $cache->setValue(null, ['logos_item_categories' => ['stale']]);
+
+        logoItemRun(logoItemExport([['slug' => 'cached']]), LogoItemEntryTestConverter::returning(logoItemBody()));
+
+        expect($cache->getValue())->toBe([]);
     });
 });
