@@ -17,6 +17,7 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -30,6 +31,7 @@ use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
@@ -215,6 +217,7 @@ function postEntryExport(array $posts): string
         $content = postEntryField($post, 'content', '<p>Body.</p>');
         $excerpt = postEntryField($post, 'excerpt', '');
         $sticky = postEntryField($post, 'sticky', '0');
+        $stickyXml = $sticky === 'absent' ? '' : "<wp:is_sticky>{$sticky}</wp:is_sticky>";
         $modified = postEntryField($post, 'modified', '2025-04-02 10:00:00');
         $categories = '';
 
@@ -244,7 +247,7 @@ function postEntryExport(array $posts): string
   <wp:post_parent>0</wp:post_parent>
   <wp:menu_order>0</wp:menu_order>
   <wp:post_type>post</wp:post_type>
-  <wp:is_sticky>{$sticky}</wp:is_sticky>
+  {$stickyXml}
   {$categories}
   {$meta}
 </item>
@@ -267,6 +270,8 @@ XML;
 <wp:category><wp:term_id>11</wp:term_id><wp:category_nicename>research</wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[Research]]></wp:cat_name></wp:category>
 <wp:category><wp:term_id>12</wp:term_id><wp:category_nicename>awards</wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[Awards]]></wp:cat_name></wp:category>
 <wp:category><wp:term_id>13</wp:term_id><wp:category_nicename>news-release</wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[News Release]]></wp:cat_name></wp:category>
+<wp:category><wp:term_id>14</wp:term_id><wp:category_nicename></wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[Blank]]></wp:cat_name></wp:category>
+<wp:tag><wp:term_id>24</wp:term_id><wp:tag_slug></wp:tag_slug><wp:tag_name><![CDATA[Blank Tag]]></wp:tag_name></wp:tag>
 <wp:tag><wp:term_id>21</wp:term_id><wp:tag_slug>grants</wp:tag_slug><wp:tag_name><![CDATA[Grants]]></wp:tag_name></wp:tag>
 <wp:tag><wp:term_id>22</wp:term_id><wp:tag_slug>faculty</wp:tag_slug><wp:tag_name><![CDATA[Faculty]]></wp:tag_name></wp:tag>
 <wp:term><wp:term_id>31</wp:term_id><wp:term_taxonomy>series</wp:term_taxonomy><wp:term_slug>season-one</wp:term_slug><wp:term_name><![CDATA[Season One]]></wp:term_name></wp:term>
@@ -306,9 +311,10 @@ XML);
  * @param  PostEntryTestConverter  $converter  The content converter
  * @param  ?PostEntryCreator  $creator  The creator, or null for a new one
  * @param  ?PostEntryTestMapper  $mapper  The metadata mapper, or null for a new one
+ * @param  ?AssetImporter  $assetImporter  The asset importer, or null for a new one
  * @return array{output: string, result: array<int|string, mixed>, mapper: PostEntryTestMapper} What the run produced
  */
-function postEntryRun(string $export, PostEntryTestConverter $converter, ?PostEntryCreator $creator = null, ?PostEntryTestMapper $mapper = null): array
+function postEntryRun(string $export, PostEntryTestConverter $converter, ?PostEntryCreator $creator = null, ?PostEntryTestMapper $mapper = null, ?AssetImporter $assetImporter = null): array
 {
     $parser = new XmlParser;
     $parser->parse($export);
@@ -316,7 +322,7 @@ function postEntryRun(string $export, PostEntryTestConverter $converter, ?PostEn
     $creator ??= new PostEntryCreator;
     $mapper ??= new PostEntryTestMapper;
 
-    $result = $creator->createEntries('default', 'posts', $parser, new AssetImporter, $output, $mapper, $converter);
+    $result = $creator->createEntries('default', 'posts', $parser, $assetImporter ?? new AssetImporter, $output, $mapper, $converter);
 
     return ['output' => $output->fetch(), 'result' => $result, 'mapper' => $mapper];
 }
@@ -828,10 +834,15 @@ describe('ordering categories primary first', function (): void {
         expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['01', '1.0'], '6', ['01' => '5', '1.0' => '6']))->toBe(['1.0', '01']);
     });
 
-    it('keeps document order when the primary\'s nicename is an integer string', function (): void {
-        // PHP stores an integer-string array key as an int, so the nicename found for
-        // the primary is 2024 and never matches the string '2024' the post carries.
-        expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['a', '2024'], '5', postEntryTermIds(['a', '2024'], ['1', '5'])))->toBe(['a', '2024']);
+    it('moves a primary whose nicename is an integer string, which PHP keys as an int', function (): void {
+        expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['a', '2024'], '5', postEntryTermIds(['a', '2024'], ['1', '5'])))->toBe(['2024', 'a']);
+    });
+
+    it('matches an integer term id, and passes over one that is not a scalar', function (): void {
+        $creator = new PostEntryCreator;
+
+        expect($creator->orderCategoriesPrimaryFirst(['a', 'b'], '2', ['a' => 1, 'b' => 2]))->toBe(['b', 'a'])
+            ->and($creator->orderCategoriesPrimaryFirst(['a', 'b'], '1', ['a' => ['1'], 'b' => '1']))->toBe(['b', 'a']);
     });
 });
 
@@ -860,4 +871,159 @@ describe('resolving term entry references', function (): void {
         expect((new PostEntryCreator)->resolveTermEntryReferences('category', ['four', 'list'], ['four' => 4, 'list' => ['4']]))
             ->toBe(['entry-four']);
     });
+});
+
+describe('what reaches the entry from the export', function (): void {
+    it('omits a category or tag with a blank nicename', function (): void {
+        postEntryRun(postEntryExport([['slug' => 'blank', 'categories' => ['', 'research'], 'tags' => ['']]]), PostEntryTestConverter::returning(postEntryBody()));
+        $entry = postEntry('blank');
+
+        expect($entry->get('post_categories'))->toBe([TermDestinationRegistry::referenceFor('category', '11')])
+            ->and($entry->get('post_tags'))->toBe([]);
+    });
+
+    it('treats a post with no sticky flag as not sticky', function (): void {
+        postEntryRun(postEntryExport([['slug' => 'unflagged', 'sticky' => 'absent']]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(postEntry('unflagged')->get('sticky_query'))->toBeFalse();
+    });
+
+    it('imports tags when tag import is not configured', function (): void {
+        $settings = config('wordpress-import');
+        config(['wordpress-import' => \array_diff_key(\is_array($settings) ? $settings : [], ['import_tags' => true])]);
+
+        postEntryRun(postEntryExport([['slug' => 'tagged', 'tags' => ['grants']]]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(postEntry('tagged')->get('post_tags'))->toBe([TermDestinationRegistry::referenceFor('post_tag', '21')])
+            ->and(PostEntryCreator::getTaxonomyHandlesForPostImport())->toBe(['category', 'post_tag']);
+    });
+
+    it('records the WordPress post id the redirect generator reads', function (): void {
+        postEntryRun(postEntryExport([['id' => '301', 'slug' => 'redirected']]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(postEntry('redirected')->get('wordpress_post_id'))->toBe(301);
+    });
+
+    it('stores no thumbnail id when the recorded one is blank', function (): void {
+        postEntryRun(postEntryExport([['slug' => 'blank-thumb', 'meta' => ['_thumbnail_id' => '']]]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(postEntryData(postEntry('blank-thumb')))->not->toHaveKeys(['_thumbnail_id', 'featured_image_16_9']);
+    });
+
+    it('stores no featured image when the upload returns an empty path', function (): void {
+        $importer = new class extends AssetImporter
+        {
+            /**
+             * Report image uploads as on.
+             *
+             * @return bool Always true
+             */
+            public function getUploadImages(): bool
+            {
+                return true;
+            }
+
+            /**
+             * Report file uploads as on.
+             *
+             * @return bool Always true
+             */
+            public function getUploadFiles(): bool
+            {
+                return true;
+            }
+
+            /**
+             * Return the empty path an overwrite handler can give back.
+             *
+             * @param  string  $url  The file URL
+             * @param  string  $site  The site handle
+             * @param  OutputInterface  $output  Console output
+             * @param  string  $container  The container handle
+             * @param  SameSitePolicy  $sameSitePolicy  The same-site policy
+             * @param  ?string  $pageUrl  The page URL
+             * @param  ?string  $title  The title
+             * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra metadata
+             * @param  ?string  $attachmentPageUrl  The attachment page URL
+             * @return string Always empty
+             */
+            public function importFile(
+                string $url,
+                string $site,
+                OutputInterface $output,
+                string $container = 'files',
+                SameSitePolicy $sameSitePolicy = SameSitePolicy::SKIP_DIFFERENT_SITE,
+                ?string $pageUrl = null,
+                ?string $title = null,
+                ?array $additionalFileMetadata = null,
+                ?string $attachmentPageUrl = null
+            ): string {
+                return '';
+            }
+        };
+
+        postEntryRun(postEntryExport([['slug' => 'empty-path', 'meta' => ['_thumbnail_id' => '901']]]), PostEntryTestConverter::returning(postEntryBody()), assetImporter: $importer);
+        $data = postEntryData(postEntry('empty-path'));
+
+        expect($data['_thumbnail_id'] ?? null)->toBe('901')
+            ->and($data)->not->toHaveKeys(['featured_image_16_9', 'featured_image_credit_query']);
+    });
+
+    it('registers the post\'s URL for link resolution', function (): void {
+        postEntryRun(postEntryExport([['id' => '301', 'slug' => 'linked']]), PostEntryTestConverter::returning(postEntryBody()));
+        $map = (new ReflectionProperty(LinkProcessor::class, 'urlToPostIdMap'))->getValue();
+
+        expect(\is_array($map) ? ($map['https://example.test/news/301/'] ?? null) : null)->toBe('301');
+    });
+
+    it('reports no page data for a post that fails to save', function (): void {
+        $creator = new class extends PostEntryCreator
+        {
+            /**
+             * Fail every save.
+             *
+             * @param  string  $collectionHandle  The collection handle
+             * @param  string  $site  The site handle
+             * @param  string  $entrySlug  The entry slug
+             * @param  array<int|string, mixed>  $data  The entry data
+             * @param  OutputInterface  $output  Console output
+             * @param  ?DateTime  $entryDate  The entry date
+             * @param  ?bool  $published  Whether the entry is published
+             * @param  ?string  $postDateStr  The post date
+             * @return ?Entry Always null
+             */
+            protected function saveEntry(
+                string $collectionHandle,
+                string $site,
+                string $entrySlug,
+                array $data,
+                OutputInterface $output,
+                ?DateTime $entryDate = null,
+                ?bool $published = null,
+                ?string $postDateStr = null
+            ): ?Entry {
+                return null;
+            }
+        };
+
+        $run = postEntryRun(postEntryExport([['id' => '301', 'slug' => 'unsaved']]), PostEntryTestConverter::returning(postEntryBody()), $creator);
+
+        expect($run['result'])->toBe([]);
+    });
+});
+
+describe('creating flat terms', function (): void {
+    it('hands a taxonomy it does not rename to the base class unchanged', function (string $handle, string $expected): void {
+        $errors = new ArrayObject;
+        Log::shouldReceive('error')->andReturnUsing(static function (mixed $message) use ($errors): void {
+            $errors->append($message);
+        });
+        $method = new ReflectionMethod(PostEntryCreator::class, 'createTaxonomyTermsFromStoredData');
+
+        $method->invoke(new PostEntryCreator, [['original' => 'term', 'name' => 'Term']], $handle, 'default', new BufferedOutput);
+
+        expect($errors->getArrayCopy())->toBe(["BaseEntryCreator::createTaxonomyTermsFromStoredData - Taxonomy '{$expected}' does not exist"]);
+    })->with([
+        'an unmapped taxonomy' => ['flat_terms', 'flat_terms'],
+    ]);
 });
