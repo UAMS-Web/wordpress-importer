@@ -58,3 +58,9 @@ it('runs a pass when any imported type declares it', function (string $pass, arr
     'nothing imported' => [ContentTypeReads::PASS_NAVIGATION, [], true],
     'an undeclared pass' => ['unknown', ['page'], false],
 ]);
+
+it('gives no type companions that repeat the shared ones, so its list needs no deduplication', function (): void {
+    foreach (ContentTypeReads::TYPE_COMPANIONS as $companions) {
+        expect(\array_intersect($companions, ContentTypeReads::BODY_COMPANIONS))->toBe([]);
+    }
+});
