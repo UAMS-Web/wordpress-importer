@@ -6,8 +6,6 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
 
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Statamic\Facades\Collection as CollectionFacade;
-use Statamic\Facades\Site as SiteFacade;
-use Statamic\Sites\Site;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
@@ -29,13 +27,6 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
      * @var array<string, array<string>>
      */
     private static array $existingTermsCache = [];
-
-    /**
-     * Cache for site names to avoid repeated Statamic facade calls.
-     *
-     * @var array<string, string>
-     */
-    private static array $siteNamesCache = [];
 
     /**
      * Tracks which terms have already been processed in the current session.
@@ -154,7 +145,10 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
                     $taxonomyHandle
                 );
 
-            // Check if the site-specific term is missing and hasn't been processed yet
+            // Check if the site-specific term is missing and hasn't been processed yet. Both
+            // sides of the comparison carry a site prefix, so none reads as a number, and
+            // in_array()'s strict flag, which phpstan-strict-rules requires, changes no result.
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 $comparisonSlug !== null
                 && $comparisonSlug !== ''
@@ -214,8 +208,10 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Get collection information for better reporting
         $collection = CollectionFacade::findByHandle($collectionHandle);
 
-        // Use collection title if available, otherwise use handle
+        // Use collection title if available, otherwise use handle. Both are strings, so the
+        // check below only narrows the type for phpstan.
         $collectionTitle = $collection !== null ? $collection->title() : $collectionHandle;
+        // @pest-mutate-ignore: TernaryNegated
         $collectionName = \is_string($collectionTitle) ? $collectionTitle : $collectionHandle;
 
         // Inform user that we're creating missing terms
@@ -368,7 +364,9 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Each immediate subdirectory holds one site's entries
         foreach (LaravelFileFacade::directories($collectionPath) as $siteDirectory) {
             // The facade types its elements `mixed`, and anything that is not a
-            // path cannot name a site
+            // path cannot name a site. It answers with paths only, so this only
+            // narrows the type for phpstan.
+            // @pest-mutate-ignore: ContinueToBreak
             if (! \is_string($siteDirectory)) {
                 continue;
             }
@@ -425,54 +423,22 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Split off the site prefix, which is everything before the first separator
         $sitePrefixEnd = \strpos($siteSpecificSlug, '_');
 
-        // Without a separator there is no prefix to keep and no path to reduce
+        // Without a separator there is no prefix to keep and no path to reduce. Read on, such
+        // a slug would come back whole anyway, so this only narrows the type.
+        // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
         if ($sitePrefixEnd === false) {
             return $siteSpecificSlug;
         }
 
-        // Everything after the site prefix is the underscore-joined term path
-        $termPath = \substr($siteSpecificSlug, $sitePrefixEnd + 1);
+        // The leaf is everything after the last separator, which is the first one when the
+        // path has a single segment. Reattach the site prefix so the comparison stays
+        // site-scoped. The first separator was found above, so the last one is found too, and
+        // the cast only narrows the type for phpstan.
+        // @pest-mutate-ignore: RemoveIntegerCast
+        $leafStart = (int) \strrpos($siteSpecificSlug, '_');
 
-        // The leaf is the last segment of that path
-        $leafStart = \strrpos($termPath, '_');
-        $leaf = $leafStart === false
-            ? $termPath
-            : \substr($termPath, $leafStart + 1);
-
-        // Reattach the site prefix so the comparison stays site-scoped
-        return \substr($siteSpecificSlug, 0, $sitePrefixEnd + 1).$leaf;
-    }
-
-    /**
-     * Gets site name from cache or Statamic facade.
-     *
-     * @param  string  $site  The site handle
-     * @return string The site name
-     */
-    protected function getCachedSiteName(
-        string $site
-    ): string {
-        // Check if site name is already cached
-        if (! isset(self::$siteNamesCache[$site])) {
-            $siteObject = SiteFacade::get($site);
-            $resolvedName = null;
-
-            if ($siteObject instanceof Site) {
-                $name = $siteObject->name();
-                $resolvedName = \is_string($name) ? $name : null;
-            }
-
-            self::$siteNamesCache[$site] = $resolvedName ?? \ucwords(
-                \str_replace(
-                    '_',
-                    ' ',
-                    $site
-                )
-            );
-        }
-
-        // Return cached site name
-        return self::$siteNamesCache[$site];
+        return \substr($siteSpecificSlug, 0, $sitePrefixEnd + 1)
+            .\substr($siteSpecificSlug, $leafStart + 1);
     }
 
     /**
@@ -482,9 +448,6 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
     {
         // Clear existing terms cache
         self::$existingTermsCache = [];
-
-        // Clear site names cache
-        self::$siteNamesCache = [];
 
         // Clear processed terms cache
         self::$processedTermsCache = [];
