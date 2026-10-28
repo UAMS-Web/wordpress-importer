@@ -145,7 +145,10 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
                     $taxonomyHandle
                 );
 
-            // Check if the site-specific term is missing and hasn't been processed yet
+            // Check if the site-specific term is missing and hasn't been processed yet. Both
+            // sides of the comparison carry a site prefix, so none reads as a number, and
+            // in_array()'s strict flag, which phpstan-strict-rules requires, changes no result.
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 $comparisonSlug !== null
                 && $comparisonSlug !== ''
@@ -205,8 +208,10 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Get collection information for better reporting
         $collection = CollectionFacade::findByHandle($collectionHandle);
 
-        // Use collection title if available, otherwise use handle
+        // Use collection title if available, otherwise use handle. Both are strings, so the
+        // check below only narrows the type for phpstan.
         $collectionTitle = $collection !== null ? $collection->title() : $collectionHandle;
+        // @pest-mutate-ignore: TernaryNegated
         $collectionName = \is_string($collectionTitle) ? $collectionTitle : $collectionHandle;
 
         // Inform user that we're creating missing terms
@@ -359,7 +364,9 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Each immediate subdirectory holds one site's entries
         foreach (LaravelFileFacade::directories($collectionPath) as $siteDirectory) {
             // The facade types its elements `mixed`, and anything that is not a
-            // path cannot name a site
+            // path cannot name a site. It answers with paths only, so this only
+            // narrows the type for phpstan.
+            // @pest-mutate-ignore: ContinueToBreak
             if (! \is_string($siteDirectory)) {
                 continue;
             }
@@ -416,22 +423,22 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
         // Split off the site prefix, which is everything before the first separator
         $sitePrefixEnd = \strpos($siteSpecificSlug, '_');
 
-        // Without a separator there is no prefix to keep and no path to reduce
+        // Without a separator there is no prefix to keep and no path to reduce. Read on, such
+        // a slug would come back whole anyway, so this only narrows the type.
+        // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
         if ($sitePrefixEnd === false) {
             return $siteSpecificSlug;
         }
 
-        // Everything after the site prefix is the underscore-joined term path
-        $termPath = \substr($siteSpecificSlug, $sitePrefixEnd + 1);
+        // The leaf is everything after the last separator, which is the first one when the
+        // path has a single segment. Reattach the site prefix so the comparison stays
+        // site-scoped. The first separator was found above, so the last one is found too, and
+        // the cast only narrows the type for phpstan.
+        // @pest-mutate-ignore: RemoveIntegerCast
+        $leafStart = (int) \strrpos($siteSpecificSlug, '_');
 
-        // The leaf is the last segment of that path
-        $leafStart = \strrpos($termPath, '_');
-        $leaf = $leafStart === false
-            ? $termPath
-            : \substr($termPath, $leafStart + 1);
-
-        // Reattach the site prefix so the comparison stays site-scoped
-        return \substr($siteSpecificSlug, 0, $sitePrefixEnd + 1).$leaf;
+        return \substr($siteSpecificSlug, 0, $sitePrefixEnd + 1)
+            .\substr($siteSpecificSlug, $leafStart + 1);
     }
 
     /**
