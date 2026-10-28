@@ -505,6 +505,9 @@ class PeopleEntryCreator extends BaseEntryCreator
                 // Note: Uses the configured WordPress taxonomy handle for mapping
                 // ---
                 $termIdValue = $taxonomyNicenameToTermIdMap[$group] ?? null;
+
+                // An id no term has finds nothing in either lookup below, whatever it is
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
                 $termId = \is_string($termIdValue) ? $termIdValue : '';
 
                 // Get the full hierarchical slug using ID-based lookup

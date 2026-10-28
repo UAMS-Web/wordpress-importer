@@ -635,7 +635,8 @@ describe('importing a person', function (): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'plain', 'meta' => ['_tsemail' => 'show@example.test', '_psunknown' => 'x', 'email' => 'bare']]]), PeopleEntryTestConverter::returning(peopleEntryBody()));
         $data = peopleEntryData(peopleEntry('plain'));
 
-        expect($data)->toHaveKey('email', null)
+        expect($data)->toHaveKey('email')
+            ->and($data['email'])->toBeNull()
             ->and($data)->not->toHaveKeys(['unknown', '_psunknown', '_thumbnail_id', 'import_wordpress_notes']);
     });
 
@@ -723,7 +724,8 @@ describe('importing a person', function (): void {
         $data = peopleEntryData(peopleEntry('faceless'));
 
         expect($data['_thumbnail_id'] ?? null)->toBe('999')
-            ->and($data)->toHaveKey('portrait', null);
+            ->and($data)->toHaveKey('portrait')
+            ->and($data['portrait'])->toBeNull();
     });
 });
 
@@ -886,7 +888,8 @@ describe('what else reaches the entry', function (): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'pictured', 'meta' => ['_thumbnail_id' => '900']]]), PeopleEntryTestConverter::returning(peopleEntryBody()), assetImporter: $importer);
 
         expect($importer->imports)->toBe([['https://example.test/wp-content/uploads/2025/04/portrait.jpg', '', 'portraits']])
-            ->and(peopleEntryData(peopleEntry('pictured')))->toHaveKey('portrait', $expected);
+            ->and(peopleEntryData(peopleEntry('pictured')))->toHaveKey('portrait')
+            ->and(peopleEntryData(peopleEntry('pictured'))['portrait'])->toBe($expected);
     })->with([
         'a path' => ['2025/04/portrait-1.jpg', 'portrait-1.jpg'],
         'an empty path' => ['', null],
