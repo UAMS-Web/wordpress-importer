@@ -670,7 +670,6 @@ class SideBySideParser
             }
         }
 
-        // Initialize image variable
         // Extract image alt text
         $altText = $normalizedData['side_image_side_image_alt_text'] ?? '';
 
