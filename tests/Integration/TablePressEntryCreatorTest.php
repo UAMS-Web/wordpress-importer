@@ -15,8 +15,10 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
+use Statamic\Events\EntryDeleted;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
@@ -927,16 +929,21 @@ describe('saving rules', function (): void {
         expect($entry instanceof Entry ? $entry->locale() : null)->toBe('other');
     });
 
-    it('replaces a table that already exists by id under a new slug', function (): void {
+    it('replaces a table that already exists by id under a new slug, deleting the old entry', function (): void {
         $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
         $creator = new TablePressEntryCreator;
         $method->invoke($creator, 'tables', 'default', 'first-slug', ['id' => 'same-id', 'title' => 'First'], new BufferedOutput);
+        $deleted = new ArrayObject;
+        Event::listen(EntryDeleted::class, static function (EntryDeleted $event) use ($deleted): void {
+            $deleted->append($event->entry instanceof Entry ? tablePressSlug($event->entry) : null);
+        });
 
         $method->invoke($creator, 'tables', 'default', 'second-slug', ['id' => 'same-id', 'title' => 'Second'], new BufferedOutput);
         $entries = tablePressEntries();
 
         expect(\array_keys($entries))->toBe(['second-slug'])
-            ->and($entries['second-slug']->get('title'))->toBe('Second');
+            ->and($entries['second-slug']->get('title'))->toBe('Second')
+            ->and($deleted->getArrayCopy())->toBe(['first-slug']);
     });
 
     it('leaves an entry in another collection with the same slug alone', function (): void {

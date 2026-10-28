@@ -318,7 +318,11 @@ class TablePressEntryCreator extends BaseEntryCreator
             // Log progress for the current table
             $output->writeln("Processing table '$entrySlug' with content length: ".\strlen($contentEncoded));
 
-            // Convert excerpt to Bard format for 'description' field
+            // ---
+            // Convert excerpt to Bard format for 'description' field. A blank one
+            // converts to nothing either way, so the check only saves the parse.
+            // ---
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             if ($excerptEncoded !== '') {
                 $editor = new Editor([
                     'extensions' => [
