@@ -1261,11 +1261,37 @@ it('leaves a shortcode right after the start of a block to the block once the te
     expect($fakes['shortcode']->converted)->toBe(['gone']);
 });
 
-it('imports an attribute value only up to its first escaped quote', function (): void {
+it('imports an attribute value holding an escaped quote whole, with WpAutoP and without', function (string $html, string $id, bool $autoP): void {
     textProcessorForBardFakes();
 
-    // Characterization of #157
-    expect(textProcessorForBard('<p id="say &quot;hi&quot; now">x</p>'))->toBe([textProcessorForBardParagraph('x', 'say ')]);
+    // #157: the content was entity-decoded before parsing, so the decoded quote
+    // ended the value; quotes inside tags are now left for libxml to decode
+    expect(textProcessorForBard($html, autoP: $autoP))->toBe([textProcessorForBardParagraph('x', $id)]);
+})->with([
+    'a named double quote' => ['<p id="say &quot;hi&quot; now">x</p>', 'say "hi" now', false],
+    'a numeric double quote' => ['<p id="say &#34;hi&#34; now">x</p>', 'say "hi" now', false],
+    'a named single quote in a single-quoted value' => ["<p id='it&apos;s'>x</p>", "it's", false],
+    'a numeric single quote in a single-quoted value' => ["<p id='it&#39;s'>x</p>", "it's", false],
+    'a named double quote with WpAutoP' => ['<p id="say &quot;hi&quot; now">x</p>', 'say "hi" now', true],
+    'a numeric double quote with WpAutoP' => ['<p id="say &#34;hi&#34; now">x</p>', 'say "hi" now', true],
+]);
+
+it('decodes the entities in text as before, quotes among them', function (bool $autoP): void {
+    textProcessorForBardFakes();
+
+    expect(textProcessorForBard('<p>A &quot;q&quot; &#34;n&#34; &amp; &#39;s&#39; &apos;t&apos; &bigstar;</p>', autoP: $autoP))
+        ->toBe([textProcessorForBardParagraph("A \"q\" \"n\" & 's' 't' \u{2605}")]);
+})->with([
+    'without WpAutoP' => [false],
+    'with WpAutoP' => [true],
+]);
+
+it('hands the link processor a link title holding an escaped quote whole', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    textProcessorForBard('<p><a href="/k" title="a &quot;q&quot; b">K</a></p>');
+
+    expect($fakes['link']->calls[0]['html'] ?? null)->toBe('<p><a href="/k" title="a &quot;q&quot; b">K</a></p>');
 });
 
 it('trims a NUL from the edges of a shortcode block in content that is not valid UTF-8', function (): void {

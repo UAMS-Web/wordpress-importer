@@ -133,6 +133,63 @@ class TextProcessor
     }
 
     /**
+     * Decodes HTML entities in markup about to be parsed, leaving quotes encoded
+     * inside tags.
+     *
+     * Decoding `&quot;` inside a double-quoted attribute value before parsing turns
+     * it into a bare `"`, which ends the value, so the parser keeps only the part
+     * before it; `&#39;` and `&apos;` do the same inside a single-quoted value
+     * (#157). Inside a tag every other entity is decoded and the quotes are left
+     * for the parser, which decodes them as part of the value. Text and comments
+     * are decoded exactly as {@see self::decodeEntities()} would.
+     *
+     * @param  string  $content  The markup to decode
+     * @return string The markup with entities decoded, and quotes inside tags left encoded
+     */
+    private static function decodeEntitiesKeepingTagQuotes(
+        string $content
+    ): string {
+        // ---
+        // Split into comments, tags and the text between them. A tag's quoted values
+        // may hold a `>`, so the pattern reads a quoted value whole; a tag whose
+        // quote is never closed does not match and is decoded as text, as before.
+        // ---
+        $segments = \preg_split(
+            '/(<!--.*?-->|<[A-Za-z\/!?][^>"\']*+(?:(?:"[^"]*+"|\'[^\']*+\')[^>"\']*+)*+>)/s',
+            $content,
+            flags: PREG_SPLIT_DELIM_CAPTURE
+        );
+
+        // Fall back to a full decode if splitting failed (e.g. a PCRE limit was hit)
+        if ($segments === false) {
+            return self::decodeEntities($content);
+        }
+
+        // Reassemble, decoding each tag without its quotes and everything else whole
+        $result = '';
+
+        foreach ($segments as $index => $segment) {
+            // The captured delimiters sit at the odd indexes
+            $isTag = $index % 2 === 1 && ! \str_starts_with($segment, '<!--');
+
+            // ---
+            // A tag keeps its quotes encoded, `&apos;` spelled as `&#39;`: `&apos;` is
+            // not an HTML 4 entity, so a libxml older than 2.14 leaves it as it is,
+            // while every version decodes a numeric reference. libxml 2.14 and later
+            // decode an HTML5 named entity in an attribute value themselves, so the doc
+            // type flag changes nothing with them; an older libxml leaves one such as
+            // `&bigstar;` encoded without it.
+            // ---
+            // @pest-mutate-ignore: BitwiseOrToBitwiseAnd, UnwrapStrReplace
+            $result .= $isTag
+                ? \str_replace('&apos;', '&#39;', \html_entity_decode($segment, ENT_NOQUOTES | ENT_HTML5, 'UTF-8'))
+                : self::decodeEntities($segment);
+        }
+
+        return $result;
+    }
+
+    /**
      * Normalizes a string by removing control characters.
      *
      * Removes control characters (U+0000 to U+001F, U+0080 to U+009F) for clean text
@@ -187,12 +244,9 @@ class TextProcessor
         // this document, so its whitespace setting has no effect.
         $doc->formatOutput = true;
 
-        // Convert HTML entities to UTF-8 equivalents
-        $html = html_entity_decode(
-            $html,
-            ENT_QUOTES | ENT_HTML5,
-            'UTF-8'
-        );
+        // Convert HTML entities to UTF-8 equivalents, leaving the quotes inside
+        // tags for libxml to decode as part of an attribute value (#157)
+        $html = self::decodeEntitiesKeepingTagQuotes($html);
 
         // ---
         // Convert every non-ASCII character to a numeric HTML entity. DOMDocument
@@ -499,8 +553,9 @@ class TextProcessor
         // Normalize UTF-8 encoding to ensure valid characters
         $processedContent = self::normalizeUtf8($html);
 
-        // Decode HTML entities for proper character rendering
-        $processedContent = self::decodeEntities($processedContent);
+        // Decode HTML entities for proper character rendering, leaving the quotes
+        // inside tags so an attribute value keeps its whole value (#157)
+        $processedContent = self::decodeEntitiesKeepingTagQuotes($processedContent);
 
         // ---
         // Handle content that is only a single wp:shortcode block.
@@ -630,21 +685,19 @@ class TextProcessor
             // point above 127 keeps its character rather than becoming one byte,
             // and an entity html_entity_decode() leaves alone, such as NUL, a
             // carriage return or a surrogate, reaches the steps after WpAutoP as
-            // it does without it (#154).
+            // it does without it (#154). A quote is left encoded, since it may sit
+            // in an attribute value; the decode below decodes it in text (#157).
             $formattedContent = preg_replace_callback(
                 '/&#\d+;/',
-                static fn (array $matches): string => self::decodeEntities($matches[0]),
+                static fn (array $matches): string => \html_entity_decode($matches[0], ENT_NOQUOTES | ENT_HTML5, 'UTF-8'),
                 $formattedContent
             );
 
             $formattedContent ??= $processedContent;
 
-            // Decode HTML entities for proper WpAutoP processing
-            $formattedContent = html_entity_decode(
-                $formattedContent,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
+            // Decode HTML entities for proper WpAutoP processing, leaving the quotes
+            // inside tags (#157)
+            $formattedContent = self::decodeEntitiesKeepingTagQuotes($formattedContent);
 
             // Apply WpAutoP to the formatted content
             $formattedContent = $wpAutoP->process($formattedContent);

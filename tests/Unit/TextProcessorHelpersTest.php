@@ -173,12 +173,55 @@ it('wraps the content in its own root even when the content starts with a div', 
     expect(textProcessorHelpersRoot($doc))->toBe("<div class=\"a\">x</div>\n<p>y</p>");
 });
 
-it('cuts an attribute value at its first escaped quote', function (): void {
-    // Characterization of #157: the quote is decoded before parsing, so it ends
-    // the value
-    $doc = TextProcessor::loadHtml('<p title="a &quot;b&quot; c">x</p>');
+it('keeps an attribute value holding an escaped quote whole', function (string $html, string $value): void {
+    // #157: the quote is left encoded inside the tag, and libxml decodes it as part
+    // of the value
+    $doc = TextProcessor::loadHtml($html);
 
-    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe('a ');
+    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe($value);
+})->with([
+    'a named double quote' => ['<p title="a &quot;b&quot; c">x</p>', 'a "b" c'],
+    'a decimal double quote' => ['<p title="a &#34;b&#34; c">x</p>', 'a "b" c'],
+    'a hex double quote' => ['<p title="a &#x22;b&#x22; c">x</p>', 'a "b" c'],
+    'a named single quote' => ["<p title='it&apos;s'>x</p>", "it's"],
+    'a decimal single quote' => ["<p title='it&#39;s'>x</p>", "it's"],
+    'a hex single quote' => ["<p title='it&#x27;s'>x</p>", "it's"],
+    'a quote after a > in the value' => ['<p title="a > &quot;b&quot;">x</p>', 'a > "b"'],
+    'a quote in the second of two values' => ['<p class="c" title="a &quot;b&quot;">x</p>', 'a "b"'],
+]);
+
+it('decodes the other entities inside a tag', function (): void {
+    $doc = TextProcessor::loadHtml('<p title="&bigstar; &amp; &lt;b&gt;">x</p>');
+
+    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe("\u{2605} & <b>");
+});
+
+it('decodes a comment whole, quotes and all', function (): void {
+    $doc = TextProcessor::loadHtml('<!-- a &quot;b&quot; --><p>x</p>');
+    $comment = $doc->getElementsByTagName('div')->item(0)?->firstChild;
+
+    expect($comment instanceof DOMComment ? $comment->data : null)->toBe(' a "b" ');
+});
+
+it('decodes an entity inside a tag that decodes to another entity, as it does in text', function (): void {
+    // The markup is decoded once here and once more by libxml, so the value is
+    // decoded twice, as it was before #157
+    $doc = TextProcessor::loadHtml('<p title="a &amp;lt;b">x</p>');
+
+    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe('a <b');
+});
+
+it('decodes the markup whole when it cannot split it into tags and text', function (): void {
+    // At the PCRE limit the split fails, and the full decode before #157 still runs
+    $doc = textProcessorHelpersAtPcreLimit(static fn (): DOMDocument => TextProcessor::loadHtml('<p>a &quot;b&quot;</p>'));
+
+    expect($doc->getElementsByTagName('p')->item(0)?->textContent)->toBe('a "b"');
+});
+
+it('decodes the quotes in text', function (): void {
+    $doc = TextProcessor::loadHtml('<p>a &quot;b&quot; &#39;c&#39; &apos;d&apos;</p>');
+
+    expect($doc->getElementsByTagName('p')->item(0)?->textContent)->toBe("a \"b\" 'c' 'd'");
 });
 
 it('clears the libxml errors recorded before it loads', function (): void {
