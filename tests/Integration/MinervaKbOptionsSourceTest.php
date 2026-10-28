@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Extractor;
@@ -1329,4 +1330,145 @@ it('refuses where the header on disk names a generation whose row was not served
         .'never says which, so "uamswp-minerva-kb-options" may exist and have been withheld. '
         .'Refusing to read another generation\'s row in its place.'
     );
+});
+
+// --- #100: the exact refusals and warning, and the readers behind them -----------------------
+
+it('words the refusal of a v1 site served only the v2 row in full', function (): void {
+    fakeOptionsWithActivePlugins(
+        ['uamswp-minerva-kb-options' => minervaKbV2Settings()],
+        ['UAMSWP-minervakb/minervakb.php'],
+        ['by_shape' => 2, 'by_name' => 5, 'total' => 7]
+    );
+
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+        MigrationApiException::class,
+        'The MinervaKB plugin active on this site is v1 (its entry file is minervakb.php), '
+        .'and v1 writes "minerva-kb-options", which the migration API did not serve. The row it did serve '
+        .'("uamswp-minerva-kb-options") is written by v2, which is not what runs here, so it is a leftover this '
+        .'site does not use. The endpoint reports 2 rows withheld by shape and 5 by name '
+        .'and never says which, so "minerva-kb-options" may exist and have been withheld rather than be '
+        .'absent. Refusing to import knowledge base content with a configuration this site '
+        .'does not use.'
+    );
+});
+
+it('words the warning that the installed generation\'s row was not served in full', function (): void {
+    fakeOptionsWithActivePlugins(
+        ['minerva-kb-options' => minervaKbDriftedV1Settings()],
+        ['uamswp-minervakb/uamswp-minervakb.php'],
+        ['by_shape' => 2, 'by_name' => 5, 'total' => 7]
+    );
+
+    $output = new BufferedOutput;
+    apiLoader()->loadSettings('/ignored.json', $output);
+
+    expect($output->fetch())->toContain(
+        'Warning: the MinervaKB generation installed on this site writes '
+        .'"uamswp-minerva-kb-options", and that row is not among those the migration API served. The row '
+        .'read instead ("minerva-kb-options") is written by the other generation. The endpoint '
+        .'reports 2 rows withheld by shape and 5 by name and never reports which, '
+        .'so "uamswp-minerva-kb-options" may exist here and have been withheld rather than be absent. If '
+        .'this site runs the generation that writes "uamswp-minerva-kb-options", these are not the settings '
+        ."it uses.\n"
+    );
+});
+
+it('words the refusal of a row left by a plugin that is not installed in full', function (): void {
+    fakeOptionsWithPlugins(['uamswp-minerva-kb-options' => minervaKbV2Settings()], [], ['UAMSWP-minervakb']);
+
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+        MigrationApiException::class,
+        'The migration API served a MinervaKB settings row ("uamswp-minerva-kb-options"), but this site has no '
+        ."MinervaKB plugin installed \u{2014} the endpoint reports the plugin directory as not "
+        .'running here. A `wp_options` row outlives the plugin that wrote it, so the row '
+        .'is a leftover and its configuration is not what this site uses. Refusing to '
+        .'import knowledge base content from it.'
+    );
+});
+
+it('finds the v1 entry file however active_plugins is served or cased', function (mixed $activePlugins): void {
+    // Served as a JSON object string, with something that is not a path ahead of it, or with
+    // the file's name in another case: each still names v1, so the v2 row alone is refused
+    Http::fake([
+        '*/options*' => Http::response([
+            'options' => [
+                'uamswp-minerva-kb-options' => \json_encode(minervaKbV2Settings()),
+                'active_plugins' => $activePlugins,
+            ],
+            'acf' => [],
+            'denylist' => ['added' => [], 'removed' => [], 'stale' => true],
+            'denied' => ['by_shape' => 0, 'by_name' => 0, 'total' => 0],
+        ], 200),
+    ]);
+
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+        ->toThrow(MigrationApiException::class, 'is written by v2, which is not what runs here');
+})->with([
+    'a JSON object string' => ['{"3":"UAMSWP-minervakb/minervakb.php"}'],
+    'after an entry that is not a path' => [[5, 'UAMSWP-minervakb/minervakb.php']],
+    'in another case' => [['UAMSWP-minervakb/MinervaKB.php']],
+]);
+
+it('reads the denylist halves on their own, and only a mention of the plugin counts', function (array $denylist, bool $refused): void {
+    Http::fake([
+        '*/options*' => Http::response([
+            'options' => ['uamswp-minerva-kb-options' => \json_encode(minervaKbV2Settings())],
+            'acf' => [],
+            'denylist' => $denylist,
+            'denied' => ['by_shape' => 0, 'by_name' => 0, 'total' => 0],
+        ], 200),
+    ]);
+
+    $load = fn (): ?array => apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+
+    if ($refused) {
+        expect($load)->toThrow(MigrationApiException::class, 'has no MinervaKB plugin installed');
+    } else {
+        expect(loadedSettings($load()))->toBe(minervaKbV2Settings());
+    }
+})->with([
+    'removed alone names it' => [['removed' => ['UAMSWP-minervakb']], true],
+    'removed names another plugin' => [['added' => [], 'removed' => ['akismet']], false],
+]);
+
+it('reports a file it fails to read for any other reason, and logs it', function (): void {
+    $log = Log::spy();
+    $loader = new class extends Loader
+    {
+        protected function readFileContent(string $filePath, OutputInterface $output): ?string
+        {
+            throw new RuntimeException('disk gone');
+        }
+    };
+
+    $output = new BufferedOutput;
+
+    expect($loader->loadSettings('/settings.json', $output))->toBeNull()
+        ->and($output->fetch())->toBe("Error loading settings file: disk gone\n");
+
+    $log->shouldHaveReceived('error', ['Loader::loadSettings: Error loading settings file /settings.json: disk gone']);
+});
+
+it('reports a file whose JSON is not an object or a list, and logs it', function (): void {
+    $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'scalar.json';
+    \file_put_contents($path, '5');
+
+    $log = Log::spy();
+    $output = new BufferedOutput;
+
+    expect((new Loader)->loadSettings($path, $output))->toBeNull()
+        ->and($output->fetch())->toBe("Invalid JSON format: expected an object or array.\n");
+
+    $log->shouldHaveReceived('error', ["Loader::parseJsonContent: JSON root is not an array in {$path}"]);
+});
+
+it('words an invalid JSON error with the parser\'s reason', function (): void {
+    $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'broken.json';
+    \file_put_contents($path, '{not valid json');
+
+    $output = new BufferedOutput(decorated: true);
+    (new Loader)->loadSettings($path, $output);
+
+    expect($output->fetch())->toBe("\e[37;41mInvalid JSON format: Syntax error\e[39;49m\n");
 });

@@ -96,7 +96,7 @@ class Selector
         }
 
         // Step 4: Log successful loading
-        $output->writeln('<info>Successfully loaded MinervaKB settings from: '.$filePath.'</info>');
+        $output->writeln(\sprintf('<info>Successfully loaded MinervaKB settings from: %s</info>', $filePath));
 
         return $settings;
     }
