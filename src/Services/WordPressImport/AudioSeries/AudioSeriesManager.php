@@ -193,7 +193,8 @@ class AudioSeriesManager
      * so an untagged term is silently treated as neither kind.
      *
      * @param  AudioSeriesConfig  $config  The audio series configuration containing taxonomy and term details
-     * @param  string  $site  The Statamic site handle where the term should be created
+     * @param  string  $site  The Statamic site handle being imported. Not read: a term is
+     *                         written to its taxonomy's default locale
      * @param  OutputInterface  $output  Console output for user feedback and logging
      * @param  ?string  $termName  Optional custom term name. If not provided, uses the default name from the
      *                             configuration
@@ -279,7 +280,6 @@ class AudioSeriesManager
         // Configure the new term
         $term->taxonomy($taxonomyHandle);
         $term->slug($termSlug);
-        $term->in($site);
         $term->set(
             'title',
             $expectedTermName
@@ -729,13 +729,6 @@ class AudioSeriesManager
         unset($metadata);
     }
 
-    /**
-     * Read a string field from a term's default locale.
-     *
-     * @param  Term  $term  The term to read from
-     * @param  string  $field  The field handle to read
-     * @return string The field value, or an empty string when unavailable
-     */
     /**
      * Write the series kind onto a term.
      *
