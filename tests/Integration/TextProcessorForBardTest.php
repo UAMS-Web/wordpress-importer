@@ -477,6 +477,15 @@ it('converts a shortcode outside a block and leaves the same shortcode inside th
         ->and($fakes['link']->calls[0]['html'] ?? null)->toBe('<p><p>Form</p></p><!-- wp:shortcode -->[gravityform id="1"]<!-- /wp:shortcode -->');
 });
 
+it('keeps each shortcode block, and the text between and after them, in place when a shortcode outside them is replaced', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->replacements = ['gravityform' => '<p>Form</p>'];
+
+    textProcessorForBard('<p>[gravityform id="1"]</p><!-- wp:shortcode -->[formidable id="2"]<!-- /wp:shortcode --><p>Between</p><!-- wp:shortcode -->[formidable id="3"]<!-- /wp:shortcode --><p>After</p>');
+
+    expect($fakes['link']->calls[0]['html'] ?? null)->toBe('<p><p>Form</p></p><!-- wp:shortcode -->[formidable id="2"]<!-- /wp:shortcode --><p>Between</p><!-- wp:shortcode -->[formidable id="3"]<!-- /wp:shortcode --><p>After</p>');
+});
+
 it('removes the hrefs of gallery links, and only those, after an earlier, longer replacement', function (): void {
     $fakes = textProcessorForBardFakes();
     $fakes['shortcode']->replacements = ['gravityform' => '<p>'.str_repeat('x', 200).'</p>'];

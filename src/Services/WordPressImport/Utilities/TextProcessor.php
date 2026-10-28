@@ -805,10 +805,7 @@ class TextProcessor
 
         // Order them by start, so removing hrefs from the last block first leaves
         // the offsets of the blocks before it in place
-        \usort(
-            $excludedBlocks,
-            static fn (array $a, array $b): int => $a[0] <=> $b[0]
-        );
+        \sort($excludedBlocks);
 
         // ---
         // Preprocess content to remove href attributes from excluded blocks before
