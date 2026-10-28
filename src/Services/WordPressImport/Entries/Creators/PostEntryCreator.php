@@ -76,9 +76,12 @@ class PostEntryCreator extends BaseEntryCreator
      * not carry, which happens because audio-series categories are filtered out before
      * this point. Only the primary moves; the rest keep their relative order (wordpress-importer-archive#441).
      *
+     * PHP keys an integer-string nicename such as `2024` as an int, so the key found
+     * is read back as a string before it is compared with the post's nicenames.
+     *
      * @param  list<string>  $categories  Category nicenames in WXR document order
      * @param  string  $primaryTermId  Raw `_yoast_wpseo_primary_category` value
-     * @param  array<string, string>  $nicenameToTermId  Map of nicename => term id
+     * @param  array<int|string, mixed>  $nicenameToTermId  Map of nicename => term id
      * @return list<string> Category nicenames, primary first when resolvable
      */
     public function orderCategoriesPrimaryFirst(
@@ -97,17 +100,23 @@ class PostEntryCreator extends BaseEntryCreator
             return $categories;
         }
 
-        $primaryNicename = array_find_key($nicenameToTermId, fn ($termId): bool => $termId === $primaryTermId);
+        $primaryKey = array_find_key(
+            $nicenameToTermId,
+            static fn (mixed $termId): bool => \is_scalar($termId) && (string) $termId === $primaryTermId
+        );
 
         // ---
         // Keep document order when the primary cannot be placed: an id the export no
         // longer defines, or a category this post does not carry. Injecting it would
         // add a category the post lost.
         // ---
-        if (
-            $primaryNicename === null
-            || ! \in_array($primaryNicename, $categories, true)
-        ) {
+        if ($primaryKey === null) {
+            return $categories;
+        }
+
+        $primaryNicename = (string) $primaryKey;
+
+        if (! \in_array($primaryNicename, $categories, true)) {
             return $categories;
         }
 
@@ -115,15 +124,20 @@ class PostEntryCreator extends BaseEntryCreator
         $remaining = $categories;
         $position = \array_search($primaryNicename, $remaining, true);
 
-        // Remove only that entry so a duplicate nicename is not swallowed
+        // ---
+        // Remove only that entry so a duplicate nicename is not swallowed. The strict
+        // in_array() above means the search always finds it, so `false` never arrives;
+        // the guard is for the type, which unset() would otherwise index with a bool.
+        // ---
+        // @pest-mutate-ignore: FalseToTrue
         if ($position !== false) {
             unset($remaining[$position]);
         }
 
-        // Re-key so the result serializes as a list rather than a map
+        // Spreading re-keys the integer keys, so the result is a list rather than a map
         return [
             $primaryNicename,
-            ...\array_values($remaining),
+            ...$remaining,
         ];
     }
 
@@ -185,17 +199,20 @@ class PostEntryCreator extends BaseEntryCreator
 
         foreach ($nicenames as $nicename) {
             // A nicename absent from the map has no term id to resolve through.
-            $termId = $this->normalizeIdentifierValue(
-                $nicenameToTermIdMap[$nicename] ?? null
-            );
+            $termId = $nicenameToTermIdMap[$nicename] ?? null;
 
-            if ($termId === '') {
+            if (! \is_scalar($termId) || (string) $termId === '') {
                 continue;
             }
 
+            // ---
+            // The registry builds its key by interpolation, so an int id and its string
+            // form find the same destination; the cast only narrows the type.
+            // ---
+            // @pest-mutate-ignore: RemoveStringCast
             $entryId = TermDestinationRegistry::referenceFor(
                 $wordpressTaxonomy,
-                $termId
+                (string) $termId
             );
 
             // Unresolved, or resolved to something unusable: omit it.
@@ -296,9 +313,6 @@ class PostEntryCreator extends BaseEntryCreator
             $site,
             $output
         );
-
-        // Initialize array to track slug usage counts for uniqueness
-        $slugCounts = [];
 
         // Open a streaming parser spanning every part. A source that can serve
         // none raises rather than importing nothing and reporting success (wordpress-importer-archive#662).
@@ -414,31 +428,27 @@ class PostEntryCreator extends BaseEntryCreator
             // prefixes so the term-creation loop below and the stored list agree on order
             // (wordpress-importer-archive#441).
             // ---
-            $categoryTermIdMapForOrder = $this->nicenameToTermIdMap['category'] ?? [];
+            $categoryTermIdMap = $this->nicenameToTermIdMap['category'] ?? [];
 
-            // Reorder only when the map is usable; otherwise keep document order
-            if (\is_array($categoryTermIdMapForOrder)) {
-                $filteredCategories = $this->orderCategoriesPrimaryFirst(
-                    \array_values(
-                        \array_filter(
-                            $filteredCategories,
-                            static fn (mixed $slug): bool => \is_string($slug) && $slug !== ''
-                        )
-                    ),
-                    XpathHelper::getStringValue(
-                        $post,
-                        "wp:postmeta[wp:meta_key='_yoast_wpseo_primary_category']/wp:meta_value"
-                    ),
-                    \array_map(
-                        static fn (mixed $termId): string => \is_scalar($termId) ? (string) $termId : '',
-                        \array_filter(
-                            $categoryTermIdMapForOrder,
-                            \is_string(...),
-                            \ARRAY_FILTER_USE_KEY
-                        )
-                    )
-                );
+            if (! \is_array($categoryTermIdMap)) {
+                $categoryTermIdMap = [];
             }
+
+            // ---
+            // The nicenames are XPath strings, so the filter keeps every one and only
+            // narrows the type; the keys it leaves reach nothing that reads them.
+            // ---
+            // @pest-mutate-ignore: UnwrapArrayValues, UnwrapArrayFilter
+            $filteredCategories = \array_values(\array_filter($filteredCategories, \is_string(...)));
+
+            $filteredCategories = $this->orderCategoriesPrimaryFirst(
+                $filteredCategories,
+                XpathHelper::getStringValue(
+                    $post,
+                    "wp:postmeta[wp:meta_key='_yoast_wpseo_primary_category']/wp:meta_value"
+                ),
+                $categoryTermIdMap
+            );
 
             // ---
             // Resolve each category to the `post_categories` COLLECTION entry it
@@ -448,18 +458,12 @@ class PostEntryCreator extends BaseEntryCreator
             // field to an `entries` picker, so a term slug written here resolves
             // to nothing (wordpress-importer-archive#422). The term pass runs before any entry is created
             // (see `initializeTerms()`), so every destination is already recorded
-            // in `TermDestinationRegistry` by the time this runs.
+            // in `TermDestinationRegistry` by the time this runs. A blank nicename
+            // has no destination, so it is omitted there.
             // ---
             $categoryEntryReferences = $this->resolveCategoryEntryReferences(
-                \array_values(
-                    \array_filter(
-                        $filteredCategories,
-                        static fn (mixed $slug): bool => \is_string($slug) && $slug !== ''
-                    )
-                ),
-                \is_array($categoryTermIdMapForOrder)
-                    ? $categoryTermIdMapForOrder
-                    : []
+                $filteredCategories,
+                $categoryTermIdMap
             );
 
             // ---
@@ -473,6 +477,8 @@ class PostEntryCreator extends BaseEntryCreator
             $tagEntryReferences = [];
             $rawTags = [];
 
+            // An `if` reads the value's truthiness, which the cast does not change
+            // @pest-mutate-ignore: RemoveBooleanCast
             if (
                 (bool) config(
                     'wordpress-import.import_tags',
@@ -488,14 +494,10 @@ class PostEntryCreator extends BaseEntryCreator
                 // Resolve the nicenames through their term ids to entry ids
                 $tagTermIdMap = $this->nicenameToTermIdMap['post_tag'] ?? [];
 
+                // A blank nicename has no destination, so it is omitted there
                 $tagEntryReferences = $this->resolveTermEntryReferences(
                     'post_tag',
-                    \array_values(
-                        \array_filter(
-                            $rawTags,
-                            static fn (string $slug): bool => $slug !== ''
-                        )
-                    ),
+                    $rawTags,
                     \is_array($tagTermIdMap) ? $tagTermIdMap : []
                 );
             }
@@ -518,7 +520,11 @@ class PostEntryCreator extends BaseEntryCreator
                 'wp:postmeta[wp:meta_key="media_contact"]/wp:meta_value'
             );
 
-            // Check if post has news-release category
+            // ---
+            // Check if post has news-release category. The needle is not numeric, so a
+            // loose comparison matches exactly what the strict one does.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
             $hasNewsReleaseCategory = \in_array(
                 'news-release',
                 $rawCategories,
@@ -554,8 +560,10 @@ class PostEntryCreator extends BaseEntryCreator
 
             // ---
             // Determine if this post should use the audio blueprint based on
-            // post-format-audio presence
+            // post-format-audio presence. The needle is not numeric, so a loose
+            // comparison matches exactly what the strict one does.
             // ---
+            // @pest-mutate-ignore: TrueToFalse
             $isAudioFormat = \in_array(
                 'post-format-audio',
                 $postFormatCategories,
@@ -711,13 +719,11 @@ class PostEntryCreator extends BaseEntryCreator
                 'wp:postmeta[wp:meta_key="_thumbnail_id"]/wp:meta_value'
             );
 
-            // Store thumbnail ID in entry data for block processors
-            if ($thumbnailId !== '') {
-                $data['_thumbnail_id'] = $thumbnailId;
-            }
-
             // Check if a featured image thumbnail ID exists
             if ($thumbnailId !== '') {
+                // Store thumbnail ID in entry data for block processors
+                $data['_thumbnail_id'] = $thumbnailId;
+
                 // Import the featured image file with graceful handling for disabled uploads
                 $featuredImagePath = FileProcessor::importFileFromAttachmentWithDisabledUploadHandling(
                     $thumbnailId,
@@ -937,7 +943,11 @@ class PostEntryCreator extends BaseEntryCreator
                 $terms
             );
 
-            // Collect garbage after processing each post in long-running loop
+            // ---
+            // Collect garbage after processing each post in long-running loop. This
+            // bounds memory over a large export and changes no output.
+            // ---
+            // @pest-mutate-ignore: RemoveFunctionCall
             gc_collect_cycles();
         }
 
@@ -952,7 +962,6 @@ class PostEntryCreator extends BaseEntryCreator
 
         // Clean up variables to free up memory
         unset(
-            $slugCounts,
             $attachments,
             $audioSeriesConfig
         );
@@ -973,6 +982,9 @@ class PostEntryCreator extends BaseEntryCreator
     public static function getTaxonomyHandlesForPostImport(): array
     {
         $handles = ['category'];
+
+        // An `if` reads the value's truthiness, which the cast does not change
+        // @pest-mutate-ignore: RemoveBooleanCast
         if ((bool) config('wordpress-import.import_tags', true)) {
             $handles[] = 'post_tag';
         }
@@ -1004,22 +1016,6 @@ class PostEntryCreator extends BaseEntryCreator
         }
 
         return $values;
-    }
-
-    /**
-     * Normalize mixed identifier values to non-empty strings.
-     *
-     * @param  mixed  $value  Identifier value to normalize
-     * @return string Normalized identifier string
-     */
-    private function normalizeIdentifierValue(
-        mixed $value
-    ): string {
-        if (! \is_scalar($value)) {
-            return '';
-        }
-
-        return (string) $value;
     }
 
     /**
