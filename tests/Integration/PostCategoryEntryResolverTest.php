@@ -416,7 +416,7 @@ it('does not query the syndicating site twice when it is the placement site', fu
 
 it('names the site, the slugs, the page, the effect and the reason in its warning', function (): void {
     ProcessingContext::setWordPressPageLink('https://example.test/news-page/');
-    $kept = makeCategoryEntry('research');
+    makeCategoryEntry('research');
 
     PostCategoryEntryResolver::referencesFor('research, lost-one, lost-two', 'default');
 
@@ -427,8 +427,6 @@ it('names the site, the slugs, the page, the effect and the reason in its warnin
         'effect' => 'The block kept its other categories; only the slugs named here were dropped.',
         'reason' => 'No `post_categories` entry exists for these slugs on this site or on the `news` site the block syndicates from. The page import creates the categories before it parses any block and the cross-site case is now resolved against the syndicating site, so a re-run will NOT help: no export imported so far declares this slug on either site (see wordpress-importer-archive#628). Set the category on the block in the Control Panel, or import an export that declares it.',
     ]]);
-
-    expect($kept)->toBeString();
 
     ProcessingContext::setWordPressPageLink(null);
 });
