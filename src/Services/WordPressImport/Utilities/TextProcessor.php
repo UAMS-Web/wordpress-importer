@@ -10,6 +10,7 @@ use DOMElement;
 use DOMNode;
 use DOMText;
 use Illuminate\Support\Facades\Log;
+use SplObjectStorage;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\AcfGalleryBlockProcessor;
@@ -26,6 +27,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Shor
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\UnwrappingBlockProcessorTrait;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGalleryBlockProcessor;
@@ -828,6 +830,14 @@ class TextProcessor
         // Initialize array to track processed nodes by HTML content
         $processedNodes = [];
 
+        // ---
+        // Nodes of this document a block has already consumed, held by identity. A block's
+        // skipCount and its processed node name particular nodes, so matching them by HTML
+        // would also skip a later node that only happens to share their markup (#152).
+        // ---
+        /** @var SplObjectStorage<DOMNode, null> $consumedNodes */
+        $consumedNodes = new SplObjectStorage;
+
         // Loop through pre-processed nodes to build tracking array
         foreach ($preProcessedNodes as $preProcessedNode) {
             // Skip non-node values from preprocessed node input
@@ -868,7 +878,8 @@ class TextProcessor
 
             // Check if node has already been processed
             if (
-                \in_array(
+                $consumedNodes->contains($node)
+                || \in_array(
                     $nodeHtml,
                     $processedNodes,
                     true
@@ -1009,28 +1020,22 @@ class TextProcessor
                                 // empty string, which no node's HTML equals.
                                 // @pest-mutate-ignore: InstanceOfToTrue
                                 if ($processedNode instanceof DOMNode) {
-                                    $processedNodes[] = self::nodeHtml(
-                                        $doc,
-                                        $processedNode
-                                    );
+                                    $consumedNodes->attach($processedNode);
                                 }
 
-                                // Check if the result specifies nodes to skip
+                                // Skip the block's nodes after its opening comment (#152)
                                 if (\is_int($skipCount)) {
-                                    // Skip the specified number of nodes
-                                    for ($j = 0; $j < $skipCount; $j++) {
-                                        // Get the next sibling node
-                                        $nextNode = $node->nextSibling;
-
-                                        // Check if the next node exists
-                                        if ($nextNode instanceof DOMNode) {
-                                            // Mark the next node as processed
-                                            $processedNodes[] = $doc->saveHTML($nextNode);
-
-                                            // Move to the next node
-                                            $node = $nextNode;
-                                        }
-                                    }
+                                    // A class name and the trait name are strings, so in_array()'s
+                                    // strict flag, which phpstan-strict-rules requires, changes no
+                                    // result.
+                                    // @pest-mutate-ignore: TrueToFalse
+                                    $node = self::consumeBlockNodes(
+                                        $node,
+                                        $skipCount,
+                                        $blockType,
+                                        $consumedNodes,
+                                        \in_array(UnwrappingBlockProcessorTrait::class, \class_uses($processor), true)
+                                    );
                                 }
                             } elseif (\is_string($result)) { // Check if the result is a string
                                 // Parse the HTML string to ProseMirror JSON
@@ -1113,12 +1118,18 @@ class TextProcessor
                                         ) === 1
                                     ) {
                                         // Mark the next node as processed
-                                        $processedNodes[] = $doc->saveHTML($nextNode);
+                                        $consumedNodes->attach($nextNode);
                                     }
                                 }
                             }
 
-                            // The block is handled, so move to the next node
+                            // ---
+                            // The block is handled, so move to the next node. Leaving only
+                            // the processor loop would add the opening comment to the
+                            // accumulated content, which the Bard parser strips, so the two
+                            // give the same content.
+                            // ---
+                            // @pest-mutate-ignore: DecrementInteger
                             continue 2;
                         }
                     }
@@ -1568,6 +1579,76 @@ class TextProcessor
         // Return the HTML, or '' for no node. saveHTML() throws for a node from another
         // document rather than returning false, and every caller passes $doc's own.
         return $html === false ? '' : $html;
+    }
+
+    /**
+     * Marks the nodes a block's skip count covers as consumed, and returns the last one.
+     *
+     * Every processor counts the block's opening comment, which is `$comment`, so one
+     * fewer sibling follows it. The processors differ on the whitespace between a block's
+     * nodes: some count it and some do not. So whitespace-only text is consumed without
+     * counting, and the walk never passes the block's own closing comment, which ends any
+     * count that included the whitespace. Which closing comment that is follows the
+     * processor's own count: the group and details processors count a same-type block
+     * nested among the siblings, so it is passed over whole for them, and every other
+     * processor counts to the first closing comment of its type, so the walk stops there.
+     * Before #152 the walk took `$skipCount` siblings, one past the block.
+     *
+     * @param  DOMNode  $comment  The block's opening comment
+     * @param  int  $skipCount  The processor's count, the opening comment included
+     * @param  string  $blockType  The block type from the opening comment, such as `spacer`
+     * @param  SplObjectStorage<DOMNode, null>  $consumedNodes  The nodes consumed so far
+     * @param  bool  $tracksNesting  Whether the processor's count passes over a nested block of the same type
+     * @return DOMNode The last node consumed, or `$comment` when none is
+     */
+    private static function consumeBlockNodes(
+        DOMNode $comment,
+        int $skipCount,
+        string $blockType,
+        SplObjectStorage $consumedNodes,
+        bool $tracksNesting
+    ): DOMNode {
+        $node = $comment;
+        $remaining = $skipCount - 1;
+        $depth = 0;
+
+        while ($remaining > 0 && $node->nextSibling instanceof DOMNode) {
+            // Consume the next sibling
+            $node = $node->nextSibling;
+            $consumedNodes->attach($node);
+
+            // Whitespace between a block's nodes does not count toward the skip
+            if ($node instanceof DOMText && \trim($node->data) === '') {
+                continue;
+            }
+
+            $remaining--;
+
+            // Only a block comment can open a nested block or close this one
+            if (! $node instanceof DOMComment) {
+                continue;
+            }
+
+            $data = \trim($node->data);
+
+            // A nested block of the same type closes with the same comment as this one
+            if ($tracksNesting && \preg_match('/^wp:'.\preg_quote($blockType, '/').'(?:\s|$)(?!.*\/$)/s', $data) === 1) {
+                $depth++;
+
+                continue;
+            }
+
+            // The block's own closing comment ends the walk, whatever is left of the count
+            if ($data === '/wp:'.$blockType) {
+                if ($depth === 0) {
+                    break;
+                }
+
+                $depth--;
+            }
+        }
+
+        return $node;
     }
 
     /**
