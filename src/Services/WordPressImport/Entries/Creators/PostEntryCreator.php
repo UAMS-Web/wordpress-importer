@@ -577,6 +577,7 @@ class PostEntryCreator extends BaseEntryCreator
                     $isAudioFormat
                 ),
                 'title' => $title,
+                'slug' => $slug,
                 'sticky_query' => XpathHelper::getBoolValue(
                     $post,
                     'wp:is_sticky',
@@ -594,6 +595,7 @@ class PostEntryCreator extends BaseEntryCreator
                 'boilerplate_query' => false,
                 'news_release_pdf' => null,
                 'title_short' => null,
+                'excerpt' => null,
                 'featured_image_4_3' => null,
                 'featured_image_1_1' => null,
                 'scripts_head' => ['code' => null, 'mode' => 'htmlmixed'],

@@ -691,6 +691,19 @@ describe('the entry data', function (): void {
             ->and($data)->not->toHaveKeys(['_thumbnail_id', 'featured_image_16_9', 'featured_image_credit_query']);
     });
 
+    it('stores the fields in a fixed order, so a re-import does not reorder an entry\'s file', function (): void {
+        postEntryRun(postEntryExport([['slug' => 'ordered', 'excerpt' => 'Words']]), PostEntryTestConverter::returning(postEntryBody()));
+
+        expect(\array_keys(postEntryData(postEntry('ordered'))))->toBe([
+            'blueprint', 'title', 'slug', 'sticky_query', 'post_categories', 'post_tags', 'post_format',
+            'boilerplate_query', 'news_release_pdf', 'title_short', 'excerpt', 'featured_image_4_3',
+            'featured_image_1_1', 'scripts_head', 'scripts_body', 'scripts_body_position', 'robots_index_meta',
+            'robots_follow_meta', 'robots_odp_meta', 'robots_imageindex_meta', 'robots_archive_meta',
+            'robots_snippet_meta', 'robots_canonical_meta', 'hide_creator_query', 'series', 'segments', 'intro',
+            'original_wordpress_url', 'wordpress_post_id', 'content', 'mapped', 'updated_at',
+        ]);
+    });
+
     it('decodes the title twice, so a double-encoded entity comes out as its character', function (): void {
         $converter = PostEntryTestConverter::returning(postEntryBody());
 
