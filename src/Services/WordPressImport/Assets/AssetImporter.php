@@ -20,13 +20,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 class AssetImporter
 {
     /**
-     * Asset overwrite behavior setting for handling existing files.
-     *
-     * @var string The overwrite behavior setting
-     */
-    protected string $assetOverwriteBehavior = 'Overwrite matching files';
-
-    /**
      * Configuration setting for whether image uploads are enabled.
      *
      * @var bool Whether image uploads are enabled
@@ -195,9 +188,6 @@ class AssetImporter
     public function setAssetOverwriteBehavior(
         string $behavior
     ): void {
-        // Update the asset overwrite behavior setting
-        $this->assetOverwriteBehavior = $behavior;
-
         // Update the overwrite handler with the new behavior setting
         $this->overwriteHandler->setBehavior($behavior);
     }
@@ -307,10 +297,11 @@ class AssetImporter
         // Check cache for existing import
         if (isset(self::$imageCache[$cacheKey])) {
             // Display cached image path message to console
-            $output->writeln("  - <comment>Using cached image path for attachment ID '$attachmentId' in container '$container': ".self::$imageCache[$cacheKey].'</comment>');
+            $cachedPath = self::$imageCache[$cacheKey];
+            $output->writeln("  - <comment>Using cached image path for attachment ID '$attachmentId' in container '$container': {$cachedPath}</comment>");
 
             // Return the cached image path
-            return self::$imageCache[$cacheKey];
+            return $cachedPath;
         }
 
         // Find the matching attachment using the helper method
@@ -452,6 +443,8 @@ class AssetImporter
             self::$imageCache[$cacheKey] = $importedPath;
         } else { // Otherwise
             // Mark this URL as failed to prevent future download attempts
+            // The cache is read with isset(), which any stored value satisfies
+            // @pest-mutate-ignore: TrueToFalse
             self::$failedAssetsCache[$url] = true;
 
             // Enhance log context with entry information
@@ -572,10 +565,11 @@ class AssetImporter
         // Check cache for existing import
         if (isset(self::$imageCache[$cacheKey])) {
             // Display cached thumbnail path message to console
-            $output->writeln("  - <comment>Using cached image path for thumbnail ID '$thumbnailId' in container '$container': ".self::$imageCache[$cacheKey].'</comment>');
+            $cachedPath = self::$imageCache[$cacheKey];
+            $output->writeln("  - <comment>Using cached image path for thumbnail ID '$thumbnailId' in container '$container': {$cachedPath}</comment>");
 
             // Return the cached thumbnail path
-            return self::$imageCache[$cacheKey];
+            return $cachedPath;
         }
 
         // Find the matching attachment using the helper method
@@ -689,6 +683,8 @@ class AssetImporter
                 self::$imageCache[$cacheKey] = $importedPath;
             } else { // Otherwise
                 // Mark this URL as failed to prevent future download attempts
+                // The cache is read with isset(), which any stored value satisfies
+                // @pest-mutate-ignore: TrueToFalse
                 self::$failedAssetsCache[$url] = true;
 
                 // Enhance log context with entry information
@@ -829,10 +825,11 @@ class AssetImporter
         // Check cache for existing import
         if (isset(self::$fileCache[$cacheKey])) {
             // Display cached file path message to console
-            $output->writeln("  - <comment>Using cached file path for '$url' in container '$container': ".self::$fileCache[$cacheKey].'</comment>');
+            $cachedPath = self::$fileCache[$cacheKey];
+            $output->writeln("  - <comment>Using cached file path for '$url' in container '$container': {$cachedPath}</comment>");
 
             // Return the cached file path
-            return self::$fileCache[$cacheKey];
+            return $cachedPath;
         }
 
         // ---
@@ -885,10 +882,14 @@ class AssetImporter
             // future download attempts. This ensures that if we try a different
             // sized version later, we'll know it already failed.
             // ---
+            // The cache is read with isset(), which any stored value satisfies
+            // @pest-mutate-ignore: TrueToFalse
             self::$failedAssetsCache[$url] = true;
 
             // Also mark normalized URL as failed if it differs from original
             if ($normalizedUrl !== $url) {
+                // The cache is read with isset(), which any stored value satisfies
+                // @pest-mutate-ignore: TrueToFalse
                 self::$failedAssetsCache[$normalizedUrl] = true;
             }
 
