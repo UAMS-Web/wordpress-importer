@@ -271,6 +271,49 @@ it('warns and returns null when no wp-block-table figure follows the comment', f
     'a figure of another block' => ['<!-- wp:table --><figure class="wp-block-image"><table><tbody><tr><td>A</td></tr></tbody></table></figure>'],
 ]);
 
+it('takes no figure from past the block\'s closing comment or from the block after it', function (string $html): void {
+    $warnings = tableWarnings();
+
+    // #197: the figure lookup stops where the block ends
+    expect(processTable(tableOpeningNode($html)))->toBeNull()
+        ->and(array_column($warnings->getArrayCopy(), 0))->toBe(['TableProcessor::process: No valid wp:table figure found']);
+})->with([
+    'a figure after the closing comment' => ['<!-- wp:table --><!-- /wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>'],
+    'a figure in the block after an unclosed one' => ['<!-- wp:table --><!-- wp:group --><div><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure></div><!-- /wp:group --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>'],
+]);
+
+it('skips the block\'s own nodes, counting neither whitespace nor what follows the closing comment', function (string $html, int $skipCount): void {
+    tableWarnings();
+
+    expect(processTable(tableOpeningNode($html))['skipCount'] ?? null)->toBe($skipCount);
+})->with([
+    'the figure alone' => ['<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><!-- /wp:table --><p>After</p>', 3],
+    'the figure among whitespace' => ["<!-- wp:table -->\n<figure class=\"wp-block-table\"><table><tbody><tr><td>T</td></tr></tbody></table></figure>\n<!-- /wp:table -->\n<p>After</p>", 3],
+    'content ahead of the figure' => ['<!-- wp:table --><p>A</p><p>B</p><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><!-- /wp:table --><p>After</p>', 5],
+    'content after the figure' => ['<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><p>A</p><!-- /wp:table --><p>After</p>', 4],
+    'a block that is never closed, before another block' => ['<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><!-- wp:paragraph --><p>Next</p><!-- /wp:paragraph -->', 2],
+]);
+
+it('warns of the content a table block holds besides its figure', function (): void {
+    $warnings = tableWarnings();
+
+    processTable(tableOpeningNode('<!-- wp:table --><p>A</p>text<!-- a note --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><figure class="wp-block-table"><table><tbody><tr><td>U</td></tr></tbody></table></figure><!-- /wp:table -->'), [], 'about');
+
+    // The note is a comment, which holds no content, so it is not named
+    expect($warnings->getArrayCopy())->toBe([[
+        'TableProcessor::process: Dropped content in a wp:table block outside its figure',
+        ['site' => 'default', 'pageSlug' => 'about', 'dropped_html' => substr('<p>A</p>text<figure class="wp-block-table"><table><tbody><tr><td>U</td></tr></tbody></table></figure>', 0, 100)],
+    ]]);
+});
+
+it('warns of nothing for a table block that holds only its figure', function (): void {
+    $warnings = tableWarnings();
+
+    processTable(tableOpeningNode("<!-- wp:table -->\n<!-- a note --><figure class=\"wp-block-table\"><table><tbody><tr><td>T</td></tr></tbody></table></figure>\n<!-- /wp:table --><p>After</p>"));
+
+    expect($warnings->getArrayCopy())->toBe([]);
+});
+
 it('returns null for a comment that belongs to no document', function (): void {
     $warnings = tableWarnings();
 
