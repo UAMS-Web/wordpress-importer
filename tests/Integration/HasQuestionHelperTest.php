@@ -547,3 +547,33 @@ it('shows a refused answer its reason as an error', function (bool $prompts): vo
     expect($result)->toBe('g')
         ->and($errors->fetch())->toBe("\e[37;41mNot that one.\e[39;49m\n");
 })->with(['prompts' => [true], 'questions' => [false]]);
+
+it('starts a Laravel Prompts choice over a list at its default index', function (int|string $default, string $chosen): void {
+    // A list's default is matched against its labels, so an index default once started the
+    // prompt at the first option whatever it named
+    [$result] = hasQuestionHelperRun(
+        fn (InputInterface $input, OutputInterface $output, Command $command): string => hasQuestionHelperWithRealPrompts(
+            [Key::ENTER],
+            fn (): string => (new HasQuestionHelperTestHarness(true))->choice(['a', 'b', 'c'], $default, $input, $output, $command)
+        ),
+        ''
+    );
+
+    expect($result)->toBe($chosen);
+})->with([
+    'an index' => [2, 'c'],
+    'an index past the options' => [5, 'a'],
+    'a label' => ['b', 'b'],
+]);
+
+it('starts a Laravel Prompts choice over keyed options at its default key', function (): void {
+    [$result] = hasQuestionHelperRun(
+        fn (InputInterface $input, OutputInterface $output, Command $command): string => hasQuestionHelperWithRealPrompts(
+            [Key::ENTER],
+            fn (): string => (new HasQuestionHelperTestHarness(true))->choice([3 => 'Three', 7 => 'Seven'], 7, $input, $output, $command)
+        ),
+        ''
+    );
+
+    expect($result)->toBe('7');
+});
