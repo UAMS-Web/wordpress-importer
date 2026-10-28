@@ -1400,7 +1400,7 @@ describe('the last details', function (): void {
         expect(\array_keys(\is_array($hero = pageEntryHero(pageEntry('hero-first'))) ? $hero : []))->toBe([0]);
     });
 
-    it('takes the knowledge base only from its collection, blueprint, slug and site', function (): void {
+    it('takes no knowledge base from an entry that misses one of its collection, blueprint, slug and site', function (string $collection, string $blueprint, string $site, string $slug): void {
         Site::setSites([
             'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
             'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
@@ -1414,29 +1414,26 @@ describe('the last details', function (): void {
         $bases = CollectionFacade::find('knowledge_bases');
         $bases?->sites(['default', 'other']);
         $bases?->save();
+        $kb = new Entry;
+        $kb->collection($collection);
+        $kb->blueprint($blueprint);
+        $kb->locale($site);
+        $kb->slug($slug);
+        $kb->id('decoy');
+        $kb->save();
+        ProcessingContext::clearKnowledgeBaseId();
 
-        foreach ([
-            ['decoy_bases', 'knowledge_base', 'default', 'kb', 'a-collection'],
-            ['knowledge_bases', 'other_base', 'default', 'kb', 'b-blueprint'],
-            ['knowledge_bases', 'knowledge_base', 'default', 'not-kb', 'c-slug'],
-            ['knowledge_bases', 'knowledge_base', 'other', 'kb', 'd-site'],
-            ['knowledge_bases', 'knowledge_base', 'default', 'kb', 'z-the-one'],
-        ] as [$collection, $blueprint, $site, $slug, $id]) {
-            $kb = new Entry;
-            $kb->collection($collection);
-            $kb->blueprint($blueprint);
-            $kb->locale($site);
-            $kb->slug($slug);
-            $kb->id($id);
-            $kb->save();
-        }
+        pageEntryRun(pageEntryExport([['slug' => 'without-the-kb']]), PageEntryTestConverter::returning(pageEntryBody()));
 
-        pageEntryRun(pageEntryExport([['slug' => 'with-the-kb']]), PageEntryTestConverter::returning(pageEntryBody()));
-
-        expect(ProcessingContext::getKnowledgeBaseId())->toBe('z-the-one');
+        expect(ProcessingContext::getKnowledgeBaseId())->toBeNull();
 
         foreach (['collections.knowledge_bases.knowledge_base', 'collections.knowledge_bases.other_base', 'collections.decoy_bases.knowledge_base'] as $handle) {
             BlueprintFacade::find($handle)?->delete();
         }
-    });
+    })->with([
+        'another collection' => ['decoy_bases', 'knowledge_base', 'default', 'kb'],
+        'another blueprint' => ['knowledge_bases', 'other_base', 'default', 'kb'],
+        'another site' => ['knowledge_bases', 'knowledge_base', 'other', 'kb'],
+        'another slug' => ['knowledge_bases', 'knowledge_base', 'default', 'not-kb'],
+    ]);
 });
