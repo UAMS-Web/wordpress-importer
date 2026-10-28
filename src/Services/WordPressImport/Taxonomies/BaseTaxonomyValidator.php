@@ -6,8 +6,6 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
 
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Statamic\Facades\Collection as CollectionFacade;
-use Statamic\Facades\Site as SiteFacade;
-use Statamic\Sites\Site;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
@@ -29,13 +27,6 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
      * @var array<string, array<string>>
      */
     private static array $existingTermsCache = [];
-
-    /**
-     * Cache for site names to avoid repeated Statamic facade calls.
-     *
-     * @var array<string, string>
-     */
-    private static array $siteNamesCache = [];
 
     /**
      * Tracks which terms have already been processed in the current session.
@@ -444,47 +435,12 @@ abstract class BaseTaxonomyValidator implements TaxonomyValidatorInterface
     }
 
     /**
-     * Gets site name from cache or Statamic facade.
-     *
-     * @param  string  $site  The site handle
-     * @return string The site name
-     */
-    protected function getCachedSiteName(
-        string $site
-    ): string {
-        // Check if site name is already cached
-        if (! isset(self::$siteNamesCache[$site])) {
-            $siteObject = SiteFacade::get($site);
-            $resolvedName = null;
-
-            if ($siteObject instanceof Site) {
-                $name = $siteObject->name();
-                $resolvedName = \is_string($name) ? $name : null;
-            }
-
-            self::$siteNamesCache[$site] = $resolvedName ?? \ucwords(
-                \str_replace(
-                    '_',
-                    ' ',
-                    $site
-                )
-            );
-        }
-
-        // Return cached site name
-        return self::$siteNamesCache[$site];
-    }
-
-    /**
      * Clears all caches for a new import session.
      */
     public static function clearCaches(): void
     {
         // Clear existing terms cache
         self::$existingTermsCache = [];
-
-        // Clear site names cache
-        self::$siteNamesCache = [];
 
         // Clear processed terms cache
         self::$processedTermsCache = [];
