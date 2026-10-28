@@ -125,8 +125,10 @@ final class DepartmentOrganizationDesignator
 
         $organizationId = $organization->id();
 
-        // An organization we cannot address by id is unusable as a designation.
+        // An organization we cannot address by id is unusable as a designation. A saved entry
+        // always has one, so this only narrows the type for phpstan.
         if (! is_string($organizationId)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return new DepartmentOrganizationDesignation(
                 $site,
                 DepartmentOrganizationOutcome::DanglingReference,
@@ -173,6 +175,8 @@ final class DepartmentOrganizationDesignator
 
         $entry = $query->first();
 
+        // The query answers with an entry or null, so this only narrows the type for phpstan
+        // @pest-mutate-ignore: InstanceOfToTrue
         return $entry instanceof Entry ? $entry : null;
     }
 

@@ -65,6 +65,9 @@ final class TaxonomyDispositions
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails TaxonomyDispositionsTableTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array SHAPES = [
         // Structured — hierarchy preserved as a collection tree.
         'category' => self::SHAPE_COLLECTION,
@@ -135,6 +138,9 @@ final class TaxonomyDispositions
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails TaxonomyDispositionsTableTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array STRUCTURED_DESTINATIONS = [
         'post_categories',
         'people_groups',
@@ -154,6 +160,9 @@ final class TaxonomyDispositions
     public static function isStructuredDestination(
         string $statamicHandle
     ): bool {
+        // The handles are strings, so in_array()'s strict flag, which phpstan-strict-rules
+        // requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         return \in_array(
             $statamicHandle,
             self::STRUCTURED_DESTINATIONS,
