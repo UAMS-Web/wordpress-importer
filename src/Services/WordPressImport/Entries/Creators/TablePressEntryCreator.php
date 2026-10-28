@@ -337,9 +337,10 @@ class TablePressEntryCreator extends BaseEntryCreator
                     'UTF-8'
                 );
                 // ---
-                // The Tiptap parser finds no document body in an excerpt of only
-                // whitespace or comments, and throws a TypeError from its DOM reader.
-                // That is an excerpt with no description, so it must not end the import.
+                // The Tiptap parser finds no document body in an excerpt with no body
+                // content (whitespace, comments, or head-only markup such as a title or
+                // a script), and throws a TypeError from its DOM reader. That is an
+                // excerpt with no description, so it must not end the import.
                 // ---
                 try {
                     $document = $editor->setContent($html)->getDocument();
