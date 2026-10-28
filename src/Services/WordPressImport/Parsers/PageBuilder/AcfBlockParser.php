@@ -46,6 +46,29 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 class AcfBlockParser
 {
     /**
+     * The supported ACF block types, in the order a comment is matched against
+     * them, each mapped to whether its block comment may omit the attribute JSON.
+     */
+    private const BLOCK_TYPES = [
+        'action-bar' => true,
+        'uams-section' => true,
+        'uams-content' => true,
+        'cta' => false,
+        'call-out' => false,
+        'image-side' => false,
+        'text-stacked' => false,
+        'text-overlay' => false,
+        'uams-news' => false,
+        'livewhale-calendar' => false,
+        'link-list' => false,
+        'counter-list' => false,
+        'uams-gallery' => false,
+        'logo-list' => false,
+        'fad-providers' => false,
+        'fad-locations' => false,
+    ];
+
+    /**
      * Instance of SectionParser for parsing uams-section blocks.
      */
     private SectionParser $sectionParser;
@@ -233,1429 +256,470 @@ class AcfBlockParser
         array $items = [],
         ?string $pageSlug = null
     ): array {
-        $processed = false;
-        $skipCount = 0;
-        $set = null;
-
+        // Parse an ACF block comment
         if ($node->nodeType === XML_COMMENT_NODE) {
-            $comment = \trim($this->getNodeText($node));
-            $normalizedComment = \preg_replace(
-                '/\s+/',
-                ' ',
-                $comment
+            return $this->parseCommentNode(
+                $node,
+                $index,
+                $nodes,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $items,
+                $pageSlug
             );
-            $normalizedComment = \is_string($normalizedComment) ? $normalizedComment : '';
+        }
 
-            // ---
-            // Surface a malformed ACF block-comment JSON failure distinctly. Every
-            // block branch below coerces a failed json_decode to an empty attribute
-            // array, so a genuinely undecodable block would otherwise vanish without
-            // explanation (surfacing only as a misleading downstream "empty body"
-            // warning). This reports the loss without altering parsing. See issue wordpress-importer-archive#290.
-            // ---
-            $this->warnOnUndecodableAcfBlockJson(
-                $normalizedComment,
+        // Parse a LiveWhale Calendar Widget div
+        if (
+            $node instanceof DOMElement
+            && $node->nodeName === 'div'
+        ) {
+            return $this->parseLiveWhaleWidget(
+                $node,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments
+            );
+        }
+
+        // Leave any other node to the caller
+        return self::unprocessed();
+    }
+
+    /**
+     * Parses an XML comment node that may open an ACF block.
+     *
+     * Matches the comment against each supported block type in turn, decodes the
+     * block's attribute JSON, and hands the block to its parser. A self-closing
+     * block spans its own node; a paired block runs through its closing comment.
+     * A comment that only carries a supported block's closing tag after other text
+     * is marked processed with nothing to skip.
+     *
+     * @param  DOMNode  $node  The comment node
+     * @param  int  $index  The index of the comment in the node list
+     * @param  DOMNodeList<DOMNameSpaceNode|DOMNode>  $nodes  The full list of nodes
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images or linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects
+     * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement item objects
+     * @param  ?string  $pageSlug  The page slug
+     * @return array{processed: bool, skipCount: int, set: ?array<int|string, mixed>} Result with processed status, skip count, and replicator set
+     */
+    private function parseCommentNode(
+        DOMNode $node,
+        int $index,
+        DOMNodeList $nodes,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        array $items,
+        ?string $pageSlug
+    ): array {
+        // Collapse the comment's whitespace so a block written across lines reads as one.
+        // preg_replace() returns null only on a PCRE error, which this pattern cannot
+        // raise on a string subject, so the default is never used.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $comment = \preg_replace('/\s+/', ' ', \trim($this->getNodeText($node))) ?? '';
+
+        // ---
+        // Surface a malformed ACF block-comment JSON failure distinctly. A failed
+        // json_decode leaves the block with empty attributes, so a genuinely
+        // undecodable block would otherwise vanish without explanation (surfacing
+        // only as a misleading downstream "empty body" warning). This reports the
+        // loss without altering parsing. See issue wordpress-importer-archive#290.
+        // ---
+        $this->warnOnUndecodableAcfBlockJson(
+            $comment,
+            $pageSlug
+        );
+
+        // Leave a closing comment to the count of the paired block it closes
+        if (\preg_match('/^\/wp:acf\//', $comment) === 1) {
+            return self::unprocessed();
+        }
+
+        foreach (self::BLOCK_TYPES as $type => $attributesOptional) {
+            // Match the opening comment, whose attribute JSON only some blocks may omit
+            $pattern = $attributesOptional
+                ? '/wp:acf\/'.$type.'(?:\s+({.+?}))?\s*(?:\/)?$/'
+                : '/wp:acf\/'.$type.'\s*({.+?})\s*(?:\/)?$/';
+
+            if (\preg_match($pattern, $comment, $matches) !== 1) {
+                continue;
+            }
+
+            // Decode the attributes, treating JSON that is not an object as none
+            $attributes = isset($matches[1]) ? \json_decode($matches[1], true) : null;
+            $attributes = \is_array($attributes) ? $attributes : [];
+
+            // A comment ending in a slash closes its own block
+            $selfClosing = \preg_match('/\/\s*$/', $comment) === 1;
+
+            return [
+                'processed' => true,
+                'skipCount' => $selfClosing ? 1 : $this->countThroughClosingComment($nodes, $index, $type),
+                'set' => $this->parseBlock(
+                    $type,
+                    $attributes,
+                    $selfClosing,
+                    $index,
+                    $nodes,
+                    $site,
+                    $assetImporter,
+                    $output,
+                    $attachments,
+                    $terms,
+                    $items,
+                    $pageSlug
+                ),
+            ];
+        }
+
+        // Mark a supported block's closing tag that follows other text as processed
+        if (
+            \preg_match(
+                '/\/wp:acf\/('.\implode('|', \array_keys(self::BLOCK_TYPES)).')/',
+                $comment
+            ) === 1
+        ) {
+            return [
+                'processed' => true,
+                'skipCount' => 0,
+                'set' => null,
+            ];
+        }
+
+        // Leave a comment that names no supported block to the caller
+        return self::unprocessed();
+    }
+
+    /**
+     * Hands an ACF block's attributes to the parser for its block type.
+     *
+     * @param  key-of<self::BLOCK_TYPES>  $type  The block type
+     * @param  array<int|string, mixed>  $attributes  The decoded block attributes
+     * @param  bool  $selfClosing  Whether the block closes itself, and so has no inner content
+     * @param  int  $index  The index of the opening comment in the node list
+     * @param  DOMNodeList<DOMNameSpaceNode|DOMNode>  $nodes  The full list of nodes
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images or linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects
+     * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement item objects
+     * @param  ?string  $pageSlug  The page slug
+     * @return ?array<int|string, mixed> The replicator set the block parser returns
+     */
+    private function parseBlock(
+        string $type,
+        array $attributes,
+        bool $selfClosing,
+        int $index,
+        DOMNodeList $nodes,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        array $items,
+        ?string $pageSlug
+    ): ?array {
+        // Collect a paired section or content block's inner content only when it is needed
+        $innerContent = fn (): array => $selfClosing
+            ? []
+            : $this->parseInnerContent(
+                $nodes,
+                $index,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
                 $pageSlug
             );
 
-            // ---
-            // Skip closing tags (they start with /wp:acf/)
-            // ---
+        return match ($type) {
+            'action-bar' => $this->actionBarParser->parse($attributes, $site, $assetImporter, $output),
+            'uams-section' => $this->sectionParser->parse($attributes, $innerContent(), $site, $assetImporter, $output, $attachments, $terms, $pageSlug),
+            'uams-content' => $this->contentParser->parse($attributes, $innerContent(), $site, $assetImporter, $output, $attachments, $terms),
+            'cta' => $this->ctaParser->parse($attributes, $site, $assetImporter, $output, $attachments, $terms),
+            'call-out' => $this->callOutParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'image-side' => $this->sideBySideParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'text-stacked' => $this->parseTextStacked($attributes, $site, $assetImporter, $output, $attachments, $terms, $pageSlug),
+            'text-overlay' => $this->overlayParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'uams-news' => $this->newsParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'livewhale-calendar' => $this->liveWhaleParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'link-list' => $this->linkListParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'counter-list' => $this->counterListParser->parse($attributes, $site, $assetImporter, $output, $attachments),
+            'uams-gallery' => $this->galleryParser->parse($attributes, $site, $assetImporter, $output, $attachments, $terms, $this->firstItemLink($items)),
+            'logo-list' => $this->logoListParser->parse($attributes, $site, $assetImporter, $output, $terms, $pageSlug),
+            'fad-providers' => $this->findADocProvidersParser->parse($attributes, $site, $assetImporter, $output, $terms, $items, $pageSlug),
+            'fad-locations' => $this->findADocLocationsParser->parse($attributes, $site, $assetImporter, $output, $terms, $items, $pageSlug),
+        };
+    }
 
-            // Check if the comment is a closing tag for an ACF block
-            if (\preg_match('/^\/wp:acf\//', $normalizedComment) === 1) {
-                // ---
-                // Return early without processing. Closing tags are handled by the loop that
-                // searches for them when processing paired blocks, not as opening tags.
-                // ---
-                return [
-                    'processed' => false,
-                    'skipCount' => 0,
-                    'set' => null,
-                ];
-            }
+    /**
+     * Counts the nodes a paired ACF block spans: from its opening comment through
+     * the first later comment that carries its closing tag, or to the last node
+     * when there is none.
+     *
+     * @param  DOMNodeList<DOMNameSpaceNode|DOMNode>  $nodes  The full list of nodes
+     * @param  int  $index  The index of the opening comment
+     * @param  string  $type  The block type
+     * @return int The number of nodes the block spans
+     */
+    private function countThroughClosingComment(
+        DOMNodeList $nodes,
+        int $index,
+        string $type
+    ): int {
+        // item() returns null one past the end, which is not a comment, so reading
+        // that far finds nothing more.
+        // @pest-mutate-ignore: SmallerToSmallerOrEqual
+        for ($i = $index + 1; $i < $nodes->length; $i++) {
+            $candidate = $nodes->item($i);
 
+            // Stop at the comment carrying this block's closing tag
             if (
-                \preg_match(
-                    '/wp:acf\/action-bar(?:\s+({.+?}))?\s*(?:\/)?$/',
-                    $normalizedComment,
-                    $matches
-                ) === 1
+                $this->isCommentNode($candidate)
+                && \preg_match('/\/wp:acf\/'.$type.'/', $this->getNodeText($candidate)) === 1
             ) {
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $set = $this->actionBarParser->parse(
-                        $attributes,
-                        $site,
-                        $assetImporter,
-                        $output
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $set = $this->actionBarParser->parse(
-                        $attributes,
-                        $site,
-                        $assetImporter,
-                        $output
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/action-bar/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/uams-section(?:\s+({.+?}))?\s*(?:\/)?$/',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $set = $this->sectionParser->parse(
-                        $attributes,
-                        [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $innerContent = $this->parseInnerContent(
-                        $nodes,
-                        $index,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-                    $set = $this->sectionParser->parse(
-                        $attributes,
-                        $innerContent,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/uams-section/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/uams-content(?:\s+({.+?}))?\s*(?:\/)?$/',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $set = $this->contentParser->parse(
-                        $attributes,
-                        [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    $attributes = \json_decode(
-                        $matches[1] ?? '',
-                        true
-                    );
-
-                    // Ensure attributes is always an array (json_decode can return null)
-                    $attributes = \is_array($attributes) ? $attributes : [];
-
-                    $innerContent = $this->parseInnerContent(
-                        $nodes,
-                        $index,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-                    $set = $this->contentParser->parse(
-                        $attributes,
-                        $innerContent,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/uams-content/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/cta\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->ctaParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->ctaParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/cta/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/call-out\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/call-out block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->callOutParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used for call-out, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->callOutParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/call-out/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/image-side\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/image-side block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->sideBySideParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->sideBySideParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/image-side/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/text-stacked\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/text-stacked block
-                $attributes = \json_decode(
-                    $matches[1],
-                    true,
-                    512
-                );
-
-                // Ensure attributes is always an array (json_decode can return null)
-                $attributes = \is_array($attributes) ? $attributes : [];
-
-                // ---
-                // Check if all items have no images and determine fallback conversion
-                // ---
-
-                // Extract data from attributes (handle both 'data' key and direct attributes)
-                $data = isset($attributes['data']) && \is_array($attributes['data'])
-                    ? $attributes['data']
-                    : $attributes;
-
-                // Create temporary StackedParser instance to access field mappings
-                $tempStackedParser = new StackedParser;
-
-                // Normalize field names using StackedParser field mappings
-                $normalizedData = AcfFieldNormalizer::normalize(
-                    $data,
-                    $tempStackedParser->getFieldMappings(),
-                    $tempStackedParser->getNestedStructures()
-                );
-
-                // Check if all items have no images
-                $allItemsHaveNoImages = StackedParser::allItemsHaveNoImages(
-                    $normalizedData
-                );
-
-                // Initialize variable to store if all items have URLs
-                $allItemsHaveUrls = false;
-
-                // Check if all items have URLs (only relevant if no images)
-                if ($allItemsHaveNoImages) {
-                    // Check if all items have URLs
-                    $allItemsHaveUrls = StackedParser::allItemsHaveUrls(
-                        $normalizedData
-                    );
-                }
-
-                // ---
-                // Determine conversion strategy based on item properties
-                // ---
-
-                // Check if should convert to link-list (no images and all have URLs)
-                if (
-                    $allItemsHaveNoImages
-                    && $allItemsHaveUrls
-                ) {
-                    // ---
-                    // Convert to link-list attributes and parse as link-list
-                    // ---
-
-                    // Convert stacked block attributes to link-list block attributes
-                    $linkListAttributes = StackedParser::convertToLinkListAttributes(
-                        $attributes
-                    );
-
-                    // Parse converted attributes as link-list block
-                    $set = $this->linkListParser->parse(
-                        $linkListAttributes,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-
-                    // Check if link-list parsing resulted in empty set (no valid items)
-                    if (
-                        $set === []
-                        || (
-                            isset($set['items'])
-                            && $set['items'] === []
-                        )
-                    ) {
-                        // ---
-                        // Fallback: Convert to uams-section if link-list parsing failed
-                        // ---
-
-                        // Convert stacked block to uams-section format
-                        $sectionFormat = StackedParser::convertToSectionFormat(
-                            $attributes
-                        );
-                        $sectionAttributes = isset($sectionFormat['attributes'])
-                            && \is_array($sectionFormat['attributes'])
-                                ? $sectionFormat['attributes']
-                                : [];
-                        $sectionInnerContent = isset($sectionFormat['innerContent'])
-                            && \is_array($sectionFormat['innerContent'])
-                                ? $sectionFormat['innerContent']
-                                : [];
-
-                        // Parse as uams-section block
-                        $set = $this->sectionParser->parse(
-                            $sectionAttributes,
-                            $sectionInnerContent,
-                            $site,
-                            $assetImporter,
-                            $output,
-                            $attachments,
-                            $terms,
-                            $pageSlug
-                        );
-                    }
-
-                    // Mark block as processed
-                    $processed = true;
-
-                    // Set skip count to 1 for self-closing block
-                    $skipCount = 1;
-
-                    // Check if block is paired (not self-closing)
-                    if (
-                        \preg_match(
-                            '/\/\s*$/',
-                            $normalizedComment
-                        ) !== 1
-                    ) {
-                        // ---
-                        // Paired block - find closing tag
-                        // ---
-
-                        // Loop through nodes to find closing comment tag
-                        for ($i = $index + 1; $i < $nodes->length; $i++) {
-                            // Increment skip count for each node
-                            $skipCount++;
-
-                            // Check if current node is the closing comment tag
-                            if (
-                                $this->isCommentNode($nodes->item($i))
-                                && \preg_match(
-                                    '/\/wp:acf\/text-stacked/',
-                                    $this->getNodeText($nodes->item($i))
-                                ) === 1
-                            ) {
-                                // Found closing tag, exit loop
-                                break;
-                            }
-                        }
-                    }
-                } elseif ($allItemsHaveNoImages) { // Check if should convert to uams-section (no images and no URLs; URLs already excluded by prior branch)
-                    // ---
-                    // Convert to uams-section format and parse as uams-section
-                    // ---
-
-                    // Convert stacked block to uams-section format
-                    $sectionFormat = StackedParser::convertToSectionFormat(
-                        $attributes
-                    );
-                    $sectionAttributes = isset($sectionFormat['attributes'])
-                        && \is_array($sectionFormat['attributes'])
-                            ? $sectionFormat['attributes']
-                            : [];
-                    $sectionInnerContent = isset($sectionFormat['innerContent'])
-                        && \is_array($sectionFormat['innerContent'])
-                            ? $sectionFormat['innerContent']
-                            : [];
-
-                    // Parse as uams-section block
-                    $set = $this->sectionParser->parse(
-                        $sectionAttributes,
-                        $sectionInnerContent,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $pageSlug
-                    );
-
-                    // Mark block as processed
-                    $processed = true;
-
-                    // Set skip count to 1 for self-closing block
-                    $skipCount = 1;
-
-                    // Check if block is paired (not self-closing)
-                    if (
-                        \preg_match(
-                            '/\/\s*$/',
-                            $normalizedComment
-                        ) !== 1
-                    ) {
-                        // ---
-                        // Paired block - find closing tag
-                        // ---
-
-                        // Loop through nodes to find closing comment tag
-                        for ($i = $index + 1; $i < $nodes->length; $i++) {
-                            // Increment skip count for each node
-                            $skipCount++;
-
-                            // Check if current node is the closing comment tag
-                            if (
-                                $this->isCommentNode($nodes->item($i))
-                                && \preg_match(
-                                    '/\/wp:acf\/text-stacked/',
-                                    $this->getNodeText($nodes->item($i))
-                                ) === 1
-                            ) {
-                                // Found closing tag, exit loop
-                                break;
-                            }
-                        }
-                    }
-                } else { // Otherwise
-                    // Parse as normal text-stacked block
-                    if (
-                        \preg_match(
-                            '/\/\s*$/',
-                            $normalizedComment
-                        ) === 1
-                    ) {
-                        // ---
-                        // Self-closing block
-                        // ---
-
-                        // Parse attributes as text-stacked block
-                        $set = $this->stackedParser->parse(
-                            $attributes,
-                            $site,
-                            $assetImporter,
-                            $output,
-                            $attachments
-                        );
-
-                        // Check if text-stacked parsing resulted in empty items
-                        if (
-                            $set === []
-                            || (
-                                isset($set['items'])
-                                && $set['items'] === []
-                            )
-                        ) {
-                            // ---
-                            // Fallback: Convert to uams-section if text-stacked parsing failed
-                            // ---
-
-                            // Convert stacked block to uams-section format
-                            $sectionFormat = StackedParser::convertToSectionFormat(
-                                $attributes
-                            );
-                            $sectionAttributes = isset($sectionFormat['attributes'])
-                                && \is_array($sectionFormat['attributes'])
-                                    ? $sectionFormat['attributes']
-                                    : [];
-                            $sectionInnerContent = isset($sectionFormat['innerContent'])
-                                && \is_array($sectionFormat['innerContent'])
-                                    ? $sectionFormat['innerContent']
-                                    : [];
-
-                            // Parse as uams-section block
-                            $set = $this->sectionParser->parse(
-                                $sectionAttributes,
-                                $sectionInnerContent,
-                                $site,
-                                $assetImporter,
-                                $output,
-                                $attachments,
-                                $terms,
-                                $pageSlug
-                            );
-                        }
-
-                        // Mark block as processed
-                        $processed = true;
-
-                        // Set skip count to 1 for self-closing block
-                        $skipCount = 1;
-                    } else { // Otherwise
-                        // ---
-                        // Paired block (not typically used, but supported)
-                        // ---
-
-                        // Parse attributes as text-stacked block
-                        $set = $this->stackedParser->parse(
-                            $attributes,
-                            $site,
-                            $assetImporter,
-                            $output,
-                            $attachments
-                        );
-
-                        // Check if text-stacked parsing resulted in empty items
-                        if (
-                            $set === []
-                            || (
-                                isset($set['items'])
-                                && $set['items'] === []
-                            )
-                        ) {
-                            // ---
-                            // Fallback: Convert to uams-section if text-stacked parsing failed
-                            // ---
-
-                            // Convert stacked block to uams-section format
-                            $sectionFormat = StackedParser::convertToSectionFormat(
-                                $attributes
-                            );
-                            $sectionAttributes = isset($sectionFormat['attributes'])
-                                && \is_array($sectionFormat['attributes'])
-                                    ? $sectionFormat['attributes']
-                                    : [];
-                            $sectionInnerContent = isset($sectionFormat['innerContent'])
-                                && \is_array($sectionFormat['innerContent'])
-                                    ? $sectionFormat['innerContent']
-                                    : [];
-
-                            // Parse as uams-section block
-                            $set = $this->sectionParser->parse(
-                                $sectionAttributes,
-                                $sectionInnerContent,
-                                $site,
-                                $assetImporter,
-                                $output,
-                                $attachments,
-                                $terms,
-                                $pageSlug
-                            );
-                        }
-
-                        // Mark block as processed
-                        $processed = true;
-
-                        // Set skip count to 1 for opening tag
-                        $skipCount = 1;
-
-                        // Loop through nodes to find closing comment tag
-                        for ($i = $index + 1; $i < $nodes->length; $i++) {
-                            // Increment skip count for each node
-                            $skipCount++;
-
-                            // Check if current node is the closing comment tag
-                            if (
-                                $this->isCommentNode($nodes->item($i))
-                                && \preg_match(
-                                    '/\/wp:acf\/text-stacked/',
-                                    $this->getNodeText($nodes->item($i))
-                                ) === 1
-                            ) {
-                                // Found closing tag, exit loop
-                                break;
-                            }
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/text-overlay\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/text-overlay block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->overlayParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->overlayParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/text-overlay/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/uams-news\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/uams-news block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->newsParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->newsParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/uams-news/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/livewhale-calendar\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/livewhale-calendar block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->liveWhaleParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->liveWhaleParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/livewhale-calendar/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/link-list\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/link-list block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->linkListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->linkListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/link-list/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/counter-list\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/counter-list block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->counterListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->counterListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/counter-list/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/uams-gallery\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/uams-gallery block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $sourceUrl = null;
-                    if (
-                        isset($items[0])
-                        && \is_object($items[0])
-                        && isset($items[0]->link)
-                        && \is_string($items[0]->link)
-                    ) {
-                        $sourceUrl = $items[0]->link;
-                    }
-
-                    $set = $this->galleryParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $sourceUrl
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $sourceUrl = null;
-                    if (
-                        isset($items[0])
-                        && \is_object($items[0])
-                        && isset($items[0]->link)
-                        && \is_string($items[0]->link)
-                    ) {
-                        $sourceUrl = $items[0]->link;
-                    }
-
-                    $set = $this->galleryParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments,
-                        $terms,
-                        $sourceUrl
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/uams-gallery/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/logo-list\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/logo-list block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->logoListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->logoListParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/logo-list/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/fad-providers\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/fad-providers block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->findADocProvidersParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $items,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->findADocProvidersParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $items,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/fad-providers/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/wp:acf\/fad-locations\s*({.+?})\s*(?:\/)?$/s',
-                    $normalizedComment,
-                    $matches
-                ) === 1
-            ) {
-                // Handle wp:acf/fad-locations block
-                if (
-                    \preg_match(
-                        '/\/\s*$/',
-                        $normalizedComment
-                    ) === 1
-                ) {
-                    // Self-closing block
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->findADocLocationsParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $items,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                } else { // Otherwise
-                    // Paired block (not typically used, but supported)
-                    $attributes = \json_decode(
-                        $matches[1],
-                        true,
-                        512
-                    );
-                    $set = $this->findADocLocationsParser->parse(
-                        \is_array($attributes) ? $attributes : [],
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $terms,
-                        $items,
-                        $pageSlug
-                    );
-                    $processed = true;
-                    $skipCount = 1;
-                    for ($i = $index + 1; $i < $nodes->length; $i++) {
-                        $skipCount++;
-                        if (
-                            $this->isCommentNode($nodes->item($i))
-                            && \preg_match(
-                                '/\/wp:acf\/fad-locations/',
-                                $this->getNodeText($nodes->item($i))
-                            ) === 1
-                        ) {
-                            break;
-                        }
-                    }
-                }
-            } elseif (
-                \preg_match(
-                    '/\/wp:acf\/(uams-section|action-bar|uams-content|cta|call-out|image-side|text-stacked|text-overlay|uams-news|livewhale-calendar|link-list|counter-list|uams-gallery|logo-list|fad-providers|fad-locations)/',
-                    $comment
-                ) === 1
-            ) {
-                // Handle closing tags for all supported ACF blocks
-                $processed = true;
-            }
-        } elseif (
-            $node->nodeType === XML_ELEMENT_NODE
-            && $node instanceof DOMElement
-            && $node->nodeName === 'div'
-        ) { // Check if the node is a div element (for div.lwcw LiveWhale widget)
-            // ---
-            // Handle div.lwcw (LiveWhale Calendar Widget) - treat same as
-            // wp:acf/livewhale-calendar, with ID from data-options
-            // ---
-
-            // Read the element's class attribute
-            $classAttr = $node->getAttribute('class');
-
-            // Read the data-options attribute (e.g., id=34&format=html)
-            $dataOptions = $node->getAttribute('data-options');
-
-            // Check if the div has class lwcw and non-empty data-options
-            if (
-                \preg_match(
-                    '/\blwcw\b/',
-                    $classAttr
-                ) === 1
-                && $dataOptions !== ''
-            ) {
-                // ---
-                // Parse id from data-options (e.g., "id=34&amp;format=html" -> 34)
-                // ---
-
-                // Decode HTML entities in data-options for parse_str
-                $optionsString = \str_replace('&amp;', '&', $dataOptions);
-
-                // Parse data-options into key-value params and extract id
-                \parse_str($optionsString, $params);
-
-                // Cast widget id from params to integer; use 0 if missing
-                $widgetId = isset($params['id']) ? (int) $params['id'] : 0;
-
-                // Check if a valid widget id was found
-                if ($widgetId > 0) {
-                    // Build attributes in Gutenberg block shape for LiveWhaleParser
-                    $attributes = [
-                        'data' => [
-                            'livewhale_heading' => 'Placeholder Block Heading — Please Replace',
-                            'livewhale_id' => (string) $widgetId,
-                            'livewhale_background_color' => 'bg-auto',
-                        ],
-                    ];
-
-                    // Parse into a LiveWhale replicator set
-                    $set = $this->liveWhaleParser->parse(
-                        $attributes,
-                        $site,
-                        $assetImporter,
-                        $output,
-                        $attachments
-                    );
-
-                    // If parsing succeeded, mark processed and skip div + script
-                    if ($set !== []) {
-                        // Mark this node as processed
-                        $processed = true;
-
-                        // Skip the div and the following script node
-                        $skipCount = 2;
-                    }
-                }
+                return $i - $index + 1;
             }
         }
 
-        // Return result with processed flag, skip count, and replicator set
+        // Run to the last node when the closing comment is missing
+        return $nodes->length - $index;
+    }
+
+    /**
+     * Parses a text-stacked block, as a link list or a section when its items
+     * suit one better.
+     *
+     * A block whose items carry no images becomes a link list when every item has
+     * a URL, and a section otherwise. A Stacked or link-list parse that yields no
+     * items falls back to a section.
+     *
+     * @param  array<int|string, mixed>  $attributes  The decoded block attributes
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images or linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects
+     * @param  ?string  $pageSlug  The page slug
+     * @return ?array<int|string, mixed> The replicator set
+     */
+    private function parseTextStacked(
+        array $attributes,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        ?string $pageSlug
+    ): ?array {
+        // Read the items from the data array, or from the attributes when there is none
+        $data = isset($attributes['data']) && \is_array($attributes['data'])
+            ? $attributes['data']
+            : $attributes;
+
+        // Normalize field names using StackedParser field mappings
+        $stackedParser = new StackedParser;
+        $normalizedData = AcfFieldNormalizer::normalize(
+            $data,
+            $stackedParser->getFieldMappings(),
+            $stackedParser->getNestedStructures()
+        );
+
+        // Choose the parser the items suit
+        if (! StackedParser::allItemsHaveNoImages($normalizedData)) {
+            $set = $this->stackedParser->parse(
+                $attributes,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments
+            );
+        } elseif (StackedParser::allItemsHaveUrls($normalizedData)) {
+            $set = $this->linkListParser->parse(
+                StackedParser::convertToLinkListAttributes($attributes),
+                $site,
+                $assetImporter,
+                $output,
+                $attachments
+            );
+        } else {
+            return $this->parseStackedAsSection(
+                $attributes,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $pageSlug
+            );
+        }
+
+        // Fall back to a section when the parse yields no items
+        if (
+            $set === []
+            || ($set['items'] ?? null) === []
+        ) {
+            return $this->parseStackedAsSection(
+                $attributes,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $pageSlug
+            );
+        }
+
+        return $set;
+    }
+
+    /**
+     * Parses a text-stacked block as a uams-section block.
+     *
+     * @param  array<int|string, mixed>  $attributes  The decoded block attributes
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images or linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects
+     * @param  ?string  $pageSlug  The page slug
+     * @return ?array<int|string, mixed> The replicator set
+     */
+    private function parseStackedAsSection(
+        array $attributes,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        ?string $pageSlug
+    ): ?array {
+        // Convert the stacked block to uams-section attributes and inner content
+        $section = StackedParser::convertToSectionFormat($attributes);
+
+        return $this->sectionParser->parse(
+            $section['attributes'],
+            $section['innerContent'],
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms,
+            $pageSlug
+        );
+    }
+
+    /**
+     * Returns the link of the first WordPress item, the page a gallery came from.
+     *
+     * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement item objects
+     * @return ?string The link, or null when the first item carries no string link
+     */
+    private function firstItemLink(array $items): ?string
+    {
+        // Read the link of the first item, when it is an object
+        $firstItem = $items[0] ?? null;
+        $link = \is_object($firstItem) ? ($firstItem->link ?? null) : null;
+
+        return \is_string($link) ? $link : null;
+    }
+
+    /**
+     * Parses a div.lwcw LiveWhale Calendar Widget as a LiveWhale block.
+     *
+     * Treats the widget like wp:acf/livewhale-calendar, with the calendar ID read
+     * from its data-options attribute (e.g., "id=34&amp;format=html"). The widget
+     * and the script node after it are skipped when the LiveWhale parser returns a
+     * set.
+     *
+     * @param  DOMElement  $node  The div element
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images or linked files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @return array{processed: bool, skipCount: int, set: ?array<int|string, mixed>} Result with processed status, skip count, and replicator set
+     */
+    private function parseLiveWhaleWidget(
+        DOMElement $node,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments
+    ): array {
+        // Leave a div that is not a LiveWhale widget to the caller
+        if (\preg_match('/\blwcw\b/', $node->getAttribute('class')) !== 1) {
+            return self::unprocessed();
+        }
+
+        // Read the widget id from data-options, whose ampersands may be encoded
+        \parse_str(
+            \str_replace('&amp;', '&', $node->getAttribute('data-options')),
+            $params
+        );
+        $widgetId = (int) ($params['id'] ?? null);
+
+        // Leave a widget without a usable id to the caller
+        if ($widgetId <= 0) {
+            return self::unprocessed();
+        }
+
+        // Parse the widget into a LiveWhale replicator set
+        $set = $this->liveWhaleParser->parse(
+            [
+                'data' => [
+                    'livewhale_heading' => "Placeholder Block Heading \u{2014} Please Replace",
+                    'livewhale_id' => (string) $widgetId,
+                    'livewhale_background_color' => 'bg-auto',
+                ],
+            ],
+            $site,
+            $assetImporter,
+            $output,
+            $attachments
+        );
+
+        // Leave the widget unprocessed when the parser returns no set
+        if ($set === []) {
+            return [
+                'processed' => false,
+                'skipCount' => 0,
+                'set' => [],
+            ];
+        }
+
+        // Skip the div and the script node after it
         return [
-            'processed' => $processed,
-            'skipCount' => $skipCount,
+            'processed' => true,
+            'skipCount' => 2,
             'set' => $set,
+        ];
+    }
+
+    /**
+     * The result for a node this parser leaves to its caller.
+     *
+     * @return array{processed: false, skipCount: 0, set: null} The unprocessed result
+     */
+    private static function unprocessed(): array
+    {
+        return [
+            'processed' => false,
+            'skipCount' => 0,
+            'set' => null,
         ];
     }
 
@@ -1813,7 +877,9 @@ class AcfBlockParser
      * Parses ACF blocks from HTML string content, for parseAcfBlocksFromHtml().
      *
      * parseAcfBlocksFromHtml() wraps this to restore libxml's internal-errors
-     * mode afterwards.
+     * mode afterwards. Each block is parsed from its opening comment alone, so a
+     * paired block's inner content and closing comment stay in the remaining HTML
+     * (tracked in wordpress-importer#201).
      *
      * @param  string  $html  The HTML string containing ACF block comments
      * @param  string  $site  The Statamic site handle
@@ -1835,267 +901,132 @@ class AcfBlockParser
         array $items,
         ?string $pageSlug
     ): array {
-        // Initialize array to store parsed ACF sets
-        $acfSets = [];
-
-        // ---
-        // Extract all ACF block opening comments from the HTML string
-        // Pattern matches: <!-- wp:acf/block-name {attributes} --> or <!-- wp:acf/block-name {attributes} /-->
-        // ---
-
-        // Define regex pattern to match ACF block comments
-        $acfBlockPattern = '/<!--\s*(wp:acf\/(?:uams-section|action-bar|uams-content|cta|call-out|image-side|text-stacked|text-overlay|uams-news|livewhale-calendar|link-list|counter-list|uams-gallery|logo-list|fad-providers|fad-locations)(?:\s+({.+?}))?\s*(?:\/)?)\s*-->/s';
-
-        // Initialize array to store regex matches
-        $matches = [];
-
-        // Find all ACF block comments in HTML string
+        // Find every opening comment of a supported block, self-closing or not
         \preg_match_all(
-            $acfBlockPattern,
+            '/<!--\s*wp:acf\/(?:'.\implode('|', \array_keys(self::BLOCK_TYPES)).')(?:\s+{.+?})?\s*\/?\s*-->/s',
             $html,
             $matches,
             PREG_OFFSET_CAPTURE
         );
 
-        // Check if any ACF blocks were found
-        if ($matches[0] === []) {
-            // Return empty ACF sets and original HTML
-            return [
-                'acfSets' => [],
-                'remainingHtml' => $html,
-            ];
-        }
-
-        // ---
-        // Process each ACF block found in the HTML
-        // ---
-
-        // Track position in HTML string for extracting content between blocks
+        $acfSets = [];
+        $remainingHtml = '';
         $lastPosition = 0;
 
-        // Initialize string to accumulate remaining non-ACF HTML content
-        $processedHtml = '';
+        foreach ($matches[0] as [$comment, $position]) {
+            // Keep the HTML between the previous block and this one
+            $remainingHtml .= \substr($html, $lastPosition, $position - $lastPosition);
+            $lastPosition = $position + \strlen($comment);
 
-        // Loop through each matched ACF block comment
-        foreach ($matches[0] as $idx => $match) {
-            // Get position of match in HTML string
-            $matchPosition = $match[1];
-
-            // Get full matched comment string
-            $fullComment = $match[0];
-
-            // Extract block comment portion (without surrounding comment markers)
-            $blockComment = $matches[1][$idx][0];
-
-            // Check if this is a self-closing block
-            $isSelfClosing = \preg_match(
-                '/\/\s*-->/',
-                $fullComment
+            // Parse the block, keeping any set its parser returns
+            $set = $this->parseBlockComment(
+                $comment,
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $items,
+                $pageSlug
             );
 
-            // ---
-            // Add HTML before this ACF block to remaining HTML
-            // ---
-
-            // Extract HTML content between last processed position and current block
-            $beforeBlock = \substr(
-                $html,
-                $lastPosition,
-                $matchPosition - $lastPosition
-            );
-
-            // Append HTML before block to processed HTML string
-            $processedHtml .= $beforeBlock;
-
-            // ---
-            // For paired blocks, find the closing comment
-            // ---
-
-            // Initialize variable for block inner content
-            $blockContent = '';
-
-            // Calculate end position of opening comment in HTML string
-            $endPosition = $matchPosition + \strlen($fullComment);
-
-            // Initialize block type variable
-            $blockType = null;
-
-            // Check if block is paired (not self-closing)
-            if ($isSelfClosing === false) {
-                // ---
-                // Extract block type from comment
-                // ---
-
-                // Extract block type name from comment string
-                if (
-                    \preg_match(
-                        '/wp:acf\/([^\s{]+)/',
-                        $blockComment,
-                        $blockTypeMatch
-                    ) === 1
-                ) {
-                    // Store extracted block type name
-                    $blockType = $blockTypeMatch[1];
-
-                    // Build regex pattern to find closing comment for this block type
-                    $closingPattern = '/<!--\s*\/wp:acf\/'.\preg_quote(
-                        $blockType,
-                        '/'
-                    ).'\s*-->/s';
-
-                    // ---
-                    // Find the closing comment
-                    // ---
-
-                    // Search for closing comment after opening comment position
-                    if (
-                        \preg_match(
-                            $closingPattern,
-                            $html,
-                            $closingMatch,
-                            PREG_OFFSET_CAPTURE,
-                            $endPosition
-                        ) === 1
-                    ) {
-                        // Get position of closing comment in HTML string
-                        $closingPosition = $closingMatch[0][1];
-
-                        // Get full closing comment string
-                        $closingComment = $closingMatch[0][0];
-
-                        // Extract content between opening and closing comments
-                        $blockContent = \substr(
-                            $html,
-                            $endPosition,
-                            $closingPosition - $endPosition
-                        );
-
-                        // Update end position to after closing comment
-                        $endPosition = $closingPosition + \strlen($closingComment);
-                    }
-                }
+            if ($set !== null) {
+                $acfSets[] = $set;
             }
-
-            // ---
-            // Parse the ACF block by creating a temporary DOM with the full block
-            // (opening comment, content, and closing comment if paired)
-            // ---
-
-            // Create temporary DOM document for parsing this block
-            $tempDoc = new \DOMDocument(
-                '1.0',
-                'UTF-8'
-            );
-
-            // Start with opening comment as base HTML
-            $blockHtml = $fullComment;
-
-            // For paired blocks, append content and closing comment
-            if ($isSelfClosing === false) {
-                // Append block content and closing comment to HTML
-                $blockHtml .= "{$blockContent}<!-- /wp:acf/{$blockType} -->";
-            }
-
-            // Wrap block HTML in full document structure for DOM parsing
-            $tempHtml = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{$blockHtml}</body></html>";
-
-            // ---
-            // Load HTML into DOM document with flags to preserve structure. No
-            // LIBXML_PARSEHUGE (wordpress-importer-archive#1273): this parses one ACF block, not a whole post,
-            // and no ACF block in the exports corpus nests past libxml's default
-            // limits, so the defaults keep a hostile export from exhausting memory.
-            // ---
-            // ---
-            // Collect libxml warnings internally while loading, then restore the
-            // caller's mode (wordpress-importer-archive#1354). The mode is process-wide, so leaving it on
-            // would silence every later libxml warning in the import, including
-            // the invalid-expression warning XpathHelper logs.
-            // ---
-            $previousInternalErrors = \libxml_use_internal_errors(true);
-
-            try {
-                $tempDoc->loadHTML(
-                    $tempHtml,
-                    LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
-                );
-            } finally {
-                // Clear any libxml errors that occurred during parsing
-                \libxml_clear_errors();
-
-                // Put back the mode the body had. parseAcfBlocksFromHtml() restores
-                // the caller's mode in its own finally, so no test can observe this
-                // call except from inside the body; it keeps warnings visible while
-                // the block parsers run.
-                // @pest-mutate-ignore: RemoveFunctionCall
-                \libxml_use_internal_errors($previousInternalErrors);
-            }
-
-            // ---
-            // Find the opening comment node in the temporary DOM
-            // ---
-
-            // Create XPath instance for querying DOM nodes
-            $xpath = new \DOMXPath($tempDoc);
-
-            // Query all comment nodes in the temporary DOM
-            $commentNodes = $xpath->query('//comment()');
-
-            // Query all nodes under body element
-            $tempNodes = $xpath->query('//body/node()');
-
-            // Check if opening comment node was found in temporary DOM
-            if (
-                $commentNodes !== false
-                && $commentNodes->length > 0
-                && $tempNodes !== false
-            ) {
-                // Get the first comment node (opening ACF block comment)
-                $commentNode = $commentNodes->item(0);
-
-                if (! $commentNode instanceof DOMNode) {
-                    continue;
-                }
-
-                // Parse the ACF block using parseNode
-                $acfResult = $this->parseNode(
-                    $commentNode,
-                    0,
-                    $tempNodes,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $attachments,
-                    $terms,
-                    $items,
-                    $pageSlug
-                );
-
-                // Check if ACF block was successfully parsed
-                if (
-                    $acfResult['processed']
-                    && isset($acfResult['set'])
-
-                ) {
-                    // Add parsed ACF set to results
-                    $acfSets[] = $acfResult['set'];
-                }
-            }
-
-            // Update last position to after this block (including closing comment if paired)
-            $lastPosition = $endPosition;
         }
 
-        // Add remaining HTML after the last ACF block
-        $processedHtml .= \substr(
-            $html,
-            $lastPosition
-        );
-
-        // Return parsed ACF sets and remaining HTML
+        // Keep the HTML after the last block
         return [
             'acfSets' => $acfSets,
-            'remainingHtml' => $processedHtml,
+            'remainingHtml' => $remainingHtml.\substr($html, $lastPosition),
         ];
+    }
+
+    /**
+     * Parses one ACF block comment taken from an HTML string.
+     *
+     * Loads the comment into a temporary DOM so it can be parsed like a node of a
+     * whole post.
+     *
+     * @param  string  $comment  The block comment, with its comment markers
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing assets
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects
+     * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement item objects
+     * @param  ?string  $pageSlug  The page slug
+     * @return ?array<int|string, mixed> The replicator set, or null when the block yields none
+     */
+    private function parseBlockComment(
+        string $comment,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        array $items,
+        ?string $pageSlug
+    ): ?array {
+        // Create temporary DOM document for parsing this block
+        $document = new \DOMDocument(
+            '1.0',
+            'UTF-8'
+        );
+
+        // ---
+        // Load the comment with flags to preserve structure. No LIBXML_PARSEHUGE
+        // (wordpress-importer-archive#1273): this parses one ACF block comment, not a
+        // whole post, so the defaults keep a hostile export from exhausting memory.
+        //
+        // Collect libxml warnings internally while loading, then restore the
+        // caller's mode (wordpress-importer-archive#1354). The mode is process-wide, so leaving it on
+        // would silence every later libxml warning in the import, including
+        // the invalid-expression warning XpathHelper logs.
+        // ---
+        $previousInternalErrors = \libxml_use_internal_errors(true);
+
+        try {
+            $document->loadHTML(
+                "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{$comment}</body></html>",
+                LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+            );
+        } finally {
+            // Clear any libxml errors that occurred during parsing
+            \libxml_clear_errors();
+
+            // Put back the mode the body had. parseAcfBlocksFromHtml() restores
+            // the caller's mode in its own finally, so no test can observe this
+            // call except from inside the body; it keeps warnings visible while
+            // the block parsers run.
+            // @pest-mutate-ignore: RemoveFunctionCall
+            \libxml_use_internal_errors($previousInternalErrors);
+        }
+
+        $body = $document->getElementsByTagName('body')->item(0);
+
+        // The markup above always gives the document a body whose first child is the
+        // matched comment, so this guard only narrows the types.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if (! $body?->firstChild instanceof DOMNode) {
+            return null;
+        }
+
+        // Parse the block as the first node of the temporary body
+        $result = $this->parseNode(
+            $body->firstChild,
+            0,
+            $body->childNodes,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $terms,
+            $items,
+            $pageSlug
+        );
+
+        return $result['processed'] ? $result['set'] : null;
     }
 
     /**

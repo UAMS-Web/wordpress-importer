@@ -175,7 +175,7 @@ class StackedParser
      * a uams-section block.
      *
      * @param  array<int|string, mixed>  $attributes  The original stacked block attributes
-     * @return array<int|string, mixed> Array with 'attributes' (uams-section block attributes) and 'innerContent' (HTML fragments for InnerBlocks)
+     * @return array{attributes: array<int|string, mixed>, innerContent: list<array{html: string}>} The uams-section block attributes and the HTML fragments for its InnerBlocks
      */
     public static function convertToSectionFormat(
         array $attributes
