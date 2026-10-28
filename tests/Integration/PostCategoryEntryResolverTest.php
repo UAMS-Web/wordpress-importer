@@ -10,6 +10,7 @@ use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
@@ -409,4 +410,53 @@ it('does not query the syndicating site twice when it is the placement site', fu
 
     expect(PostCategoryEntryResolver::referencesFor('research', 'news'))
         ->toBe([$newsEntry]);
+});
+
+// --- #102: the warning in full, the dedup order and the cache -----------------------------
+
+it('names the site, the slugs, the page, the effect and the reason in its warning', function (): void {
+    ProcessingContext::setWordPressPageLink('https://example.test/news-page/');
+    $kept = makeCategoryEntry('research');
+
+    PostCategoryEntryResolver::referencesFor('research, lost-one, lost-two', 'default');
+
+    expect(ImportWarningManager::getWarnings('content', 'unresolvable_news_category'))->toBe([[
+        'site' => 'default',
+        'category_slugs' => 'lost-one, lost-two',
+        'page_url' => 'https://example.test/news-page/',
+        'effect' => 'The block kept its other categories; only the slugs named here were dropped.',
+        'reason' => 'No `post_categories` entry exists for these slugs on this site or on the `news` site the block syndicates from. The page import creates the categories before it parses any block and the cross-site case is now resolved against the syndicating site, so a re-run will NOT help: no export imported so far declares this slug on either site (see wordpress-importer-archive#628). Set the category on the block in the Control Panel, or import an export that declares it.',
+    ]]);
+
+    expect($kept)->toBeString();
+
+    ProcessingContext::setWordPressPageLink(null);
+});
+
+it('keeps the slugs after two that name the same entry', function (): void {
+    // The slug query matches case-insensitively, so these two name one entry
+    $news = makeCategoryEntry('news');
+    $events = makeCategoryEntry('events');
+
+    expect(PostCategoryEntryResolver::referencesFor('news, News, events', 'default'))->toBe([$news, $events]);
+});
+
+it('remembers an entry it found for the rest of the run', function (): void {
+    $entryId = makeCategoryEntry('research');
+
+    PostCategoryEntryResolver::referencesFor('research', 'default');
+
+    $entry = EntryFacade::find($entryId);
+    assert($entry instanceof Entry);
+    $entry->delete();
+
+    expect(PostCategoryEntryResolver::referencesFor('research', 'default'))->toBe([$entryId]);
+});
+
+it('remembers each site\'s entry for a slug apart', function (): void {
+    $local = makeCategoryEntry('research');
+    $syndicated = makeCategoryEntry('research', 'news');
+
+    expect(PostCategoryEntryResolver::referencesFor('research', 'default'))->toBe([$local])
+        ->and(PostCategoryEntryResolver::referencesFor('research', 'news'))->toBe([$syndicated]);
 });
