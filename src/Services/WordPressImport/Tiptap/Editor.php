@@ -204,14 +204,10 @@ class Editor extends BaseEditor
 
             // Iterate through child nodes
             foreach ($node['content'] as $child) {
-                if (
-                    \is_array($child)
-                    && isset($child['type'])
-                    && $child['type'] === 'text'
-                ) {
+                if (self::isTextNode($child)) {
+                    // The text appended below creates the paragraph's content
                     $currentParagraph ??= [
                         'type' => 'paragraph',
-                        'content' => [],
                     ];
 
                     // Add text node to the current paragraph
@@ -249,6 +245,29 @@ class Editor extends BaseEditor
 
             unset($child);
         }
+    }
+
+    /**
+     * Report whether a child of a node's content is a text node.
+     *
+     * @param  mixed  $child  A child of a node's content
+     * @return bool True when the child is an array whose type is `text`
+     *
+     * @phpstan-assert-if-true array<int|string, mixed> $child
+     */
+    private static function isTextNode(
+        mixed $child
+    ): bool {
+        // Content that is not an array is not a node at all. A document only
+        // ever holds arrays and scalars here, since setContent() decodes array
+        // input from JSON, and isset() is false for a scalar anyway: the guard
+        // is here for the offset read's type, not for the result
+        if (! \is_array($child)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
+            return false;
+        }
+
+        return isset($child['type']) && $child['type'] === 'text';
     }
 
     /**
@@ -370,9 +389,7 @@ class Editor extends BaseEditor
             foreach ($node['content'] as &$child) {
                 // Check if child is a text node with text content
                 if (
-                    \is_array($child)
-                    && isset($child['type'])
-                    && $child['type'] === 'text'
+                    self::isTextNode($child)
                     && isset($child['text'])
                     && \is_string($child['text'])
                 ) {
