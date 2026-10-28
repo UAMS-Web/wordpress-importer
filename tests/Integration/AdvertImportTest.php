@@ -931,3 +931,30 @@ it('reports progress through the listings, leaving the per-listing lines as they
         'Progress: advert 3 of 3 (100%)',
     ])->and($run['output'])->toContain("Processing advert '".advertSlug('bike-for-sale')."'...");
 });
+
+it('reports progress through the category term passes, counting only advert categories (#182)', function (): void {
+    // A term of another taxonomy, which the finishing pass leaves out of its total
+    $export = advertExport();
+    $xml = (string) \file_get_contents($export);
+    // Insert it once, before the first item
+    $patched = \preg_replace(
+        '/<item>/',
+        '<wp:term><wp:term_id>90</wp:term_id><wp:term_taxonomy>category</wp:term_taxonomy><wp:term_slug>news</wp:term_slug><wp:term_name><![CDATA[News]]></wp:term_name></wp:term>'."\n<item>",
+        $xml,
+        1,
+        $replaced
+    );
+
+    if (! \is_string($patched) || $replaced === 0) {
+        throw new RuntimeException('The export carries no item to insert the term before.');
+    }
+
+    \file_put_contents($export, $patched);
+
+    $output = advertImportRun($export)['output'];
+
+    expect($output)->toContain('Progress: classified_categories terms checked 0 of 5 (0%)'.\PHP_EOL)
+        ->and($output)->toContain('Progress: classified_categories terms created 0 of 5 (0%)'.\PHP_EOL)
+        ->and($output)->toContain('Progress: advert category terms finished 0 of 5 (0%)'.\PHP_EOL)
+        ->and($output)->toContain('Progress: advert category terms finished 5 of 5 (100%)'.\PHP_EOL);
+});

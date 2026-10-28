@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\NullOutput;
+use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 
 /**
@@ -181,4 +183,87 @@ it('writes plain text with no control sequences, even to a decorated output', fu
     expect($text)->not->toContain("\e")
         ->and($text)->not->toContain("\r")
         ->and($text)->toContain('Progress: <info>redirect_rule</info> 2 of 2 (100%)');
+});
+
+it('counts a streamed source once, through its closure, when the lines will print (#182)', function (): void {
+    $calls = 0;
+    $count = function () use (&$calls): int {
+        $calls++;
+
+        return 3;
+    };
+
+    $output = new BufferedOutput;
+
+    foreach (ImportProgress::track($output, 'page', (static fn (): Generator => yield from ['a', 'b', 'c'])(), $count, static fn (): float => 0.0) as $item) {
+        // Consume the loop
+    }
+
+    expect($calls)->toBe(1)
+        ->and($output->fetch())->toEndWith('Progress: page 3 of 3 (100%)'.\PHP_EOL);
+});
+
+it('neither counts nor reports when the output will not print a line (#182)', function (OutputInterface $output): void {
+    $calls = 0;
+    $count = function () use (&$calls): int {
+        $calls++;
+
+        return 3;
+    };
+
+    $yielded = [];
+
+    foreach (ImportProgress::track($output, 'page', (static fn (): Generator => yield from ['a', 'b', 'c'])(), $count) as $item) {
+        $yielded[] = $item;
+    }
+
+    expect($calls)->toBe(0)
+        ->and($yielded)->toBe(['a', 'b', 'c'])
+        ->and($output instanceof BufferedOutput ? $output->fetch() : '')->toBe('');
+})->with([
+    'quiet' => fn (): OutputInterface => new BufferedOutput(OutputInterface::VERBOSITY_QUIET),
+    'silent' => fn (): OutputInterface => new BufferedOutput(OutputInterface::VERBOSITY_SILENT),
+    'null output' => fn (): OutputInterface => new NullOutput,
+]);
+
+it('still refuses a streamed source without a total when the output is quiet', function (): void {
+    foreach (ImportProgress::track(new NullOutput, 'page', (static fn (): Generator => yield 1)()) as $item) {
+        // Consume the loop
+    }
+})->throws(InvalidArgumentException::class, 'A total is required');
+
+it('reports after a quiet stretch of ten seconds, and not of less', function (float $stretch, bool $reported): void {
+    $now = 0.0;
+
+    $run = importProgressRun(
+        \range(1, 100),
+        body: function (int|string $key) use (&$now, $stretch): bool {
+            if ($key === 4) {
+                $now += $stretch;
+            }
+
+            return true;
+        },
+        clock: function () use (&$now): float {
+            return $now;
+        }
+    );
+
+    expect(\in_array('Progress: page 5 of 100 (5%)', $run['lines'], true))->toBe($reported);
+})->with([
+    'ten seconds' => [10.0, true],
+    'nine and a half' => [9.5, false],
+    'eleven seconds' => [11.0, true],
+]);
+
+it('reads seconds from the system clock when given none', function (): void {
+    $output = new BufferedOutput;
+
+    foreach (ImportProgress::track($output, 'page', \range(1, 20)) as $item) {
+        // Each item takes no time to speak of
+    }
+
+    // Only the start and the ten tenths; a clock a billion times too fast would
+    // report every item
+    expect(\substr_count($output->fetch(), 'Progress:'))->toBe(11);
 });

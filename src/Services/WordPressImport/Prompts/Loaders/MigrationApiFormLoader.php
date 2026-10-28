@@ -121,24 +121,23 @@ class MigrationApiFormLoader implements FileLoaderInterface
             return $this->fileLoader->load($filePath, $command);
         }
 
-        return $this->loadFromApi($command);
+        return $this->loadFromApi($this->client, $command);
     }
 
     /**
      * Read every form this plugin serves from the migration API.
      *
+     * The client is the one `load()` has just found configured, passed in rather than read
+     * again, so no check of it is needed here (#100).
+     *
+     * @param  Client  $client  The migration API client for this run
      * @param  Command  $command  Command instance for error reporting
      * @return array<int|string, mixed>|null The forms, or null when the read failed
      */
     private function loadFromApi(
+        Client $client,
         Command $command
     ): ?array {
-        $client = $this->client;
-
-        if (! $client instanceof Client) {
-            return null;
-        }
-
         $endpoint = 'forms/'.$this->endpointSlug;
 
         try {

@@ -10,6 +10,7 @@ use DOMElement;
 use DOMNode;
 use DOMText;
 use Illuminate\Support\Facades\Log;
+use SplObjectStorage;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\AcfGalleryBlockProcessor;
@@ -26,6 +27,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Shor
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\UnwrappingBlockProcessorTrait;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGalleryBlockProcessor;
@@ -43,6 +45,18 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSp
  */
 class TextProcessor
 {
+    /**
+     * Matches a `wp:shortcode` block, whose shortcodes ShortcodeBlockProcessor
+     * converts.
+     */
+    private const string SHORTCODE_BLOCK_PATTERN = '/<!--\s*wp:shortcode\s*-->.*?<!--\s*\/wp:shortcode\s*-->/is';
+
+    /**
+     * Matches a `wp:gallery` block, whose image links WpGalleryBlockProcessor
+     * resolves from attachment ids.
+     */
+    private const string GALLERY_BLOCK_PATTERN = '/<!--\s*wp:gallery\s*{.*?}\s*-->.*?<!--\s*\/wp:gallery\s*-->/is';
+
     /**
      * Static cache for processor instances to avoid repeated instantiation.
      *
@@ -119,6 +133,63 @@ class TextProcessor
     }
 
     /**
+     * Decodes HTML entities in markup about to be parsed, leaving quotes encoded
+     * inside tags.
+     *
+     * Decoding `&quot;` inside a double-quoted attribute value before parsing turns
+     * it into a bare `"`, which ends the value, so the parser keeps only the part
+     * before it; `&#39;` and `&apos;` do the same inside a single-quoted value
+     * (#157). Inside a tag every other entity is decoded and the quotes are left
+     * for the parser, which decodes them as part of the value. Text and comments
+     * are decoded exactly as {@see self::decodeEntities()} would.
+     *
+     * @param  string  $content  The markup to decode
+     * @return string The markup with entities decoded, and quotes inside tags left encoded
+     */
+    private static function decodeEntitiesKeepingTagQuotes(
+        string $content
+    ): string {
+        // ---
+        // Split into comments, tags and the text between them. A tag's quoted values
+        // may hold a `>`, so the pattern reads a quoted value whole; a tag whose
+        // quote is never closed does not match and is decoded as text, as before.
+        // ---
+        $segments = \preg_split(
+            '/(<!--.*?-->|<[A-Za-z\/!?][^>"\']*+(?:(?:"[^"]*+"|\'[^\']*+\')[^>"\']*+)*+>)/s',
+            $content,
+            flags: PREG_SPLIT_DELIM_CAPTURE
+        );
+
+        // Fall back to a full decode if splitting failed (e.g. a PCRE limit was hit)
+        if ($segments === false) {
+            return self::decodeEntities($content);
+        }
+
+        // Reassemble, decoding each tag without its quotes and everything else whole
+        $result = '';
+
+        foreach ($segments as $index => $segment) {
+            // The captured delimiters sit at the odd indexes
+            $isTag = $index % 2 === 1 && ! \str_starts_with($segment, '<!--');
+
+            // ---
+            // A tag keeps its quotes encoded, `&apos;` spelled as `&#39;`: `&apos;` is
+            // not an HTML 4 entity, so a libxml older than 2.14 leaves it as it is,
+            // while every version decodes a numeric reference. libxml 2.14 and later
+            // decode an HTML5 named entity in an attribute value themselves, so the doc
+            // type flag changes nothing with them; an older libxml leaves one such as
+            // `&bigstar;` encoded without it.
+            // ---
+            // @pest-mutate-ignore: BitwiseOrToBitwiseAnd, UnwrapStrReplace
+            $result .= $isTag
+                ? \str_replace('&apos;', '&#39;', \html_entity_decode($segment, ENT_NOQUOTES | ENT_HTML5, 'UTF-8'))
+                : self::decodeEntities($segment);
+        }
+
+        return $result;
+    }
+
+    /**
      * Normalizes a string by removing control characters.
      *
      * Removes control characters (U+0000 to U+001F, U+0080 to U+009F) for clean text
@@ -173,12 +244,9 @@ class TextProcessor
         // this document, so its whitespace setting has no effect.
         $doc->formatOutput = true;
 
-        // Convert HTML entities to UTF-8 equivalents
-        $html = html_entity_decode(
-            $html,
-            ENT_QUOTES | ENT_HTML5,
-            'UTF-8'
-        );
+        // Convert HTML entities to UTF-8 equivalents, leaving the quotes inside
+        // tags for libxml to decode as part of an attribute value (#157)
+        $html = self::decodeEntitiesKeepingTagQuotes($html);
 
         // ---
         // Convert every non-ASCII character to a numeric HTML entity. DOMDocument
@@ -485,8 +553,9 @@ class TextProcessor
         // Normalize UTF-8 encoding to ensure valid characters
         $processedContent = self::normalizeUtf8($html);
 
-        // Decode HTML entities for proper character rendering
-        $processedContent = self::decodeEntities($processedContent);
+        // Decode HTML entities for proper character rendering, leaving the quotes
+        // inside tags so an attribute value keeps its whole value (#157)
+        $processedContent = self::decodeEntitiesKeepingTagQuotes($processedContent);
 
         // ---
         // Handle content that is only a single wp:shortcode block.
@@ -611,53 +680,28 @@ class TextProcessor
 
         // Check if WpAutoP should be applied
         if ($applyWpAutoP) {
-            // Convert numeric HTML entities for proper WpAutoP processing
+            // Convert numeric HTML entities for proper WpAutoP processing. Each
+            // is decoded as the content is decoded everywhere else, so a code
+            // point above 127 keeps its character rather than becoming one byte,
+            // and an entity html_entity_decode() leaves alone, such as NUL, a
+            // carriage return or a surrogate, reaches the steps after WpAutoP as
+            // it does without it (#154). A quote is left encoded, since it may sit
+            // in an attribute value; the decode below decodes it in text (#157).
             $formattedContent = preg_replace_callback(
-                '/&#(\d+);/',
-                fn ($matches): string => \chr((int) $matches[1]),
+                '/&#\d+;/',
+                static fn (array $matches): string => \html_entity_decode($matches[0], ENT_NOQUOTES | ENT_HTML5, 'UTF-8'),
                 $formattedContent
             );
 
             $formattedContent ??= $processedContent;
 
-            // Decode HTML entities for proper WpAutoP processing
-            $formattedContent = html_entity_decode(
-                $formattedContent,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
+            // Decode HTML entities for proper WpAutoP processing, leaving the quotes
+            // inside tags (#157)
+            $formattedContent = self::decodeEntitiesKeepingTagQuotes($formattedContent);
 
             // Apply WpAutoP to the formatted content
             $formattedContent = $wpAutoP->process($formattedContent);
         }
-
-        // Extract shortcode block positions to prevent duplicate processing
-        $shortcodeBlocks = self::extractBlockPositions(
-            $formattedContent,
-            '/<!--\s*wp:shortcode\s*-->(.*?)<!--\s*\/wp:shortcode\s*-->/is'
-        );
-
-        // ---
-        // Extract gallery blocks from processed content.
-        //
-        // To prevent LinkProcessor from treating gallery image href attributes as file
-        // links, we must ensure href attributes inside
-        // <!-- wp:gallery --> ... <!-- /wp:gallery --> blocks are NOT processed by the
-        // LinkProcessor. They should only be handled by the WpGalleryBlockProcessor using
-        // attachment IDs.
-        //
-        // We scan for all such blocks, record their offsets, and skip any href attributes
-        // whose position falls within these blocks.
-        // ---
-
-        // ---
-        // Extract gallery block positions to prevent LinkProcessor from processing href
-        // attributes
-        // ---
-        $galleryBlocks = self::extractBlockPositions(
-            $formattedContent,
-            '/<!--\s*wp:gallery\s*({.*?})\s*-->(.*?)<!--\s*\/wp:gallery\s*-->/is'
-        );
 
         // Extract all shortcodes from the formatted content
         $shortcodes = $shortcodeProcessor->extract(
@@ -681,20 +725,16 @@ class TextProcessor
                 continue;
             }
 
-            // Find the position of this shortcode in the content
-            $shortcodePos = \strpos(
-                $formattedContent,
-                $shortcode['original']
-            );
-
-            // Check if the shortcode is within a wp:shortcode block
+            // Leave a shortcode the content holds only inside wp:shortcode blocks
+            // to ShortcodeBlockProcessor. The blocks are found in the content as it
+            // now stands, after the replacements so far (#155)
             if (
-                self::isInsideBlock(
-                    $shortcodePos,
-                    $shortcodeBlocks
+                \str_contains($formattedContent, $shortcode['original'])
+                && ! self::occursOutsideShortcodeBlocks(
+                    $formattedContent,
+                    $shortcode['original']
                 )
             ) {
-                // Skip processing here; ShortcodeBlockProcessor will handle it
                 continue;
             }
 
@@ -754,11 +794,16 @@ class TextProcessor
                         $pageSlug
                     );
 
-                    // Replace shortcode with Tiptap HTML in content
-                    $formattedContent = \str_replace(
-                        $shortcode['original'],
-                        $tiptapHtml,
-                        $formattedContent
+                    // Replace the shortcode with Tiptap HTML outside wp:shortcode
+                    // blocks, leaving any copy inside one to the block
+                    $original = $shortcode['original'];
+                    $formattedContent = self::replaceOutsideShortcodeBlocks(
+                        $formattedContent,
+                        static fn (string $segment): string => \str_replace(
+                            $original,
+                            $tiptapHtml,
+                            $segment
+                        )
                     );
                 }
             } else { // Otherwise
@@ -773,11 +818,16 @@ class TextProcessor
                     $pageSlug
                 );
 
-                // Replace shortcode with Tiptap HTML in content
-                $formattedContent = ShortcodeProcessor::replaceShortcode(
+                // Replace the shortcode with Tiptap HTML outside wp:shortcode
+                // blocks, leaving any copy inside one to the block
+                $original = $shortcode['original'];
+                $formattedContent = self::replaceOutsideShortcodeBlocks(
                     $formattedContent,
-                    $shortcode['original'],
-                    $tiptapHtml
+                    static fn (string $segment): string => ShortcodeProcessor::replaceShortcode(
+                        $segment,
+                        $original,
+                        $tiptapHtml
+                    )
                 );
             }
 
@@ -785,7 +835,7 @@ class TextProcessor
             // `[table]` branch that used to define it)
             unset(
                 $shortcode,
-                $shortcodePos,
+                $original,
                 $tiptapHtml,
                 $doc,
                 $images,
@@ -793,11 +843,22 @@ class TextProcessor
             );
         }
 
-        // Combine shortcode and gallery blocks as excluded blocks for preprocessing
+        // ---
+        // Find the shortcode and gallery blocks in the content as the replacements
+        // above left it, so their offsets point at the blocks LinkProcessor will
+        // read (#155). Gallery image links are resolved from attachment ids by
+        // WpGalleryBlockProcessor, and links inside a shortcode block by
+        // ShortcodeBlockProcessor, so LinkProcessor must not read them as file
+        // links
+        // ---
         $excludedBlocks = \array_merge(
-            $shortcodeBlocks,
-            $galleryBlocks
+            self::extractBlockPositions($formattedContent, self::SHORTCODE_BLOCK_PATTERN),
+            self::extractBlockPositions($formattedContent, self::GALLERY_BLOCK_PATTERN)
         );
+
+        // Order them by start, so removing hrefs from the last block first leaves
+        // the offsets of the blocks before it in place
+        \sort($excludedBlocks);
 
         // ---
         // Preprocess content to remove href attributes from excluded blocks before
@@ -828,6 +889,14 @@ class TextProcessor
         // Initialize array to track processed nodes by HTML content
         $processedNodes = [];
 
+        // ---
+        // Nodes of this document a block has already consumed, held by identity. A block's
+        // skipCount and its processed node name particular nodes, so matching them by HTML
+        // would also skip a later node that only happens to share their markup (#152).
+        // ---
+        /** @var SplObjectStorage<DOMNode, null> $consumedNodes */
+        $consumedNodes = new SplObjectStorage;
+
         // Loop through pre-processed nodes to build tracking array
         foreach ($preProcessedNodes as $preProcessedNode) {
             // Skip non-node values from preprocessed node input
@@ -846,6 +915,14 @@ class TextProcessor
 
         // Initialize array to store block attributes
         $blockAttributes = [];
+
+        // ---
+        // The type of the block whose comment set $blockAttributes. It is read only with
+        // attributes present, which a block comment sets together with it, so this first
+        // value is never read.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $blockAttributesType = '';
 
         // Get all child nodes from the root div element
         $rootDiv = $doc->getElementsByTagName('div')->item(0);
@@ -868,7 +945,8 @@ class TextProcessor
 
             // Check if node has already been processed
             if (
-                \in_array(
+                $consumedNodes->contains($node)
+                || \in_array(
                     $nodeHtml,
                     $processedNodes,
                     true
@@ -897,8 +975,9 @@ class TextProcessor
                     // Extract the block type from the comment
                     $blockType = $matches[1];
 
-                    // Initialize block attributes array
+                    // Initialize block attributes array, recording whose they are
                     $blockAttributes = [];
+                    $blockAttributesType = $blockType;
 
                     // Check if block attributes are present in the comment
                     if (isset($matches[2])) {
@@ -1009,29 +1088,34 @@ class TextProcessor
                                 // empty string, which no node's HTML equals.
                                 // @pest-mutate-ignore: InstanceOfToTrue
                                 if ($processedNode instanceof DOMNode) {
-                                    $processedNodes[] = self::nodeHtml(
-                                        $doc,
-                                        $processedNode
+                                    $consumedNodes->attach($processedNode);
+                                }
+
+                                // Skip the block's nodes after its opening comment (#152)
+                                if (\is_int($skipCount)) {
+                                    // A class name and the trait name are strings, so in_array()'s
+                                    // strict flag, which phpstan-strict-rules requires, changes no
+                                    // result.
+                                    // @pest-mutate-ignore: TrueToFalse
+                                    $node = self::consumeBlockNodes(
+                                        $node,
+                                        $skipCount,
+                                        $blockType,
+                                        $consumedNodes,
+                                        \in_array(UnwrappingBlockProcessorTrait::class, \class_uses($processor), true)
                                     );
                                 }
-
-                                // Check if the result specifies nodes to skip
-                                if (\is_int($skipCount)) {
-                                    // Skip the specified number of nodes
-                                    for ($j = 0; $j < $skipCount; $j++) {
-                                        // Get the next sibling node
-                                        $nextNode = $node->nextSibling;
-
-                                        // Check if the next node exists
-                                        if ($nextNode instanceof DOMNode) {
-                                            // Mark the next node as processed
-                                            $processedNodes[] = $doc->saveHTML($nextNode);
-
-                                            // Move to the next node
-                                            $node = $nextNode;
-                                        }
-                                    }
-                                }
+                            } elseif (
+                                $blockType === 'shortcode'
+                                && $result === ShortcodeBlockProcessor::blockContent($node)
+                            ) {
+                                // ---
+                                // A shortcode block whose processor converted nothing returns
+                                // its content unchanged. Its own nodes still hold it, so they are
+                                // read below as ordinary content, once, which also turns an
+                                // image in them into a set; adding the string too read it twice
+                                // (#156)
+                                // ---
                             } elseif (\is_string($result)) { // Check if the result is a string
                                 // Parse the HTML string to ProseMirror JSON
                                 $parsedResult = $bardParser->parse($result);
@@ -1040,8 +1124,18 @@ class TextProcessor
                                 $firstParsed = $parsedResult[0] ?? null;
 
                                 if ($firstParsed !== null) {
-                                    // Add parsed content to Bard content
-                                    $bardContent[] = $firstParsed;
+                                    // Add the parsed content: all of it for a shortcode block,
+                                    // whose string is the block's whole content, converted, and
+                                    // whose nodes are skipped below, so nothing else adds the
+                                    // rest (#156)
+                                    if ($blockType === 'shortcode') {
+                                        $bardContent = \array_merge(
+                                            $bardContent,
+                                            $parsedResult
+                                        );
+                                    } else {
+                                        $bardContent[] = $firstParsed;
+                                    }
                                 } elseif ( // Check if HTML string is not empty but parsing failed
                                     // A processor returns a string only with content in it, or empty,
                                     // so no whitespace-only string reaches this check
@@ -1068,6 +1162,24 @@ class TextProcessor
                                         $logData['context']
                                     );
                                 }
+
+                                // ---
+                                // A shortcode block's string is its whole content, converted, so
+                                // skip the block's nodes through its closing comment; otherwise
+                                // the unconverted content in them is read again below (#156)
+                                // ---
+                                if ($blockType === 'shortcode') {
+                                    // The count ends at the block's first closing comment, so the
+                                    // walk stops there whether or not it tracks nesting
+                                    // @pest-mutate-ignore: FalseToTrue
+                                    $node = self::consumeBlockNodes(
+                                        $node,
+                                        ShortcodeBlockProcessor::blockSkipCount($node),
+                                        $blockType,
+                                        $consumedNodes,
+                                        false
+                                    );
+                                }
                             } elseif ($result === null) { // Check if block processor returns null
                                 // Enhance log context with entry information
                                 $logData = LogContextHelper::enhanceWithEntryContext(
@@ -1089,61 +1201,61 @@ class TextProcessor
                             }
 
                             // ---
-                            // After processing a wp:shortcode block, if the next sibling is a text node
-                            // containing a raw shortcode (e.g., [show-people ...]), mark it as processed so
-                            // it is not accumulated into $currentContent. This prevents an erroneous text
-                            // node from being added to Bard content.
+                            // A processor that returned a result has used the block's
+                            // attributes, and its skip can consume the closing comment that
+                            // would clear them below, so clear them here: a later figure is
+                            // not this block's (#153). A null result leaves them for the
+                            // block's figure, if one follows.
                             // ---
-
-                            // Check if this is a shortcode block
-                            if ($blockType === 'shortcode') {
-                                // Get the next sibling node
-                                $nextNode = $node->nextSibling;
-
-                                // Check if the next node is a text node
-                                if ($nextNode instanceof DOMText) {
-                                    // Get the trimmed text content
-                                    $text = \trim($nextNode->textContent);
-
-                                    // Check if the text looks like a shortcode
-                                    if (
-                                        \preg_match(
-                                            '/^\[.+\]$/s',
-                                            $text
-                                        ) === 1
-                                    ) {
-                                        // Mark the next node as processed
-                                        $processedNodes[] = $doc->saveHTML($nextNode);
-                                    }
-                                }
+                            if ($result !== null) {
+                                $blockAttributes = [];
                             }
 
-                            // The block is handled, so move to the next node
+                            // ---
+                            // The block is handled, so move to the next node. Leaving only
+                            // the processor loop would add the opening comment to the
+                            // accumulated content, which the Bard parser strips, so the two
+                            // give the same content.
+                            // ---
+                            // @pest-mutate-ignore: DecrementInteger
                             continue 2;
                         }
                     }
                 }
             }
 
-            // Check if this is a figure element with block attributes. Only an element
-            // is named `figure`, so the instanceof check only narrows the type.
+            // ---
+            // Check if this is the figure of an image block its processor did not claim,
+            // which keeps the block's attributes (#153). They are an image block's only:
+            // another unclaimed block's attributes describe that block, not a figure
+            // after it. The closing image comment below clears them, and so does a
+            // processor that claims a block. A figure with
+            // no image is ordinary content, read further down. Only an element is
+            // named `figure`, so the instanceof check only narrows the type.
+            // ---
             // @pest-mutate-ignore: InstanceOfToTrue
             if (
                 $node instanceof DOMElement
                 && $node->nodeName === 'figure'
                 && $blockAttributes !== []
+                && $blockAttributesType === 'image'
+                && $node->getElementsByTagName('img')->length > 0
             ) {
-                // Extract the HTML of the first <img> in the <figure>, or '' for none
+                // Extract the HTML of the first <img> in the <figure>
                 $imgHtml = self::nodeHtml(
                     $doc,
                     $node->getElementsByTagName('img')->item(0)
                 );
 
-                // Check if image exists and hasn't been processed yet
-                if (
-                    $imgHtml !== ''
-                    && ! isset($processedImages[$imgHtml])
-                ) {
+                // Check if the image hasn't been processed yet
+                if (! isset($processedImages[$imgHtml])) {
+                    // Parse the content accumulated ahead of the image first
+                    self::flushContent(
+                        $currentContent,
+                        $bardContent,
+                        $bardParser
+                    );
+
                     // Process <figure> with ImageProcessor, passing block attributes
                     $imageSet = $imageProcessor->processImage(
                         $nodeHtml,
@@ -1288,6 +1400,29 @@ class TextProcessor
                 continue;
             }
 
+            // ---
+            // The closing comment of a shortcode block whose content was read as ordinary
+            // nodes ends that content, so parse it as its own content rather than joining
+            // it to the text after the block (#156). A block whose processor converted it
+            // has consumed this comment, and the content ahead of the block was parsed
+            // before its processor ran.
+            // ---
+            if (
+                $node instanceof DOMComment
+                && \preg_match(
+                    '/^\/wp:shortcode\s*$/',
+                    \trim($node->data)
+                ) === 1
+            ) {
+                self::flushContent(
+                    $currentContent,
+                    $bardContent,
+                    $bardParser
+                );
+
+                continue;
+            }
+
             // Accumulate non-image, non-block content for later parsing
             $currentContent .= $nodeHtml;
         }
@@ -1330,7 +1465,6 @@ class TextProcessor
             $processedContent,
             $processedImages,
             $processedNodes,
-            $shortcodeBlocks,
             $shortcodeProcessor,
             $shortcodes,
             $wpAutoP
@@ -1562,12 +1696,89 @@ class TextProcessor
         DOMDocument $doc,
         ?DOMNode $node
     ): string {
-        // Read the node's HTML; there is none for no node
+        // ---
+        // Read the node's HTML; there is none for no node. Every caller passes a node it
+        // has checked exists (an `<img>` it counted, or the node the loop is on), so the
+        // null and false results only satisfy the nullable `item()` and `saveHTML()`
+        // types. saveHTML() throws for a node from another document rather than
+        // returning false, and every caller passes $doc's own.
+        // ---
+        // @pest-mutate-ignore: InstanceOfToTrue, FalseToTrue
         $html = $node instanceof DOMNode ? $doc->saveHTML($node) : false;
 
-        // Return the HTML, or '' for no node. saveHTML() throws for a node from another
-        // document rather than returning false, and every caller passes $doc's own.
+        // Return the HTML, or '' for no node
+        // @pest-mutate-ignore: FalseToTrue, EmptyStringToNotEmpty
         return $html === false ? '' : $html;
+    }
+
+    /**
+     * Marks the nodes a block's skip count covers as consumed, and returns the last one.
+     *
+     * Every processor counts the block's opening comment, which is `$comment`, so one
+     * fewer sibling follows it. The processors differ on the whitespace between a block's
+     * nodes: some count it and some do not. So whitespace-only text is consumed without
+     * counting, and the walk never passes the block's own closing comment, which ends any
+     * count that included the whitespace. Which closing comment that is follows the
+     * processor's own count: the group and details processors count a same-type block
+     * nested among the siblings, so it is passed over whole for them, and every other
+     * processor counts to the first closing comment of its type, so the walk stops there.
+     * Before #152 the walk took `$skipCount` siblings, one past the block.
+     *
+     * @param  DOMNode  $comment  The block's opening comment
+     * @param  int  $skipCount  The processor's count, the opening comment included
+     * @param  string  $blockType  The block type from the opening comment, such as `spacer`
+     * @param  SplObjectStorage<DOMNode, null>  $consumedNodes  The nodes consumed so far
+     * @param  bool  $tracksNesting  Whether the processor's count passes over a nested block of the same type
+     * @return DOMNode The last node consumed, or `$comment` when none is
+     */
+    private static function consumeBlockNodes(
+        DOMNode $comment,
+        int $skipCount,
+        string $blockType,
+        SplObjectStorage $consumedNodes,
+        bool $tracksNesting
+    ): DOMNode {
+        $node = $comment;
+        $remaining = $skipCount - 1;
+        $depth = 0;
+
+        while ($remaining > 0 && $node->nextSibling instanceof DOMNode) {
+            // Consume the next sibling
+            $node = $node->nextSibling;
+            $consumedNodes->attach($node);
+
+            // Whitespace between a block's nodes does not count toward the skip
+            if ($node instanceof DOMText && \trim($node->data) === '') {
+                continue;
+            }
+
+            $remaining--;
+
+            // Only a block comment can open a nested block or close this one
+            if (! $node instanceof DOMComment) {
+                continue;
+            }
+
+            $data = \trim($node->data);
+
+            // A nested block of the same type closes with the same comment as this one
+            if ($tracksNesting && \preg_match('/^wp:'.\preg_quote($blockType, '/').'(?:\s|$)(?!.*\/$)/s', $data) === 1) {
+                $depth++;
+
+                continue;
+            }
+
+            // The block's own closing comment ends the walk, whatever is left of the count
+            if ($data === '/wp:'.$blockType) {
+                if ($depth === 0) {
+                    break;
+                }
+
+                $depth--;
+            }
+        }
+
+        return $node;
     }
 
     /**
@@ -1617,31 +1828,70 @@ class TextProcessor
     }
 
     /**
-     * Checks whether a position falls inside any of the given blocks.
+     * Splits content into the text of its `wp:shortcode` blocks and the text
+     * between them, in order.
      *
-     * @param  int|false  $position  The position, or false when it was not found
-     * @param  array<int, array{int, int}>  $blocks  Block start/end offsets
-     * @return bool True when the position is at or after a block's start and before its end
+     * @param  string  $content  The content to split
+     * @return list<array{string, bool}> Each piece of text, and whether it is a block
      */
-    private static function isInsideBlock(
-        int|false $position,
-        array $blocks
-    ): bool {
-        // A position that was not found is inside no block
-        if ($position === false) {
-            return false;
+    private static function splitOnShortcodeBlocks(
+        string $content
+    ): array {
+        // Initialize the pieces and the offset the next one starts at
+        $pieces = [];
+        $offset = 0;
+
+        // Take the text before each block, then the block itself
+        foreach (self::extractBlockPositions($content, self::SHORTCODE_BLOCK_PATTERN) as [$blockStart, $blockEnd]) {
+            $pieces[] = [\substr($content, $offset, $blockStart - $offset), false];
+            $pieces[] = [\substr($content, $blockStart, $blockEnd - $blockStart), true];
+            $offset = $blockEnd;
         }
 
-        // Check each block for the position
-        foreach ($blocks as [$blockStart, $blockEnd]) {
-            // Check whether the position falls inside this block
-            if ($position >= $blockStart && $position < $blockEnd) {
+        // Take the text after the last block
+        $pieces[] = [\substr($content, $offset), false];
+
+        return $pieces;
+    }
+
+    /**
+     * Checks whether text occurs in content outside every `wp:shortcode` block.
+     *
+     * @param  string  $content  The content to search
+     * @param  string  $needle  The text to find
+     * @return bool True when some copy of the text lies between blocks
+     */
+    private static function occursOutsideShortcodeBlocks(
+        string $content,
+        string $needle
+    ): bool {
+        // Look for the text in each piece that is not a block
+        foreach (self::splitOnShortcodeBlocks($content) as [$text, $isBlock]) {
+            if (! $isBlock && \str_contains($text, $needle)) {
                 return true;
             }
         }
 
-        // Return false when no block holds the position
         return false;
+    }
+
+    /**
+     * Applies a replacement to the content outside its `wp:shortcode` blocks,
+     * leaving the blocks as they are.
+     *
+     * @param  string  $content  The content to change
+     * @param  callable(string): string  $replace  The replacement for a piece between blocks
+     * @return string The content with the pieces between blocks replaced
+     */
+    private static function replaceOutsideShortcodeBlocks(
+        string $content,
+        callable $replace
+    ): string {
+        // Replace each piece that is not a block, and rejoin them in order
+        return \implode('', \array_map(
+            static fn (array $piece): string => $piece[1] ? $piece[0] : $replace($piece[0]),
+            self::splitOnShortcodeBlocks($content)
+        ));
     }
 
     /**

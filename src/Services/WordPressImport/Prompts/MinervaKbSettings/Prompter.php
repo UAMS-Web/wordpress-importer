@@ -92,19 +92,18 @@ class Prompter
     ): ?string {
         $filePath = $this->askWithValidation(
             'Enter the path to your MinervaKB settings JSON file (or press Enter to skip): ',
-            function ($answer): ?string {
-                if (! \is_string($answer)) {
-                    throw new RuntimeException('Invalid file path.');
-                }
-
-                return $this->validateFilePath($answer);
-            },
+            // The command's own question answers an empty line with its default, null, which
+            // skips as an empty answer does (#100)
+            fn (mixed $answer): ?string => $this->validateFilePath(
+                \is_string($answer) ? $answer : ''
+            ),
             $input,
             $output,
             $command
         );
 
-        return \is_string($filePath) || $filePath === null ? $filePath : null;
+        // The validator answers with a path or null, so this only narrows the type for phpstan
+        return \is_string($filePath) ? $filePath : null;
     }
 
     /**

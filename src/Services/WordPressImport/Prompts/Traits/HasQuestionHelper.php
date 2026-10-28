@@ -35,10 +35,15 @@ trait HasQuestionHelper
     protected function getQuestionHelper(
         ?Command $command = null
     ): QuestionHelper {
+        // A class that is not a command taking itself as one is refused just below, with the
+        // same message as when it does not
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $isCommand = $this instanceof Command;
+
         // Check if no command is provided and we're in a command context
         if (
             ! $command instanceof Command
-            && $this instanceof Command
+            && $isCommand
         ) {
             // Set the command to the current instance
             $command = $this;
@@ -198,71 +203,36 @@ trait HasQuestionHelper
 
         // Check if Laravel Prompts is supported (input already confirmed interactive above)
         if ($this->isPromptsSupported()) {
-            // Use Laravel Prompts for choice selection
+            // Use Laravel Prompts for choice selection. A list's default is matched against
+            // its labels rather than its indexes, so an index default is given as its label (#100).
             $selectedOption = select(
                 label: $question,
                 options: $normalizedOptions,
-                default: $default
+                default: \is_int($default) && \array_is_list($normalizedOptions)
+                    ? ($normalizedOptions[$default] ?? null)
+                    : $default
             );
 
             // Return the selected option key as a normalized string
             return (string) $selectedOption;
         }
 
-        // Attempt to ask using Laravel command helper for test interception
-        try {
-            // Use Laravel command helper to select the choice
-            $selectedOption = $command->choice(
-                $question,
-                $normalizedOptions,
-                $default
-            );
+        // ---
+        // Ask through Laravel's command helper, so expectsQuestion() can intercept it in
+        // tests. A choice that is not multiple-select answers with one option, and a choice
+        // question answers with its default when the input runs out rather than throwing,
+        // and this one always has a default (#100).
+        // ---
+        $selectedOption = $command->choice(
+            $question,
+            $normalizedOptions,
+            $default
+        );
 
-            // Return the selected option value as a normalized string
-            if (\is_array($selectedOption)) {
-                // Fall back to the first selected option in unexpected array responses
-                $firstSelectedOption = reset($selectedOption);
-
-                // Return a safe string representation of the first selected option
-                if (
-                    \is_string($firstSelectedOption)
-                    || \is_int($firstSelectedOption)
-                    || \is_float($firstSelectedOption)
-                    || \is_bool($firstSelectedOption)
-                    || $firstSelectedOption instanceof Stringable
-                ) {
-                    return (string) $firstSelectedOption;
-                }
-
-                return '';
-            }
-
-            return $selectedOption;
-        } catch (MissingInputException) {
-            // Check if the default is an integer and is set in the options
-            if (
-                \is_int($default)
-                && isset($normalizedOptions[$default])
-            ) {
-                // Return the default option as a string
-                return $normalizedOptions[$default];
-            }
-
-            // Check if the default is a string and is set in the options
-            if (
-                \is_string($default)
-                && isset($normalizedOptions[$default])
-            ) {
-                // Return the default option as a string
-                return $normalizedOptions[$default];
-            }
-
-            // Get the first option
-            $firstOption = reset($normalizedOptions);
-
-            // Return the first option as a string
-            return $firstOption === false ? '' : $firstOption;
-        }
+        // The list a multiple-select choice answers with is never asked for here, so it only
+        // narrows the type for phpstan
+        // @pest-mutate-ignore: TernaryNegated, EmptyStringToNotEmpty
+        return \is_array($selectedOption) ? '' : $selectedOption;
     }
 
     /**
@@ -312,21 +282,10 @@ trait HasQuestionHelper
                 $question,
                 $default
             );
-            // Return string responses and normalize scalar values to strings
-            if (\is_string($response)) {
-                return $response;
-            }
 
-            // Return string responses and normalize scalar values to strings
-            if (\is_int($response)
-            || \is_float($response)
-            || \is_bool($response)
-            || $response instanceof Stringable) {
-                return (string) $response;
-            }
-
-            // Return null for unsupported response types
-            return null;
+            // The command helper answers with the text given, or with the default, which is a
+            // string or null (#100)
+            return \is_string($response) ? $response : null;
         } catch (MissingInputException) {
             // Return the default value
             return $default;
@@ -411,7 +370,7 @@ trait HasQuestionHelper
             // Handle validation errors by displaying error and retrying
             catch (\Exception $e) {
                 // Display the validation error message
-                $output->writeln('<error>'.$e->getMessage().'</error>');
+                $output->writeln(\sprintf('<error>%s</error>', $e->getMessage()));
 
                 // Recursively call this method to retry the question
                 return $this->askWithValidation(
@@ -445,7 +404,7 @@ trait HasQuestionHelper
                 return $validator($response);
             } catch (\Exception $e) {
                 // Display the validation error message
-                $output->writeln('<error>'.$e->getMessage().'</error>');
+                $output->writeln(\sprintf('<error>%s</error>', $e->getMessage()));
             }
         }
     }

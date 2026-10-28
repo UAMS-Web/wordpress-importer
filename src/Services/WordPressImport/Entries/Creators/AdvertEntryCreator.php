@@ -230,7 +230,7 @@ class AdvertEntryCreator extends BaseEntryCreator
         }
 
         // Import each listing
-        foreach (ImportProgress::track($output, self::POST_TYPE, $xmlStreamParser->streamItems(self::POST_TYPE), $xmlStreamParser->countItems(self::POST_TYPE)) as $advert) {
+        foreach (ImportProgress::track($output, self::POST_TYPE, $xmlStreamParser->streamItems(self::POST_TYPE), static fn (): int => $xmlStreamParser->countItems(self::POST_TYPE)) as $advert) {
             $this->importAdvert(
                 $advert,
                 $site,
@@ -651,18 +651,17 @@ class AdvertEntryCreator extends BaseEntryCreator
         // ---
         $this->rebuildTermStoreFromDisk('classified_categories');
 
-        foreach (ImportProgress::track($output, 'advert category terms finished', $xmlParser->getTerms()) as $wpTerm) {
-            // Consider only WP Adverts categories. `getTerms()` returns only elements, so
-            // the type test is for the analyser, and WordPress term ids are unique across
-            // taxonomies, so another taxonomy's term never resolves as an advert category.
-            // @pest-mutate-ignore: InstanceOfToTrue, BooleanOrToBooleanAnd
-            if (
-                ! $wpTerm instanceof SimpleXMLElement
-                || XpathHelper::getStringValue($wpTerm, 'wp:term_taxonomy') !== self::CATEGORY_TAXONOMY
-            ) {
-                continue;
-            }
+        // Consider only WP Adverts categories, so the progress total counts the terms
+        // this loop finishes. `getTerms()` returns only elements, so the type test is
+        // for the analyzer.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $categoryTerms = \array_values(\array_filter(
+            $xmlParser->getTerms(),
+            static fn (mixed $wpTerm): bool => $wpTerm instanceof SimpleXMLElement
+                && XpathHelper::getStringValue($wpTerm, 'wp:term_taxonomy') === self::CATEGORY_TAXONOMY
+        ));
 
+        foreach (ImportProgress::track($output, 'advert category terms finished', $categoryTerms) as $wpTerm) {
             // Find the term the term pass wrote for this category
             $destination = TermDestinationRegistry::resolve(
                 self::CATEGORY_TAXONOMY,

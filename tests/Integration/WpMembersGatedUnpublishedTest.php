@@ -187,7 +187,9 @@ it('imports a gated reusable block unpublished and an open one published', funct
         ->and(wpmem1241Entry('reusable_content', 'plain-notice')->published())->toBeTrue()
         ->and(wpmem1241Entry('reusable_content', 'draft-promo')->published())->toBeFalse()
         ->and($printed)->toContain('Imported as unpublished: WP-Members gates https://example.test/wp_block/members-banner/ (_wpmem_block=1).')
-        ->and(\substr_count($printed, 'Imported as unpublished'))->toBe(2);
+        ->and(\substr_count($printed, 'Imported as unpublished'))->toBe(2)
+        ->and($printed)->toContain('Progress: wp_block 0 of 5 (0%)'.\PHP_EOL)
+        ->and($printed)->toContain('Progress: wp_block 5 of 5 (100%)'.\PHP_EOL);
 });
 
 it('passes each item\'s _wpmem_block wherever a creator publishes from wp:status alone', function (): void {

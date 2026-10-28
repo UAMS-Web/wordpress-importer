@@ -503,9 +503,18 @@ describe('in Bard content', function (): void {
             ->and(\array_keys($nodes))->toBe([0, 1]);
     });
 
-    it('keeps the heading of an accordion in a wp:shortcode block among other blocks', function (): void {
-        // The block loop keeps only the first node of a block's HTML, so the section
-        // bodies are still lost here (#156); the heading has to be that first node
+    it('keeps the content a list when an empty section\'s paragraph is dropped', function (): void {
+        $html = '<!-- wp:shortcode -->[accordion][section title="A"][/section][section title="B"]y[/section][/accordion]<!-- /wp:shortcode -->';
+        $nodes = TextProcessor::processForBard($html, 'default', accordionAssetImporter(), new BufferedOutput, false, false, [], [], 'slug');
+
+        // The empty section leaves an empty paragraph between its heading and the next
+        expect(accordionBardOutline($nodes))->toBe(['heading3: A', 'heading3: B', 'paragraph: y'])
+            ->and(\array_keys($nodes))->toBe([0, 1, 2]);
+    });
+
+    it('keeps the heading and the section body of an accordion in a wp:shortcode block among other blocks', function (): void {
+        // The block loop keeps every node of a shortcode block's HTML, so the section
+        // body follows the heading (#156)
         $html = "<!-- wp:paragraph --><p>Intro</p><!-- /wp:paragraph -->\n<!-- wp:shortcode -->\n[accordion][section title=\"Q\"]Answer text.\n\nSecond answer para.[/section][/accordion]\n<!-- /wp:shortcode -->\n<!-- wp:paragraph --><p>Outro</p><!-- /wp:paragraph -->";
 
         // The block path reads the importer's upload setting, which the
@@ -515,6 +524,8 @@ describe('in Bard content', function (): void {
         expect(accordionBardOutline($nodes))->toBe([
             'paragraph: Intro',
             'heading3: Q',
+            'paragraph: Answer text.',
+            'paragraph: Second answer para.',
             'paragraph: Outro',
         ]);
     });

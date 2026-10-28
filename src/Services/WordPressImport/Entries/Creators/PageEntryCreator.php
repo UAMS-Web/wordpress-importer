@@ -151,7 +151,7 @@ class PageEntryCreator extends BaseEntryCreator
 
         $terms = $xmlParser->getTerms(); // Now always uses streaming
 
-        foreach (ImportProgress::track($output, 'page', $xmlStreamParser->streamItems('page'), $xmlStreamParser->countItems('page')) as $page) {
+        foreach (ImportProgress::track($output, 'page', $xmlStreamParser->streamItems('page'), static fn (): int => $xmlStreamParser->countItems('page')) as $page) {
             $hasAcfBlocks = false;
 
             // Decode HTML entities and strip HTML tags from title

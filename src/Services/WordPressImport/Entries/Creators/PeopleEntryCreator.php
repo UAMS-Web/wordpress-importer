@@ -330,7 +330,7 @@ class PeopleEntryCreator extends BaseEntryCreator
         }
 
         // Loop through all items of this post type to process each person
-        foreach (ImportProgress::track($output, $this->postType, $xmlStreamParser->streamItems($this->postType), $xmlStreamParser->countItems($this->postType)) as $person) {
+        foreach (ImportProgress::track($output, $this->postType, $xmlStreamParser->streamItems($this->postType), fn (): int => $xmlStreamParser->countItems($this->postType)) as $person) {
             // Decode HTML entities and strip HTML tags from the person's title
             $title = HtmlTagStripper::strip(
                 html_entity_decode(

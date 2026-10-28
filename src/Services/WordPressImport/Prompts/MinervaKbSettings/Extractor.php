@@ -78,10 +78,7 @@ class Extractor
             'knowledge_base_search_query',
             function (array $settings, string $key): bool {
                 // Check if 'home_sections_switch' is not set or is not explicitly true
-                if (
-                    ! isset($settings[$key]) // if 'home_sections_switch' is not set
-                    || $settings[$key] !== true // if 'home_sections_switch' is not explicitly true
-                ) {
+                if (($settings[$key] ?? false) !== true) {
                     // Home sections switch is disabled, so enable search query
                     return true;
                 }
@@ -94,11 +91,6 @@ class Extractor
                 // 'true' until wordpress-importer-archive#1106, and reaching it exposed the undefined-key warning.
                 // ---
                 $homeSections = $settings['home_sections'] ?? [];
-                // Check if 'home_sections' is missing or empty
-                if ($homeSections === []) {
-                    // No home sections configured, so disable search query
-                    return false;
-                }
 
                 // Check if home_sections is a comma-separated string that needs normalization
                 if (\is_string($homeSections)) {
@@ -340,7 +332,7 @@ class Extractor
         array &$result
     ): void {
         // Check if restrict_on is set and is false
-        if (isset($settings['restrict_on']) && $settings['restrict_on'] === false) {
+        if (($settings['restrict_on'] ?? null) === false) {
             // When restrict_on is false, set restriction_enabled to false
             $result['restriction_enabled'] = false;
 
@@ -349,7 +341,7 @@ class Extractor
         }
 
         // Check if restrict_on is true
-        if (isset($settings['restrict_on']) && $settings['restrict_on'] === true) {
+        if (($settings['restrict_on'] ?? null) === true) {
             // Get restrict_article_role value
             $restrictArticleRole = $settings['restrict_article_role'] ?? null;
 
@@ -491,9 +483,10 @@ class Extractor
         // Read the raw value from settings using null when missing
         $value = $settings[$key] ?? null;
 
-        // Check if the key exists and has a non-empty value
+        // Check if the value is one of the empty scalars; a missing key, null and an array
+        // take the default below, as values that are not scalar
         if (
-            in_array($value, [null, false, '', 0, '0', []], true)
+            in_array($value, [false, '', 0, '0'], true)
         ) {
             return $default;
         }
@@ -540,7 +533,7 @@ class Extractor
     private function getInt(
         array $settings,
         string $key,
-        int $default = 0
+        int $default
     ): int {
         // Get the value from settings or use default if key doesn't exist
         $value = $settings[$key] ?? $default;
@@ -568,9 +561,11 @@ class Extractor
         // Read raw value once for consistent type handling
         $value = $settings[$key] ?? null;
 
-        // Return default if key is empty or doesn't exist
+        // Return the default for an empty string or '0'; a missing key, null, false and 0 take
+        // it below, as values that are neither a list nor a string, and an empty array is
+        // returned as the list it is, which equals the one caller's default
         if (
-            in_array($value, [null, false, '', 0, '0', []], true)
+            in_array($value, ['', '0'], true)
         ) {
             return $default;
         }
@@ -604,13 +599,13 @@ class Extractor
      * @param  array<int|string, mixed>  $settings  The settings array to check
      * @param  string  $key  The key to check
      * @param  array<int|string, mixed>  &$result  The result array to update
-     * @param  ?string  $resultKey  The key to set in the result (defaults to $key)
+     * @param  string  $resultKey  The key to set in the result
      */
     private function setBoolIfSet(
         array $settings,
         string $key,
         array &$result,
-        ?string $resultKey = null
+        string $resultKey
     ): void {
         // Use setResultField with getBool as the getter for boolean conversion
         $this->setResultField(
@@ -635,23 +630,22 @@ class Extractor
      * @param  array<int|string, mixed>  &$result  The result array to update
      * @param  string  $checkKey  The result key to check for true
      * @param  string  $setKey  The result key to set
-     * @param  ?string  $settingsKey  The settings key to use (defaults to $setKey)
+     * @param  string  $settingsKey  The settings key to use
      */
     private function setIfResultKeyIsOne(
         array $settings,
         array &$result,
         string $checkKey,
         string $setKey,
-        ?string $settingsKey = null
+        string $settingsKey
     ): void {
-        // Check if the conditional key is set to true (enabled)
-        $checkValue = $result[$checkKey] ?? false;
-        if ($checkValue === true) {
+        // Check if the conditional key, which is always set before this is asked, is true
+        if ($result[$checkKey] === true) {
             // Use setResultField to set the dependent field if condition is met
             $this->setResultField(
                 $settings,
                 $result,
-                $settingsKey ?? $setKey,
+                $settingsKey,
                 $setKey
             );
         }

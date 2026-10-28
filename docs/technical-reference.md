@@ -54,7 +54,7 @@ For debugging purposes, you can clear the cache and log file before running the 
 5. **Filesize Measurement**: When enabled (see `WORDPRESS_IMPORT_MEASURE_FILESIZE`), measures and reports the filesize difference of the codebase before and after import, displaying results in bytes, kilobytes, megabytes, and gigabytes.
 6. **Site Selection**: Prompts the user to select a target site within Statamic for content import using `SiteSelector`.
 7. **Content Type Selection**: Allows users to choose which content types to import (e.g., pages, posts, people) via `ContentTypeSelector`.
-8. **Destination Mapping**: Maps WordPress content types to Statamic collections or global sets with `DestinationSelector`, offering default mappings for common types.
+8. **Destination Mapping**: Maps each WordPress content type to the Statamic collection or global set its default mapping names. A content type with no default mapping is reported, and the run ends.
 9. **Classic Block Detection**: Scans for Classic Editor content and warns users, as it is not fully compatible with Statamic's Bard format.
 10. **Row Block Detection**: Scans for WordPress Row blocks (wp:group blocks with flex layout and nowrap configuration) and warns users, as they are not fully compatible with Statamic's Bard format.
 11. **Details Block Detection**: Scans for WordPress Details blocks (wp:details blocks) and warns users, as they are not fully compatible with Statamic's Bard format.
@@ -233,9 +233,9 @@ The command uses the `scanForKbWithoutTopics()` method within `src/Console/Comma
 
 After scanning for `kb` entries without topics, if any are detected, the command displays a warning message listing the affected entries and informs the user that these entries will not be imported. It prompts the user to decide whether to continue with the import despite the missing topics, suggesting to resolve the issue on the source site by assigning topics to all entries before re-exporting the XML file.
 
-#### Use Default Destination or Select a Custom One
+#### Use the Default Destination
 
-The command checks if the selected content type has a default mapping defined in the `$defaultMappings` array. If a default mapping exists, it is automatically used. If no default mapping exists, the user is prompted to select a custom destination. This is handled by the `DestinationSelector` class from `src/Services/WordPressImport/Prompts/DestinationSelector.php`, which manages the selection of an import destination, either a Statamic collection or taxonomy, and handles site enabling for the chosen destination. For more details on the `DestinationSelector` class, see the [Prompt Classes](#prompt-classes) section.
+The command checks if the selected content type has a default mapping defined in the `$defaultMappings` array. If a default mapping exists, it is automatically used. If no default mapping exists, the command reports it and ends the run with an error status. Every supported content type has a default mapping, so this happens only if one is added without its mapping (#213).
 
 #### Automatically Enable Necessary Collections, Global Sets, or Taxonomies for the Site
 
@@ -774,24 +774,6 @@ Below is a detailed overview of each class:
   - Utilizes Laravel Prompts on supported systems for a modern interface, with a fallback to Symfony Console Questions.
 - **Methods**:
   - `select()`: Prompts the user to choose a content type from the available options.
-
-### DestinationSelector
-
-- **Purpose**: Facilitates the selection of an import destination, either a Statamic collection or taxonomy, and handles site enabling for the chosen destination.
-- **File Path**: `src/Services/WordPressImport/Prompts/DestinationSelector.php`
-- **Key Functionality**:
-  - Prompts the user to decide between importing into a collection or a taxonomy.
-  - Lists available collections or taxonomies based on the user's choice and allows selection of a specific handle.
-  - Checks if the selected destination is enabled for the chosen site; if not, prompts the user to enable it.
-  - Updates YAML configuration files to enable the site for the selected collection or taxonomy and clears the Statamic cache.
-  - Creates a tree file for collections if it doesn't exist for the selected site.
-  - Supports Laravel Prompts for interactive selection on compatible systems, with a fallback to Symfony Console Questions.
-- **Methods**:
-  - `select()`: Orchestrates the process of choosing between collection or taxonomy and selecting a specific destination.
-  - `selectCollection()`: Handles collection selection and site enabling.
-  - `selectTaxonomy()`: Manages taxonomy selection and site enabling.
-  - `enableSiteForCollection()`: Updates collection configuration to enable a site and creates a tree file.
-  - `enableSiteForTaxonomy()`: Updates taxonomy configuration to enable a site.
 
 ## Asset Classes
 
@@ -1924,11 +1906,9 @@ The following classes are located in `src/Services/WordPressImport/Tiptap/Nodes/
 - **Inheritance**: Extends [`AbstractSetRenderer`](#abstractsetrenderer)
 - **Key Functionality**:
   - Handles shortcode-based set parsing.
-  - Provides configuration for Tiptap parsing.
   - Supports future shortcode-based sets.
 - **Methods**:
   - `__construct()`: Initializes the shortcode renderer.
-  - `getShortcodeConfig()`: Gets shortcode parsing configuration.
   - `renderHTML()`: Renders a shortcode-based set node to HTML.
 
 ##### Table

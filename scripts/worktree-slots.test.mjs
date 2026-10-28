@@ -986,13 +986,21 @@ describe('claim — atomic under real concurrency (wordpress-importer-archive#11
         return { root, repo };
     }
 
+    // Keeps stderr too, where claim says why it refused, so a failure names its reason (#204)
     const claimAsync = (repo, owner) => new Promise((resolve) => {
         const child = spawn(process.execPath, [script, 'claim', '--owner', owner], { cwd: repo });
         let out = '';
+        let err = '';
 
         child.stdout.on('data', (chunk) => { out += chunk; });
-        child.on('close', (code) => resolve({ code, slot: out.split('\n')[0] || null }));
+        child.stderr.on('data', (chunk) => { err += chunk; });
+        child.on('close', (code) => resolve({ owner, code, slot: out.split('\n')[0] || null, err }));
     });
+
+    // The owner the claim ref of a slot records, read back from the repository
+    const recordedOwner = (repo, slot) => parseClaimRecord(
+        spawnSync('git', ['cat-file', '-p', `refs/slots/${slot}`], { cwd: repo, encoding: 'utf8' }).stdout,
+    )?.owner ?? null;
 
     it('gives two simultaneous claimants different slots, never the same one', async () => {
         const { root, repo } = fixture();
@@ -1002,10 +1010,36 @@ describe('claim — atomic under real concurrency (wordpress-importer-archive#11
             // testing nothing, which is why this does not use spawnSync.
             const [one, two] = await Promise.all([claimAsync(repo, 'c1'), claimAsync(repo, 'c2')]);
 
-            assert.equal(one.code, 0);
-            assert.equal(two.code, 0);
+            assert.equal(one.code, 0, one.err);
+            assert.equal(two.code, 0, two.err);
             assert.notEqual(one.slot, two.slot, 'both claimants took the same slot');
             assert.deepEqual([one.slot, two.slot].sort(), ['a', 'b']);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    // #204: the record was written to a scratch file named for the slot, which every claimant of
+    // that slot shared, so a winner could hash the other's record and hold the slot under the
+    // other's name, and then be refused when releasing it. Measured in a loop on macOS, 83 of
+    // 300 winning claims; ten rounds make a miss on the old code vanishingly unlikely.
+    it('records each simultaneous claim against the claimant that won it', async () => {
+        const { root, repo } = fixture();
+
+        try {
+            for (let round = 0; round < 10; round++) {
+                const results = await Promise.all([claimAsync(repo, 'c1'), claimAsync(repo, 'c2')]);
+
+                for (const result of results) {
+                    assert.equal(result.code, 0, result.err);
+                    assert.equal(recordedOwner(repo, result.slot), result.owner, `round ${round}: ${result.owner} won ${result.slot}`);
+                }
+
+                // Free both slots for the next round
+                for (const slot of ['a', 'b']) {
+                    spawnSync('git', ['update-ref', '-d', `refs/slots/${slot}`], { cwd: repo });
+                }
+            }
         } finally {
             rmSync(root, { recursive: true, force: true });
         }

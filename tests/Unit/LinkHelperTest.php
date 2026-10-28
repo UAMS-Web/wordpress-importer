@@ -98,18 +98,18 @@ it('prefers the fallback to a bare string when a fallback is given', function ()
     expect(linkHelperQuietly(static fn (): string => LinkHelper::getUrl('https://example.org/c', 'fb')))->toBe('fb');
 });
 
-it('reads whether a link opens in the same tab', function (mixed $link, bool $expected): void {
+it('reads whether a link opens in a new window', function (mixed $link, bool $expected): void {
     expect(linkHelperQuietly(static fn (): bool => LinkHelper::getTarget($link)))->toBe($expected);
 })->with([
-    'a new tab' => [['target' => '_blank'], false],
-    'a named target' => [['target' => '_self'], true],
-    'a truthy flag' => [['target' => '1'], true],
+    'a new window' => [['target' => '_blank'], true],
+    'the same window' => [['target' => '_self'], false],
+    'a truthy flag' => [['target' => '1'], false],
     'an empty target' => [['target' => ''], false],
     'a zero target' => [['target' => '0'], false],
     'no target' => [['url' => 'https://example.org/'], false],
     'a null target' => [['target' => null], false],
-    'a serialized new tab' => [\serialize(['target' => '_blank']), false],
-    'a serialized named target' => [\serialize(['target' => '_self']), true],
+    'a serialized new window' => [\serialize(['target' => '_blank']), true],
+    'a serialized same window' => [\serialize(['target' => '_self']), false],
     'a bare string' => ['_self', false],
     'null' => [null, false],
 ]);

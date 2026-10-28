@@ -79,83 +79,49 @@ class FindADocProvidersParser
     /**
      * Builds a map of term IDs to their slugs and parent IDs from XML terms.
      *
+     * A term's parent is the first term carrying its parent slug, as WordPress
+     * exports name the parent by slug rather than by ID.
+     *
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
-     * @return array<string, array{slug: string, parent_id: string}> Associative array
-     *                                                               mapping term IDs to slug and parent ID
+     * @return array<string, array{slug: string, parent_id: ?string}> Associative array
+     *                                                                mapping term IDs to slug and parent ID
      */
     private function buildTermMap(
         array $terms
     ): array {
-        // Initialize term map
-        $termMap = [];
-
-        // Loop through terms to build the term mapping
+        // Read the ID, slug and parent slug of each XML term
+        $entries = [];
         foreach ($terms as $term) {
-            // Skip invalid term payloads that are not XML elements
             if (! $term instanceof SimpleXMLElement) {
                 continue;
             }
 
-            // Extract the term ID from WordPress XML
-            $id = XpathHelper::getStringValue(
-                $term,
-                'wp:term_id'
-            );
-
-            // Extract the term slug from WordPress XML
-            $slug = XpathHelper::getStringValue(
-                $term,
-                'wp:term_slug'
-            );
-
-            // Extract the parent term slug from WordPress XML
-            $parentSlug = XpathHelper::getStringValue(
-                $term,
-                'wp:term_parent'
-            );
-
-            // Initialize parent ID variable
-            $parentId = '';
-
-            // Check if this term has a parent slug
-            if ($parentSlug !== '') {
-                // Loop through terms to find the parent term
-                foreach ($terms as $parentTerm) {
-                    // Skip invalid parent term payloads
-                    if (! $parentTerm instanceof SimpleXMLElement) {
-                        continue;
-                    }
-
-                    // Check if this term matches the parent slug
-                    if (
-                        XpathHelper::getStringValue(
-                            $parentTerm,
-                            'wp:term_slug'
-                        ) === $parentSlug
-                    ) {
-                        // Extract the parent term ID
-                        $parentId = XpathHelper::getStringValue(
-                            $parentTerm,
-                            'wp:term_id'
-                        );
-
-                        // Break out of the loop once parent is found
-                        break;
-                    }
-                }
-            }
-
-            // Check if we have valid ID and slug before adding to map
-            if ($id !== '' && $slug !== '') {
-                // Add the term to the mapping with its slug and parent ID
-                $termMap[$id] = [
-                    'slug' => $slug,
-                    'parent_id' => $parentId,
-                ];
-            }
+            $entries[] = [
+                XpathHelper::getStringValue($term, 'wp:term_id'),
+                XpathHelper::getStringValue($term, 'wp:term_slug'),
+                XpathHelper::getStringValue($term, 'wp:term_parent'),
+            ];
         }
 
-        // Return the completed term mapping
+        // Index each slug by the ID of the first term carrying it
+        $idsBySlug = [];
+        foreach ($entries as [$id, $slug]) {
+            $idsBySlug[$slug] ??= $id;
+        }
+
+        // Map each term with an ID and a slug to its slug and parent ID
+        $termMap = [];
+        foreach ($entries as [$id, $slug, $parentSlug]) {
+            if ($id === '' || $slug === '') {
+                continue;
+            }
+
+            $termMap[$id] = [
+                'slug' => $slug,
+                'parent_id' => $parentSlug === '' ? null : ($idsBySlug[$parentSlug] ?? null),
+            ];
+        }
+
         return $termMap;
     }
 
@@ -163,8 +129,8 @@ class FindADocProvidersParser
      * Constructs the full slug path for a term, recursively prepending ancestor slugs.
      *
      * @param  string  $termId  The term ID
-     * @param  array<string, array{slug: string, parent_id: string}>  $termMap  Map
-     *                                                                          of term IDs to their slugs and parent IDs
+     * @param  array<string, array{slug: string, parent_id: ?string}>  $termMap  Map
+     *                                                                           of term IDs to their slugs and parent IDs
      * @param  array<int, string>  $visited  Term IDs visited in current recursion
      * @return string The full slug path (e.g., 'grandparent_parent_term') or term slug if no parent
      */
@@ -173,38 +139,28 @@ class FindADocProvidersParser
         array $termMap,
         array &$visited = []
     ): string {
-        if ($termId === '' || ! isset($termMap[$termId])) {
-            return "term-$termId"; // Fallback if term not found
+        // Fall back to a placeholder slug for a term the export does not carry
+        if (! isset($termMap[$termId])) {
+            return "term-$termId";
         }
 
         $term = $termMap[$termId];
         $slug = $term['slug'];
 
         // Prevent infinite recursion due to circular parent references
-        if (
-            \in_array(
-                $termId,
-                $visited,
-                true
-            )
-        ) {
+        if (\in_array($termId, $visited, true)) {
             return $slug;
         }
 
         $visited[] = $termId;
 
+        // Prepend the ancestors' path when the parent is a mapped term
         $parentId = $term['parent_id'];
-        if ($parentId !== '' && isset($termMap[$parentId])) {
-            $ancestorSlug = $this->getFullTermSlug(
-                $parentId,
-                $termMap,
-                $visited
-            );
-
-            return $ancestorSlug !== '' ? "{$ancestorSlug}_{$slug}" : $slug;
+        if ($parentId === null || ! isset($termMap[$parentId])) {
+            return $slug;
         }
 
-        return $slug;
+        return $this->getFullTermSlug($parentId, $termMap, $visited).'_'.$slug;
     }
 
     /**
@@ -665,11 +621,6 @@ class FindADocProvidersParser
             return $default;
         }
 
-        // Return existing string values unchanged
-        if (\is_string($data[$key])) {
-            return $data[$key];
-        }
-
         // Convert scalar payloads to strings for downstream use
         if (\is_scalar($data[$key])) {
             return (string) $data[$key];
@@ -690,7 +641,7 @@ class FindADocProvidersParser
     ): array {
         // Wrap scalar values to preserve legacy single-value payloads
         if (! \is_array($value)) {
-            $value = ($value === null || $value === '') ? [] : [$value];
+            $value = [$value];
         }
 
         // Normalize list entries into non-empty string IDs

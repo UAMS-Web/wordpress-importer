@@ -67,6 +67,9 @@ class Loader
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in MinervaKbOptionsSourceTest (#100)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array OPTION_KEYS = [
         'uamswp-minerva-kb-options',
         'minerva-kb-options',
@@ -78,6 +81,9 @@ class Loader
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in MinervaKbOptionsSourceTest (#100)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const DECLARABLE_GENERATIONS = [
         'v1' => 'minerva-kb-options',
         'v2' => 'uamswp-minerva-kb-options',
@@ -94,6 +100,9 @@ class Loader
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in MinervaKbOptionsSourceTest (#100)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array TEXT_DOMAIN_GENERATIONS = [
         'minerva-kb' => 'v1',
         'uamswp-minerva-kb' => 'v2',
@@ -287,6 +296,9 @@ class Loader
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in MinervaKbOptionsSourceTest (#100)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array ENTRY_FILE_ROWS = [
         'minervakb.php' => 'minerva-kb-options',
         'uamswp-minervakb.php' => 'uamswp-minerva-kb-options',
@@ -450,13 +462,16 @@ class Loader
             $basename = \strtolower(\basename($path));
 
             if (isset(self::ENTRY_FILE_ROWS[$basename])) {
+                // Only the key is read, so the value is never seen
+                // @pest-mutate-ignore: TrueToFalse
                 $found[self::ENTRY_FILE_ROWS[$basename]] = true;
             }
         }
 
         // Exactly one generation, or nothing to say. Both installed at once is not a state any
         // site has shown, and guessing between them would be the thing this method exists to
-        // avoid.
+        // avoid. With one key, the first is the last.
+        // @pest-mutate-ignore: ArrayKeyFirstToArrayKeyLast
         return \count($found) === 1 ? \array_key_first($found) : null;
     }
 
@@ -644,7 +659,10 @@ class Loader
     ): bool {
         $denylist = $payload['denylist'] ?? null;
 
+        // A missing offset read with `??` from a value that is not an array is null as well, so
+        // this only narrows the type for phpstan
         if (! \is_array($denylist)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -992,7 +1010,7 @@ class Loader
             true
         );
         if (json_last_error() !== JSON_ERROR_NONE) {
-            $output->writeln('<error>Invalid JSON format: '.json_last_error_msg().'</error>');
+            $output->writeln(\sprintf('<error>Invalid JSON format: %s</error>', json_last_error_msg()));
             Log::error("Loader::parseJsonContent: Invalid JSON format in {$filePath}: ".json_last_error_msg());
 
             return null;
