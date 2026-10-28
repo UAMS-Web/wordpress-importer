@@ -49,7 +49,7 @@ require_once __DIR__.'/../Support/form-audit-test-support.php';
  * pass in the minimal band (2 passed, 5 assertions). The second half is the real and
  * sufficient one — the corpus is optional, the audit `markTestSkipped`s without it, and
  * a gate test that skips on a fresh slot reads as covered while verifying nothing. It
- * stays in tests/Feature on that basis (uams-statamic#1725). It creates and deletes
+ * stays in tests/Feature on that basis (uams-statamic-archive#1725). It creates and deletes
  * throwaway Statamic forms, so it stays quarantined to the host suite's
  * `serial` group.
  *
@@ -243,7 +243,7 @@ function formidableNotificationAuditCountActionViews(array $views): array
  * mistyped FRM_AUDIT_FIXTURES_DIR produces - used to fall through to a hard
  * assertNotEmpty() and red the run. This is a dump test, not a regression test,
  * so an empty corpus is a reason to skip the audit, never to fail it. Same
- * defect class as the Gravity Forms sample guard (uams-statamic#1724).
+ * defect class as the Gravity Forms sample guard (uams-statamic-archive#1724).
  *
  * @param  string  $fixturesDir  Absolute path to the configured fixtures directory.
  * @return list<string> Absolute paths to every *.xml export found, possibly empty.

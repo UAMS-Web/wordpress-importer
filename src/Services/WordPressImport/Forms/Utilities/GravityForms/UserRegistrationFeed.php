@@ -151,7 +151,7 @@ final readonly class UserRegistrationFeed
      * Written under a single `user_registration` key on the form's own data bag. Statamic's
      * `Form` uses `ContainsData`, `save()` persists arbitrary keys and `hydrate()` reads them
      * back, so this round-trips with no host-app change — which is what lets the consumer
-     * (`UAMS-Web/uams-statamic#2115`) choose a schema rather than negotiate a mechanism.
+     * (`UAMS-Web/uams-statamic#208`) choose a schema rather than negotiate a mechanism.
      *
      * @return array<string, mixed> The form-data value
      */

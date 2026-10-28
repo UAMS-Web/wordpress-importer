@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Tests that a post's WordPress categories resolve to `post_categories` entry ids.
  *
- * `UAMS-Web/uams-statamic#1433` migrated `post_categories` from a flat taxonomy
+ * `UAMS-Web/uams-statamic-archive#1433` migrated `post_categories` from a flat taxonomy
  * to a structured collection and repointed the `posts` field from a `terms`
  * reference to an `entries` one. The importer kept writing site-prefixed term
  * slugs under a `post_category` key, so every imported post landed with a value

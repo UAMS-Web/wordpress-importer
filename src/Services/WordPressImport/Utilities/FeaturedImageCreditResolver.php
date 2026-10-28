@@ -12,7 +12,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryC
  * The Statamic `featured_image_credit_query` toggle surfaces an entry's
  * featured-image credit wherever another block renders that entry's featured
  * image — news listings and the post / clinical-resource / knowledge-base card
- * lists (`UAMS-Web/uams-statamic#1532`). It reaches 15 blueprints through the
+ * lists (`UAMS-Web/uams-statamic-archive#1532`). It reaches 15 blueprints through the
  * `uamsweb_post_cover_image` fieldset, and defaults to `false`.
  *
  * That default was chosen for existing hand-authored content, not for migrated
@@ -45,7 +45,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryC
  * importer featured-image write path to set it from. `clinical_expertise`
  * cherry-picks only the three image handles by `field:` reference and so does
  * **not** carry the toggle at all. `people` is excluded by
- * `UAMS-Web/uams-statamic#1532` — portraits are not editorial media.
+ * `UAMS-Web/uams-statamic-archive#1532` — portraits are not editorial media.
  */
 class FeaturedImageCreditResolver
 {

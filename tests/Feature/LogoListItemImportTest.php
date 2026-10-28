@@ -88,7 +88,7 @@ afterEach(function (): void {
  * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/LogoListItemImportTest.php
  */
 it('points logos_item_categories at a collection entry, not a taxonomy term', function (): void {
-    // `UAMS-Web/uams-statamic#1863` converted `logos_item_categories` into a
+    // `UAMS-Web/uams-statamic-archive#1863` converted `logos_item_categories` into a
     // structured collection, and the blueprint field is `type: entries`. The
     // importer used to write `logos_item_categories::default_baz-qux`, which that
     // fieldtype cannot resolve. This pins the entry-id shape and, more
@@ -153,7 +153,7 @@ it('points logos_item_categories at a collection entry, not a taxonomy term', fu
 });
 
 it('points logos_item_labels at a plainly titled collection entry on the imported site', function (): void {
-    // `UAMS-Web/uams-statamic#2533` converted `logos_item_labels` into a
+    // `UAMS-Web/uams-statamic-archive#2533` converted `logos_item_labels` into a
     // site-scoped collection, and the blueprint field is `type: entries`. The
     // importer used to write `logos_item_labels::default_foo-bar`, which that
     // fieldtype cannot resolve (wordpress-importer-archive#1220). As for categories above, the id has to
@@ -442,7 +442,7 @@ function logoListItemYamlFieldValidationProvider(): array
                 'type' => 'boolean',
             ],
             // `logo category` is asserted separately: `logos_item_categories`
-            // became a structured collection in `UAMS-Web/uams-statamic#1863`, so
+            // became a structured collection in `UAMS-Web/uams-statamic-archive#1863`, so
             // the field holds a generated entry id rather than a fixed
             // `handle::slug` taxonomy reference and cannot be a literal here.
             // A `logos_item_labels` entry id, generated per import, so matched by

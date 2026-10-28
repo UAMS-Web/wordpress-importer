@@ -27,7 +27,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
  * fields based on the format (e.g., headlines, full, side) and omits empty
  * optional fields.
  *
- * The destination fieldset was reshaped by `UAMS-Web/uams-statamic#76` from a
+ * The destination fieldset was reshaped by `UAMS-Web/uams-statamic-archive#76` from a
  * remote `news.uams.edu` syndication bridge into a native cross-site query of
  * the local `posts` collection, so three of the fields this parser used to
  * write no longer exist in the shape they were written in:

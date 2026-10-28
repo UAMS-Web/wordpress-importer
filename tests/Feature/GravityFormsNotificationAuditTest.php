@@ -40,7 +40,7 @@ uses(TestCase::class)->group('serial');
  * The override is NOT a way to audit the full wordpress-importer exports
  * corpus. Every file there is named gravityforms-export_<site>.json, so no
  * sample name resolves and the audit skips in full - the samples below are the
- * unit of this audit, not the directory (uams-statamic#1724).
+ * unit of this audit, not the directory (uams-statamic-archive#1724).
  *
  * Host-bound for the FIXTURE CORPUS, not for the host app — the reason was corrected
  * in wordpress-importer-archive#844. It previously read "it drives real Statamic forms through the booted host
@@ -50,7 +50,7 @@ uses(TestCase::class)->group('serial');
  * the corpus is a separate private repository, configured on demand. In the
  * standalone gate that yields a test which silently skips on a fresh slot and runs on a
  * provisioned one — coverage that reads as present and is not. It stays in tests/Feature
- * on that basis (uams-statamic#1725). It creates and deletes
+ * on that basis (uams-statamic-archive#1725). It creates and deletes
  * throwaway Statamic forms, so it stays in the host suite's `serial` group.
  *
  * @command  php artisan test --compact vendor/uams-web/wordpress-importer/tests/Feature/GravityFormsNotificationAuditTest.php

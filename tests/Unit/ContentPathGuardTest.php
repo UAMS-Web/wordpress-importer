@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Content under `content/` moves under `APP_ENV=testing`: the host re-roots
  * every content-backed Stache store at a disposable mirror
- * (`UAMS-Web/uams-statamic#1995`), so a path this package builds itself has to
+ * (`UAMS-Web/uams-statamic-archive#1995`), so a path this package builds itself has to
  * follow the store or it reads — and deletes — the wrong tree.
  *
  * **Two mechanisms reach the wrong tree, and wordpress-importer-archive#622's acceptance criterion only

@@ -8,7 +8,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesCo
  * Tests the `audio_series` subtype model on the importer's series configs
  * (issue wordpress-importer-archive#443).
  *
- * `UAMS-Web/uams-statamic#1611` retired the parallel `podcast_series` taxonomy and
+ * `UAMS-Web/uams-statamic-archive#1611` retired the parallel `podcast_series` taxonomy and
  * folded podcast into `audio_series` as a multi-select `subtype` (`podcast`,
  * `radio`). The shared `audio` blueprint's podcast-episode fields
  * (`episode_number`, `season_number`, `show_notes`, `episode_transcript`,

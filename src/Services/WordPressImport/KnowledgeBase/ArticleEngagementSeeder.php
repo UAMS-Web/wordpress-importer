@@ -14,7 +14,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 /**
  * Seeds historical MinervaKB engagement tallies into the app's sideband store.
  *
- * `UAMS-Web/uams-statamic#286` / `#287` moved knowledge base article view / like /
+ * `UAMS-Web/uams-statamic-archive#286` / `#287` moved knowledge base article view / like /
  * dislike counts OFF the entry YAML and into an app-owned SQLite table,
  * `article_engagement_counts` — one row per article entry id — so a per-view
  * increment never rewrites content in the git submodule, never re-indexes the

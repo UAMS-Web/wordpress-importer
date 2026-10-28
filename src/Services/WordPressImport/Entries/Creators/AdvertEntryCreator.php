@@ -28,7 +28,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 /**
  * Creates Statamic `classifieds` entries for WordPress `advert` posts (WP Adverts).
  *
- * The destination was built by `UAMS-Web/uams-statamic#2096`, whose "Destination
+ * The destination was built by `UAMS-Web/uams-statamic-archive#2096`, whose "Destination
  * handles" table is the specification this class maps to:
  *
  *   - `post_title` / `post_content` become `title` / `description`

@@ -71,7 +71,7 @@ class SiteManager
      *
      * Resolves the handle as a taxonomy first and as a collection second, because
      * the two are interchangeable destinations from the importer's point of view
-     * and several have migrated from the former to the latter — `uams-statamic#1863`
+     * and several have migrated from the former to the latter — `uams-statamic-archive#1863`
      * converted `logos_item_categories` and `people_groups` into structured
      * collections, joining `post_categories`. A caller that asks only about a
      * taxonomy reports a converted destination as missing, and the callers that

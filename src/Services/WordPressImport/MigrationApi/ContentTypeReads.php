@@ -65,6 +65,9 @@ final class ContentTypeReads
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in ContentTypeReadsTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array BODY_COMPANIONS = [
         'attachment',
         'wp_block',
@@ -79,6 +82,9 @@ final class ContentTypeReads
      *
      * @var array<string, list<string>>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in ContentTypeReadsTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array TYPE_COMPANIONS = [
         'kb' => ['page'],
     ];
@@ -100,6 +106,9 @@ final class ContentTypeReads
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in ContentTypeReadsTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array LINK_TARGETS = [
         'page',
         'post',
@@ -115,6 +124,9 @@ final class ContentTypeReads
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in ContentTypeReadsTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array REDIRECT_RULE_COMPANIONS = [
         'attachment',
     ];
@@ -146,10 +158,11 @@ final class ContentTypeReads
             return $redirectDomain ? [] : self::REDIRECT_RULE_COMPANIONS;
         }
 
-        return \array_values(\array_unique(\array_merge(
-            self::BODY_COMPANIONS,
-            self::TYPE_COMPANIONS[$contentType] ?? []
-        )));
+        // No type's own companions repeat a shared one, which ContentTypeReadsTest holds
+        return [
+            ...self::BODY_COMPANIONS,
+            ...self::TYPE_COMPANIONS[$contentType] ?? [],
+        ];
     }
 
     /**

@@ -1758,7 +1758,7 @@ class KbEntryCreator extends BaseEntryCreator
 
         // ---
         // Collect the article's tags as `knowledge_base_tags` ENTRY ids.
-        // `UAMS-Web/uams-statamic#2534` converted the tags into a site-scoped
+        // `UAMS-Web/uams-statamic-archive#2534` converted the tags into a site-scoped
         // structured collection and the article's `tags` field into an `entries`
         // picker, so a `knowledge_base_tags::slug` term id resolves to nothing
         // there (wordpress-importer-archive#1220). The term pass runs before any article is written and

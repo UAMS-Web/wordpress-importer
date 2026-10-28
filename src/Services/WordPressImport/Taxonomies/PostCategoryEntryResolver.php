@@ -30,7 +30,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingConte
  * Statamic's `Entries` fieldtype localizes its stored ids to the parent entry's
  * site before anything reads them, unless the field sets
  * `select_across_sites` — which `uamsweb_block_news`'s `category` field now
- * does (`uams-statamic#2165`):
+ * does (`uams-statamic-archive#2165`):
  *
  * ```php
  * // vendor/statamic/cms/src/Fieldtypes/Entries.php::queryBuilder()
@@ -282,7 +282,7 @@ final class PostCategoryEntryResolver
         // ---
         // Fall back to the syndicating site.
         //
-        // `uams-statamic#2165` put `select_across_sites: true` on the block's
+        // `uams-statamic-archive#2165` put `select_across_sites: true` on the block's
         // `category` field, which is what makes this safe: the fieldtype's only
         // localization step is skipped when that flag is set, so an id belonging
         // to another site survives the read instead of being dropped. Verified in

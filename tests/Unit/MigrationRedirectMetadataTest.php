@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Tests the WordPress metadata stamped for the migration redirect generator.
  *
- * `UAMS-Web/uams-statamic#1641` synthesizes structural WordPress redirects —
+ * `UAMS-Web/uams-statamic-archive#1641` synthesizes structural WordPress redirects —
  * `?p=<id>` / `?page_id=<id>` ugly permalinks, `/author/<nicename>/` archives,
  * and attachment pages. It can only do that if the importer stamps the values
  * those URLs derive from as queryable keys. Today the numeric post id is folded

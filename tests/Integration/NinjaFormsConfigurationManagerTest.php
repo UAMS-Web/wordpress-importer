@@ -329,7 +329,7 @@ it('records the payment configuration of the first active payment action', funct
 
     expect($form->get('wordpress_payment_import'))->toBe([
         'plugin' => 'Ninja Forms',
-        'status' => "Recorded from the WordPress form. Not configured in Statamic \u{2014} see UAMS-Web/uams-statamic#821.",
+        'status' => "Recorded from the WordPress form. Not configured in Statamic \u{2014} see UAMS-Web/uams-statamic#48.",
         'gateway' => '7',
         'amount_source' => '12.5',
         'amount_source_type' => '1',

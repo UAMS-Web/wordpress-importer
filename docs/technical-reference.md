@@ -1962,7 +1962,7 @@ A page size arriving as the string `env()` returns is accepted and cast; a non-n
 
 **The network address and the API key are not configuration.** `Client::forRun($baseUrl, $key)` takes both from what the operator pastes when a run starts, and neither survives the process — the estate is 26 separate multisite networks each issuing its own key, so configuration able to address them all would hold 26 live credentials on disk for a job that reads one network at a time (wordpress-importer-archive#982). `Client::fromConfig()` is gone.
 
-`base_url` and `secret` were host-app configuration until then and are now read by nothing. Setting them has no effect; the consuming application removes them in [`UAMS-Web/uams-statamic#2358`](https://github.com/UAMS-Web/uams-statamic/issues/2358).
+`base_url` and `secret` were host-app configuration until then and are now read by nothing. Setting them has no effect; the consuming application removes them in [`UAMS-Web/uams-statamic-archive#2358`](https://github.com/UAMS-Web/uams-statamic-archive/issues/2358).
 
 The address is refused unless it is an absolute `https://` URL carrying a host, and an empty key is refused rather than sent — the API answers `401` to a missing header, so letting it through would report an operator's slip as an authentication failure against a network that is fine.
 
@@ -1987,7 +1987,7 @@ A part the cleaner cannot parse is refused rather than overwritten: the cleaner 
 
 ### Vanity redirect domains
 
-A vanity domain is not a Statamic site, so its redirect rules are stored in the host application's `redirect_domains` collection, one entry per rule, rather than in a site's `redirects` global set (`UAMS-Web/uams-statamic#2594`, #1306). An import routes there when the host of the export's `wp:base_blog_url` matches the list exactly, ignoring case:
+A vanity domain is not a Statamic site, so its redirect rules are stored in the host application's `redirect_domains` collection, one entry per rule, rather than in a site's `redirects` global set (`UAMS-Web/uams-statamic-archive#2594`, #1306). An import routes there when the host of the export's `wp:base_blog_url` matches the list exactly, ignoring case:
 
 - `redirect_domains.hosts`: the vanity domains (default: `['uams.health', 'uams.info', 'uamsbaptist.health', 'go.uams.edu', 'gouams.com']`). The first three run Safe Redirect Manager; `go.uams.edu` and `gouams.com` run Redirection and Pretty Links (wordpress-importer-archive#1307).
 
