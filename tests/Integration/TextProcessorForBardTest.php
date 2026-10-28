@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Facades\Log;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -928,9 +929,8 @@ it('gives a later figure no attributes of an image block whose processor consume
 
     // With image uploads off, the block's own processor builds the set from the original
     // URL, so the block is claimed
-    $importer = Mockery::mock(AssetImporter::class);
-    $importer->allows('getUploadImages')->andReturn(false);
-    $importer->allows('getBaseBlogUrl')->andReturn('https://example.org');
+    /** @var AssetImporter&MockInterface $importer */
+    $importer = Mockery::mock(AssetImporter::class, ['getUploadImages' => false, 'getBaseBlogUrl' => 'https://example.org']);
 
     // The div-wrapped figure's skip covers the closing comment, so the attributes are
     // cleared when the block is claimed rather than at the comment (#153)
