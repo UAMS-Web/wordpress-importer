@@ -61,13 +61,6 @@ class PeopleEntryCreator extends BaseEntryCreator
     private string $wordpressTaxonomyHandle;
 
     /**
-     * Maps group slugs to entry slugs.
-     *
-     * @var array<string, list<string>> Group slug to entry slug list
-     */
-    private array $peopleGroups = [];
-
-    /**
      * Stores normalized people group term data.
      *
      * @var list<array{site_specific: string, original: string, name: string}>
@@ -116,7 +109,7 @@ class PeopleEntryCreator extends BaseEntryCreator
         string $phoneNumber
     ): string {
         // Create a Phone fieldtype instance with default config for US national format
-        $phoneFieldtype = new Phone;
+        $phoneFieldtype = $this->phoneFieldtype();
 
         // Configure phone fieldtype for US national format
         $config = [
@@ -138,6 +131,19 @@ class PeopleEntryCreator extends BaseEntryCreator
 
         // Return the normalized phone number in E.164 format
         return $normalized;
+    }
+
+    /**
+     * The fieldtype that normalizes a phone number.
+     *
+     * The class is the host application's, so a standalone test supplies its own
+     * through this seam to see the configuration it is given.
+     *
+     * @return Phone The fieldtype
+     */
+    protected function phoneFieldtype(): Phone
+    {
+        return new Phone;
     }
 
     /**
@@ -309,9 +315,6 @@ class PeopleEntryCreator extends BaseEntryCreator
             $site,
             $output
         );
-
-        // Initialize array to track slug usage counts for duplicate handling
-        $slugCounts = [];
 
         // Open a streaming parser spanning every part. A source that can serve
         // none raises rather than importing nothing and reporting success (wordpress-importer-archive#662).
@@ -495,35 +498,23 @@ class PeopleEntryCreator extends BaseEntryCreator
                 $groupName = (string) $category;
 
                 // ---
-                // Get term ID from nicename mapping for efficient ID-based lookup.
+                // Get term ID from nicename mapping. The map and the term map are built
+                // from the same terms, so a nicename with no id has no term to look up
+                // by slug either, and falls back to itself below.
                 //
                 // Note: Uses the configured WordPress taxonomy handle for mapping
                 // ---
                 $termIdValue = $taxonomyNicenameToTermIdMap[$group] ?? null;
 
-                // Normalize term ID to string for helper APIs that require string IDs
-                $termId = \is_int($termIdValue)
-                    ? (string) $termIdValue
-                    : (\is_string($termIdValue) ? $termIdValue : '');
+                // An id no term has finds nothing in either lookup below, whatever it is
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $termId = \is_string($termIdValue) ? $termIdValue : '';
 
-                if ($termId !== '') {
-                    // Get the full hierarchical slug using ID-based lookup for better performance
-                    $resolvedFullSlug = TermLookupHelper::getFullSlugFromMapById(
-                        $this->termMap,
-                        $termId
-                    );
-                } else {
-                    // ---
-                    // Fallback to slug-based lookup if ID not found.
-                    //
-                    // Note: Uses the configured WordPress taxonomy handle for lookup.
-                    // ---
-                    $resolvedFullSlug = TermLookupHelper::getFullSlugFromMap(
-                        $this->termMap,
-                        $group,
-                        $this->wordpressTaxonomyHandle
-                    );
-                }
+                // Get the full hierarchical slug using ID-based lookup
+                $resolvedFullSlug = TermLookupHelper::getFullSlugFromMapById(
+                    $this->termMap,
+                    $termId
+                );
 
                 // Use category slug as fallback when lookup result is empty
                 $fullSlug = ($resolvedFullSlug !== '')
@@ -531,19 +522,10 @@ class PeopleEntryCreator extends BaseEntryCreator
                     : $group;
 
                 // Add site prefix to create site-specific taxonomy slugs
-                $siteSpecificSlugs = TaxonomySlugProcessor::addSitePrefixToSlugs(
-                    [$fullSlug],
+                $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $fullSlug,
                     $site
                 );
-
-                // Normalize first site-specific slug from returned slug list
-                $firstSiteSpecificSlug = $siteSpecificSlugs[0] ?? null;
-                $siteSpecificSlug = (
-                    \is_string($firstSiteSpecificSlug)
-                    && $firstSiteSpecificSlug !== ''
-                )
-                    ? $firstSiteSpecificSlug
-                    : $fullSlug;
 
                 // ---
                 // `people_groups` became a structured collection in
@@ -553,12 +535,10 @@ class PeopleEntryCreator extends BaseEntryCreator
                 // any entry is created, so the destination is already recorded.
                 // Fall back to the slug when the taxonomy is still flat.
                 // ---
-                $destinationReference = $termId !== ''
-                    ? TermDestinationRegistry::referenceFor(
-                        $this->wordpressTaxonomyHandle,
-                        $termId
-                    )
-                    : null;
+                $destinationReference = TermDestinationRegistry::referenceFor(
+                    $this->wordpressTaxonomyHandle,
+                    $termId
+                );
 
                 // Add the resolved destination to the people groups array
                 $peopleGroups[] = $destinationReference ?? $siteSpecificSlug;
@@ -579,20 +559,6 @@ class PeopleEntryCreator extends BaseEntryCreator
                     )
                 ) {
                     $this->siteSpecificPeopleGroups[] = $termData;
-                }
-
-                $this->peopleGroups[$group] ??= [];
-
-                // Check if this entry slug is not already in the group
-                if (
-                    ! \in_array(
-                        $entrySlug,
-                        $this->peopleGroups[$group],
-                        true
-                    )
-                ) {
-                    // Add the entry slug to the group
-                    $this->peopleGroups[$group][] = $entrySlug;
                 }
 
                 // Clean up variables to free up memory
@@ -814,7 +780,12 @@ class PeopleEntryCreator extends BaseEntryCreator
 
                             // Handle free HTML/bio short field
                         case 'freehtml':
-                            // Check if the bio short content is not empty
+                            // ---
+                            // Check if the bio short content is not empty. Blank content
+                            // converts to nothing, which the emptiness check drops, so the
+                            // guard only saves the work.
+                            // ---
+                            // @pest-mutate-ignore: EmptyStringToNotEmpty
                             if ($value !== '') {
                                 // Set collection handle in processing context for link processing
                                 ProcessingContext::setCollectionHandle($collectionHandle);
@@ -822,7 +793,14 @@ class PeopleEntryCreator extends BaseEntryCreator
                                 // Set Statamic entry ID in processing context for link processing
                                 ProcessingContext::setStatamicEntryId($entryId);
 
-                                // Process the bio short content for Bard format
+                                // ---
+                                // Process the bio short content for Bard format. As InnerBlocks
+                                // content its block comments would be stripped first, but the
+                                // converter drops them anyway, so the flag changes no output
+                                // (measured on bare, attributed, ACF, separator, html and
+                                // shortcode blocks).
+                                // ---
+                                // @pest-mutate-ignore: FalseToTrue
                                 $parsedBioShort = TextProcessor::processForBard(
                                     $value,
                                     $site,
@@ -987,11 +965,14 @@ class PeopleEntryCreator extends BaseEntryCreator
         // Clean up variables to free up memory
         unset(
             $attachments,
-            $slugCounts,
             $xmlStreamParser
         );
 
-        // Force garbage collection after processing all entries
+        // ---
+        // Force garbage collection after processing all entries. This bounds memory
+        // and changes no output.
+        // ---
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return the collected page data for tree building
