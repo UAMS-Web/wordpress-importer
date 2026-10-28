@@ -409,16 +409,26 @@ it('keeps block-comment text inside the content, which is not inner blocks', fun
     expect(json_encode($body))->toContain('"title":"x <!-- wp:x --> y"');
 })->with('contentEntries');
 
-it('converts a supported iframe beside one it leaves alone', function (bool $before): void {
+it('converts a supported iframe beside one it leaves alone', function (bool $before, string $other, string $kept): void {
     $supported = '<iframe src="https://vimeo.com/7"></iframe>';
-    $other = '<iframe src="https://example.com/x"></iframe>';
     $video = contentVideoDiv('vimeo', 'https://vimeo.com/7');
 
     expect(contentConvert($before ? $supported.$other : $other.$supported))
-        ->toBe($before ? $video."\n".$other : $other.$video);
+        ->toBe($before ? $video."\n".$kept : $kept.$video);
 })->with([
     'after it' => [false],
     'before it' => [true],
+])->with([
+    'another host, refused at extraction' => [
+        '<iframe src="https://example.com/x"></iframe>',
+        '<iframe src="https://example.com/x"></iframe>',
+    ],
+    // The watch-URL prefix matches, so extraction keeps the src, and the space makes VideoSetType
+    // refuse it. Saving the document percent-encodes the space in the iframe it leaves alone.
+    'a watch URL with a space, refused at resolution' => [
+        '<iframe src="https://www.youtube.com/watch?v=abc def"></iframe>',
+        '<iframe src="https://www.youtube.com/watch?v=abc%20def"></iframe>',
+    ],
 ]);
 
 it('centers a video whose parent div is aligned left or right', function (string $class): void {
