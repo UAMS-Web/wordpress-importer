@@ -38,7 +38,8 @@ class AssetDownloader
      *
      * A constant is not a line coverage can reach, so a mutant here always reads
      * as uncovered. AssetDownloaderPathsTest pins 30, and changing it by hand
-     * fails that test.
+     * fails that test. That the walk is handed it is not asserted: the HTTP fake does
+     * not expose the connect timeout a request was sent with.
      */
     // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     public const CONNECT_TIMEOUT_SECONDS = 30;

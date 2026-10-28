@@ -541,7 +541,7 @@ describe('a failed download', function (): void {
         Http::assertSentCount(3);
     });
 
-    it('gives each hop thirty seconds to connect', function (): void {
+    it('keeps thirty seconds as the connect timeout', function (): void {
         expect(AssetDownloader::CONNECT_TIMEOUT_SECONDS)->toBe(30);
     });
 
