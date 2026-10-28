@@ -9,6 +9,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\TerminatesCommand;
 
 /**
  * Handles the selection of a WordPress content type for import.
@@ -29,6 +30,11 @@ class ContentTypeSelector
      * Include the HasQuestionHelper trait to provide centralized question handling.
      */
     use HasQuestionHelper;
+
+    /**
+     * Include the TerminatesCommand trait to end the run when no content type is left.
+     */
+    use TerminatesCommand;
 
     /**
      * Prompt the user to select a content type to import from the XML file.
@@ -54,7 +60,7 @@ class ContentTypeSelector
             $command->error('No supported content types (page, post, uamspeople) found in the XML.');
 
             // Exit command with error code to indicate failure
-            exit(1);
+            $this->terminate(1);
         }
 
         // Filter out nav_menu_item from content type options
@@ -66,24 +72,22 @@ class ContentTypeSelector
                 && $type[0] !== 'nav_menu_item'
         );
 
-        // Re-index array after filtering
-        $contentTypes = \array_values($contentTypes);
-
         // Check if any content types remain after filtering
         if ($contentTypes === []) {
             // Display error message when no supported content types are available
             $command->error('No supported content types (page, post, uamspeople) found in the XML.');
 
             // Exit command with error code to indicate failure
-            exit(1);
+            $this->terminate(1);
         }
 
         // Format content types as display options with counts
         $options = [];
 
         foreach ($contentTypes as $type) {
-            $count = $type[1];
-            $countLabel = \is_scalar($count) ? (string) $count : '0';
+            // A row with no count is offered with 0 rather than read past its end (#100)
+            $count = $type[1] ?? null;
+            $countLabel = \is_scalar($count) ? $count : '0';
             $options[] = "{$type[0]} ({$countLabel})";
         }
 
