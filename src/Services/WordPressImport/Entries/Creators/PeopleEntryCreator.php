@@ -61,13 +61,6 @@ class PeopleEntryCreator extends BaseEntryCreator
     private string $wordpressTaxonomyHandle;
 
     /**
-     * Maps group slugs to entry slugs.
-     *
-     * @var array<string, list<string>> Group slug to entry slug list
-     */
-    private array $peopleGroups = [];
-
-    /**
      * Stores normalized people group term data.
      *
      * @var list<array{site_specific: string, original: string, name: string}>
@@ -116,7 +109,7 @@ class PeopleEntryCreator extends BaseEntryCreator
         string $phoneNumber
     ): string {
         // Create a Phone fieldtype instance with default config for US national format
-        $phoneFieldtype = new Phone;
+        $phoneFieldtype = $this->phoneFieldtype();
 
         // Configure phone fieldtype for US national format
         $config = [
@@ -138,6 +131,19 @@ class PeopleEntryCreator extends BaseEntryCreator
 
         // Return the normalized phone number in E.164 format
         return $normalized;
+    }
+
+    /**
+     * The fieldtype that normalizes a phone number.
+     *
+     * The class is the host application's, so a standalone test supplies its own
+     * through this seam to see the configuration it is given.
+     *
+     * @return Phone The fieldtype
+     */
+    protected function phoneFieldtype(): Phone
+    {
+        return new Phone;
     }
 
     /**
@@ -309,9 +315,6 @@ class PeopleEntryCreator extends BaseEntryCreator
             $site,
             $output
         );
-
-        // Initialize array to track slug usage counts for duplicate handling
-        $slugCounts = [];
 
         // Open a streaming parser spanning every part. A source that can serve
         // none raises rather than importing nothing and reporting success (wordpress-importer-archive#662).
@@ -579,20 +582,6 @@ class PeopleEntryCreator extends BaseEntryCreator
                     )
                 ) {
                     $this->siteSpecificPeopleGroups[] = $termData;
-                }
-
-                $this->peopleGroups[$group] ??= [];
-
-                // Check if this entry slug is not already in the group
-                if (
-                    ! \in_array(
-                        $entrySlug,
-                        $this->peopleGroups[$group],
-                        true
-                    )
-                ) {
-                    // Add the entry slug to the group
-                    $this->peopleGroups[$group][] = $entrySlug;
                 }
 
                 // Clean up variables to free up memory
@@ -987,7 +976,6 @@ class PeopleEntryCreator extends BaseEntryCreator
         // Clean up variables to free up memory
         unset(
             $attachments,
-            $slugCounts,
             $xmlStreamParser
         );
 
