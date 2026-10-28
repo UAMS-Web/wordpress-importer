@@ -561,8 +561,9 @@ class Extractor
         // Read raw value once for consistent type handling
         $value = $settings[$key] ?? null;
 
-        // Return the default for an empty string; a missing key, null, false, 0 and an empty
-        // array take it below, as values that are neither a list nor a string
+        // Return the default for an empty string or '0'; a missing key, null, false and 0 take
+        // it below, as values that are neither a list nor a string, and an empty array is
+        // returned as the list it is, which equals the one caller's default
         if (
             in_array($value, ['', '0'], true)
         ) {
