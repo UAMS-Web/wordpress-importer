@@ -166,17 +166,24 @@ class DeferredProcessingCoordinator
             );
         }
 
+        // Hold the checked dependencies, which each step below is handed
+        $contentProcessor = $this->contentProcessor;
+        $formPluginCoordinator = $this->formPluginCoordinator;
+        $xmlParser = $this->xmlParser;
+        $assetImporter = $this->assetImporter;
+        $pageData = $this->pageData;
+
         // ---
         // Process form imports
         // ---
 
         // Trigger Statamic form creation for all referenced Gravity Forms and
         // Formidable Forms after Bard content is parsed
-        $this->formPluginCoordinator->processFormImports(
+        $formPluginCoordinator->processFormImports(
             $site,
             $output,
-            $this->assetImporter,
-            $this->pageData
+            $assetImporter,
+            $pageData
         );
 
         // ---
@@ -187,27 +194,34 @@ class DeferredProcessingCoordinator
         $this->processTableUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $contentProcessor,
+            $xmlParser,
+            $pageData
         );
 
         // 2. Process wp_block updates
         $this->processWpBlockUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $pageData
         );
 
         // 3. Process form updates
         $this->processFormUpdates(
             $site,
-            $output
+            $output,
+            $formPluginCoordinator
         );
 
         // 4. Process internal link updates
         $this->processInternalLinkUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $assetImporter,
+            $pageData
         );
     }
 
@@ -259,11 +273,17 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  ContentProcessor  $contentProcessor  The content processor that links the tables
+     * @param  XmlParser  $xmlParser  The XML parser holding the export's tables
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processTableUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        ContentProcessor $contentProcessor,
+        XmlParser $xmlParser,
+        array $pageData
     ): void {
         // ---
         // Collect entries that need table updates
@@ -277,19 +297,6 @@ class DeferredProcessingCoordinator
             // No table updates needed, return early
             return;
         }
-
-        // Require dependencies and page data before processing table updates
-        if (
-            ! $this->contentProcessor instanceof ContentProcessor
-            || ! $this->xmlParser instanceof XmlParser
-            || ! is_array($this->pageData)
-        ) {
-            return;
-        }
-
-        $contentProcessor = $this->contentProcessor;
-        $xmlParser = $this->xmlParser;
-        $pageData = $this->pageData;
 
         // Inform user that table updates are starting
         $output->writeln('Processing table updates...');
@@ -315,7 +322,7 @@ class DeferredProcessingCoordinator
 
             // Get table IDs for this post ID
             $pageTableIds = TablePressShortcodeProcessor::getTableIdsForPage(
-                self::entryIdAsString($postId) ?? (string) $postId
+                (string) $postId
             );
 
             // Check if this entry has table IDs to link
@@ -426,11 +433,13 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processWpBlockUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        array $pageData
     ): void {
         // ---
         // Collect entries that need wp_block updates
@@ -456,13 +465,6 @@ class DeferredProcessingCoordinator
 
         // Build map of entry IDs that need wp_block updates
         $entriesToProcess = [];
-
-        // Require page data before collecting wp_block updates
-        if (! is_array($this->pageData)) {
-            return;
-        }
-
-        $pageData = $this->pageData;
 
         // Loop through pageData to find entries with wp_block references
         foreach ($pageData as $postId => $page) {
@@ -624,16 +626,13 @@ class DeferredProcessingCoordinator
      *
      * @param  string  $site  The site handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  FormPluginCoordinator  $formPluginCoordinator  The coordinator that updates the form handles
      */
     private function processFormUpdates(
         string $site,
-        OutputInterface $output
+        OutputInterface $output,
+        FormPluginCoordinator $formPluginCoordinator
     ): void {
-        // Require the form plugin coordinator before processing form updates
-        if (! $this->formPluginCoordinator instanceof FormPluginCoordinator) {
-            return;
-        }
-
         // ---
         // Get entries that need form handle updates (all entries in relevant
         // collections). This returns a map of entry IDs to entry data for
@@ -644,7 +643,7 @@ class DeferredProcessingCoordinator
         // replaces form placeholders with actual form handles. The individual
         // "Applied form update" messages are logged during the save loop below.
         // ---
-        $formUpdatesByEntryId = $this->formPluginCoordinator->updateAllFormHandlesInEntries(
+        $formUpdatesByEntryId = $formPluginCoordinator->updateAllFormHandlesInEntries(
             $site,
             $output
         );
@@ -678,12 +677,7 @@ class DeferredProcessingCoordinator
                 continue;
             }
 
-            $entryIdString = self::entryIdAsString($entryId)
-                ?? self::entryIdAsString($entry->id());
-
-            if ($entryIdString === null) {
-                continue;
-            }
+            $entryIdString = (string) $entryId;
 
             // Inform user that we're re-processing this entry
             $output->writeln(
@@ -743,11 +737,15 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  AssetImporter  $assetImporter  The asset importer for links to attachments
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processInternalLinkUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        AssetImporter $assetImporter,
+        array $pageData
     ): void {
         // Get deferred internal links (map of entry IDs to deferred link arrays)
         $deferredLinkUpdatesByEntryId = LinkProcessor::getDeferredInternalLinks();
@@ -757,14 +755,6 @@ class DeferredProcessingCoordinator
             // No internal link updates needed, return early
             return;
         }
-
-        // Require the asset importer before resolving deferred internal links
-        if (! $this->assetImporter instanceof AssetImporter) {
-            return;
-        }
-
-        $assetImporter = $this->assetImporter;
-        $pageData = is_array($this->pageData) ? $this->pageData : [];
 
         // Inform user that internal link updates are starting
         $output->writeln('Resolving deferred internal links for entries in current post type...');
