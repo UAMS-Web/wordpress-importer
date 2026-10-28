@@ -1198,15 +1198,22 @@ it('reads nothing past a shortcode block that ends the content', function (): vo
     expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead']);
 });
 
-it('keeps an element after a shortcode block even when its text looks like a shortcode', function (): void {
+it('adds a shortcode block\'s content once, whether its processor converts it or returns it as it is', function (string $block, array $summary): void {
     textProcessorForBardFakes();
 
-    // Characterization of #156: the block's processor returns its content as a
-    // string and skips nothing, so the paragraph is read again after it
-    $content = textProcessorForBard('<p>Lead</p><!-- wp:shortcode --><p>[unknown_thing]</p><!-- /wp:shortcode -->');
+    // #156: the block's processor returns its whole content as a string, and the
+    // block's nodes were then read a second time, and only the string's first node
+    // was kept; the block's nodes are now skipped and every node of the string kept
+    $content = textProcessorForBard("<p>Lead</p><!-- wp:shortcode -->{$block}<!-- /wp:shortcode --><p>End</p>");
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'paragraph:[unknown_thing]', 'paragraph:[unknown_thing]']);
-});
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', ...$summary, 'paragraph:End']);
+})->with([
+    'an element and no shortcode' => ['<p>[unknown_thing]</p>', ['paragraph:[unknown_thing]']],
+    'two elements and no shortcode' => ['<p>a</p><p>b</p>', ['paragraph:a', 'paragraph:b']],
+    'text and no shortcode' => ['[unknown_thing]', ['text']],
+    'a converted shortcode after text in an element' => ['<p>Hi [ninja_form id=3]</p>', ['paragraph:Hi', 'set:form']],
+    'two converted shortcodes in two elements' => ['<p>[table id=1 /]</p><p>[table id=2 /]</p>', ['set:table', 'set:table']],
+]);
 
 it('parses an image inside a paragraph as content, not as a figure', function (): void {
     $fakes = textProcessorForBardFakes();

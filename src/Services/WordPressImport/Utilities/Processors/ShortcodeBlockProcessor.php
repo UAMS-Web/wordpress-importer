@@ -460,7 +460,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @param  DOMNode  $node  The opening wp:shortcode comment
      * @return int The number of nodes to skip, the opening comment included
      */
-    private static function blockSkipCount(
+    public static function blockSkipCount(
         DOMNode $node
     ): int {
         // Start skip count with the wp:shortcode comment node
