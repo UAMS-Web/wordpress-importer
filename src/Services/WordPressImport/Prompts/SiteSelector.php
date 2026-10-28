@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use RuntimeException;
 use Statamic\Facades\Site;
 use Statamic\Yaml\Yaml;
@@ -89,26 +90,12 @@ class SiteSelector
         );
 
         // ---
-        // Return the selected handle when validation returns a string value
+        // Return the handle the answer resolved to. The validator returns a trimmed handle
+        // that is not empty, and a run that is not interactive answers with the default,
+        // which is null only when no site is configured at all (#100).
         // ---
-
-        // Check if the selected site is a string and not empty
-        if (
-            \is_string($selectedSite)
-            && \trim($selectedSite) !== ''
-        ) {
-            // Return the selected site handle
+        if (\is_string($selectedSite)) {
             return $selectedSite;
-        }
-
-        // ---
-        // Return the default site when no interactive response is provided
-        // ---
-
-        // Check if the default site is not null
-        if ($defaultSite !== null) {
-            // Return the default site handle
-            return $defaultSite;
         }
 
         // Throw when no site can be resolved from selection or configuration
@@ -164,13 +151,11 @@ class SiteSelector
             )
         );
 
+        // The column starts 5 past the longest handle, so every handle gets 4 dots or more
         foreach ($sites as $handle => $name) {
             $dots = str_repeat(
                 '.',
-                max(
-                    3,
-                    $siteNameStartPosition - \strlen($handle) - 1
-                )
+                $siteNameStartPosition - \strlen($handle) - 1
             );
             $output->writeln(
                 \sprintf(
@@ -211,11 +196,8 @@ class SiteSelector
             );
         }
 
-        // Remove duplicates and sort by handle
-        $sites = array_unique(
-            $sites,
-            SORT_REGULAR
-        );
+        // Sort by handle. Merging by handle already keeps each handle once; two sites may
+        // share a name, so nothing is removed by name (#100)
         ksort($sites);
 
         return $sites;
@@ -283,16 +265,14 @@ class SiteSelector
         $sites = [];
         $statamicSites = Site::all();
 
-        if (! \is_object($statamicSites) || ! \is_callable([$statamicSites, 'all'])) {
+        // The facade types all() as mixed and it returns the sites as a collection, so this
+        // only narrows the type for phpstan
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
+        if (! $statamicSites instanceof Collection) {
             return $sites;
         }
 
-        $rawSites = \call_user_func([$statamicSites, 'all']);
-        if (! \is_array($rawSites)) {
-            return $sites;
-        }
-
-        foreach ($rawSites as $rawSite) {
+        foreach ($statamicSites as $rawSite) {
             $handle = self::extractMethodString(
                 $rawSite,
                 'handle'
@@ -322,6 +302,10 @@ class SiteSelector
         string $sitesConfigPath
     ): array {
         $sitesConfig = $this->parseYamlFile($sitesConfigPath);
+
+        // The parse returns an array for every file it can read and throws for one it
+        // cannot, so this only narrows the mixed it is typed as, for phpstan
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($sitesConfig)) {
             return [];
         }
@@ -355,6 +339,9 @@ class SiteSelector
 
         $yamlFile = $yamlService->file($sitesConfigPath);
 
+        // file() returns the Yaml service itself, which parses, so this only narrows the
+        // mixed it is typed as, for phpstan
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (! \is_object($yamlFile) || ! \is_callable([$yamlFile, 'parse'])) {
             return null;
         }
@@ -373,6 +360,9 @@ class SiteSelector
         mixed $config,
         string $fallbackHandle
     ): string {
+        // A config that is not a map has no name to read, and reading one from a string
+        // gives null and so the fallback too; the check narrows the type for phpstan
+        // @pest-mutate-ignore: RemoveEarlyReturn
         if (! \is_array($config)) {
             return $fallbackHandle;
         }
@@ -393,6 +383,9 @@ class SiteSelector
         mixed $candidate,
         string $methodName
     ): ?string {
+        // Every candidate is a Statamic site, which has both methods, or null when no site
+        // is configured, which either form of the check answers with null
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd
         if (! \is_object($candidate) || ! \is_callable([$candidate, $methodName])) {
             return null;
         }
