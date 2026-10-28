@@ -857,6 +857,14 @@ class TextProcessor
         // Initialize array to store block attributes
         $blockAttributes = [];
 
+        // ---
+        // The type of the block whose comment set $blockAttributes. It is read only with
+        // attributes present, which a block comment sets together with it, so this first
+        // value is never read.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $blockAttributesType = '';
+
         // Get all child nodes from the root div element
         $rootDiv = $doc->getElementsByTagName('div')->item(0);
 
@@ -908,8 +916,9 @@ class TextProcessor
                     // Extract the block type from the comment
                     $blockType = $matches[1];
 
-                    // Initialize block attributes array
+                    // Initialize block attributes array, recording whose they are
                     $blockAttributes = [];
+                    $blockAttributesType = $blockType;
 
                     // Check if block attributes are present in the comment
                     if (isset($matches[2])) {
@@ -1136,25 +1145,37 @@ class TextProcessor
                 }
             }
 
-            // Check if this is a figure element with block attributes. Only an element
-            // is named `figure`, so the instanceof check only narrows the type.
+            // ---
+            // Check if this is the figure of an image block its processor did not claim,
+            // which keeps the block's attributes (#153). They are an image block's only:
+            // another unclaimed block's attributes describe that block, not a figure
+            // after it, and the closing image comment below clears them. A figure with
+            // no image is ordinary content, read further down. Only an element is
+            // named `figure`, so the instanceof check only narrows the type.
+            // ---
             // @pest-mutate-ignore: InstanceOfToTrue
             if (
                 $node instanceof DOMElement
                 && $node->nodeName === 'figure'
                 && $blockAttributes !== []
+                && $blockAttributesType === 'image'
+                && $node->getElementsByTagName('img')->length > 0
             ) {
-                // Extract the HTML of the first <img> in the <figure>, or '' for none
+                // Extract the HTML of the first <img> in the <figure>
                 $imgHtml = self::nodeHtml(
                     $doc,
                     $node->getElementsByTagName('img')->item(0)
                 );
 
-                // Check if image exists and hasn't been processed yet
-                if (
-                    $imgHtml !== ''
-                    && ! isset($processedImages[$imgHtml])
-                ) {
+                // Check if the image hasn't been processed yet
+                if (! isset($processedImages[$imgHtml])) {
+                    // Parse the content accumulated ahead of the image first
+                    self::flushContent(
+                        $currentContent,
+                        $bardContent,
+                        $bardParser
+                    );
+
                     // Process <figure> with ImageProcessor, passing block attributes
                     $imageSet = $imageProcessor->processImage(
                         $nodeHtml,
@@ -1573,11 +1594,18 @@ class TextProcessor
         DOMDocument $doc,
         ?DOMNode $node
     ): string {
-        // Read the node's HTML; there is none for no node
+        // ---
+        // Read the node's HTML; there is none for no node. Every caller passes a node it
+        // has checked exists (an `<img>` it counted, or the node the loop is on), so the
+        // null and false results only satisfy the nullable `item()` and `saveHTML()`
+        // types. saveHTML() throws for a node from another document rather than
+        // returning false, and every caller passes $doc's own.
+        // ---
+        // @pest-mutate-ignore: InstanceOfToTrue, FalseToTrue
         $html = $node instanceof DOMNode ? $doc->saveHTML($node) : false;
 
-        // Return the HTML, or '' for no node. saveHTML() throws for a node from another
-        // document rather than returning false, and every caller passes $doc's own.
+        // Return the HTML, or '' for no node
+        // @pest-mutate-ignore: FalseToTrue, EmptyStringToNotEmpty
         return $html === false ? '' : $html;
     }
 
