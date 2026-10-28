@@ -625,16 +625,24 @@ export function checkoutArgs(path, ref, { create = false } = {}) {
  * @param  ?string  cwd
  * @param  mixed    stdio
  * @param  ?object  env    Added to the inherited environment
+ * @param  ?string  input  Written to the command's stdin, which `stdio` must then pipe
  * @return object
  */
-function spawn(file, args, cwd, stdio, env = null) {
+function spawn(file, args, cwd, stdio, env = null, input = null) {
     const exe = which(file) || file;
     const shell = needsShell(exe);
 
     return spawnSync(
         shell ? winQuote(exe) : exe,
         shell ? args.map(winQuote) : args,
-        { cwd, stdio, shell, encoding: 'utf8', env: env ? { ...process.env, ...env } : process.env },
+        {
+            cwd,
+            stdio,
+            shell,
+            encoding: 'utf8',
+            env: env ? { ...process.env, ...env } : process.env,
+            ...(input === null ? {} : { input }),
+        },
     );
 }
 
@@ -1432,13 +1440,19 @@ function readClaim(repoRoot, slot) {
  * @return ?string  the claim object written, or null when another claimant got there first
  */
 function tryClaim(repoRoot, slot, owner, at) {
-    const scratch = join(repoRoot, '.git', `slot-claim-${slot}.tmp`);
-
-    writeFileSync(scratch, claimRecord(owner, at));
-
-    const oid = capture('git', ['-C', repoRoot, 'hash-object', '-w', scratch], repoRoot);
-
-    rmSync(scratch, { force: true });
+    // Hash the record from stdin. A scratch file named for the slot was shared by every
+    // claimant of that slot, so one could hash another's record, between the other's write and
+    // its own, and win the slot under the other's name: 83 of 300 winning claims in a loop of
+    // two concurrent claimants, which left the winner unable to release its own slot (#204).
+    const hashed = spawn(
+        'git',
+        ['-C', repoRoot, 'hash-object', '-w', '--stdin'],
+        repoRoot,
+        ['pipe', 'pipe', 'ignore'],
+        null,
+        claimRecord(owner, at),
+    );
+    const oid = hashed.status === 0 && typeof hashed.stdout === 'string' ? hashed.stdout.trim() : null;
 
     // The create-only update. git refuses under the ref lock when the name already exists, so
     // exactly one of two concurrent claimants succeeds however their reads interleaved.

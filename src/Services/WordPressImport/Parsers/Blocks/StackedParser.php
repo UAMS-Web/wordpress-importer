@@ -175,7 +175,7 @@ class StackedParser
      * a uams-section block.
      *
      * @param  array<int|string, mixed>  $attributes  The original stacked block attributes
-     * @return array<int|string, mixed> Array with 'attributes' (uams-section block attributes) and 'innerContent' (HTML fragments for InnerBlocks)
+     * @return array{attributes: array<int|string, mixed>, innerContent: list<array{html: string}>} The uams-section block attributes and the HTML fragments for its InnerBlocks
      */
     public static function convertToSectionFormat(
         array $attributes
@@ -245,12 +245,6 @@ class StackedParser
                 $normalizedData,
                 "stacked_section_{$i}_stacked_section_body"
             );
-
-            // Skip section if both heading and body are empty
-            if ($heading === '' && $body === '') {
-                // Skip to next section
-                continue;
-            }
 
             // ---
             // Create heading HTML fragment if heading exists
@@ -591,25 +585,31 @@ class StackedParser
                 }
             }
 
-            // Process button fields
+            // Process button fields, which an item carries only when the button has text
             $buttonText = $section['stacked_section_button_text'];
-            $buttonUrl = '';
-            $buttonTarget = false;
-            $buttonDescription = '';
+            $button = [];
             if ($buttonText !== '') {
                 $originalUrl = LinkHelper::getUrl($section['stacked_section_button_url']);
 
                 // Process URL through LinkProcessor to handle internal links and file imports
-                $buttonUrl = LinkProcessor::processUrlString(
-                    $originalUrl,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    ProcessingContext::getStatamicEntryId(),
-                    ProcessingContext::getCollectionHandle()
-                );
-                $buttonTarget = LinkHelper::getTarget($section['stacked_section_button_url']);
+                $button = [
+                    'button_text' => $buttonText,
+                    'button_url' => LinkProcessor::processUrlString(
+                        $originalUrl,
+                        $site,
+                        $assetImporter,
+                        $output,
+                        ProcessingContext::getStatamicEntryId(),
+                        ProcessingContext::getCollectionHandle()
+                    ),
+                    'button_target' => LinkHelper::getTarget($section['stacked_section_button_url']),
+                ];
+
+                // Include the button description only if non-empty
                 $buttonDescription = $section['stacked_section_button_description'];
+                if ($buttonDescription !== '') {
+                    $button['button_link_description'] = $buttonDescription;
+                }
             }
 
             // Skip invalid items (missing required fields)
@@ -663,16 +663,8 @@ class StackedParser
                 $item['alt_override'] = $altOverride;
             }
 
-            if ($buttonText !== '') {
-                $item['button_text'] = $buttonText;
-                $item['button_url'] = $buttonUrl;
-                $item['button_target'] = $buttonTarget;
-                if ($buttonDescription !== '') {
-                    $item['button_link_description'] = $buttonDescription;
-                }
-            }
-
-            $result[] = $item;
+            // Add the button fields after the alt override
+            $result[] = $item + $button;
         }
 
         return $result;
@@ -755,19 +747,18 @@ class StackedParser
             );
         }
 
-        // Process footer link fields
-        $moreHeading = self::getStringFieldValue(
-            $normalizedData,
-            'stacked_more_text'
-        );
-        $moreButtonText = self::getStringFieldValue(
-            $normalizedData,
-            'stacked_more_button_text'
-        );
-        $moreButtonUrl = '';
-        $moreButtonTarget = false;
-        $moreButtonDescription = '';
+        // Process footer link fields, which the set carries only while the footer link is on
+        $more = [];
         if ($moreQuery) {
+            // Include the footer heading only if non-empty
+            $moreHeading = self::getStringFieldValue(
+                $normalizedData,
+                'stacked_more_text'
+            );
+            if ($moreHeading !== '') {
+                $more['more_heading'] = $moreHeading;
+            }
+
             $urlData = self::getMixedFieldValue(
                 $normalizedData,
                 'stacked_more_button_url'
@@ -785,13 +776,28 @@ class StackedParser
                 ProcessingContext::getStatamicEntryId(),
                 ProcessingContext::getCollectionHandle()
             );
-            $moreButtonTarget = \is_array($urlData) && isset($urlData['target']) && $urlData['target'] === '_blank';
-            $moreButtonDescription = HtmlTagStripper::strip(
-                self::getStringFieldValue(
-                    $normalizedData,
-                    'stacked_more_button_description'
-                )
+
+            // Include the footer button only if it has text
+            $moreButtonText = self::getStringFieldValue(
+                $normalizedData,
+                'stacked_more_button_text'
             );
+            if ($moreButtonText !== '') {
+                $more['more_button_text'] = $moreButtonText;
+                $more['more_button_url'] = $moreButtonUrl;
+                $more['more_button_target'] = \is_array($urlData) && isset($urlData['target']) && $urlData['target'] === '_blank';
+
+                // Include the footer button description only if non-empty
+                $moreButtonDescription = HtmlTagStripper::strip(
+                    self::getStringFieldValue(
+                        $normalizedData,
+                        'stacked_more_button_description'
+                    )
+                );
+                if ($moreButtonDescription !== '') {
+                    $more['more_button_link_description'] = $moreButtonDescription;
+                }
+            }
         }
 
         // Build the replicator set, omitting empty fields
@@ -814,20 +820,8 @@ class StackedParser
             $result['items'] = $items; // Required, include only if non-empty
         }
 
-        if ($moreQuery) {
-            if ($moreHeading !== '') {
-                $result['more_heading'] = $moreHeading; // Required if more_query=true
-            }
-
-            if ($moreButtonText !== '') {
-                $result['more_button_text'] = $moreButtonText; // Required if more_query=true
-                $result['more_button_url'] = $moreButtonUrl; // Required if more_query=true
-                $result['more_button_target'] = $moreButtonTarget; // Required if more_query=true
-                if ($moreButtonDescription !== '') {
-                    $result['more_button_link_description'] = $moreButtonDescription; // Optional
-                }
-            }
-        }
+        // Add the footer link fields after the items
+        $result += $more;
 
         return $result;
     }

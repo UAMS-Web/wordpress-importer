@@ -94,36 +94,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         array $terms = [],
         ?string $pageSlug = null
     ): string|array|null {
-        $shortcodeContent = '';
-        $currentNode = $node->nextSibling;
-
-        while (
-            $currentNode instanceof DOMNode
-            && ! self::matchesClosingShortcodeComment($currentNode)
-        ) {
-            if ($currentNode instanceof DOMText) {
-                $textContent = \trim(
-                    self::extractNodeValueString($currentNode->nodeValue)
-                );
-                if ($textContent !== '') {
-                    $shortcodeContent .= $textContent;
-                }
-            } elseif ($currentNode instanceof DOMElement) {
-                $ownerDocument = $currentNode->ownerDocument;
-
-                if ($ownerDocument instanceof DOMDocument) {
-                    $nodeContent = $ownerDocument->saveHTML($currentNode);
-
-                    if (\is_string($nodeContent)) {
-                        $shortcodeContent .= $nodeContent;
-                    }
-                }
-            }
-
-            $currentNode = $currentNode->nextSibling;
-        }
-
-        $shortcodeContent = \trim($shortcodeContent);
+        $shortcodeContent = self::blockContent($node);
 
         if ($shortcodeContent === '') {
             // ---
@@ -455,12 +426,61 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     }
 
     /**
+     * Reads the content of a wp:shortcode block: its text, trimmed, and its elements'
+     * HTML, from the opening comment to the closing one.
+     *
+     * process() returns this content unchanged when it converts no shortcode in it,
+     * which is how a caller can tell that the block's own nodes still hold it.
+     *
+     * @param  DOMNode  $node  The opening wp:shortcode comment
+     * @return string The block's content, trimmed
+     */
+    public static function blockContent(
+        DOMNode $node
+    ): string {
+        // Collect the content of each node up to the closing comment
+        $shortcodeContent = '';
+        $currentNode = $node->nextSibling;
+
+        while (
+            $currentNode instanceof DOMNode
+            && ! self::matchesClosingShortcodeComment($currentNode)
+        ) {
+            if ($currentNode instanceof DOMText) {
+                $textContent = \trim(
+                    self::extractNodeValueString($currentNode->nodeValue)
+                );
+                if ($textContent !== '') {
+                    $shortcodeContent .= $textContent;
+                }
+            } elseif ($currentNode instanceof DOMElement) {
+                $ownerDocument = $currentNode->ownerDocument;
+
+                if ($ownerDocument instanceof DOMDocument) {
+                    $nodeContent = $ownerDocument->saveHTML($currentNode);
+
+                    if (\is_string($nodeContent)) {
+                        $shortcodeContent .= $nodeContent;
+                    }
+                }
+            }
+
+            $currentNode = $currentNode->nextSibling;
+        }
+
+        // Each piece is trimmed text or an element's HTML, which saveHTML() writes
+        // with no whitespace around it, so the content has none at its edges
+        // @pest-mutate-ignore: UnwrapTrim
+        return \trim($shortcodeContent);
+    }
+
+    /**
      * Counts the nodes from a wp:shortcode comment through its closing comment.
      *
      * @param  DOMNode  $node  The opening wp:shortcode comment
      * @return int The number of nodes to skip, the opening comment included
      */
-    private static function blockSkipCount(
+    public static function blockSkipCount(
         DOMNode $node
     ): int {
         // Start skip count with the wp:shortcode comment node
