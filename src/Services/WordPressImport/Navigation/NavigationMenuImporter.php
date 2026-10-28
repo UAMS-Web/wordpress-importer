@@ -825,7 +825,6 @@ class NavigationMenuImporter
                 return $this->createCustomNavigationItem(
                     $title,
                     $menuItemUrl,
-                    $site,
                     $output
                 );
 
@@ -866,14 +865,12 @@ class NavigationMenuImporter
      *
      * @param  string  $title  The navigation item title
      * @param  string  $url  The custom URL
-     * @param  string  $site  The Statamic site handle
      * @param  OutputInterface  $output  Console output interface
      * @return array{id: string, title?: string, entry?: string, url?: string}|null The created navigation item array or null if failed
      */
     private function createCustomNavigationItem(
         string $title,
         string $url,
-        string $site,
         OutputInterface $output
     ): ?array {
         // Check if URL is provided
