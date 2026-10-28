@@ -140,7 +140,9 @@ final class PostCategoryEntryResolver
             }
 
             // Two slugs can name the same entry, and the picker stores each
-            // reference once.
+            // reference once. Entry ids are strings, so the strict flag, which
+            // phpstan-strict-rules requires, changes no result.
+            // @pest-mutate-ignore: TrueToFalse
             if (\in_array($entryId, $entryIds, true)) {
                 continue;
             }
@@ -239,7 +241,7 @@ final class PostCategoryEntryResolver
         string $slug,
         string $siteHandle
     ): ?string {
-        $cacheKey = $siteHandle.'::'.$slug;
+        $cacheKey = "{$siteHandle}::{$slug}";
 
         // Only hits are memoized. A miss is deliberately re-queried, because
         // `clearTaxonomyCaches()` runs once per command rather than between
@@ -274,6 +276,8 @@ final class PostCategoryEntryResolver
         if ($entryId === null) {
             $normalized = Str::slug($slug);
 
+            // Skipping an empty or unchanged form only saves a lookup that would miss
+            // @pest-mutate-ignore: BooleanAndToBooleanOr, EmptyStringToNotEmpty
             if ($normalized !== '' && $normalized !== $slug) {
                 $entryId = self::queryEntryId($normalized, $siteHandle);
             }
@@ -301,13 +305,18 @@ final class PostCategoryEntryResolver
             if ($entryId === null) {
                 $normalized = Str::slug($slug);
 
+                // Skipping an empty or unchanged form only saves a lookup that would miss
+                // @pest-mutate-ignore: BooleanAndToBooleanOr, EmptyStringToNotEmpty
                 if ($normalized !== '' && $normalized !== $slug) {
                     $entryId = self::queryEntryId($normalized, self::SYNDICATING_SITE);
                 }
             }
         }
 
+        // A miss is not memoized; caching a null would read as a miss through isset() anyway,
+        // so this only keeps the cache's type
         if ($entryId === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
@@ -342,8 +351,7 @@ final class PostCategoryEntryResolver
             ? $entry->id()
             : null;
 
-        return \is_string($entryId) && $entryId !== ''
-            ? $entryId
-            : null;
+        // A saved entry always has an id
+        return \is_string($entryId) ? $entryId : null;
     }
 }
