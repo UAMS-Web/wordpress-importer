@@ -114,7 +114,9 @@ class DeferredKnowledgeBaseMounts
                 continue;
             }
 
-            // Resolve the parent page entry the knowledge base should mount under
+            // Resolve the parent page entry the knowledge base should mount under. A fresh
+            // read would only drop the Stache's copy first and find the same entry.
+            // @pest-mutate-ignore: FalseToTrue
             $parentEntry = EntryFinder::findEntryByWordPressId(
                 'pages',
                 $mount['parent_wp_id'],
@@ -148,7 +150,9 @@ class DeferredKnowledgeBaseMounts
                 continue;
             }
 
-            // Load the knowledge base root entry to mount
+            // Load the knowledge base root entry to mount. A fresh read would only drop the
+            // Stache's copy first and find the same entry.
+            // @pest-mutate-ignore: FalseToTrue
             $kbRoot = EntryFinder::findEntryById(
                 'knowledge_bases',
                 $mount['kb_root_id'],
@@ -185,7 +189,9 @@ class DeferredKnowledgeBaseMounts
             $data = self::entryDataToArray($kbRoot);
             $data['mount_parent'] = [$parentEntry->id()];
 
-            // Reset initialPath so the entry path is rebuilt on save
+            // Reset initialPath so the entry path is rebuilt on save. Mounting changes no
+            // slug, so the rebuilt path is the one the entry already has.
+            // @pest-mutate-ignore: RemoveMethodCall
             $kbRoot->initialPath(null);
 
             // Persist the mount reference
@@ -221,7 +227,10 @@ class DeferredKnowledgeBaseMounts
         // Read the entry's current data object
         $entryData = $entry->data();
 
-        // Return an empty array when data() did not yield a readable object
+        // Return an empty array when data() did not yield a readable object. An entry's
+        // data() always answers with a collection, so this only narrows the type for
+        // phpstan.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (
             ! is_object($entryData)
             || ! method_exists(
