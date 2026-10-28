@@ -846,45 +846,25 @@ class NavigationMenuImporter
             return null;
         }
 
-        // Attempt to create the navigation item
-        try {
-            // Create navigation item as array structure
-            $navItem = [
-                'id' => Str::uuid()->toString(),
-            ];
+        // Create navigation item as array structure
+        $navItem = [
+            'id' => Str::uuid()->toString(),
+        ];
 
-            // Check if title is provided
-            if ($title !== '') {
-                // Add title to navigation item
-                $navItem['title'] = $title;
-            }
-
-            // Add URL to navigation item ($url is guaranteed non-empty by the guard above)
-            $navItem['url'] = $url;
-
-            // Log successful creation
-            $output->writeln("  - <info>Created nav item: '{$url}'</info>");
-
-            // Return the created navigation item
-            return $navItem;
-        } catch (Exception $exception) {
-            // Log error message to console
-            $output->writeln("  - <error>Failed to create custom navigation item: {$exception->getMessage()}</error>");
-
-            // Log error details for debugging
-            Log::error(
-                'NavigationMenuImporter::createCustomNavigationItem failed',
-                [
-                    'title' => $title,
-                    'url' => $url,
-                    'site' => $site,
-                    'error' => $exception->getMessage(),
-                ]
-            );
-
-            // Return null to indicate failure
-            return null;
+        // Check if title is provided
+        if ($title !== '') {
+            // Add title to navigation item
+            $navItem['title'] = $title;
         }
+
+        // Add URL to navigation item ($url is guaranteed non-empty by the guard above)
+        $navItem['url'] = $url;
+
+        // Log successful creation
+        $output->writeln("  - <info>Created nav item: '{$url}'</info>");
+
+        // Return the created navigation item
+        return $navItem;
     }
 
     /**
@@ -961,58 +941,37 @@ class NavigationMenuImporter
             return null;
         }
 
-        // Attempt to create the navigation item
-        try {
-            // Create navigation item as array structure
-            $navItem = [
-                'id' => Str::uuid()->toString(),
-            ];
+        // Create navigation item as array structure
+        $navItem = [
+            'id' => Str::uuid()->toString(),
+        ];
 
-            // Check if title is provided
-            if ($title !== '') {
-                // Add title to navigation item
-                $navItem['title'] = $title;
-            }
+        // Check if title is provided
+        if ($title !== '') {
+            // Add title to navigation item
+            $navItem['title'] = $title;
+        }
 
-            // Add entry reference to navigation item ($entry is guaranteed non-null by the guard above)
-            // Normalize the Statamic entry ID to a string value.
-            $entryId = $this->normalizeStringIdentifier(
-                $entry->id()
-            );
+        // Add entry reference to navigation item ($entry is guaranteed non-null by the guard above)
+        // Normalize the Statamic entry ID to a string value.
+        $entryId = $this->normalizeStringIdentifier(
+            $entry->id()
+        );
 
-            // Skip entries that do not expose a valid string/integer ID.
-            if ($entryId === null || $entryId === '') {
-                $output->writeln("  - <comment>Entry for WordPress {$postType} ID {$postId} has no usable ID (skipping navigation item)</comment>");
+        // Skip entries that do not expose a valid string/integer ID.
+        if ($entryId === null || $entryId === '') {
+            $output->writeln("  - <comment>Entry for WordPress {$postType} ID {$postId} has no usable ID (skipping navigation item)</comment>");
 
-                return null;
-            }
-
-            $navItem['entry'] = $entryId;
-
-            // Log successful creation
-            $output->writeln("  - <info>Created link to entry: '{$entryId}'</info>");
-
-            // Return the created navigation item
-            return $navItem;
-        } catch (Exception $exception) {
-            // Log error message to console
-            $output->writeln("  - <error>Failed to create navigation item: {$exception->getMessage()}</error>");
-
-            // Log error details for debugging
-            Log::error(
-                'NavigationMenuImporter::createPostTypeNavigationItem failed',
-                [
-                    'title' => $title,
-                    'post_type' => $postType,
-                    'post_id' => $postId,
-                    'site' => $site,
-                    'error' => $exception->getMessage(),
-                ]
-            );
-
-            // Return null to indicate failure
             return null;
         }
+
+        $navItem['entry'] = $entryId;
+
+        // Log successful creation
+        $output->writeln("  - <info>Created link to entry: '{$entryId}'</info>");
+
+        // Return the created navigation item
+        return $navItem;
     }
 
     /**
@@ -1193,7 +1152,8 @@ class NavigationMenuImporter
      * Get the menu order for a tree item by finding its original WordPress item ID.
      *
      * Uses the stored WordPress menu item ID in the tree item to directly look up the
-     * menu order from the hierarchy map, avoiding unreliable title/entry matching.
+     * menu order from the hierarchy map. Every tree item is built from an item in that map
+     * and carries its id, so the lookup always finds it.
      *
      * @param  array<string, mixed>  $treeItem  The tree item (should contain '_wordpress_menu_item_id')
      * @param  array<string, array{item: SimpleXMLElement, parent_id: string, menu_order: int, children: list<string>}>  $hierarchyMap  The hierarchy map with menu orders
@@ -1214,98 +1174,6 @@ class NavigationMenuImporter
             if (isset($hierarchyMap[$wordPressItemId])) {
                 // Return the menu order from the hierarchy map
                 return $hierarchyMap[$wordPressItemId]['menu_order'];
-            }
-        }
-
-        // ---
-        // Fallback to title/entry matching for backwards compatibility (though this
-        // should rarely be needed)
-        // ---
-
-        // Iterate through hierarchy map to find matching item by title and entry
-        foreach ($hierarchyMap as $itemData) {
-            // Get the original XML item
-            $item = $itemData['item'];
-
-            // Decode HTML entities and strip HTML tags from the navigation item title
-            $title = HtmlTagStripper::strip(
-                html_entity_decode(
-                    (string) $item->title,
-                    ENT_QUOTES | ENT_HTML5,
-                    'UTF-8'
-                )
-            );
-
-            // ---
-            // Match by title and entry ID if available
-            // ---
-
-            // Get title from tree item, default to empty string
-            $treeItemTitle = $this->extractStringFromTreeItem(
-                $treeItem,
-                'title'
-            );
-
-            // Check if titles match
-            if ($title === $treeItemTitle) {
-                // ---
-                // For entries, we need to match by the entry ID
-                // ---
-
-                // Check if tree item has an entry
-                if (
-                    $this->extractStringFromTreeItem(
-                        $treeItem,
-                        'entry'
-                    ) !== ''
-                ) {
-                    // ---
-                    // For entries, we need to match by the entry ID
-                    // ---
-
-                    // Get the menu item object ID from WordPress meta
-                    $menuItemObjectId = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_object_id'
-                    );
-
-                    // Get the menu item object type from WordPress meta
-                    $menuItemObject = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_object'
-                    );
-
-                    // ---
-                    // This is a simplified match - in practice, we might need more
-                    // sophisticated matching
-                    // ---
-
-                    // Check if both object ID and object type are present
-                    if (
-                        $menuItemObjectId !== ''
-                        && $menuItemObject !== ''
-                    ) {
-                        // Return the menu order for this item
-                        return $itemData['menu_order'];
-                    }
-                } else { // Otherwise
-                    // For custom URLs, match by title and URL
-                    $url = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_url'
-                    );
-
-                    // Check if URLs match
-                    if (
-                        $this->extractStringFromTreeItem(
-                            $treeItem,
-                            'url'
-                        ) === $url
-                    ) {
-                        // Return the menu order for this item
-                        return $itemData['menu_order'];
-                    }
-                }
             }
         }
 
