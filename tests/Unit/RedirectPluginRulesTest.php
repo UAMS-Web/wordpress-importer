@@ -286,3 +286,114 @@ it('reads served values that are missing or of another type as their defaults', 
         ->and(redirectPluginMeta($pretty, '_redirect_rule_from'))->toBe(['/3'])
         ->and(redirectPluginMeta($pretty, '_redirect_rule_status_code'))->toBe(['302']);
 });
+
+it('reads a Redirection rule that carries almost nothing with every default, unpublished', function (): void {
+    // Each field it reads falls back on its own, and a rule not marked enabled is not live (#102)
+    expect(RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, ['group' => ['enabled' => true]]))->toBe([
+        'post' => [
+            'id' => 'redirection-',
+            'type' => 'redirect_rule',
+            'status' => 'draft',
+            'title' => '',
+            'menu_order' => 0,
+            'meta' => [
+                '_redirect_rule_from' => [''],
+                '_redirect_rule_to' => [''],
+                '_redirect_rule_status_code' => ['301'],
+                '_redirect_rule_from_regex' => ['0'],
+            ],
+        ],
+        'unsupported' => [],
+    ]);
+});
+
+it('prefers the plugin\'s parsed target to the stored column', function (): void {
+    $post = RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, redirectionRule([
+        'action_data' => 'https://uams.edu/stored/',
+        'action_data_parsed' => ['url' => 'https://uams.edu/parsed/'],
+    ]))['post'];
+
+    expect(redirectPluginMeta($post, '_redirect_rule_to'))->toBe(['https://uams.edu/parsed/']);
+});
+
+it('writes a rule unpublished when its group does not say it is enabled', function (): void {
+    $post = RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, redirectionRule([
+        'group' => ['id' => 1, 'module_id' => 1],
+    ]))['post'];
+
+    expect($post['status'] ?? null)->toBe('draft');
+});
+
+it('writes no note for a Redirection title that is only whitespace', function (): void {
+    $post = RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, redirectionRule(['title' => '   ']))['post'];
+
+    expect(redirectPluginMeta($post, '_redirect_rule_notes'))->toBeNull();
+});
+
+it('reads a whole number served as text, and nothing else, as a number', function (mixed $position, int $order): void {
+    $post = RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, redirectionRule(['position' => $position]))['post'];
+
+    expect($post['menu_order'] ?? null)->toBe($order);
+})->with([
+    'text' => ['7', 7],
+    'negative text' => ['-3', -3],
+    'text that only starts with a number' => ['7a', 0],
+    'text with a number inside it' => ['a7', 0],
+]);
+
+it('reads a module id served as text', function (string $module, array $unsupported): void {
+    $converted = RedirectPluginRules::convert(RedirectPluginRules::REDIRECTION, redirectionRule([
+        'group' => ['id' => 1, 'module_id' => $module, 'enabled' => true],
+    ]));
+
+    expect($converted['unsupported'])->toBe($unsupported);
+})->with([
+    'WordPress' => ['1', []],
+    'the web server' => ['2', ['served by the web server module rather than by WordPress']],
+]);
+
+it('refuses a Pretty Links link that carries nothing, naming the default type', function (): void {
+    expect(RedirectPluginRules::convert(RedirectPluginRules::PRETTY_LINKS, []))
+        ->toBe(['post' => null, 'unsupported' => ['not imported: a 302 link with no target URL']]);
+});
+
+it('reads a Pretty Links link that carries only a target with every default, published', function (): void {
+    expect(RedirectPluginRules::convert(RedirectPluginRules::PRETTY_LINKS, ['url' => 'https://uams.edu/']))->toBe([
+        'post' => [
+            'id' => 'pretty-links-',
+            'type' => 'redirect_rule',
+            'status' => 'publish',
+            'title' => '/',
+            'menu_order' => null,
+            'meta' => [
+                '_redirect_rule_from' => ['/'],
+                '_redirect_rule_to' => ['https://uams.edu/'],
+                '_redirect_rule_status_code' => ['302'],
+                '_redirect_rule_from_regex' => ['0'],
+            ],
+        ],
+        'unsupported' => [],
+    ]);
+});
+
+it('compares a Pretty Links redirect type as the text it is', function (): void {
+    // `301.0` loosely equals `301`, and is not a type the plugin answers on its own
+    $converted = RedirectPluginRules::convert(RedirectPluginRules::PRETTY_LINKS, prettyLink(['redirect_type' => '301.0']));
+
+    expect(redirectPluginMeta($converted['post'], '_redirect_rule_status_code'))->toBe(['302'])
+        ->and($converted['unsupported'])->toBe(['301.0 redirect, imported as a 302']);
+});
+
+it('builds a Pretty Links note from whichever of its name and description it has', function (array $fields, ?array $notes): void {
+    $link = prettyLink();
+    unset($link['name'], $link['description']);
+
+    $post = RedirectPluginRules::convert(RedirectPluginRules::PRETTY_LINKS, $fields + $link)['post'];
+
+    expect(redirectPluginMeta($post, '_redirect_rule_notes'))->toBe($notes);
+})->with([
+    'a name only' => [['name' => 'Flu shots'], ['Flu shots']],
+    'a description only' => [['description' => 'Fall campaign'], ['Fall campaign']],
+    'a blank name and a description' => [['name' => '   ', 'description' => 'Fall campaign'], ['Fall campaign']],
+    'neither' => [[], null],
+]);
