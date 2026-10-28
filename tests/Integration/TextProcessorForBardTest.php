@@ -437,16 +437,79 @@ it('converts a registered shortcode outside a shortcode block, and leaves one in
     expect($fakes['shortcode']->converted)->toBe(['ninja_form', 'gravityform']);
 });
 
-it('measures blocks against offsets an earlier, longer replacement has shifted', function (): void {
+it('leaves a shortcode inside a block to the block after an earlier, longer replacement', function (): void {
     $fakes = textProcessorForBardFakes();
     $fakes['shortcode']->replacements = ['gravityform' => '<p>'.str_repeat('x', 200).'</p>'];
 
-    // Characterization of #155: replacing the form shortcode with much longer HTML
-    // moves the block past the offsets recorded for it, so the shortcode inside it
-    // is converted here too, where it was meant to be left to the block
+    // #155: the blocks are found in the content as the replacements leave it, so
+    // HTML much longer than the shortcode it replaces does not move the block
+    // away from where it is looked for
     textProcessorForBard('<p>[gravityform id="1"]</p><!-- wp:shortcode -->[formidable id="2"]<!-- /wp:shortcode -->');
 
-    expect($fakes['shortcode']->converted)->toBe(['gravityform', 'formidable']);
+    expect($fakes['shortcode']->converted)->toBe(['gravityform'])
+        ->and($fakes['link']->calls[0]['html'] ?? null)->toBe('<p><p>'.str_repeat('x', 200).'</p></p><!-- wp:shortcode -->[formidable id="2"]<!-- /wp:shortcode -->');
+});
+
+it('converts a shortcode after a block after an earlier replacement that removes text', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->extracted = [
+        ['name' => 'gone', 'original' => '[gone '.str_repeat('a', 60).']'],
+        ['name' => 'inside', 'original' => '[inside]'],
+        ['name' => 'after', 'original' => '[after]'],
+    ];
+    $fakes['shortcode']->replacements = ['gone' => ''];
+
+    // Removing the first shortcode moves [after] back to where the block was
+    // before it, which is still outside the block (#155)
+    textProcessorForBard('[gone '.str_repeat('a', 60).']<!-- wp:shortcode -->[inside]<!-- /wp:shortcode -->[after]');
+
+    expect($fakes['shortcode']->converted)->toBe(['gone', 'after']);
+});
+
+it('converts a shortcode outside a block and leaves the same shortcode inside the block to it', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->replacements = ['gravityform' => '<p>Form</p>'];
+
+    textProcessorForBard('<p>[gravityform id="1"]</p><!-- wp:shortcode -->[gravityform id="1"]<!-- /wp:shortcode -->');
+
+    // The copy inside the block reaches the block's processor unconverted
+    expect($fakes['shortcode']->converted)->toBe(['gravityform'])
+        ->and($fakes['link']->calls[0]['html'] ?? null)->toBe('<p><p>Form</p></p><!-- wp:shortcode -->[gravityform id="1"]<!-- /wp:shortcode -->');
+});
+
+it('removes the hrefs of gallery links, and only those, after an earlier, longer replacement', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->replacements = ['gravityform' => '<p>'.str_repeat('x', 200).'</p>'];
+
+    // #155: with the gallery's offsets taken before the replacement, its link kept
+    // its href and the range stripped the ordinary link instead
+    textProcessorForBard(
+        '<p>[gravityform id="1"]</p><p><a href="/keep-this-link">K</a></p>'
+        .'<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a href="/g.jpg"><img src="g.jpg"></a></figure><!-- /wp:gallery -->'
+    );
+
+    expect($fakes['link']->calls[0]['html'] ?? null)->toBe(
+        '<p><p>'.str_repeat('x', 200).'</p></p><p><a href="/keep-this-link">K</a></p>'
+        .'<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a ><img src="g.jpg"></a></figure><!-- /wp:gallery -->'
+    );
+});
+
+it('removes the hrefs of links in a gallery ahead of a shortcode block, and in the block', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    // The two kinds of block are found separately, so they are put in order
+    // before the hrefs are removed from the last one first
+    textProcessorForBard(
+        '<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a href="/one-long-target.jpg"><img src="a.jpg"></a></figure><!-- /wp:gallery -->'
+        .'<!-- wp:shortcode --><a href="/in-block">B</a><!-- /wp:shortcode -->'
+        .'<p><a href="/after">A</a></p>'
+    );
+
+    expect($fakes['link']->calls[0]['html'] ?? null)->toBe(
+        '<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a ><img src="a.jpg"></a></figure><!-- /wp:gallery -->'
+        .'<!-- wp:shortcode --><a >B</a><!-- /wp:shortcode -->'
+        .'<p><a href="/after">A</a></p>'
+    );
 });
 
 it('skips extracted shortcodes that are malformed, and keeps converting the rest', function (): void {
@@ -1144,7 +1207,7 @@ it('parses an image inside a paragraph as content, not as a figure', function ()
     expect($fakes['image']->calls)->toBe([]);
 });
 
-it('measures a shortcode that lands on a block\'s recorded start as inside it', function (): void {
+it('leaves a shortcode right after the start of a block to the block once the text ahead of it is removed', function (): void {
     $fakes = textProcessorForBardFakes();
     $fakes['shortcode']->extracted = [
         ['name' => 'gone', 'original' => '[gone aaaaaaaaaaaaaa]'],
@@ -1152,8 +1215,8 @@ it('measures a shortcode that lands on a block\'s recorded start as inside it', 
     ];
     $fakes['shortcode']->replacements = ['gone' => ''];
 
-    // Removing the 21-character shortcode moves [b] onto the offset recorded for
-    // the block's start (#155), and a position at the start counts as inside
+    // [b] is only inside the block, so it is left to the block once the shortcode
+    // ahead of the block is removed
     textProcessorForBard('[gone aaaaaaaaaaaaaa]<!-- wp:shortcode -->[b]<!-- /wp:shortcode -->');
 
     expect($fakes['shortcode']->converted)->toBe(['gone']);

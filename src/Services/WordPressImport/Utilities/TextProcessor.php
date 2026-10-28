@@ -46,6 +46,18 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSp
 class TextProcessor
 {
     /**
+     * Matches a `wp:shortcode` block, whose shortcodes ShortcodeBlockProcessor
+     * converts.
+     */
+    private const string SHORTCODE_BLOCK_PATTERN = '/<!--\s*wp:shortcode\s*-->.*?<!--\s*\/wp:shortcode\s*-->/is';
+
+    /**
+     * Matches a `wp:gallery` block, whose image links WpGalleryBlockProcessor
+     * resolves from attachment ids.
+     */
+    private const string GALLERY_BLOCK_PATTERN = '/<!--\s*wp:gallery\s*{.*?}\s*-->.*?<!--\s*\/wp:gallery\s*-->/is';
+
+    /**
      * Static cache for processor instances to avoid repeated instantiation.
      *
      * @var array<string, object>
@@ -638,34 +650,6 @@ class TextProcessor
             $formattedContent = $wpAutoP->process($formattedContent);
         }
 
-        // Extract shortcode block positions to prevent duplicate processing
-        $shortcodeBlocks = self::extractBlockPositions(
-            $formattedContent,
-            '/<!--\s*wp:shortcode\s*-->(.*?)<!--\s*\/wp:shortcode\s*-->/is'
-        );
-
-        // ---
-        // Extract gallery blocks from processed content.
-        //
-        // To prevent LinkProcessor from treating gallery image href attributes as file
-        // links, we must ensure href attributes inside
-        // <!-- wp:gallery --> ... <!-- /wp:gallery --> blocks are NOT processed by the
-        // LinkProcessor. They should only be handled by the WpGalleryBlockProcessor using
-        // attachment IDs.
-        //
-        // We scan for all such blocks, record their offsets, and skip any href attributes
-        // whose position falls within these blocks.
-        // ---
-
-        // ---
-        // Extract gallery block positions to prevent LinkProcessor from processing href
-        // attributes
-        // ---
-        $galleryBlocks = self::extractBlockPositions(
-            $formattedContent,
-            '/<!--\s*wp:gallery\s*({.*?})\s*-->(.*?)<!--\s*\/wp:gallery\s*-->/is'
-        );
-
         // Extract all shortcodes from the formatted content
         $shortcodes = $shortcodeProcessor->extract(
             $formattedContent,
@@ -688,20 +672,16 @@ class TextProcessor
                 continue;
             }
 
-            // Find the position of this shortcode in the content
-            $shortcodePos = \strpos(
-                $formattedContent,
-                $shortcode['original']
-            );
-
-            // Check if the shortcode is within a wp:shortcode block
+            // Leave a shortcode the content holds only inside wp:shortcode blocks
+            // to ShortcodeBlockProcessor. The blocks are found in the content as it
+            // now stands, after the replacements so far (#155)
             if (
-                self::isInsideBlock(
-                    $shortcodePos,
-                    $shortcodeBlocks
+                \str_contains($formattedContent, $shortcode['original'])
+                && ! self::occursOutsideShortcodeBlocks(
+                    $formattedContent,
+                    $shortcode['original']
                 )
             ) {
-                // Skip processing here; ShortcodeBlockProcessor will handle it
                 continue;
             }
 
@@ -761,11 +741,16 @@ class TextProcessor
                         $pageSlug
                     );
 
-                    // Replace shortcode with Tiptap HTML in content
-                    $formattedContent = \str_replace(
-                        $shortcode['original'],
-                        $tiptapHtml,
-                        $formattedContent
+                    // Replace the shortcode with Tiptap HTML outside wp:shortcode
+                    // blocks, leaving any copy inside one to the block
+                    $original = $shortcode['original'];
+                    $formattedContent = self::replaceOutsideShortcodeBlocks(
+                        $formattedContent,
+                        static fn (string $segment): string => \str_replace(
+                            $original,
+                            $tiptapHtml,
+                            $segment
+                        )
                     );
                 }
             } else { // Otherwise
@@ -780,11 +765,16 @@ class TextProcessor
                     $pageSlug
                 );
 
-                // Replace shortcode with Tiptap HTML in content
-                $formattedContent = ShortcodeProcessor::replaceShortcode(
+                // Replace the shortcode with Tiptap HTML outside wp:shortcode
+                // blocks, leaving any copy inside one to the block
+                $original = $shortcode['original'];
+                $formattedContent = self::replaceOutsideShortcodeBlocks(
                     $formattedContent,
-                    $shortcode['original'],
-                    $tiptapHtml
+                    static fn (string $segment): string => ShortcodeProcessor::replaceShortcode(
+                        $segment,
+                        $original,
+                        $tiptapHtml
+                    )
                 );
             }
 
@@ -792,7 +782,7 @@ class TextProcessor
             // `[table]` branch that used to define it)
             unset(
                 $shortcode,
-                $shortcodePos,
+                $original,
                 $tiptapHtml,
                 $doc,
                 $images,
@@ -800,10 +790,24 @@ class TextProcessor
             );
         }
 
-        // Combine shortcode and gallery blocks as excluded blocks for preprocessing
+        // ---
+        // Find the shortcode and gallery blocks in the content as the replacements
+        // above left it, so their offsets point at the blocks LinkProcessor will
+        // read (#155). Gallery image links are resolved from attachment ids by
+        // WpGalleryBlockProcessor, and links inside a shortcode block by
+        // ShortcodeBlockProcessor, so LinkProcessor must not read them as file
+        // links
+        // ---
         $excludedBlocks = \array_merge(
-            $shortcodeBlocks,
-            $galleryBlocks
+            self::extractBlockPositions($formattedContent, self::SHORTCODE_BLOCK_PATTERN),
+            self::extractBlockPositions($formattedContent, self::GALLERY_BLOCK_PATTERN)
+        );
+
+        // Order them by start, so removing hrefs from the last block first leaves
+        // the offsets of the blocks before it in place
+        \usort(
+            $excludedBlocks,
+            static fn (array $a, array $b): int => $a[0] <=> $b[0]
         );
 
         // ---
@@ -1379,7 +1383,6 @@ class TextProcessor
             $processedContent,
             $processedImages,
             $processedNodes,
-            $shortcodeBlocks,
             $shortcodeProcessor,
             $shortcodes,
             $wpAutoP
@@ -1743,31 +1746,70 @@ class TextProcessor
     }
 
     /**
-     * Checks whether a position falls inside any of the given blocks.
+     * Splits content into the text of its `wp:shortcode` blocks and the text
+     * between them, in order.
      *
-     * @param  int|false  $position  The position, or false when it was not found
-     * @param  array<int, array{int, int}>  $blocks  Block start/end offsets
-     * @return bool True when the position is at or after a block's start and before its end
+     * @param  string  $content  The content to split
+     * @return list<array{string, bool}> Each piece of text, and whether it is a block
      */
-    private static function isInsideBlock(
-        int|false $position,
-        array $blocks
-    ): bool {
-        // A position that was not found is inside no block
-        if ($position === false) {
-            return false;
+    private static function splitOnShortcodeBlocks(
+        string $content
+    ): array {
+        // Initialize the pieces and the offset the next one starts at
+        $pieces = [];
+        $offset = 0;
+
+        // Take the text before each block, then the block itself
+        foreach (self::extractBlockPositions($content, self::SHORTCODE_BLOCK_PATTERN) as [$blockStart, $blockEnd]) {
+            $pieces[] = [\substr($content, $offset, $blockStart - $offset), false];
+            $pieces[] = [\substr($content, $blockStart, $blockEnd - $blockStart), true];
+            $offset = $blockEnd;
         }
 
-        // Check each block for the position
-        foreach ($blocks as [$blockStart, $blockEnd]) {
-            // Check whether the position falls inside this block
-            if ($position >= $blockStart && $position < $blockEnd) {
+        // Take the text after the last block
+        $pieces[] = [\substr($content, $offset), false];
+
+        return $pieces;
+    }
+
+    /**
+     * Checks whether text occurs in content outside every `wp:shortcode` block.
+     *
+     * @param  string  $content  The content to search
+     * @param  string  $needle  The text to find
+     * @return bool True when some copy of the text lies between blocks
+     */
+    private static function occursOutsideShortcodeBlocks(
+        string $content,
+        string $needle
+    ): bool {
+        // Look for the text in each piece that is not a block
+        foreach (self::splitOnShortcodeBlocks($content) as [$text, $isBlock]) {
+            if (! $isBlock && \str_contains($text, $needle)) {
                 return true;
             }
         }
 
-        // Return false when no block holds the position
         return false;
+    }
+
+    /**
+     * Applies a replacement to the content outside its `wp:shortcode` blocks,
+     * leaving the blocks as they are.
+     *
+     * @param  string  $content  The content to change
+     * @param  callable(string): string  $replace  The replacement for a piece between blocks
+     * @return string The content with the pieces between blocks replaced
+     */
+    private static function replaceOutsideShortcodeBlocks(
+        string $content,
+        callable $replace
+    ): string {
+        // Replace each piece that is not a block, and rejoin them in order
+        return \implode('', \array_map(
+            static fn (array $piece): string => $piece[1] ? $piece[0] : $replace($piece[0]),
+            self::splitOnShortcodeBlocks($content)
+        ));
     }
 
     /**
