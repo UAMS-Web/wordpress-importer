@@ -905,7 +905,6 @@ The `src/Services/WordPressImport/Utilities/Processors` directory contains class
   - `fileExists()`: Checks if a file exists at a given URL using HTTP HEAD request.
   - `guessMimeType()`: Determines the MIME type of a file based on its extension.
   - `isSameSiteUrl(string $url, string $baseBlogUrl)`: Checks if a URL is on the same site as the base blog URL by comparing normalized domain paths.
-  - `isIntranetUrl(string $url)`: **Deprecated.** Detects if a URL points to an intranet domain (intranet.uams.edu, inside.uams.edu). Use `isSameSiteUrl()` instead for site-specific filtering.
   - `extractWordPressPathInfo()`: Extracts year/month information from WordPress URLs and generates unique filenames with year-month prefixes. Supports both multisite (/sites/{id}/{year}/{month}/) and regular WordPress upload patterns (/wp-content/uploads/{year}/{month}/). Falls back to current date for URLs without year/month patterns. **Applies lowercase conversion when configured in Statamic.**
   - `generateUniqueFilename()`: Creates unique filenames with year-month prefixes to prevent conflicts when multiple files with the same name exist in different WordPress upload directories. **Applies lowercase conversion when configured in Statamic.**
 

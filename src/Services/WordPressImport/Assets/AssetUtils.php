@@ -26,7 +26,12 @@ class AssetUtils
      * `30 * (MAX_REDIRECT_HOPS + 1)` seconds. Keeping the same 30 seconds as a
      * whole-chain budget leaves a single-hop check behaving exactly as before
      * while bounding the chain (wordpress-importer-archive#542).
+     *
+     * A constant is not a line coverage can reach, so a mutant here always reads
+     * as uncovered. AssetUtilsTest pins 30, and changing it by hand fails that
+     * test.
      */
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     public const EXISTENCE_CHECK_TIMEOUT_SECONDS = 30;
 
     /**
@@ -154,23 +159,16 @@ class AssetUtils
         );
 
         // ---
-        // Remove trailing slashes
+        // Remove trailing slashes from the base
         //
         // The prefix check below assumes the base ends WITHOUT a trailing
         // slash: it treats the character at strlen($baseBlogUrl) as the path
         // separator. When a WXR's <wp:base_blog_url> carries a trailing slash
         // that character is instead the first char of the next path segment,
         // so a genuine same-site URL is misclassified as external (wordpress-importer-archive#30).
-        // Stripping trailing slashes from both sides — symmetric with the
-        // leading-slash removal above — keeps the separator check correct
-        // whether or not the base was exported with a trailing slash.
+        // The URL's own trailing slashes need no trimming: whatever follows
+        // the base in it, a slash still marks the path boundary.
         // ---
-
-        // Remove trailing slashes from URL
-        $url = \rtrim(
-            $url,
-            '/'
-        );
 
         // Remove trailing slashes from base blog URL
         $baseBlogUrl = \rtrim(
@@ -207,20 +205,13 @@ class AssetUtils
         string $url,
         ?string $baseBlogUrl
     ): bool {
-        // Check if base blog URL is null or empty
-        if (
-            $baseBlogUrl === null
-            || $baseBlogUrl === ''
-        ) {
-            // Consider all URLs as same site
-            return true;
-        }
-
-        // Delegate to isSameSiteUrl for actual comparison
-        return self::isSameSiteUrl(
-            $url,
-            $baseBlogUrl
-        );
+        // Consider all URLs as same site without a base; isSameSiteUrl() does the
+        // same for an empty one
+        return $baseBlogUrl === null
+            || self::isSameSiteUrl(
+                $url,
+                $baseBlogUrl
+            );
     }
 
     /**
@@ -341,47 +332,6 @@ class AssetUtils
     }
 
     /**
-     * Check if a URL is an intranet URL.
-     *
-     * @deprecated  Use isSameSiteUrl() instead. This method is kept for backward compatibility
-     *
-     * @param  string  $url  The URL to check
-     * @return bool True if the URL is an intranet URL, false otherwise
-     */
-    public static function isIntranetUrl(
-        string $url
-    ): bool {
-        // Normalize URL to lowercase for comparison
-        $url = \strtolower($url);
-
-        // Remove http:// or https:// protocol from URL
-        $urlWithoutProtocol = \preg_replace(
-            '#^https?:#',
-            '',
-            $url
-        );
-        $url = is_string($urlWithoutProtocol)
-            ? $urlWithoutProtocol
-            : $url;
-
-        // Remove leading slashes from URL
-        $url = \ltrim(
-            $url,
-            '/'
-        );
-
-        // Check if URL starts with intranet domain
-        return \str_starts_with(
-            $url,
-            'intranet.uams.edu'
-        )
-        || \str_starts_with(
-            $url,
-            'inside.uams.edu'
-        );
-    }
-
-    /**
      * Extracts WordPress upload path information from a URL.
      *
      * Parses WordPress upload URLs to extract year/month information and
@@ -402,7 +352,9 @@ class AssetUtils
         // Parse URL into components
         $parsedUrl = parse_url($url);
 
-        // Extract path component from parsed URL
+        // Extract path component from parsed URL. Any default that cannot hold an
+        // upload directory reads the same as an empty one
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $path = $parsedUrl['path'] ?? '';
 
         // ---
@@ -456,18 +408,6 @@ class AssetUtils
         // Extract filename from URL
         $originalFilename = basename($url);
 
-        // Extract file extension from filename
-        pathinfo(
-            $originalFilename,
-            PATHINFO_EXTENSION
-        );
-
-        // Extract filename without extension
-        pathinfo(
-            $originalFilename,
-            PATHINFO_FILENAME
-        );
-
         // Generate unique filename with year-month prefix
         $uniqueFilename = "{$year}-{$month}-{$originalFilename}";
 
@@ -475,7 +415,9 @@ class AssetUtils
         // Apply lowercase conversion if configured in Statamic
         // ---
 
-        // Check if lowercase conversion is enabled
+        // Check if lowercase conversion is enabled. The condition reads the value as
+        // a boolean with or without the cast
+        // @pest-mutate-ignore: RemoveBooleanCast
         if (
             (bool) config(
                 'statamic.assets.lowercase',
@@ -507,29 +449,8 @@ class AssetUtils
     public static function generateUniqueFilename(
         string $url
     ): string {
-        // Extract WordPress path information from URL
-        $pathInfo = self::extractWordPressPathInfo($url);
-
-        // Get unique filename from path info
-        $filename = $pathInfo['filename'];
-
-        // ---
-        // Apply lowercase conversion if configured in Statamic
-        // ---
-
-        // Check if lowercase conversion is enabled
-        if (
-            (bool) config(
-                'statamic.assets.lowercase',
-                false
-            )
-        ) {
-            // Convert filename to lowercase
-            return \strtolower($filename);
-        }
-
-        // Return the unique filename
-        return $filename;
+        // The path info already lowercases the filename when Statamic is configured to
+        return self::extractWordPressPathInfo($url)['filename'];
     }
 
     /**
@@ -591,14 +512,6 @@ class AssetUtils
                 $output->writeln("  - <comment>Asset not on same site detected. Importing directly from '$url'.</comment>");
 
                 // Return null to continue with the import process
-                return null;
-
-                // Handle unknown policies safely
-            default:
-                // Log warning about unknown policy
-                $output->writeln('  - <comment>Unknown same-site policy. Skipping download.</comment>');
-
-                // Default to skip for safety
                 return null;
         }
     }
