@@ -638,95 +638,20 @@ class PageEntryCreator extends BaseEntryCreator
                     $data['title_options'] = 'graphic';
                 }
 
-                // Handle Classic block content
-                $classicBlockInfo = $this->entryCreator->hasClassicBlock($postId);
-                if ($classicBlockInfo !== null && $classicBlockInfo !== []) {
-                    // Normalize classic block details for safe string interpolation
-                    $classicBlockTitle = $this->normalizeMixedString(
-                        $classicBlockInfo['title'] ?? null
-                    );
-                    $classicBlockId = $this->normalizeMixedString(
-                        $classicBlockInfo['id'] ?? null
-                    );
-                    $data['content'] = [
-                        [
-                            'type' => 'paragraph',
-                            'content' => [
-                                [
-                                    'type' => 'text',
-                                    'marks' => [
-                                        ['type' => 'bold'],
-                                    ],
-                                    'text' => 'Note:',
-                                ],
-                                [
-                                    'type' => 'text',
-                                    'text' => " This page contains WordPress Classic block content which hasn't been mapped to Statamic Bard.",
-                                ],
-                            ],
-                        ],
-                        [
-                            'type' => 'paragraph',
-                            'content' => [
-                                ['type' => 'text', 'text' => 'Original details:'],
-                            ],
-                        ],
-                        [
-                            'type' => 'bulletList',
-                            'content' => [
-                                [
-                                    'type' => 'listItem',
-                                    'content' => [
-                                        [
-                                            'type' => 'paragraph',
-                                            'content' => [
-                                                ['type' => 'text', 'text' => "Title: \"{$classicBlockTitle}\""],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    'type' => 'listItem',
-                                    'content' => [
-                                        [
-                                            'type' => 'paragraph',
-                                            'content' => [
-                                                ['type' => 'text', 'text' => "ID: {$classicBlockId}"],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    'type' => 'listItem',
-                                    'content' => [
-                                        [
-                                            'type' => 'paragraph',
-                                            'content' => [
-                                                ['type' => 'text', 'text' => 'Permalink: '],
-                                                [
-                                                    'type' => 'text',
-                                                    'marks' => [
-                                                        ['type' => 'link', 'attrs' => [
-                                                            'href' => $classicBlockInfo['link'],
-                                                            'rel' => null,
-                                                            'target' => '_blank',
-                                                            'title' => null,
-                                                        ]],
-                                                    ],
-                                                    'text' => $classicBlockInfo['link'],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                        ],
-                    ];
+                // ---
+                // Handle Classic, Row or Freeform block content, checked in that order:
+                // the page gets a note naming the block in place of its content, and
+                // its ACF blocks are still processed (e.g. landing pages with ACF
+                // blocks and Classic Editor shortcodes)
+                // ---
+                $unmappedBlock = $this->findUnmappedBlock($postId);
 
-                    // ---
-                    // Process ACF blocks if present, even when Classic block content is detected
-                    // (e.g., landing pages with ACF blocks and Classic Editor shortcodes)
-                    // ---
+                if ($unmappedBlock !== null) {
+                    $data['content'] = $this->unmappedBlockNote(
+                        $unmappedBlock['kind'],
+                        $unmappedBlock['info']
+                    );
+
                     $this->processAcfBlocksForPageBuilder(
                         $hasAcfBlocks,
                         $contentProcessor,
@@ -746,305 +671,54 @@ class PageEntryCreator extends BaseEntryCreator
                         $entryId
                     );
                 } else {
-                    // Handle Row block content
-                    $rowBlockInfo = $this->entryCreator->hasRowBlock($postId);
-                    if ($rowBlockInfo !== null && $rowBlockInfo !== []) {
-                        // Normalize row block details for safe string interpolation
-                        $rowBlockTitle = $this->normalizeMixedString(
-                            $rowBlockInfo['title'] ?? null
-                        );
-                        $rowBlockId = $this->normalizeMixedString(
-                            $rowBlockInfo['id'] ?? null
-                        );
-                        $data['content'] = [
-                            [
-                                'type' => 'paragraph',
-                                'content' => [
-                                    [
-                                        'type' => 'text',
-                                        'marks' => [
-                                            [
-                                                'type' => 'bold',
-                                            ],
-                                        ],
-                                        'text' => 'Note:',
-                                    ],
-                                    [
-                                        'type' => 'text',
-                                        'text' => " This page contains WordPress Row block content which hasn't been mapped to Statamic Bard.",
-                                    ],
-                                ],
-                            ],
-                            [
-                                'type' => 'paragraph',
-                                'content' => [
-                                    [
-                                        'type' => 'text',
-                                        'text' => 'Original details:',
-                                    ],
-                                ],
-                            ],
-                            [
-                                'type' => 'bulletList',
-                                'content' => [
-                                    [
-                                        'type' => 'listItem',
-                                        'content' => [
-                                            [
-                                                'type' => 'paragraph',
-                                                'content' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => "Title: \"{$rowBlockTitle}\"",
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                    [
-                                        'type' => 'listItem',
-                                        'content' => [
-                                            [
-                                                'type' => 'paragraph',
-                                                'content' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => "ID: {$rowBlockId}",
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                    [
-                                        'type' => 'listItem',
-                                        'content' => [
-                                            [
-                                                'type' => 'paragraph',
-                                                'content' => [
-                                                    [
-                                                        'type' => 'text',
-                                                        'text' => 'Permalink: ',
-                                                    ],
-                                                    [
-                                                        'type' => 'text',
-                                                        'marks' => [
-                                                            [
-                                                                'type' => 'link',
-                                                                'attrs' => [
-                                                                    'href' => $rowBlockInfo['link'],
-                                                                    'rel' => null,
-                                                                    'target' => '_blank',
-                                                                    'title' => null,
-                                                                ],
-                                                            ],
-                                                        ],
-                                                        'text' => $rowBlockInfo['link'],
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                        ];
+                    // ---
+                    // Set knowledge_base ID in processing context for all pages,
+                    // so block parsers can access it when processing MinervaKB blocks
+                    // ---
+                    // Resolve the knowledge base entry ID for this site
+                    $knowledgeBaseEntryId = $this->findKnowledgeBaseEntryId($site);
 
-                        // ---
-                        // Process ACF blocks if present, even when Row block content is detected
-                        // ---
-                        $this->processAcfBlocksForPageBuilder(
-                            $hasAcfBlocks,
-                            $contentProcessor,
-                            $contentEncoded,
-                            $site,
-                            $assetImporter,
-                            $output,
-                            $xmlParser,
-                            $title,
-                            $postId,
-                            $link,
-                            $attachments,
-                            $terms,
-                            $data,
-                            $collectionHandle,
-                            $entrySlug,
-                            $entryId
-                        );
-                    } else {
-                        // Handle Freeform block content
-                        $freeformBlockInfo = $this->entryCreator->hasFreeformBlock($postId);
-                        if ($freeformBlockInfo !== null && $freeformBlockInfo !== []) {
-                            // Normalize freeform block details for safe string interpolation
-                            $freeformBlockTitle = $this->normalizeMixedString(
-                                $freeformBlockInfo['title'] ?? null
-                            );
-                            $freeformBlockId = $this->normalizeMixedString(
-                                $freeformBlockInfo['id'] ?? null
-                            );
-                            $data['content'] = [
-                                [
-                                    'type' => 'paragraph',
-                                    'content' => [
-                                        [
-                                            'type' => 'text',
-                                            'marks' => [
-                                                [
-                                                    'type' => 'bold',
-                                                ],
-                                            ],
-                                            'text' => 'Note:',
-                                        ],
-                                        [
-                                            'type' => 'text',
-                                            'text' => " This page contains WordPress Freeform block content which hasn't been mapped to Statamic Bard.",
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    'type' => 'paragraph',
-                                    'content' => [
-                                        [
-                                            'type' => 'text',
-                                            'text' => 'Original details:',
-                                        ],
-                                    ],
-                                ],
-                                [
-                                    'type' => 'bulletList',
-                                    'content' => [
-                                        [
-                                            'type' => 'listItem',
-                                            'content' => [
-                                                [
-                                                    'type' => 'paragraph',
-                                                    'content' => [
-                                                        [
-                                                            'type' => 'text',
-                                                            'text' => "Title: \"{$freeformBlockTitle}\"",
-                                                        ],
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                        [
-                                            'type' => 'listItem',
-                                            'content' => [
-                                                [
-                                                    'type' => 'paragraph',
-                                                    'content' => [
-                                                        [
-                                                            'type' => 'text',
-                                                            'text' => "ID: {$freeformBlockId}",
-                                                        ],
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                        [
-                                            'type' => 'listItem',
-                                            'content' => [
-                                                [
-                                                    'type' => 'paragraph',
-                                                    'content' => [
-                                                        [
-                                                            'type' => 'text',
-                                                            'text' => 'Permalink: ',
-                                                        ],
-                                                        [
-                                                            'type' => 'text',
-                                                            'marks' => [
-                                                                [
-                                                                    'type' => 'link',
-                                                                    'attrs' => [
-                                                                        'href' => $freeformBlockInfo['link'],
-                                                                        'rel' => null,
-                                                                        'target' => '_blank',
-                                                                        'title' => null,
-                                                                    ],
-                                                                ],
-                                                            ],
-                                                            'text' => $freeformBlockInfo['link'],
-                                                        ],
-                                                    ],
-                                                ],
-                                            ],
-                                        ],
-                                    ],
-                                ],
-                            ];
+                    // Check if knowledge_base entry ID was found
+                    if ($knowledgeBaseEntryId !== null) {
+                        // Set knowledge_base ID in processing context
+                        ProcessingContext::setKnowledgeBaseId($knowledgeBaseEntryId);
+                    }
 
-                            // ---
-                            // Process ACF blocks if present, even when Freeform block content is detected
-                            // (e.g., landing pages with ACF blocks and Classic Editor shortcodes)
-                            // ---
-                            $this->processAcfBlocksForPageBuilder(
-                                $hasAcfBlocks,
-                                $contentProcessor,
-                                $contentEncoded,
-                                $site,
-                                $assetImporter,
-                                $output,
-                                $xmlParser,
-                                $title,
-                                $postId,
-                                $link,
-                                $attachments,
-                                $terms,
-                                $data,
-                                $collectionHandle,
-                                $entrySlug,
-                                $entryId
-                            );
-                        } else {
-                            // ---
-                            // Set knowledge_base ID in processing context for all pages,
-                            // so block parsers can access it when processing MinervaKB blocks
-                            // ---
-                            // Resolve the knowledge base entry ID for this site
-                            $knowledgeBaseEntryId = $this->findKnowledgeBaseEntryId($site);
+                    // Process content, including XML parser for table linking
+                    $parsedContent = $contentProcessor->process(
+                        $contentEncoded,
+                        $site,
+                        $assetImporter,
+                        $output,
+                        $xmlParser,
+                        $title,
+                        $postId,
+                        $link,
+                        $attachments,
+                        $terms,
+                        [], // items array (empty for now)
+                        $data,
+                        $collectionHandle,
+                        $entrySlug,
+                        $entryId
+                    );
+                    // Normalize parsed content field before empty-content checks
+                    $parsedBodyContent = $parsedContent['content'] ?? [];
+                    if (! \is_array($parsedBodyContent)) {
+                        $parsedBodyContent = [];
+                    }
 
-                            // Check if knowledge_base entry ID was found
-                            if ($knowledgeBaseEntryId !== null) {
-                                // Set knowledge_base ID in processing context
-                                ProcessingContext::setKnowledgeBaseId($knowledgeBaseEntryId);
-                            }
+                    $isEmptyContent = $this->isEmptyContent($parsedBodyContent);
 
-                            // Process content, including XML parser for table linking
-                            $parsedContent = $contentProcessor->process(
-                                $contentEncoded,
-                                $site,
-                                $assetImporter,
-                                $output,
-                                $xmlParser,
-                                $title,
-                                $postId,
-                                $link,
-                                $attachments,
-                                $terms,
-                                [], // items array (empty for now)
-                                $data,
-                                $collectionHandle,
-                                $entrySlug,
-                                $entryId
-                            );
-                            // Normalize parsed content field before empty-content checks
-                            $parsedBodyContent = $parsedContent['content'] ?? [];
-                            if (! \is_array($parsedBodyContent)) {
-                                $parsedBodyContent = [];
-                            }
+                    // The assignment above is unconditional for this branch, so
+                    // page_builder is always set here — the warning that used to
+                    // guard the opposite case was unreachable.
+                    if ($hasAcfBlocks) {
+                        $data['page_builder'] = $parsedContent['page_builder'];
+                    }
 
-                            $isEmptyContent = $this->isEmptyContent($parsedBodyContent);
-
-                            // The assignment above is unconditional for this branch, so
-                            // page_builder is always set here — the warning that used to
-                            // guard the opposite case was unreachable.
-                            if ($hasAcfBlocks) {
-                                $data['page_builder'] = $parsedContent['page_builder'];
-                            }
-
-                            if (! $isEmptyContent) {
-                                $data['content'] = $parsedContent['content'];
-                            }
-                        }
+                    if (! $isEmptyContent) {
+                        $data['content'] = $parsedContent['content'];
                     }
                 }
             }
@@ -1341,6 +1015,129 @@ class PageEntryCreator extends BaseEntryCreator
     {
         // Use the centralized term tracking from PeopleShortcodeProcessor
         return PeopleShortcodeProcessor::getTermsUsed();
+    }
+
+    /**
+     * Finds the first block on a page that is not mapped to Statamic Bard.
+     *
+     * Classic, Row and Freeform block content is checked in that order, and the
+     * first found is returned, so a later check is not made once one matches.
+     *
+     * @param  string  $postId  The WordPress post ID
+     * @return array{kind: string, info: array<int|string, mixed>}|null The block's kind and details, or null when there is none
+     */
+    private function findUnmappedBlock(
+        string $postId
+    ): ?array {
+        // Check each block kind in turn, stopping at the first found
+        foreach (['Classic', 'Row', 'Freeform'] as $kind) {
+            $info = match ($kind) {
+                'Classic' => $this->entryCreator->hasClassicBlock($postId),
+                'Row' => $this->entryCreator->hasRowBlock($postId),
+                default => $this->entryCreator->hasFreeformBlock($postId),
+            };
+
+            if ($info !== null && $info !== []) {
+                return ['kind' => $kind, 'info' => $info];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Builds the Bard note a page gets in place of block content it cannot map.
+     *
+     * @param  string  $kind  The block's kind, as WordPress names it (Classic, Row or Freeform)
+     * @param  array<int|string, mixed>  $info  The block's title, ID and link
+     * @return list<array<string, mixed>> The note, as Bard nodes
+     */
+    private function unmappedBlockNote(
+        string $kind,
+        array $info
+    ): array {
+        // Normalize block details for safe string interpolation
+        $blockTitle = $this->normalizeMixedString(
+            $info['title'] ?? null
+        );
+        $blockId = $this->normalizeMixedString(
+            $info['id'] ?? null
+        );
+
+        return [
+            [
+                'type' => 'paragraph',
+                'content' => [
+                    [
+                        'type' => 'text',
+                        'marks' => [
+                            ['type' => 'bold'],
+                        ],
+                        'text' => 'Note:',
+                    ],
+                    [
+                        'type' => 'text',
+                        'text' => " This page contains WordPress {$kind} block content which hasn't been mapped to Statamic Bard.",
+                    ],
+                ],
+            ],
+            [
+                'type' => 'paragraph',
+                'content' => [
+                    ['type' => 'text', 'text' => 'Original details:'],
+                ],
+            ],
+            [
+                'type' => 'bulletList',
+                'content' => [
+                    [
+                        'type' => 'listItem',
+                        'content' => [
+                            [
+                                'type' => 'paragraph',
+                                'content' => [
+                                    ['type' => 'text', 'text' => "Title: \"{$blockTitle}\""],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'type' => 'listItem',
+                        'content' => [
+                            [
+                                'type' => 'paragraph',
+                                'content' => [
+                                    ['type' => 'text', 'text' => "ID: {$blockId}"],
+                                ],
+                            ],
+                        ],
+                    ],
+                    [
+                        'type' => 'listItem',
+                        'content' => [
+                            [
+                                'type' => 'paragraph',
+                                'content' => [
+                                    ['type' => 'text', 'text' => 'Permalink: '],
+                                    [
+                                        'type' => 'text',
+                                        'marks' => [
+                                            ['type' => 'link', 'attrs' => [
+                                                'href' => $info['link'],
+                                                'rel' => null,
+                                                'target' => '_blank',
+                                                'title' => null,
+                                            ]],
+                                        ],
+                                        'text' => $info['link'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
     }
 
     /**
