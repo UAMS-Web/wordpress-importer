@@ -105,18 +105,14 @@ class ArticleEngagementSeeder
             }
 
             // Get the raw aggregate, which MinervaKB stores as a plain integer string
-            $metaValue = \trim(
-                XpathHelper::getStringValue(
-                    $meta,
-                    'wp:meta_value'
-                )
+            $metaValue = XpathHelper::getStringValue(
+                $meta,
+                'wp:meta_value'
             );
 
-            // Treat a blank or non-numeric aggregate as zero
-            if (
-                $metaValue === ''
-                || ! \is_numeric($metaValue)
-            ) {
+            // Treat a blank or non-numeric aggregate as zero. A numeric string may carry
+            // surrounding whitespace, and a blank one is not numeric (#102).
+            if (! \is_numeric($metaValue)) {
                 continue;
             }
 
@@ -138,6 +134,9 @@ class ArticleEngagementSeeder
      * pruning is what keeps the prefix match from ever reaching an id this importer
      * did not mint.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // this value; 15 and 17 by hand each fail ArticleEngagementSeedTest (#102)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int ENTRY_ID_RANDOM_LENGTH = 16;
 
     /**
@@ -283,7 +282,10 @@ class ArticleEngagementSeeder
             '-'
         );
 
-        // An id with no separator is not one this importer minted
+        // An id with no separator is not one this importer minted. The separator count
+        // below refuses such an id as well, so this only narrows the type for the
+        // arithmetic that follows.
+        // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
         if ($separator === false) {
             return;
         }
@@ -301,10 +303,7 @@ class ArticleEngagementSeeder
         );
 
         // A `<slug>-<postId>-` prefix always carries at least one more separator
-        if (
-            $prefix === ''
-            || \substr_count($prefix, '-') < 2
-        ) {
+        if (\substr_count($prefix, '-') < 2) {
             return;
         }
 
