@@ -339,7 +339,10 @@ class TableProcessor implements BlockProcessorInterface
         // block that was written some other way rather than losing it silently.
         // ---
         if ($extent['others'] !== []) {
-            // Enhance log context with entry information
+            // Enhance log context with entry information. saveHTML() returns false
+            // only for a node of another document, and these are the block's own
+            // siblings, so the cast phpstan needs changes no result.
+            // @pest-mutate-ignore: RemoveStringCast
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
                     'site' => $site,
