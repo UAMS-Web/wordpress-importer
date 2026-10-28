@@ -970,7 +970,14 @@ class AcfBlockParser
         // caller's mode (wordpress-importer-archive#1354). The mode is process-wide, so leaving it on
         // would silence every later libxml warning in the import, including
         // the invalid-expression warning XpathHelper logs.
+        //
+        // Switching collection off shows only as a warning from loadHTML(), and
+        // which comments make libxml raise one depends on its version: 2.11
+        // flags a control character in a comment, the macOS build the gate runs
+        // does not. No input is known to raise one on every version, so this
+        // mutant is not killed.
         // ---
+        // @pest-mutate-ignore: TrueToFalse
         $previousInternalErrors = \libxml_use_internal_errors(true);
 
         try {

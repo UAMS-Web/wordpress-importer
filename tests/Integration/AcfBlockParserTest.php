@@ -1263,6 +1263,24 @@ describe('blocks in an HTML string', function (): void {
         }
     });
 
+    it('clears the libxml errors already collected when it loads a block comment', function (): void {
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
+        try {
+            simplexml_load_string('<unclosed>');
+            $before = count(libxml_get_errors());
+
+            acfBlocksFromHtml(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, '<!-- wp:acf/cta {"data":{}} /-->');
+
+            expect($before)->toBeGreaterThan(0)
+                ->and(libxml_get_errors())->toBe([]);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    });
+
     it('gives a block whose match runs across comments the nodes after its own', function (): void {
         $calls = new AcfBlockCalls;
 
