@@ -1052,6 +1052,17 @@ class TextProcessor
                                         \in_array(UnwrappingBlockProcessorTrait::class, \class_uses($processor), true)
                                     );
                                 }
+                            } elseif (
+                                $blockType === 'shortcode'
+                                && $result === ShortcodeBlockProcessor::blockContent($node)
+                            ) {
+                                // ---
+                                // A shortcode block whose processor converted nothing returns
+                                // its content unchanged. Its own nodes still hold it, so they are
+                                // read below as ordinary content, once, which also turns an
+                                // image in them into a set; adding the string too read it twice
+                                // (#156)
+                                // ---
                             } elseif (\is_string($result)) { // Check if the result is a string
                                 // Parse the HTML string to ProseMirror JSON
                                 $parsedResult = $bardParser->parse($result);
@@ -1060,8 +1071,18 @@ class TextProcessor
                                 $firstParsed = $parsedResult[0] ?? null;
 
                                 if ($firstParsed !== null) {
-                                    // Add parsed content to Bard content
-                                    $bardContent[] = $firstParsed;
+                                    // Add the parsed content: all of it for a shortcode block,
+                                    // whose string is the block's whole content, converted, and
+                                    // whose nodes are skipped below, so nothing else adds the
+                                    // rest (#156)
+                                    if ($blockType === 'shortcode') {
+                                        $bardContent = \array_merge(
+                                            $bardContent,
+                                            $parsedResult
+                                        );
+                                    } else {
+                                        $bardContent[] = $firstParsed;
+                                    }
                                 } elseif ( // Check if HTML string is not empty but parsing failed
                                     // A processor returns a string only with content in it, or empty,
                                     // so no whitespace-only string reaches this check
@@ -1088,6 +1109,24 @@ class TextProcessor
                                         $logData['context']
                                     );
                                 }
+
+                                // ---
+                                // A shortcode block's string is its whole content, converted, so
+                                // skip the block's nodes through its closing comment; otherwise
+                                // the unconverted content in them is read again below (#156)
+                                // ---
+                                if ($blockType === 'shortcode') {
+                                    // The count ends at the block's first closing comment, so the
+                                    // walk stops there whether or not it tracks nesting
+                                    // @pest-mutate-ignore: FalseToTrue
+                                    $node = self::consumeBlockNodes(
+                                        $node,
+                                        ShortcodeBlockProcessor::blockSkipCount($node),
+                                        $blockType,
+                                        $consumedNodes,
+                                        false
+                                    );
+                                }
                             } elseif ($result === null) { // Check if block processor returns null
                                 // Enhance log context with entry information
                                 $logData = LogContextHelper::enhanceWithEntryContext(
@@ -1106,36 +1145,6 @@ class TextProcessor
                                     ),
                                     $logData['context']
                                 );
-                            }
-
-                            // ---
-                            // After processing a wp:shortcode block, if the next sibling is a text node
-                            // containing a raw shortcode (e.g., [show-people ...]), mark it as processed so
-                            // it is not accumulated into $currentContent. This prevents an erroneous text
-                            // node from being added to Bard content.
-                            // ---
-
-                            // Check if this is a shortcode block
-                            if ($blockType === 'shortcode') {
-                                // Get the next sibling node
-                                $nextNode = $node->nextSibling;
-
-                                // Check if the next node is a text node
-                                if ($nextNode instanceof DOMText) {
-                                    // Get the trimmed text content
-                                    $text = \trim($nextNode->textContent);
-
-                                    // Check if the text looks like a shortcode
-                                    if (
-                                        \preg_match(
-                                            '/^\[.+\]$/s',
-                                            $text
-                                        ) === 1
-                                    ) {
-                                        // Mark the next node as processed
-                                        $consumedNodes->attach($nextNode);
-                                    }
-                                }
                             }
 
                             // ---
@@ -1335,6 +1344,29 @@ class TextProcessor
                 $processedNodes[] = $nodeHtml;
 
                 // Skip to next node
+                continue;
+            }
+
+            // ---
+            // The closing comment of a shortcode block whose content was read as ordinary
+            // nodes ends that content, so parse it as its own content rather than joining
+            // it to the text after the block (#156). A block whose processor converted it
+            // has consumed this comment, and the content ahead of the block was parsed
+            // before its processor ran.
+            // ---
+            if (
+                $node instanceof DOMComment
+                && \preg_match(
+                    '/^\/wp:shortcode\s*$/',
+                    \trim($node->data)
+                ) === 1
+            ) {
+                self::flushContent(
+                    $currentContent,
+                    $bardContent,
+                    $bardParser
+                );
+
                 continue;
             }
 

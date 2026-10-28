@@ -1121,7 +1121,9 @@ it('warns when a block processor returns HTML that parses to nothing', function 
     textProcessorForBardFakes();
     $warnings = textProcessorForBardWarnings();
 
-    $content = TextProcessor::processForBard('<p>Lead</p><!-- wp:shortcode --><div class="x"></div><!-- /wp:shortcode -->', 'default', app(AssetImporter::class), new BufferedOutput, pageSlug: $slug);
+    // Dropping the shortcode converts the block, so its processor returns the rest
+    // as HTML, which parses to nothing
+    $content = TextProcessor::processForBard('<p>Lead</p><!-- wp:shortcode --><div class="x"></div>[subpage-list]<!-- /wp:shortcode -->', 'default', app(AssetImporter::class), new BufferedOutput, pageSlug: $slug);
 
     expect($content)->toBe([textProcessorForBardParagraph('Lead')])
         ->and($warnings->getArrayCopy())->toBe([[
@@ -1138,7 +1140,7 @@ it('previews only the first 100 characters of HTML that parses to nothing', func
     $warnings = textProcessorForBardWarnings();
     $html = '<div class="'.str_repeat('y', 120).'"></div>';
 
-    textProcessorForBard("<p>Lead</p><!-- wp:shortcode -->{$html}<!-- /wp:shortcode -->");
+    textProcessorForBard("<p>Lead</p><!-- wp:shortcode -->{$html}[subpage-list]<!-- /wp:shortcode -->");
 
     expect($warnings[0]['context']['result_length'] ?? null)->toBe(strlen($html))
         ->and($warnings[0]['context']['result_preview'] ?? null)->toBe(substr($html, 0, 100));
@@ -1198,14 +1200,42 @@ it('reads nothing past a shortcode block that ends the content', function (): vo
     expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead']);
 });
 
-it('keeps an element after a shortcode block even when its text looks like a shortcode', function (): void {
+it('adds a shortcode block\'s content once, whether its processor converts it or returns it as it is', function (string $block, array $summary): void {
     textProcessorForBardFakes();
 
-    // Characterization of #156: the block's processor returns its content as a
-    // string and skips nothing, so the paragraph is read again after it
-    $content = textProcessorForBard('<p>Lead</p><!-- wp:shortcode --><p>[unknown_thing]</p><!-- /wp:shortcode -->');
+    // #156: the block's processor returns its whole content as a string, and the
+    // block's nodes were then read a second time, and only the string's first node
+    // was kept; the block's nodes are now skipped and every node of the string kept
+    $content = textProcessorForBard("<p>Lead</p><!-- wp:shortcode -->{$block}<!-- /wp:shortcode --><p>End</p>");
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'paragraph:[unknown_thing]', 'paragraph:[unknown_thing]']);
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', ...$summary, 'paragraph:End']);
+})->with([
+    'an element and no shortcode' => ['<p>[unknown_thing]</p>', ['paragraph:[unknown_thing]']],
+    'two elements and no shortcode' => ['<p>a</p><p>b</p>', ['paragraph:a', 'paragraph:b']],
+    'text and no shortcode' => ['[unknown_thing]', ['text']],
+    'a converted shortcode after text in an element' => ['<p>Hi [ninja_form id=3]</p>', ['paragraph:Hi', 'set:form']],
+    'two converted shortcodes in two elements' => ['<p>[table id=1 /]</p><p>[table id=2 /]</p>', ['set:table', 'set:table']],
+    'a dropped shortcode beside text, which leaves one element' => ['<p>Text [subpage-list]</p>', ['paragraph:Text']],
+]);
+
+it('warns of nothing for a shortcode block whose processor converts nothing', function (): void {
+    textProcessorForBardFakes();
+    $warnings = textProcessorForBardWarnings();
+
+    textProcessorForBard('<p>Lead</p><!-- wp:shortcode --><p>[unknown_thing]</p><!-- /wp:shortcode -->');
+
+    expect($warnings->getArrayCopy())->toBe([]);
+});
+
+it('imports an image in a shortcode block whose processor converts nothing, once', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    // The block's own nodes are read as ordinary content, which is what turns the
+    // image into a set; the Bard parser makes no image set from the string (#156)
+    $content = textProcessorForBard('<p>Lead</p><!-- wp:shortcode -->[callout]Text<img src="c.jpg">[/callout]<!-- /wp:shortcode --><p>End</p>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'text', 'set:image', 'text', 'paragraph:End'])
+        ->and(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="c.jpg">']);
 });
 
 it('parses an image inside a paragraph as content, not as a figure', function (): void {
