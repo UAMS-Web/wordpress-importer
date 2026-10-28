@@ -915,6 +915,19 @@ it('decodes a double-encoded numeric entity to the same character with WpAutoP a
     'beyond the integer range' => ['&amp;#99999999999999999999;', "\u{FFFD}"],
 ]);
 
+it('decodes one more level of a nested numeric entity with WpAutoP than without', function (): void {
+    textProcessorForBardFakes();
+
+    // The numeric pass ahead of WpAutoP's html_entity_decode() decodes each
+    // `&#N;` once more, as it did with chr() before #154; this pins that the
+    // pass still runs
+    $withAutoP = textProcessorForBard('<p>A &amp;#38;#38;#38;#38;#60; B</p>', autoP: true);
+    $without = textProcessorForBard('<p>A &amp;#38;#38;#38;#38;#60; B</p>');
+
+    expect(textProcessorForBardPath($withAutoP, [0, 'content', 0, 'text']))->toBe('A &#60; B')
+        ->and(textProcessorForBardPath($without, [0, 'content', 0, 'text']))->toBe('A &#38;#38;#60; B');
+});
+
 it('processes the blocks inside a group block', function (): void {
     $fakes = textProcessorForBardFakes();
 
