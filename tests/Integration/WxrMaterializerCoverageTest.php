@@ -353,6 +353,12 @@ it('writes each kind of meta value as text, and leaves out a null one', function
         ->and(wmcValues($path, '//item/category/@nicename'))->toBe(['']);
 });
 
+it('writes a float past 14 significant digits in full, as JSON writes it', function (): void {
+    wmcFake(['/posts/post' => [wmcPost(1, ['meta' => ['amount' => [123456789012345.67]]])]]);
+
+    expect(wmcValues(wmcMaterialize($this->workingDirectory)[0], '//item/wp:postmeta/wp:meta_value'))->toBe(['123456789012345.67']);
+});
+
 it('writes an attachment URL only when it is text', function (): void {
     wmcFake(['/posts/post' => [
         wmcPost(1, ['attachment' => ['url' => 'https://example.test/wp-content/uploads/a.jpg']]),

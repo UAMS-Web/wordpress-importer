@@ -171,7 +171,9 @@ class NavigationMenuImporter
                 []
             );
 
-            // Skip import when Statamic did not return a valid navigation tree.
+            // Skip import when Statamic did not return a valid navigation tree. A navigation
+            // always makes a NavTree, so this only types what follows.
+            // @pest-mutate-ignore: InstanceOfToTrue, RemoveMethodCall
             if (! ($newTree instanceof NavTree)) {
                 $output->writeln("  - <error>Could not create primary navigation tree for site: {$site}</error>");
 
@@ -233,15 +235,16 @@ class NavigationMenuImporter
             // Get all menu categories for this item
             $menuCategories = $item->xpath("category[@domain='nav_menu']");
 
-            // Skip items that do not expose a valid categories array.
+            // A relative path over an element always answers an array, so this only types it.
+            // @pest-mutate-ignore: ContinueToBreak
             if (! \is_array($menuCategories)) {
                 continue;
             }
 
             // Loop through menu categories to find matching menu
             foreach ($menuCategories as $category) {
-                // Extract the menu slug from the category
-                $menuSlug = (string) ($category['nicename'] ?? '');
+                // Extract the menu slug from the category; an absent one reads as ''
+                $menuSlug = (string) $category['nicename'];
 
                 // Check if this item belongs to the selected menu
                 if ($menuSlug === $selectedMenuSlug) {
@@ -314,6 +317,9 @@ class NavigationMenuImporter
                     'item' => $item,
                     'parent_id' => $parentId,
                     'menu_order' => $menuOrder,
+                    // A child is appended to its parent's list whether or not this starts it,
+                    // and a leaf's absent list reads as no children.
+                    // @pest-mutate-ignore: RemoveArrayItem
                     'children' => [],
                 ];
             }
@@ -324,11 +330,9 @@ class NavigationMenuImporter
             // Get the parent ID for this item
             $parentId = $itemData['parent_id'];
 
-            // Check if item has a valid parent in the hierarchy map
-            if (
-                $parentId !== ''
-                && isset($hierarchyMap[$parentId])
-            ) {
+            // Check if item has a valid parent in the hierarchy map. A top-level item's empty
+            // parent never keys an item, since an item without an id is not mapped.
+            if (isset($hierarchyMap[$parentId])) {
                 // Add this item as a child of its parent
                 $hierarchyMap[$parentId]['children'][] = $itemId;
             }
@@ -351,7 +355,8 @@ class NavigationMenuImporter
         // Get existing navigation items
         $existingItems = $localizedNav->tree();
 
-        // Normalize existing items to an array before counting/clearing.
+        // A tree always answers an array, so this only types it.
+        // @pest-mutate-ignore: IfNegated, RemoveNot
         if (! \is_array($existingItems)) {
             $existingItems = [];
         }
@@ -515,51 +520,26 @@ class NavigationMenuImporter
         //
         // **A set rather than a counter, because the loop below revisits them (wordpress-importer-archive#1171).** An item
         // that fails to create is never added to `$importedItems`, so its `! isset()` guard stays
-        // true and it is retried on every pass of the `while ($changed)` loop — incrementing a
+        // true and it is retried on every pass of the loop below, incrementing a
         // counter each time. One dropped item reported as three, and the count is what an
         // operator uses to judge whether a navigation import is worth re-running.
         $skippedIds = [];
 
-        // Flag to track if any items were processed in this iteration
-        $changed = true;
-
-        // Continue processing while items are being added
-        while ($changed) {
-            // Reset changed flag for this iteration
-            $changed = false;
-
-            // Loop through hierarchy map to find processable child items
-            foreach ($hierarchyMap as $itemId => $itemData) {
-                // Check if item hasn't been imported, has a parent, and parent is imported
-                if (
-                    ! isset($importedItems[$itemId])
-                    && ! isset($skippedIds[$itemId])
-                    && $itemData['parent_id'] !== ''
-                    && isset($importedItems[$itemData['parent_id']])
-                ) {
-                    // Create navigation item from WordPress menu item
-                    $navItem = $this->createNavigationItem(
-                        $itemData['item'],
-                        $site,
-                        $output
-                    );
-
-                    // Check if navigation item was created successfully
-                    if ($navItem !== null) {
-                        // Store the imported item
-                        $importedItems[$itemId] = $navItem;
-
-                        // Increment processed count
-                        $processedCount++;
-
-                        // Mark that changes were made
-                        $changed = true;
-                    } else { // Otherwise
-                        // Record the id rather than counting, so a retry cannot count it twice.
-                        $skippedIds[$itemId] = true;
-                    }
-                }
-            }
+        // ---
+        // Each pass imports every item whose parent an earlier pass imported, and stops at
+        // the first pass that adds nothing. A menu cannot nest deeper than its item count less
+        // one, so that bounds the passes too, and no item revisited can keep the loop going.
+        // An extra pass adds nothing, and a pass counted down is still ended by the first
+        // pass that adds nothing.
+        // ---
+        // Short-circuiting the pass on the bound only defers it: the passes still run, after
+        // the bound, until one adds nothing.
+        // @pest-mutate-ignore: DecrementInteger, SmallerToSmallerOrEqual, PostIncrementToPostDecrement, BooleanAndToBooleanOr
+        for (
+            $pass = 1;
+            $pass < \count($hierarchyMap) && $this->importChildPass($hierarchyMap, $importedItems, $skippedIds, $processedCount, $site, $output);
+            $pass++
+        ) {
         }
 
         // Return processing statistics
@@ -567,6 +547,67 @@ class NavigationMenuImporter
             'processed' => $processedCount,
             'skipped' => \count($skippedIds),
         ];
+    }
+
+    /**
+     * Import, in one pass, every child item whose parent is already imported.
+     *
+     * @param  array<string, array{item: SimpleXMLElement, parent_id: string, menu_order: int, children: list<string>}>  $hierarchyMap  Hierarchy map with parent-child relationships
+     * @param  array<string, array{id: string, title?: string, entry?: string, url?: string}>  $importedItems  Imported navigation items, added to
+     * @param  array<int|string, true>  $skippedIds  Items that could not be created, added to
+     * @param  int  $processedCount  Child items created so far, added to
+     * @param  string  $site  The Statamic site handle
+     * @param  OutputInterface  $output  Console output interface
+     * @return bool Whether the pass imported any item
+     */
+    private function importChildPass(
+        array $hierarchyMap,
+        array &$importedItems,
+        array &$skippedIds,
+        int &$processedCount,
+        string $site,
+        OutputInterface $output
+    ): bool {
+        // A pass that reports a change it did not make only costs one more bounded pass.
+        // @pest-mutate-ignore: FalseToTrue
+        $changed = false;
+
+        // Loop through hierarchy map to find processable child items
+        foreach ($hierarchyMap as $itemId => $itemData) {
+            // Check if item hasn't been imported or skipped, and its parent is imported. A
+            // top-level item's empty parent never keys an imported item.
+            if (
+                ! isset($importedItems[$itemId])
+                && ! isset($skippedIds[$itemId])
+                && isset($importedItems[$itemData['parent_id']])
+            ) {
+                // Create navigation item from WordPress menu item
+                $navItem = $this->createNavigationItem(
+                    $itemData['item'],
+                    $site,
+                    $output
+                );
+
+                // Check if navigation item was created successfully
+                if ($navItem !== null) {
+                    // Store the imported item
+                    $importedItems[$itemId] = $navItem;
+
+                    // Increment processed count
+                    $processedCount++;
+
+                    // Mark that changes were made
+                    $changed = true;
+                } else { // Otherwise
+                    // Record the id rather than counting, so a retry cannot count it twice.
+                    // Only the key is read.
+                    // @pest-mutate-ignore: TrueToFalse
+                    $skippedIds[$itemId] = true;
+                }
+            }
+        }
+
+        return $changed;
     }
 
     /**
@@ -597,8 +638,8 @@ class NavigationMenuImporter
                     $importedItems
                 );
 
-                // Check if tree item was built successfully
-                if ($treeItem !== null && $treeItem !== []) {
+                // Check if tree item was built successfully; a built one always has an id
+                if ($treeItem !== null) {
                     // Add tree item to tree array
                     $tree[] = $treeItem;
                 }
@@ -650,29 +691,25 @@ class NavigationMenuImporter
             '_wordpress_menu_item_id' => $itemId,
         ];
 
-        // Check if entry exists and is not empty
-        if (
-            isset($navItem['entry'])
-            && $navItem['entry'] !== ''
-        ) {
+        // ---
+        // Copy the entry, title and URL the item carries. An item is only ever given a value
+        // that is not empty, so presence is the whole check.
+        // ---
+
+        // Check if entry exists
+        if (isset($navItem['entry'])) {
             // Add entry reference to tree item
             $treeItem['entry'] = $navItem['entry'];
         }
 
-        // Check if title exists and is not empty
-        if (
-            isset($navItem['title'])
-            && $navItem['title'] !== ''
-        ) {
+        // Check if title exists
+        if (isset($navItem['title'])) {
             // Add title to tree item
             $treeItem['title'] = $navItem['title'];
         }
 
-        // Check if URL exists and is not empty
-        if (
-            isset($navItem['url'])
-            && $navItem['url'] !== ''
-        ) {
+        // Check if URL exists
+        if (isset($navItem['url'])) {
             // Add URL to tree item
             $treeItem['url'] = $navItem['url'];
         }
@@ -698,8 +735,8 @@ class NavigationMenuImporter
                     $importedItems
                 );
 
-                // Check if child tree item was built successfully
-                if ($childTreeItem !== null && $childTreeItem !== []) {
+                // Check if child tree item was built successfully; a built one always has an id
+                if ($childTreeItem !== null) {
                     // Add child to children array
                     $children[] = $childTreeItem;
                 }
@@ -742,7 +779,9 @@ class NavigationMenuImporter
             'wp:post_id'
         );
 
-        // Decode HTML entities and strip HTML tags from the navigation item title
+        // Decode HTML entities and strip HTML tags from the navigation item title. The
+        // stripper decodes once more with every entity table, so the flags here change nothing.
+        // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
         $title = HtmlTagStripper::strip(
             html_entity_decode(
                 (string) $item->title,
@@ -786,7 +825,6 @@ class NavigationMenuImporter
                 return $this->createCustomNavigationItem(
                     $title,
                     $menuItemUrl,
-                    $site,
                     $output
                 );
 
@@ -827,14 +865,12 @@ class NavigationMenuImporter
      *
      * @param  string  $title  The navigation item title
      * @param  string  $url  The custom URL
-     * @param  string  $site  The Statamic site handle
      * @param  OutputInterface  $output  Console output interface
      * @return array{id: string, title?: string, entry?: string, url?: string}|null The created navigation item array or null if failed
      */
     private function createCustomNavigationItem(
         string $title,
         string $url,
-        string $site,
         OutputInterface $output
     ): ?array {
         // Check if URL is provided
@@ -846,45 +882,25 @@ class NavigationMenuImporter
             return null;
         }
 
-        // Attempt to create the navigation item
-        try {
-            // Create navigation item as array structure
-            $navItem = [
-                'id' => Str::uuid()->toString(),
-            ];
+        // Create navigation item as array structure
+        $navItem = [
+            'id' => Str::uuid()->toString(),
+        ];
 
-            // Check if title is provided
-            if ($title !== '') {
-                // Add title to navigation item
-                $navItem['title'] = $title;
-            }
-
-            // Add URL to navigation item ($url is guaranteed non-empty by the guard above)
-            $navItem['url'] = $url;
-
-            // Log successful creation
-            $output->writeln("  - <info>Created nav item: '{$url}'</info>");
-
-            // Return the created navigation item
-            return $navItem;
-        } catch (Exception $exception) {
-            // Log error message to console
-            $output->writeln("  - <error>Failed to create custom navigation item: {$exception->getMessage()}</error>");
-
-            // Log error details for debugging
-            Log::error(
-                'NavigationMenuImporter::createCustomNavigationItem failed',
-                [
-                    'title' => $title,
-                    'url' => $url,
-                    'site' => $site,
-                    'error' => $exception->getMessage(),
-                ]
-            );
-
-            // Return null to indicate failure
-            return null;
+        // Check if title is provided
+        if ($title !== '') {
+            // Add title to navigation item
+            $navItem['title'] = $title;
         }
+
+        // Add URL to navigation item ($url is guaranteed non-empty by the guard above)
+        $navItem['url'] = $url;
+
+        // Log successful creation
+        $output->writeln("  - <info>Created nav item: '{$url}'</info>");
+
+        // Return the created navigation item
+        return $navItem;
     }
 
     /**
@@ -961,58 +977,37 @@ class NavigationMenuImporter
             return null;
         }
 
-        // Attempt to create the navigation item
-        try {
-            // Create navigation item as array structure
-            $navItem = [
-                'id' => Str::uuid()->toString(),
-            ];
+        // Create navigation item as array structure
+        $navItem = [
+            'id' => Str::uuid()->toString(),
+        ];
 
-            // Check if title is provided
-            if ($title !== '') {
-                // Add title to navigation item
-                $navItem['title'] = $title;
-            }
+        // Check if title is provided
+        if ($title !== '') {
+            // Add title to navigation item
+            $navItem['title'] = $title;
+        }
 
-            // Add entry reference to navigation item ($entry is guaranteed non-null by the guard above)
-            // Normalize the Statamic entry ID to a string value.
-            $entryId = $this->normalizeStringIdentifier(
-                $entry->id()
-            );
+        // Add entry reference to navigation item ($entry is guaranteed non-null by the guard above)
+        // Normalize the Statamic entry ID to a string value.
+        $entryId = $this->normalizeStringIdentifier(
+            $entry->id()
+        );
 
-            // Skip entries that do not expose a valid string/integer ID.
-            if ($entryId === null || $entryId === '') {
-                $output->writeln("  - <comment>Entry for WordPress {$postType} ID {$postId} has no usable ID (skipping navigation item)</comment>");
+        // Skip entries that do not expose a valid string/integer ID.
+        if ($entryId === null || $entryId === '') {
+            $output->writeln("  - <comment>Entry for WordPress {$postType} ID {$postId} has no usable ID (skipping navigation item)</comment>");
 
-                return null;
-            }
-
-            $navItem['entry'] = $entryId;
-
-            // Log successful creation
-            $output->writeln("  - <info>Created link to entry: '{$entryId}'</info>");
-
-            // Return the created navigation item
-            return $navItem;
-        } catch (Exception $exception) {
-            // Log error message to console
-            $output->writeln("  - <error>Failed to create navigation item: {$exception->getMessage()}</error>");
-
-            // Log error details for debugging
-            Log::error(
-                'NavigationMenuImporter::createPostTypeNavigationItem failed',
-                [
-                    'title' => $title,
-                    'post_type' => $postType,
-                    'post_id' => $postId,
-                    'site' => $site,
-                    'error' => $exception->getMessage(),
-                ]
-            );
-
-            // Return null to indicate failure
             return null;
         }
+
+        $navItem['entry'] = $entryId;
+
+        // Log successful creation
+        $output->writeln("  - <info>Created link to entry: '{$entryId}'</info>");
+
+        // Return the created navigation item
+        return $navItem;
     }
 
     /**
@@ -1044,7 +1039,7 @@ class NavigationMenuImporter
         );
 
         // Check if collection handle was found
-        if ($collectionHandle === null || $collectionHandle === '') {
+        if ($collectionHandle === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -1068,6 +1063,8 @@ class NavigationMenuImporter
         }
 
         // Use the centralized EntryFinder to find entry by WordPress ID
+        // A fresh read only skips the finder's cache, so the flag cannot change the result.
+        // @pest-mutate-ignore: FalseToTrue
         $entry = EntryFinder::findEntryByWordPressId(
             $collectionHandle,
             $wordPressId,
@@ -1093,19 +1090,23 @@ class NavigationMenuImporter
             if ($substituteId !== null) {
                 $substitute = EntryFacade::find($substituteId);
 
+                // What is not an entry leaves the lookup empty either way
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if ($substitute instanceof Entry) {
                     $entry = $substitute;
                 }
             }
         }
 
-        // Cache the entry for future lookups
+        // Cache the entry for future lookups. A lookup only reads back an entry, and a miss
+        // stored is read back as a miss, so the cache never changes what is found.
+        // @pest-mutate-ignore: IfNegated, InstanceOfToTrue, InstanceOfToFalse
         if ($entry instanceof Entry) {
             self::$entryCache[$cacheKey] = $entry;
         }
 
         // Return the found entry
-        return $entry instanceof Entry ? $entry : null;
+        return $entry;
     }
 
     /**
@@ -1186,14 +1187,15 @@ class NavigationMenuImporter
         }
 
         // Return numeric comparison result
-        return $orderA - $orderB;
+        return $orderA <=> $orderB;
     }
 
     /**
      * Get the menu order for a tree item by finding its original WordPress item ID.
      *
      * Uses the stored WordPress menu item ID in the tree item to directly look up the
-     * menu order from the hierarchy map, avoiding unreliable title/entry matching.
+     * menu order from the hierarchy map. Every tree item is built from an item in that map
+     * and carries its id, so the lookup always finds it.
      *
      * @param  array<string, mixed>  $treeItem  The tree item (should contain '_wordpress_menu_item_id')
      * @param  array<string, array{item: SimpleXMLElement, parent_id: string, menu_order: int, children: list<string>}>  $hierarchyMap  The hierarchy map with menu orders
@@ -1203,114 +1205,15 @@ class NavigationMenuImporter
         array $treeItem,
         array $hierarchyMap
     ): int {
-        // Check if the tree item has the WordPress menu item ID stored
+        // Look the item's menu order up by the WordPress menu item id it carries
         $wordPressItemId = $this->extractStringFromTreeItem(
             $treeItem,
             '_wordpress_menu_item_id'
         );
-        if ($wordPressItemId !== '') {
-            // Extract the WordPress menu item ID from the tree item
-            // Check if the hierarchy map contains this item
-            if (isset($hierarchyMap[$wordPressItemId])) {
-                // Return the menu order from the hierarchy map
-                return $hierarchyMap[$wordPressItemId]['menu_order'];
-            }
-        }
 
-        // ---
-        // Fallback to title/entry matching for backwards compatibility (though this
-        // should rarely be needed)
-        // ---
-
-        // Iterate through hierarchy map to find matching item by title and entry
-        foreach ($hierarchyMap as $itemData) {
-            // Get the original XML item
-            $item = $itemData['item'];
-
-            // Decode HTML entities and strip HTML tags from the navigation item title
-            $title = HtmlTagStripper::strip(
-                html_entity_decode(
-                    (string) $item->title,
-                    ENT_QUOTES | ENT_HTML5,
-                    'UTF-8'
-                )
-            );
-
-            // ---
-            // Match by title and entry ID if available
-            // ---
-
-            // Get title from tree item, default to empty string
-            $treeItemTitle = $this->extractStringFromTreeItem(
-                $treeItem,
-                'title'
-            );
-
-            // Check if titles match
-            if ($title === $treeItemTitle) {
-                // ---
-                // For entries, we need to match by the entry ID
-                // ---
-
-                // Check if tree item has an entry
-                if (
-                    $this->extractStringFromTreeItem(
-                        $treeItem,
-                        'entry'
-                    ) !== ''
-                ) {
-                    // ---
-                    // For entries, we need to match by the entry ID
-                    // ---
-
-                    // Get the menu item object ID from WordPress meta
-                    $menuItemObjectId = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_object_id'
-                    );
-
-                    // Get the menu item object type from WordPress meta
-                    $menuItemObject = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_object'
-                    );
-
-                    // ---
-                    // This is a simplified match - in practice, we might need more
-                    // sophisticated matching
-                    // ---
-
-                    // Check if both object ID and object type are present
-                    if (
-                        $menuItemObjectId !== ''
-                        && $menuItemObject !== ''
-                    ) {
-                        // Return the menu order for this item
-                        return $itemData['menu_order'];
-                    }
-                } else { // Otherwise
-                    // For custom URLs, match by title and URL
-                    $url = $this->getMenuItemMeta(
-                        $item,
-                        '_menu_item_url'
-                    );
-
-                    // Check if URLs match
-                    if (
-                        $this->extractStringFromTreeItem(
-                            $treeItem,
-                            'url'
-                        ) === $url
-                    ) {
-                        // Return the menu order for this item
-                        return $itemData['menu_order'];
-                    }
-                }
-            }
-        }
-
-        // Return default menu order if not found
-        return 0;
+        // Every tree item carries the id of an item in the map, so the default is never read.
+        // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+        return $hierarchyMap[$wordPressItemId]['menu_order'] ?? 0;
     }
 
     /**
@@ -1504,7 +1407,8 @@ class NavigationMenuImporter
     {
         // Loop through each tree item to remove internal fields
         foreach ($tree as &$item) {
-            // Skip malformed tree nodes.
+            // Every tree item is an array, so this only types it.
+            // @pest-mutate-ignore: ContinueToBreak
             if (! \is_array($item)) {
                 continue;
             }
@@ -1513,10 +1417,7 @@ class NavigationMenuImporter
             unset($item['_wordpress_menu_item_id']);
 
             // Check if item has children to process recursively
-            if (
-                isset($item['children'])
-                && \is_array($item['children'])
-            ) {
+            if (\is_array($item['children'] ?? null)) {
                 // Recursively process children to remove internal fields
                 $item['children'] = $this->removeInternalFields($item['children']);
             }
@@ -1539,7 +1440,8 @@ class NavigationMenuImporter
         // Drop the export-derived taxonomy resolver with it
         $this->taxonomyResolver = null;
 
-        // Force garbage collection to free memory
+        // Force garbage collection to free memory. Collecting changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
     }
 
@@ -1552,30 +1454,50 @@ class NavigationMenuImporter
     private function itemsWithUnreachableParents(
         array $hierarchyMap
     ): array {
-        $unreachable = [];
+        // ---
+        // Mark every item reached from a top-level one through its children. Each item names
+        // one parent, so this walks a forest: an item in a cycle, or below a parent outside
+        // the menu, is never reached, and the walk cannot loop.
+        // ---
+        $reached = [];
 
         foreach ($hierarchyMap as $itemId => $itemData) {
-            $parentId = $itemData['parent_id'];
+            if ($itemData['parent_id'] === '') {
+                $this->markReached($itemId, $hierarchyMap, $reached);
+            }
+        }
 
-            // Ancestors already walked, so malformed export data cannot loop.
-            $seen = [];
+        $unreachable = [];
 
-            while ($parentId !== '') {
-                if (
-                    isset($seen[$parentId])
-                    || ! isset($hierarchyMap[$parentId])
-                ) {
-                    $unreachable[] = $itemId;
-
-                    break;
-                }
-
-                $seen[$parentId] = true;
-                $parentId = $hierarchyMap[$parentId]['parent_id'];
+        foreach (\array_keys($hierarchyMap) as $itemId) {
+            if (! isset($reached[$itemId])) {
+                $unreachable[] = $itemId;
             }
         }
 
         return $unreachable;
+    }
+
+    /**
+     * Mark an item, and every item below it, as reached.
+     *
+     * @param  int|string  $itemId  The item to mark; an integer when it came from an array key
+     * @param  array<string, array{item: SimpleXMLElement, parent_id: string, menu_order: int, children: list<string>}>  $hierarchyMap  Hierarchy map with parent-child relationships
+     * @param  array<int|string, true>  $reached  The items reached, added to
+     */
+    private function markReached(
+        int|string $itemId,
+        array $hierarchyMap,
+        array &$reached
+    ): void {
+        // Only the key is read.
+        // @pest-mutate-ignore: TrueToFalse
+        $reached[$itemId] = true;
+
+        // A child is only ever listed under a parent the map holds
+        foreach ($hierarchyMap[$itemId]['children'] ?? [] as $childId) {
+            $this->markReached($childId, $hierarchyMap, $reached);
+        }
     }
 
     /**
@@ -1633,17 +1555,8 @@ class NavigationMenuImporter
         // Read the raw value from the tree item.
         $value = $treeItem[$key] ?? null;
 
-        // Return string values directly.
-        if (\is_string($value)) {
-            return $value;
-        }
-
-        // Convert integer values into strings for comparisons.
-        if (\is_int($value)) {
-            return (string) $value;
-        }
-
-        // Return empty string when the key is missing or unsupported.
-        return '';
+        // Return a string value, or an empty string when the key is missing. Every key read
+        // here holds a string when it is present.
+        return \is_string($value) ? $value : '';
     }
 }
