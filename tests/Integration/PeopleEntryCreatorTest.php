@@ -80,18 +80,28 @@ final class PeopleEntryTestPhone extends Phone
 
 /**
  * A people creator whose phone fieldtype is the recording one.
+ *
+ * Built as an anonymous class, so the creator is first loaded inside a test, where
+ * the application's error handler turns a compile warning into a failure, rather
+ * than while Pest collects this file.
+ *
+ * @param  string  $postType  The post type
+ * @return PeopleEntryCreator The creator
  */
-final class PeopleEntryTestCreator extends PeopleEntryCreator
+function peopleEntryTestCreator(string $postType = 'uamspeople'): PeopleEntryCreator
 {
-    /**
-     * The recording phone fieldtype.
-     *
-     * @return Phone The fieldtype
-     */
-    protected function phoneFieldtype(): Phone
+    return new class($postType) extends PeopleEntryCreator
     {
-        return new PeopleEntryTestPhone;
-    }
+        /**
+         * The recording phone fieldtype.
+         *
+         * @return Phone The fieldtype
+         */
+        protected function phoneFieldtype(): Phone
+        {
+            return new PeopleEntryTestPhone;
+        }
+    };
 }
 
 /**
@@ -414,7 +424,7 @@ function peopleEntryRun(string $export, PeopleEntryTestConverter $converter, ?Pe
     $parser = new XmlParser;
     $parser->parse($export);
     $output = new BufferedOutput;
-    $creator ??= new PeopleEntryTestCreator;
+    $creator ??= peopleEntryTestCreator();
     $mapper = new PeopleEntryTestMapper;
 
     $result = $creator->createEntries('default', 'people', $parser, $assetImporter ?? new AssetImporter, $output, $mapper, $converter);
@@ -623,7 +633,7 @@ describe('importing a person', function (): void {
             'slug' => 'showcase',
             'groups' => ['faculty' => 'Faculty'],
             'meta' => ['_tsemail' => 'show@example.test', '_psemail' => 'ignored@example.test'],
-        ]], 'tshowcase'), PeopleEntryTestConverter::returning(peopleEntryBody()), new PeopleEntryTestCreator('tshowcase'));
+        ]], 'tshowcase'), PeopleEntryTestConverter::returning(peopleEntryBody()), peopleEntryTestCreator('tshowcase'));
         $data = peopleEntryData(peopleEntry('showcase'));
 
         expect($data['email'] ?? null)->toBe('show@example.test')
@@ -939,7 +949,10 @@ describe('the class itself', function (): void {
         // ---
         // The class is already loaded here, so its source is compiled again under a new
         // name with warnings thrown. A compile warning, such as `continue` targeting a
-        // switch, fails this test, where in the host it would abort the import.
+        // switch, fails this test, where in the host it would abort the import. A
+        // mutation run does not select this test, since the copy covers none of the
+        // class's own lines; there the import tests fail instead, because each first
+        // loads the class under the application's error handler.
         // ---
         $file = (new ReflectionClass(PeopleEntryCreator::class))->getFileName();
         $source = \is_string($file) ? \file_get_contents($file) : false;
