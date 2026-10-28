@@ -694,14 +694,14 @@ describe('importing a file', function (): void {
         'an empty path' => [''],
     ]);
 
-    it('records a failed unsized file under its URL alone', function (): void {
+    it('skips a sized URL whose unsized form failed', function (): void {
         assetImporterTestWarnings();
         $handler = new AssetImporterTestHandler([null, 'news/p-300x200.jpg']);
         $importer = new AssetImporterTestImporter($handler);
 
         $importer->importFile('https://uams.edu/p.jpg', 'news', new BufferedOutput);
 
-        // The sized URL was never tried, so it is not skipped
+        // The sized URL reduces to the failed unsized one, so it is not tried
         expect($importer->importFile('https://uams.edu/p-300x200.jpg', 'news', new BufferedOutput))->toBeNull()
             ->and($handler->files)->toHaveCount(1);
     });
