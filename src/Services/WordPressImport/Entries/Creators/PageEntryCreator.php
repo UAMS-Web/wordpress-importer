@@ -1360,6 +1360,8 @@ class PageEntryCreator extends BaseEntryCreator
             // Set context to 'shortcodes' to display accurate validation messages
             // for people shortcodes (vs. people entries)
             // ---
+            // The validator names shortcodes when no context is set as well
+            // @pest-mutate-ignore: RemoveMethodCall
             $validator->setContext('shortcodes');
 
             // Validate that all people groups referenced in shortcodes exist

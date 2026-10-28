@@ -608,6 +608,8 @@ describe('importing a page', function (): void {
         $data = pageEntryData(pageEntry('untitled'));
 
         expect($data['title'] ?? null)->toBe('Untitled Page')
+            ->and($data)->toHaveKey('excerpt')
+            ->and($data['excerpt'])->toBeNull()
             ->and($data)->not->toHaveKeys(['content', 'page_builder', '_thumbnail_id']);
     });
 
@@ -1181,6 +1183,7 @@ describe('modules and their hero', function (): void {
         $notImplemented = \array_values(\array_filter(pageEntryMessages($warnings), static fn (string $message): bool => \str_contains($message, "'modules_hero' is not yet implemented")));
 
         expect($notImplemented)->toHaveCount(1)
+            ->and($notImplemented[0] ?? '')->toContain('/pages/883/')
             ->and(pageEntry('m-hero')->get('title_options'))->toBe('hero')
             ->and(pageEntry('m-plain')->get('title_options'))->toBe('normal');
     });
@@ -1191,7 +1194,7 @@ describe('modules and their hero', function (): void {
         expect(pageEntry('m-none')->get('title_options'))->toBe('normal');
     })->with([
         'modules that are not serialized' => [['uamswp_modules' => 'broken']],
-        'no hero module' => [['uamswp_modules' => 'a:1:{i:0;s:11:"modules_cta";}']],
+        'no hero module' => [['uamswp_modules' => 'a:1:{i:0;s:11:"modules_cta";}', 'uamswp_modules_0_cta_heading' => 'Call']],
         'a hero module with no fields' => [['uamswp_modules' => 'a:1:{i:0;s:12:"modules_hero";}']],
     ]);
 
@@ -1357,5 +1360,83 @@ describe('the warnings a save raises, in full', function (): void {
 describe('the creator\'s state', function (): void {
     it('starts with no show-people shortcode noted', function (): void {
         expect((new PageEntryCreator(PageEntryTestEntryCreator::make()))->hasShowPeople())->toBeFalse();
+    });
+});
+
+describe('the last details', function (): void {
+    it('filters out a hero module only when that module is the hero used for the title', function (): void {
+        $warnings = pageEntryWarnings();
+
+        pageEntryRun(pageEntryExport([['id' => '894', 'slug' => 'block-hero-modules', 'parent' => '7', 'content' => '<!-- wp:acf/hero {"data":{"hero_0_hero_heading":"Block"}} /-->', 'meta' => [
+            '_wp_page_template' => 'templates/modules.php',
+            'uamswp_modules' => 'a:1:{i:0;s:12:"modules_hero";}',
+            'page_title_options' => 'hidden',
+        ]]]), PageEntryTestConverter::returning(pageEntryBody()));
+        $notImplemented = \array_values(\array_filter(pageEntryMessages($warnings), static fn (string $message): bool => \str_contains($message, "'modules_hero' is not yet implemented")));
+
+        expect(pageEntry('block-hero-modules')->get('title_options'))->toBe('hero')
+            ->and($notImplemented)->toHaveCount(1);
+    });
+
+    it('records the full context of a landing page with no page builder', function (): void {
+        $warnings = pageEntryWarnings();
+
+        pageEntryRun(pageEntryExport([['id' => '895', 'slug' => 'landing-context', 'content' => '<!-- wp:acf/text {"data":{}} /-->']]), PageEntryTestConverter::returning(pageEntryBody(null, [])));
+        $contexts = \array_map(static fn (array $warning): mixed => \is_array($warning[1]) ? \array_diff_key($warning[1], ['entry_url' => true]) : null, $warnings->getArrayCopy());
+        $expected = [
+            'entry_slug' => 'landing-context',
+            'blueprint' => 'landing_page',
+            'has_content' => true,
+            'has_page_builder' => false,
+            'source_url' => 'https://example.test/pages/895/',
+        ];
+
+        expect($contexts)->toBe([$expected, $expected]);
+    });
+
+    it('takes the first slide index a hero block names', function (): void {
+        pageEntryRun(pageEntryExport([['slug' => 'hero-first', 'content' => '<!-- wp:acf/hero {"data":{"hero_0_hero_heading":"First","hero_2_hero_body":"Body"}} /-->', 'meta' => ['page_title_options' => 'hidden']]]), PageEntryTestConverter::returning(pageEntryBody([], [['type' => 'set']])));
+
+        expect(\array_keys(\is_array($hero = pageEntryHero(pageEntry('hero-first'))) ? $hero : []))->toBe([0]);
+    });
+
+    it('takes the knowledge base only from its collection, blueprint, slug and site', function (): void {
+        Site::setSites([
+            'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+            'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
+        ]);
+        pageEntryCollection('knowledge_bases', 'knowledge_base');
+        pageEntryCollection('decoy_bases', 'knowledge_base');
+        $other = BlueprintFacade::make('other_base');
+        $other->setNamespace('collections.knowledge_bases');
+        $other->setContents(['fields' => [['handle' => 'title', 'field' => ['type' => 'text']]]]);
+        $other->save();
+        $bases = CollectionFacade::find('knowledge_bases');
+        $bases?->sites(['default', 'other']);
+        $bases?->save();
+
+        foreach ([
+            ['decoy_bases', 'knowledge_base', 'default', 'kb', 'a-collection'],
+            ['knowledge_bases', 'other_base', 'default', 'kb', 'b-blueprint'],
+            ['knowledge_bases', 'knowledge_base', 'default', 'not-kb', 'c-slug'],
+            ['knowledge_bases', 'knowledge_base', 'other', 'kb', 'd-site'],
+            ['knowledge_bases', 'knowledge_base', 'default', 'kb', 'z-the-one'],
+        ] as [$collection, $blueprint, $site, $slug, $id]) {
+            $kb = new Entry;
+            $kb->collection($collection);
+            $kb->blueprint($blueprint);
+            $kb->locale($site);
+            $kb->slug($slug);
+            $kb->id($id);
+            $kb->save();
+        }
+
+        pageEntryRun(pageEntryExport([['slug' => 'with-the-kb']]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(ProcessingContext::getKnowledgeBaseId())->toBe('z-the-one');
+
+        foreach (['collections.knowledge_bases.knowledge_base', 'collections.knowledge_bases.other_base', 'collections.decoy_bases.knowledge_base'] as $handle) {
+            BlueprintFacade::find($handle)?->delete();
+        }
     });
 });
