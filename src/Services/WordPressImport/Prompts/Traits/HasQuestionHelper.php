@@ -203,11 +203,14 @@ trait HasQuestionHelper
 
         // Check if Laravel Prompts is supported (input already confirmed interactive above)
         if ($this->isPromptsSupported()) {
-            // Use Laravel Prompts for choice selection
+            // Use Laravel Prompts for choice selection. A list's default is matched against
+            // its labels rather than its indexes, so an index default is given as its label (#100).
             $selectedOption = select(
                 label: $question,
                 options: $normalizedOptions,
-                default: $default
+                default: \is_int($default) && \array_is_list($normalizedOptions)
+                    ? ($normalizedOptions[$default] ?? null)
+                    : $default
             );
 
             // Return the selected option key as a normalized string
