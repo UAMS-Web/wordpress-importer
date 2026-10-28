@@ -40,6 +40,9 @@ final class RedirectPluginRules
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails tests in the Unit or Integration suite (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array PLUGINS = [
         self::REDIRECTION => 'Redirection',
         self::PRETTY_LINKS => 'Pretty Links',
@@ -54,6 +57,9 @@ final class RedirectPluginRules
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails tests in the Unit or Integration suite (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     public const array ABSENT_CODES = [
         'uamswp_migration_api_redirect_plugin_not_loaded',
         'uamswp_migration_api_redirect_plugin_not_active',
@@ -64,6 +70,9 @@ final class RedirectPluginRules
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails tests in the Unit or Integration suite (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array ID_PREFIXES = [
         self::REDIRECTION => 'redirection-',
         self::PRETTY_LINKS => 'pretty-links-',
@@ -74,6 +83,9 @@ final class RedirectPluginRules
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails tests in the Unit or Integration suite (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array PRETTY_LINKS_STATUSES = ['301', '302', '307'];
 
     /**
@@ -81,6 +93,9 @@ final class RedirectPluginRules
      *
      * The plugin's other modules write rules to the web server's own configuration.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // this value; changing it to 0 or 2 by hand fails tests in the Unit or Integration suite (#102)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int REDIRECTION_WORDPRESS_MODULE = 1;
 
     /**
@@ -152,6 +167,10 @@ final class RedirectPluginRules
 
         // The match flags as the plugin applies them, the rule's own or the site's defaults
         $matchData = $rule['match_data'] ?? null;
+
+        // A `??` read of a missing offset of a value that is not an array is null as well, and
+        // a flag read from text is null too, so either check alone gives the same flags
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         $flags = \is_array($matchData) && \is_array($matchData['source'] ?? null) ? $matchData['source'] : [];
 
         if (($flags['flag_case'] ?? false) === true) {
@@ -237,10 +256,10 @@ final class RedirectPluginRules
         }
 
         // The name and description are what an editor reads to know what the link is for
-        $notes = \implode(' - ', \array_values(\array_filter(
+        $notes = \implode(' - ', \array_filter(
             [self::string($link['name'] ?? null, ''), self::string($link['description'] ?? null, '')],
             static fn (string $part): bool => \trim($part) !== ''
-        )));
+        ));
 
         return [
             'post' => self::post(
