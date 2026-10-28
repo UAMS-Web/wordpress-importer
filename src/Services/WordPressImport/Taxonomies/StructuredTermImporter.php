@@ -11,6 +11,7 @@ use Statamic\Entries\Entry;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Structures\CollectionStructure;
+use Statamic\Structures\CollectionTree;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
@@ -159,18 +160,17 @@ class StructuredTermImporter
             // at it later.
             TermDestinationRegistry::registerCollectionEntry(
                 $wordpressTaxonomy,
-                (string) $termId,
+                $termId,
                 $collectionHandle,
                 $entryId
             );
 
             // Resolve the parent slug to a term id. An unknown parent leaves the
-            // node top-level rather than discarding it.
-            $parentTermId = $parsedTerm['parent'] !== ''
-                ? ($termIdBySlug[$parsedTerm['parent']] ?? '')
-                : '';
+            // node top-level rather than discarding it, and so does no parent at
+            // all: no term has an empty slug, so '' never names one.
+            $parentTermId = $termIdBySlug[$parsedTerm['parent']] ?? '';
 
-            $treeData[(string) $termId] = [
+            $treeData[$termId] = [
                 'entry' => $entryId,
                 'parent' => $parentTermId,
                 'title' => $parsedTerm['name'],
@@ -192,7 +192,7 @@ class StructuredTermImporter
         // spreading RENUMBERS integer keys, which would silently destroy the very
         // ids the parent edges and the registry are keyed by.
         // ---
-        $destinationKey = $collectionHandle.'::'.$site;
+        $destinationKey = "{$collectionHandle}::{$site}";
         self::$treeNodes[$destinationKey] = \array_replace(
             self::$treeNodes[$destinationKey] ?? [],
             $treeData
@@ -230,6 +230,9 @@ class StructuredTermImporter
             $treeData
         );
 
+        // Collecting cycles frees memory and changes no result, so removing the
+        // call cannot be observed.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         return $imported;
@@ -251,11 +254,6 @@ class StructuredTermImporter
         foreach ($nodes as $termId => $node) {
             $parentTermId = $node['parent'];
 
-            // A root has no parent to record.
-            if ($parentTermId === '') {
-                continue;
-            }
-
             // ---
             // A term naming ITSELF as its parent is skipped, the same way
             // {@see self::buildNestedTree()} treats it as no parent at all.
@@ -271,16 +269,16 @@ class StructuredTermImporter
                 continue;
             }
 
-            // Resolve the parent TERM id to the parent ENTRY id the query needs.
-            $parentEntryId = $nodes[$parentTermId]['entry'] ?? null;
-
-            if (! \is_string($parentEntryId) || $parentEntryId === '') {
+            // A root, or a parent whose entry was not saved, has no entry to
+            // record: '' never keys a node, since every term has an id.
+            if (! isset($nodes[$parentTermId])) {
                 continue;
             }
 
+            // Resolve the parent TERM id to the parent ENTRY id the query needs.
             $this->setEntryParent(
                 $node['entry'],
-                $parentEntryId
+                $nodes[$parentTermId]['entry']
             );
         }
     }
@@ -366,8 +364,11 @@ class StructuredTermImporter
             $parent = $node['parent'];
 
             // A parent naming a term this export does not contain, or naming the
-            // term itself, is treated as no parent at all.
-            if ($parent === '' || ! isset($nodes[$parent]) || $parent === (string) $termId) {
+            // term itself, is treated as no parent at all. No node is keyed '',
+            // so an empty parent is among the absent ones. Grouping these with
+            // the roots here, rather than leaving them to the promotion below,
+            // keeps a root that shares another's title in export order.
+            if (! isset($nodes[$parent]) || $parent === (string) $termId) {
                 $childrenByParent[''][] = (string) $termId;
 
                 continue;
@@ -392,11 +393,13 @@ class StructuredTermImporter
         // this import is supposed to prevent.
         // ---
         foreach ($nodes as $termId => $node) {
-            if (isset($visited[(string) $termId])) {
+            if (isset($visited[$termId])) {
                 continue;
             }
 
-            $visited[(string) $termId] = true;
+            // Only the key is read, and isset() holds for false as for true.
+            // @pest-mutate-ignore: TrueToFalse
+            $visited[$termId] = true;
 
             $branch = ['entry' => $node['entry']];
 
@@ -432,7 +435,7 @@ class StructuredTermImporter
      * @param  string  $parentId  The parent term id, or '' for the roots
      * @param  array<int|string, array{entry: string, parent: string, title: string}>  $nodes  Flat nodes keyed by term id
      * @param  array<string, list<string>>  $childrenByParent  Term ids grouped by parent term id
-     * @param  array<string, bool>  &$visited  Term ids already placed, guarding cycles
+     * @param  array<int|string, bool>  &$visited  Term ids already placed, guarding cycles
      * @return list<array{entry: string, children?: list<mixed>}> The nodes at this level
      */
     private static function branch(
@@ -449,6 +452,8 @@ class StructuredTermImporter
                 continue;
             }
 
+            // Only the key is read, and isset() holds for false as for true.
+            // @pest-mutate-ignore: TrueToFalse
             $visited[$termId] = true;
 
             $branch = ['entry' => $nodes[$termId]['entry']];
@@ -530,19 +535,25 @@ class StructuredTermImporter
 
         $structure = $collection->structure();
 
+        // A collection's structure is always a CollectionStructure, so the
+        // narrowing only types the calls below and its return is never reached.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
         if (! $structure instanceof CollectionStructure) {
             return;
         }
 
         $tree = $structure->in($site);
 
+        // `in()` already makes a tree for a site the collection is enabled for,
+        // and the whole tree is replaced below, so a fresh tree in place of an
+        // existing one writes the same file.
+        // @pest-mutate-ignore: CoalesceEqualToEqual
         $tree ??= $structure->makeTree($site, []);
 
-        if (
-            ! \is_object($tree)
-            || ! \method_exists($tree, 'tree')
-            || ! \method_exists($tree, 'save')
-        ) {
+        // Both calls answer with a CollectionTree, so the narrowing only types
+        // the two calls below.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if (! $tree instanceof CollectionTree) {
             return;
         }
 
@@ -639,6 +650,9 @@ class StructuredTermImporter
             $entry->collection($collectionHandle);
             $entry->locale($site);
             $entry->slug($slug);
+            // A new entry is already published (`Publishable::$published` is
+            // true), so this states the intent and cannot be observed.
+            // @pest-mutate-ignore: RemoveMethodCall
             $entry->published(true);
         }
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Collection;
 use Statamic\Facades\Collection as CollectionFacade;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -68,18 +69,27 @@ final class StructuredTermImporterProbe extends StructuredTermImporter
      * @param  string  $title  The term name
      * @param  string  $collectionHandle  The destination collection handle
      * @param  string  $site  The Statamic site handle
-     * @return string The stubbed entry id
+     * @return ?string The stubbed entry id, or null for a slug listed as unsaved
      */
     protected function createOrUpdateEntry(
         string $slug,
         string $title,
         string $collectionHandle,
         string $site
-    ): string {
+    ): ?string {
         $this->written[] = ['slug' => $slug, 'title' => $title];
+
+        if (\in_array($slug, $this->unsaved, true)) {
+            return null;
+        }
 
         return 'entry-'.$slug;
     }
+
+    /**
+     * @var list<string> Slugs whose entry write is reported as failed
+     */
+    public array $unsaved = [];
 
     /**
      * Record the nodes rather than writing them onto a real structure.
@@ -197,7 +207,7 @@ function structuredTermCollectionExists(): void
 /**
  * Run the importer over a set of terms with the persistence stubbed.
  *
- * @param  list<SimpleXMLElement>  $terms  The term elements
+ * @param  list<mixed>  $terms  The term elements, and anything else an export can hold
  * @param  string  $wordpressTaxonomy  The WordPress taxonomy handle
  * @param  string  $collectionHandle  The destination collection handle
  * @param  ?StructuredTermImporterProbe  $importer  Reuse an importer to model a second pass
@@ -665,4 +675,300 @@ it('drops the accumulated tree nodes when the taxonomy caches are cleared', func
     expect($second->nodeField('50', 'entry'))->toBe('entry-showcase')
         ->and($second->nodeField('40', 'entry'))->toBeNull()
         ->and($second->captured)->toHaveCount(1);
+});
+
+it('reports a missing destination collection on the console and in the log', function (): void {
+    CollectionFacade::shouldReceive('findByHandle')->andReturn(null);
+    $log = Log::spy();
+
+    $output = new BufferedOutput;
+
+    $imported = (new StructuredTermImporterProbe)->import(
+        [structuredTerm('10', 'health', 'Health')],
+        'category',
+        'post_categories',
+        'default',
+        $output
+    );
+
+    expect($imported)->toBe(0)
+        ->and($output->fetch())->toBe(
+            "  - Collection 'post_categories' not found; skipping 'category' terms.".\PHP_EOL
+        );
+
+    $log->shouldHaveReceived('warning', [
+        'StructuredTermImporter::import: destination collection is missing.',
+        [
+            'wordpress_taxonomy' => 'category',
+            'collection' => 'post_categories',
+            'site' => 'default',
+        ],
+    ]);
+});
+
+it('claims no site and prints nothing when the export carries no usable terms', function (): void {
+    structuredTermCollectionExists();
+
+    $importer = new StructuredTermImporterProbe;
+    $output = new BufferedOutput;
+
+    $imported = $importer->import(
+        [structuredTerm('', 'no-id', 'No Id')],
+        'category',
+        'post_categories',
+        'default',
+        $output
+    );
+
+    expect($imported)->toBe(0)
+        ->and($importer->enabled)->toBe([])
+        ->and($output->fetch())->toBe('');
+});
+
+it('reports how many terms it imported into the collection', function (): void {
+    structuredTermCollectionExists();
+
+    $output = new BufferedOutput;
+
+    (new StructuredTermImporterProbe)->import(
+        [
+            structuredTerm('10', 'health', 'Health'),
+            structuredTerm('20', 'cardiology', 'Cardiology', parentSlug: 'health'),
+        ],
+        'category',
+        'post_categories',
+        'default',
+        $output
+    );
+
+    expect(\explode(\PHP_EOL, $output->fetch()))
+        ->toContain("  - Imported 2 'category' term(s) into 'post_categories'.");
+});
+
+it('skips a term whose entry was not saved and imports the terms after it', function (): void {
+    structuredTermCollectionExists();
+
+    $importer = new StructuredTermImporterProbe;
+    $importer->unsaved = ['health'];
+
+    $imported = $importer->import(
+        [
+            structuredTerm('10', 'health', 'Health'),
+            structuredTerm('20', 'cardiology', 'Cardiology'),
+        ],
+        'category',
+        'post_categories',
+        'default',
+        new BufferedOutput
+    );
+
+    expect($imported)->toBe(1)
+        ->and($importer->captured)->toBe([
+            20 => ['entry' => 'entry-cardiology', 'parent' => '', 'title' => 'Cardiology'],
+        ])
+        ->and(TermDestinationRegistry::referenceFor('category', '10'))->toBeNull()
+        ->and(TermDestinationRegistry::referenceFor('category', '20'))->toBe('entry-cardiology');
+});
+
+it('writes no tree and reports nothing when no entry was saved', function (): void {
+    structuredTermCollectionExists();
+
+    $importer = new StructuredTermImporterProbe;
+    $importer->unsaved = ['health'];
+    $output = new BufferedOutput;
+
+    $imported = $importer->import(
+        [structuredTerm('10', 'health', 'Health')],
+        'category',
+        'post_categories',
+        'default',
+        $output
+    );
+
+    expect($imported)->toBe(0)
+        ->and($importer->saves)->toBe(0)
+        ->and($importer->parents)->toBe([])
+        ->and(\str_contains($output->fetch(), 'Imported'))->toBeFalse();
+});
+
+it('stamps the later children when an earlier one names an unsaved parent', function (): void {
+    structuredTermCollectionExists();
+
+    // A parent whose entry was not saved is not a node, so its child has no
+    // parent entry to record; the children after it still have theirs.
+    $importer = new StructuredTermImporterProbe;
+    $importer->unsaved = ['stray-parent'];
+
+    $importer->import(
+        [
+            structuredTerm('5', 'stray-parent', 'Stray Parent'),
+            structuredTerm('6', 'stray-child', 'Stray Child', parentSlug: 'stray-parent'),
+            structuredTerm('10', 'health', 'Health'),
+            structuredTerm('20', 'cardiology', 'Cardiology', parentSlug: 'health'),
+        ],
+        'category',
+        'post_categories',
+        'default',
+        new BufferedOutput
+    );
+
+    expect($importer->parents)->toBe(['entry-cardiology' => 'entry-health']);
+});
+
+it('stamps the later children when an earlier term names itself', function (): void {
+    structuredTermCollectionExists();
+
+    $importer = new StructuredTermImporterProbe;
+
+    $importer->import(
+        [
+            structuredTerm('10', 'health', 'Health', parentSlug: 'health'),
+            structuredTerm('20', 'cardiology', 'Cardiology', parentSlug: 'health'),
+        ],
+        'category',
+        'post_categories',
+        'default',
+        new BufferedOutput
+    );
+
+    expect($importer->parents)->toBe(['entry-cardiology' => 'entry-health']);
+});
+
+it('records each node\'s title for the tree', function (): void {
+    structuredTermCollectionExists();
+
+    $result = runStructuredTermImport([
+        structuredTerm('10', 'health', 'Health'),
+    ]);
+
+    expect($result['tree']->nodeField('10', 'title'))->toBe('Health');
+});
+
+it('nests a child listed ahead of its parent', function (): void {
+    $tree = StructuredTermImporter::buildNestedTree([
+        '20' => ['entry' => 'entry-cardiology', 'parent' => '10', 'title' => 'Cardiology'],
+        '10' => ['entry' => 'entry-health', 'parent' => '', 'title' => 'Health'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-health', 'children' => [['entry' => 'entry-cardiology']]],
+    ]);
+});
+
+it('keeps a parent cycle that follows a real root', function (): void {
+    $tree = StructuredTermImporter::buildNestedTree([
+        '1' => ['entry' => 'entry-root', 'parent' => '', 'title' => 'Root'],
+        '10' => ['entry' => 'entry-a', 'parent' => '20', 'title' => 'A'],
+        '20' => ['entry' => 'entry-b', 'parent' => '10', 'title' => 'B'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-a', 'children' => [['entry' => 'entry-b']]],
+        ['entry' => 'entry-root'],
+    ]);
+});
+
+it('keeps the sibling after the edge that closes a parent cycle', function (): void {
+    // Promoting A reaches B, whose children are A (already placed, closing the
+    // cycle) and then C, which has to be placed under B rather than lost there.
+    $tree = StructuredTermImporter::buildNestedTree([
+        '10' => ['entry' => 'entry-a', 'parent' => '20', 'title' => 'A'],
+        '20' => ['entry' => 'entry-b', 'parent' => '10', 'title' => 'B'],
+        '30' => ['entry' => 'entry-c', 'parent' => '20', 'title' => 'C'],
+    ]);
+
+    expect($tree)->toBe([
+        [
+            'entry' => 'entry-a',
+            'children' => [
+                ['entry' => 'entry-b', 'children' => [['entry' => 'entry-c']]],
+            ],
+        ],
+    ]);
+});
+
+it('orders a promoted root among the real roots by title', function (): void {
+    $tree = StructuredTermImporter::buildNestedTree([
+        '10' => ['entry' => 'entry-zebra', 'parent' => '', 'title' => 'Zebra'],
+        '20' => ['entry' => 'entry-alpha', 'parent' => '99', 'title' => 'Alpha'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-alpha'],
+        ['entry' => 'entry-zebra'],
+    ]);
+});
+
+it('orders children by title, not by entry id or input order', function (): void {
+    // The entry ids sort the opposite way to the titles, so a sort on the id
+    // and no sort at all both give the wrong order.
+    $tree = StructuredTermImporter::buildNestedTree([
+        '10' => ['entry' => 'entry-parent', 'parent' => '', 'title' => 'Parent'],
+        '20' => ['entry' => 'entry-a', 'parent' => '10', 'title' => 'Zebra'],
+        '30' => ['entry' => 'entry-b', 'parent' => '10', 'title' => 'Alpha'],
+        '40' => ['entry' => 'entry-y', 'parent' => '', 'title' => 'Apex'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-y'],
+        [
+            'entry' => 'entry-parent',
+            'children' => [
+                ['entry' => 'entry-b'],
+                ['entry' => 'entry-a'],
+            ],
+        ],
+    ]);
+});
+
+it('skips an item that is not a term element and imports the terms after it', function (): void {
+    structuredTermCollectionExists();
+
+    $result = runStructuredTermImport([
+        'not-a-term',
+        structuredTerm('10', 'health', 'Health'),
+    ]);
+
+    expect($result['imported'])->toBe(1)
+        ->and($result['importer']->written)->toBe([['slug' => 'health', 'title' => 'Health']]);
+});
+
+it('imports the terms after a repeated term id', function (): void {
+    structuredTermCollectionExists();
+
+    $result = runStructuredTermImport([
+        structuredTerm('10', 'health', 'Health'),
+        structuredTerm('10', 'health-duplicate', 'Health Duplicate'),
+        structuredTerm('20', 'cardiology', 'Cardiology'),
+    ]);
+
+    expect($result['imported'])->toBe(2)
+        ->and(\array_column($result['importer']->written, 'slug'))->toBe(['health', 'cardiology']);
+});
+
+it('keeps an orphan ahead of a root of the same title, in export order', function (): void {
+    // The sort is stable, so roots of one title stay in the order they were
+    // grouped. An orphan is grouped with the roots as it is read, not appended
+    // after them, so it keeps its place in the export.
+    $tree = StructuredTermImporter::buildNestedTree([
+        '20' => ['entry' => 'entry-orphan', 'parent' => '99', 'title' => 'Health'],
+        '10' => ['entry' => 'entry-root', 'parent' => '', 'title' => 'Health'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-orphan'],
+        ['entry' => 'entry-root'],
+    ]);
+});
+
+it('keeps a self-parented term ahead of a root of the same title, in export order', function (): void {
+    $tree = StructuredTermImporter::buildNestedTree([
+        '20' => ['entry' => 'entry-self', 'parent' => '20', 'title' => 'Health'],
+        '10' => ['entry' => 'entry-root', 'parent' => '', 'title' => 'Health'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-self'],
+        ['entry' => 'entry-root'],
+    ]);
 });
