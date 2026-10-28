@@ -1215,7 +1215,17 @@ it('adds a shortcode block\'s content once, whether its processor converts it or
     'text and no shortcode' => ['[unknown_thing]', ['text']],
     'a converted shortcode after text in an element' => ['<p>Hi [ninja_form id=3]</p>', ['paragraph:Hi', 'set:form']],
     'two converted shortcodes in two elements' => ['<p>[table id=1 /]</p><p>[table id=2 /]</p>', ['set:table', 'set:table']],
+    'a dropped shortcode beside text, which leaves one element' => ['<p>Text [subpage-list]</p>', ['paragraph:Text']],
 ]);
+
+it('warns of nothing for a shortcode block whose processor converts nothing', function (): void {
+    textProcessorForBardFakes();
+    $warnings = textProcessorForBardWarnings();
+
+    textProcessorForBard('<p>Lead</p><!-- wp:shortcode --><p>[unknown_thing]</p><!-- /wp:shortcode -->');
+
+    expect($warnings->getArrayCopy())->toBe([]);
+});
 
 it('imports an image in a shortcode block whose processor converts nothing, once', function (): void {
     $fakes = textProcessorForBardFakes();

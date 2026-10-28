@@ -468,6 +468,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $currentNode = $currentNode->nextSibling;
         }
 
+        // Each piece is trimmed text or an element's HTML, which saveHTML() writes
+        // with no whitespace around it, so the content has none at its edges
+        // @pest-mutate-ignore: UnwrapTrim
         return \trim($shortcodeContent);
     }
 
