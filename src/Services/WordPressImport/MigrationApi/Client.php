@@ -344,8 +344,27 @@ class Client
         $total = null;
         $totalPages = null;
         $pageSize = $this->pageSize();
+        $reads = 0;
 
         do {
+            // ---
+            // A server that answers every page with a full one, an endpoint ignoring
+            // `page` say, would otherwise loop forever. Where the API reports a page count,
+            // that bounds the walk below; otherwise this ceiling, far beyond any real
+            // collection, does. It counts reads rather than pages and sits at the top of
+            // the loop, so no path through the body can repeat a read without reaching it.
+            // ---
+            if ($reads >= self::MAX_PAGES) {
+                throw new MigrationApiException(\sprintf(
+                    'The migration API served %d full pages for "%s" without ending. '
+                    .'Refusing to keep reading.',
+                    self::MAX_PAGES,
+                    $path
+                ));
+            }
+
+            $reads++;
+
             $response = $this->request(
                 $path,
                 $site,
@@ -398,20 +417,9 @@ class Client
 
             $page++;
 
-            // A server that answers every page with a full one — an endpoint ignoring
-            // `page`, say — would otherwise loop forever. Bound it by what the API itself
-            // reported, or by a ceiling far beyond any real collection.
+            // The page count the API itself reported bounds the walk too
             if ($totalPages !== null && $page > $totalPages) {
                 break;
-            }
-
-            if ($page > self::MAX_PAGES) {
-                throw new MigrationApiException(\sprintf(
-                    'The migration API served %d full pages for "%s" without ending. '
-                    .'Refusing to keep reading.',
-                    self::MAX_PAGES,
-                    $path
-                ));
             }
         } while (true);
 

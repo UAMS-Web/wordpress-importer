@@ -31,6 +31,12 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  */
 uses(StatamicTestCase::class);
 
+// No case waits for real. A retry a case does not expect then costs no time, so a change
+// that retries a failure is reported by an assertion rather than by a timeout.
+beforeEach(function (): void {
+    Sleep::fake();
+});
+
 /**
  * A client pointed at a fake host.
  */
@@ -421,15 +427,18 @@ it('returns an empty set for a genuinely empty collection', function (): void {
 
 it('stops at the page count the API reported', function (): void {
     // A server that answers every page with a full one would otherwise never end. Where it
-    // reports `X-WP-TotalPages`, that is the bound.
-    Http::fake(['*' => Http::response(
-        [['id' => 1], ['id' => 2]],
-        200,
-        ['X-WP-TotalPages' => '2']
-    )]);
+    // reports `X-WP-TotalPages`, that is the bound. The fake serves exactly the two reported
+    // pages, so a walk past the bound fails at once on the empty sequence rather than running
+    // on toward the page ceiling.
+    Http::fake(['*' => Http::sequence()
+        ->push([['id' => 1], ['id' => 2]], 200, ['X-WP-TotalPages' => '2'])
+        ->push([['id' => 3], ['id' => 4]], 200, ['X-WP-TotalPages' => '2']),
+    ]);
 
     // Two full pages of two, bounded by the reported page count rather than by a short read.
     expect(migrationApiClient(2)->paginate('posts/post'))->toHaveCount(4);
+
+    Http::assertSentCount(2);
 });
 
 it('still raises when a known total is not served', function (): void {
@@ -921,7 +930,20 @@ it('names the configured scheme as none when the base URL carries none', functio
 });
 
 it('stops after 10,000 full pages with no total, naming the route', function (): void {
-    Http::fake(['*' => Http::response([['id' => 1]], 200)]);
+    // Every page comes back full, and a request past the ceiling fails at once, so a walk
+    // the ceiling does not stop is reported here rather than left to run
+    /** @var ArrayObject<int, bool> $requests */
+    $requests = new ArrayObject;
+
+    Http::fake(static function () use ($requests) {
+        $requests->append(true);
+
+        if (\count($requests) > 10000) {
+            throw new RuntimeException('A request was made past the 10,000-page ceiling.');
+        }
+
+        return Http::response([['id' => 1]], 200);
+    });
 
     expect(migrationApiMessage(fn () => migrationApiClient(1)->paginate('posts/post')))->toBe(
         'The migration API served 10000 full pages for "posts/post" without ending. Refusing to keep reading.'
