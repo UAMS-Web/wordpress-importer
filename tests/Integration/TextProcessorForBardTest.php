@@ -897,7 +897,7 @@ it('decodes a double-encoded numeric entity to the same character with WpAutoP a
 
     // #154: the entity pass ahead of WpAutoP used chr(), which wrapped 8212 to
     // U+0014 and turned 233 into a lone byte; it now writes UTF-8, and leaves
-    // NUL and code points that name no character to html_entity_decode()
+    // NUL, surrogates and values past U+10FFFF to html_entity_decode()
     $withAutoP = textProcessorForBard("<p>A {$entity} B</p>", autoP: true);
     $without = textProcessorForBard("<p>A {$entity} B</p>");
 
@@ -910,7 +910,11 @@ it('decodes a double-encoded numeric entity to the same character with WpAutoP a
     'the digit zero, which is falsy' => ['&amp;#48;', '0'],
     'outside the BMP' => ['&amp;#128512;', "\u{1F600}"],
     'NUL' => ['&amp;#0;', "\u{FFFD}"],
-    'a surrogate' => ['&amp;#55296;', "\u{FFFD}"],
+    'the last code point before the surrogates' => ['&amp;#55295;', "\u{D7FF}"],
+    'the first surrogate' => ['&amp;#55296;', "\u{FFFD}"],
+    'the last surrogate' => ['&amp;#57343;', "\u{FFFD}"],
+    'the first code point after the surrogates' => ['&amp;#57344;', "\u{E000}"],
+    'U+10FFFF' => ['&amp;#1114111;', "\u{10FFFF}"],
     'above U+10FFFF' => ['&amp;#1114112;', "\u{FFFD}"],
     'beyond the integer range' => ['&amp;#99999999999999999999;', "\u{FFFD}"],
 ]);

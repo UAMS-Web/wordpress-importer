@@ -615,14 +615,19 @@ class TextProcessor
         if ($applyWpAutoP) {
             // Convert numeric HTML entities for proper WpAutoP processing, as
             // UTF-8 rather than one byte, so a code point above 127 keeps its
-            // character (#154). One that names no character, and NUL, which
-            // HTML decodes to U+FFFD, are left for the decode below.
+            // character (#154). NUL, which HTML decodes to U+FFFD, and a
+            // surrogate or a value past U+10FFFF, which name no character, are
+            // left for the decode below.
             $formattedContent = preg_replace_callback(
                 '/&#(\d+);/',
                 static function (array $matches): string {
-                    $character = \mb_chr((int) $matches[1], 'UTF-8');
+                    $codePoint = (int) $matches[1];
 
-                    return $character === false || $character === "\0" ? $matches[0] : $character;
+                    if ($codePoint === 0 || ($codePoint >= 0xD800 && $codePoint <= 0xDFFF) || $codePoint > 0x10FFFF) {
+                        return $matches[0];
+                    }
+
+                    return \mb_chr($codePoint, 'UTF-8');
                 },
                 $formattedContent
             );
