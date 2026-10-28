@@ -680,8 +680,8 @@ class SideBySideParser
 
         // Extract the image crop setting, kept to the fieldset's options as parseModule()
         // keeps it: the template's validity guard needs a truthy image_crop, so the old '0'
-        // for 'none' hid the whole block, and a value outside the options renders no crop
-        // the stylesheet knows (#199, wordpress-importer-archive#1346)
+        // for 'none' hid the whole block, and a value outside the options matches none of
+        // the template's crop branches (#199, wordpress-importer-archive#1346)
         $imageCrop = $this->radioOption(
             $normalizedData['side_image_side_image_crop'] ?? null,
             ['top', 'bottom'],
@@ -1137,6 +1137,8 @@ class SideBySideParser
         // and their URLs are not run through LinkProcessor, which can import the files
         // they link to (#199)
         // ---
+        // Any count below one reads no row, so the zero is one choice among several
+        // @pest-mutate-ignore: DecrementInteger
         $linkRowCount = $textLayout === 'link-list' ? $linkListCount : 0;
 
         // Process each link in the list
