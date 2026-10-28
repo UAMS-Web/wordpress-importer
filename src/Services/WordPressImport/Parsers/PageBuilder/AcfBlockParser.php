@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
+use DOMComment;
 use DOMElement;
 use DOMNameSpaceNode;
 use DOMNode;
@@ -37,9 +38,10 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 /**
  * Parses WordPress ACF blocks into Statamic page_builder replicator sets.
  *
- * Handles ACF blocks (action-bar, uams-section, uams-content, cta) in mixed
- * content scenarios where WordPress pages/posts contain both ACF and non-ACF
- * blocks. Delegates parsing to specialized block parsers and supports single-line
+ * Handles the ACF blocks listed in {@see self::BLOCK_TYPES}, and LiveWhale
+ * Calendar widget divs, in mixed content scenarios where WordPress pages/posts
+ * contain both ACF and non-ACF blocks. Delegates parsing to specialized block
+ * parsers and supports single-line
  * and multi-line JSON attributes in XML comments. Returns parsed sets for
  * PageBuilderParser to order.
  */
@@ -489,7 +491,7 @@ class AcfBlockParser
 
             // Stop at the comment carrying this block's closing tag
             if (
-                $this->isCommentNode($candidate)
+                $candidate instanceof DOMComment
                 && \preg_match('/\/wp:acf\/'.$type.'/', $this->getNodeText($candidate)) === 1
             ) {
                 return $i - $index + 1;
@@ -726,36 +728,23 @@ class AcfBlockParser
     /**
      * Returns node text content as a safe string.
      *
-     * @param  DOMNameSpaceNode|DOMNode|null  $node  Node whose text should be read
-     * @return string The node text, or empty string when missing
+     * @param  DOMNode  $node  Node whose text should be read
+     * @return string The node text, or empty string when it has none
      */
     private function getNodeText(
-        DOMNameSpaceNode|DOMNode|null $node
+        DOMNode $node
     ): string {
-        if (! $node instanceof DOMNode) {
-            return '';
-        }
-
+        // Every caller passes a comment node, whose nodeValue is always a string, so
+        // the fallback only narrows the type.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($node->nodeValue) ? $node->nodeValue : '';
-    }
-
-    /**
-     * Determines whether a node is an XML comment node.
-     *
-     * @param  DOMNameSpaceNode|DOMNode|null  $node  Candidate node
-     * @return bool True when node is an XML comment
-     */
-    private function isCommentNode(
-        DOMNameSpaceNode|DOMNode|null $node
-    ): bool {
-        return $node instanceof DOMNode && $node->nodeType === XML_COMMENT_NODE;
     }
 
     /**
      * Logs a distinct warning when an ACF block comment carries attribute JSON that
      * fails to decode.
      *
-     * Each block branch in {@see self::parseNode()} coerces a failed `json_decode`
+     * Each block in {@see self::parseCommentNode()} coerces a failed `json_decode`
      * to an empty attribute array, so a malformed block would otherwise vanish
      * silently and surface only as a misleading downstream "empty body" warning
      * (issue wordpress-importer-archive#290). This validates the JSON once up front and, on failure, logs the
@@ -787,11 +776,7 @@ class AcfBlockParser
         $json = $matches[2];
 
         // Decode purely to detect failure; the real parsing happens per-block above.
-        \json_decode(
-            $json,
-            true,
-            512
-        );
+        \json_decode($json);
 
         // Nothing to report when the JSON is well-formed.
         if (\json_last_error() === JSON_ERROR_NONE) {
@@ -826,8 +811,10 @@ class AcfBlockParser
      * Parses ACF blocks from HTML string content.
      *
      * Extracts and parses ACF block comments from HTML strings (e.g., from
-     * unwrapped wp:group blocks). Handles both self-closing and paired ACF blocks.
-     * Returns an array of parsed ACF sets and the remaining non-ACF HTML content.
+     * unwrapped wp:group blocks). Each block is parsed from its opening comment
+     * alone, so a paired block's inner content and closing comment stay in the
+     * remaining HTML (tracked in wordpress-importer#201). Returns an array of
+     * parsed ACF sets and the remaining non-ACF HTML content.
      *
      * @param  string  $html  The HTML string containing ACF block comments
      * @param  string  $site  The Statamic site handle
@@ -987,6 +974,9 @@ class AcfBlockParser
         $previousInternalErrors = \libxml_use_internal_errors(true);
 
         try {
+            // The markup names its own doctype, html and body, so neither flag
+            // changes the document it gives.
+            // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
             $document->loadHTML(
                 "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body>{$comment}</body></html>",
                 LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
@@ -1007,7 +997,7 @@ class AcfBlockParser
 
         // The markup above always gives the document a body whose first child is the
         // matched comment, so this guard only narrows the types.
-        // @pest-mutate-ignore: InstanceOfToTrue
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveNullSafeOperator
         if (! $body?->firstChild instanceof DOMNode) {
             return null;
         }
@@ -1062,8 +1052,14 @@ class AcfBlockParser
         $innerContent = [];
         $i = $startIndex + 1;
 
+        // item() returns null one past the end, which the guard below skips, so
+        // reading that far adds nothing.
+        // @pest-mutate-ignore: SmallerToSmallerOrEqual
         while ($i < $nodes->length) {
             $node = $nodes->item($i);
+
+            // The loop bound keeps item() in range, so this guard only narrows the type
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $node instanceof DOMNode) {
                 $i++;
 
@@ -1074,7 +1070,7 @@ class AcfBlockParser
                 $node->nodeType === XML_COMMENT_NODE
                 && \preg_match(
                     '/\/wp:acf\/(uams-section|action-bar|uams-content|cta)/',
-                    \trim($this->getNodeText($node))
+                    $this->getNodeText($node)
                 ) === 1
             ) {
                 break;
@@ -1095,7 +1091,7 @@ class AcfBlockParser
 
                 // Check if block was successfully processed by a processor
                 if ($result !== null && $result !== []) {
-                    $skipCount = isset($result['skipCount']) && \is_int($result['skipCount'])
+                    $skipCount = \is_int($result['skipCount'] ?? null)
                         ? $result['skipCount']
                         : 0;
 

@@ -72,6 +72,11 @@ final class AcfBlockCalls
     public array $returns = [];
 
     /**
+     * Run on each call, before it returns, so a test can act from inside a parser.
+     */
+    public ?Closure $onRecord = null;
+
+    /**
      * Records a call and returns what the named parser is set to return.
      *
      * @param  string  $name  The parser name
@@ -81,6 +86,10 @@ final class AcfBlockCalls
     public function record(string $name, array $arguments): mixed
     {
         $this->calls[] = [$name, $arguments];
+
+        if ($this->onRecord instanceof Closure) {
+            ($this->onRecord)();
+        }
 
         return \array_key_exists($name, $this->returns) ? $this->returns[$name] : ['set' => $name];
     }
@@ -529,6 +538,14 @@ describe('a self-closing block', function (): void {
         'content' => ['uams-content', 'content'],
     ]);
 
+    it('is matched against the block types in order', function (): void {
+        $calls = new AcfBlockCalls;
+
+        acfBlockParse(acfBlockParser($calls), new AcfBlockContext, '<!-- wp:acf/cta {"a":"wp:acf/uams-section {}"} /-->');
+
+        expect($calls->names())->toBe(['section']);
+    });
+
     it('returns what its parser returns', function (): void {
         $calls = new AcfBlockCalls;
         $calls->returns['section'] = null;
@@ -597,6 +614,37 @@ describe('a paired block', function (): void {
         'as the first node' => ['', 0],
         'after two other nodes' => ['<p>a</p><p>b</p>', 2],
     ]);
+
+    it('ends at a closing comment that follows it directly', function (string $type): void {
+        $result = acfBlockParse(
+            acfBlockParser(new AcfBlockCalls),
+            new AcfBlockContext,
+            '<!-- wp:acf/'.$type.' {"data":{}} --><!-- /wp:acf/'.$type.' --><p>after</p>'
+        );
+
+        expect($result['skipCount'])->toBe(2);
+    })->with(acfAllBlockTypes());
+
+    it('does not take its own opening comment for its closing one', function (string $type): void {
+        $result = acfBlockParse(
+            acfBlockParser(new AcfBlockCalls),
+            new AcfBlockContext,
+            '<!-- wp:acf/'.$type.' {"data":{"a":"/wp:acf/'.$type.'"}} --><p>inside</p><!-- /wp:acf/'.$type.' -->'
+        );
+
+        expect($result['skipCount'])->toBe(3);
+    })->with(acfAllBlockTypes());
+
+    it('ignores a closing comment before it', function (string $type): void {
+        $result = acfBlockParse(
+            acfBlockParser(new AcfBlockCalls),
+            new AcfBlockContext,
+            '<p>a</p><!-- /wp:acf/'.$type.' --><!-- wp:acf/'.$type.' {"data":{}} --><p>inside</p><!-- /wp:acf/'.$type.' -->',
+            2
+        );
+
+        expect($result['skipCount'])->toBe(3);
+    })->with(acfAllBlockTypes());
 
     it('is paired when its JSON ends the comment without a slash', function (string $type): void {
         $result = acfBlockParse(
@@ -941,6 +989,25 @@ describe('a LiveWhale widget div', function (): void {
         'a text node' => ['lwcw id=34'],
     ]);
 
+    it('is left alone when it is a node named div that is not an element', function (): void {
+        $calls = new AcfBlockCalls;
+        $context = new AcfBlockContext;
+        $attribute = (new DOMDocument)->createAttribute('div');
+        $attribute->value = 'lwcw';
+
+        $result = (acfBlockParser($calls))->parseNode(
+            $attribute,
+            0,
+            acfBlockNodes('<p>a</p>'),
+            'test_site',
+            $context->assetImporter,
+            $context->output
+        );
+
+        expect($result)->toBe(['processed' => false, 'skipCount' => 0, 'set' => null])
+            ->and($calls->calls)->toBe([]);
+    });
+
     it('returns the empty set the LiveWhale parser makes without marking it processed', function (): void {
         $calls = new AcfBlockCalls;
         $calls->returns['liveWhale'] = [];
@@ -1128,4 +1195,68 @@ describe('blocks in an HTML string', function (): void {
             libxml_use_internal_errors($previous);
         }
     })->with([true, false]);
+
+    it('restores the libxml error mode the caller had when a block parser changes it', function (): void {
+        $previous = libxml_use_internal_errors(false);
+        $calls = new AcfBlockCalls;
+        $calls->onRecord = static function (): void {
+            libxml_use_internal_errors(true);
+        };
+
+        try {
+            acfBlocksFromHtml(acfBlockParser($calls), new AcfBlockContext, '<!-- wp:acf/cta {"data":{}} /-->');
+
+            expect($calls->names())->toBe(['cta'])
+                ->and(libxml_use_internal_errors())->toBeFalse();
+        } finally {
+            libxml_use_internal_errors($previous);
+        }
+    });
+
+    it('raises no warning for a block comment libxml cannot read cleanly', function (): void {
+        $previous = libxml_use_internal_errors(false);
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+
+        try {
+            acfBlocksFromHtml(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, "<!-- wp:acf/cta {\"data\":{\"a\":\"\x01\"}} /-->");
+        } finally {
+            restore_error_handler();
+            libxml_use_internal_errors($previous);
+        }
+
+        expect($warnings)->toBe([]);
+    });
+
+    it('leaves no libxml error behind for a block comment libxml cannot read cleanly', function (): void {
+        $previous = libxml_use_internal_errors(true);
+        libxml_clear_errors();
+
+        try {
+            acfBlocksFromHtml(acfBlockParser(new AcfBlockCalls), new AcfBlockContext, "<!-- wp:acf/cta {\"data\":{\"a\":\"\x01\"}} /-->");
+
+            expect(libxml_get_errors())->toBe([]);
+        } finally {
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+        }
+    });
+
+    it('gives a block whose match runs across comments the nodes after its own', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlocksFromHtml(
+            acfBlockParser($calls),
+            new AcfBlockContext,
+            '<!-- wp:acf/cta {x wp:acf/uams-section --><p>inside</p><!-- } -->'
+        );
+
+        expect($result)->toBe(['acfSets' => [['set' => 'section']], 'remainingHtml' => ''])
+            ->and($calls->names())->toBe(['section'])
+            ->and($calls->calls[0][1][1])->toBe([['html' => '<p>inside</p>'], ['html' => '<!-- } -->']]);
+    });
 });
