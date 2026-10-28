@@ -35,7 +35,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocPr
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\DestinationSelector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
@@ -346,7 +345,6 @@ function importCommandRegisterWithDoubles(
         app(XmlParser::class),
         app(SiteSelector::class),
         app(ContentTypeSelector::class),
-        app(DestinationSelector::class),
         app(TaxonomyOverwriteBehaviorSelector::class),
         app(MinervaKbSettingsSelector::class),
         app(MinervaKbSettingsLoader::class),

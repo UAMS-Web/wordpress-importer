@@ -12,7 +12,6 @@ use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\DataManager as FormidableFormsDataManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager as GravityFormsDataManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager as NinjaFormsDataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\DestinationSelector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
@@ -54,14 +53,6 @@ class ServiceProvider extends AddonServiceProvider
 
         // Register SiteManager as a singleton
         $this->app->singleton(SiteManager::class);
-
-        // Register DestinationSelector with SiteManager dependency
-        $this->app->bind(
-            DestinationSelector::class,
-            fn (): DestinationSelector => new DestinationSelector(
-                $this->app->make(SiteManager::class)
-            )
-        );
 
         // Register CollectionStructureManager as a singleton
         $this->app->singleton(CollectionStructureManager::class);

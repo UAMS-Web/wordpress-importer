@@ -45,7 +45,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLo
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\DestinationSelector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
@@ -362,7 +361,6 @@ class ImportWordPress extends Command
      * @param  XmlParser  $xmlParser  Service for parsing WordPress XML files
      * @param  SiteSelector  $siteSelector  Service for selecting the target site
      * @param  ContentTypeSelector  $contentTypeSelector  Service for selecting the content type
-     * @param  DestinationSelector  $destinationSelector  Service for selecting the import destination
      * @param  TaxonomyOverwriteBehaviorSelector  $taxonomyOverwriteBehaviorSelector  Service for selecting taxonomy overwrite behavior
      * @param  MinervaKbSettingsSelector  $minervaKbSettingsSelector  Service for selecting MinervaKB settings
      * @param  MinervaKbSettingsLoader  $minervaKbSettingsLoader  Loader whose source this command configures
@@ -387,7 +385,6 @@ class ImportWordPress extends Command
         protected XmlParser $xmlParser,
         protected SiteSelector $siteSelector,
         protected ContentTypeSelector $contentTypeSelector,
-        protected DestinationSelector $destinationSelector,
         protected TaxonomyOverwriteBehaviorSelector $taxonomyOverwriteBehaviorSelector,
         protected MinervaKbSettingsSelector $minervaKbSettingsSelector,
         protected MinervaKbSettingsLoader $minervaKbSettingsLoader,
@@ -1775,15 +1772,12 @@ class ImportWordPress extends Command
                         $this->info("Enabled '$site' for global set '$defaultHandle'.");
                     }
                 }
-            } else { // Otherwise
-                // Prompt user to select destination for unmapped content type
-                $destination = $this->destinationSelector->select(
-                    $site,
-                    $contentType,
-                    $this->input,
-                    $this->output,
-                    $this
-                );
+            } else {
+                // Report a content type with no default mapping, and end the run (#213)
+                $this->error("'$contentType' content has no default mapping to a Statamic collection or global set.");
+
+                // Exit with error status code
+                return 1;
             }
 
             $destinationType = $destination['type'];
