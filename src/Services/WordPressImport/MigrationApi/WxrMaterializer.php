@@ -290,13 +290,10 @@ class WxrMaterializer
         // A vanity domain running Redirection or Pretty Links keeps its rules in the plugins'
         // own tables, so they are read from their endpoints and written as `redirect_rule`
         // items, which is the type the import reads a redirect domain's rules from (wordpress-importer-archive#1307).
-        // Written before the post types so a scoped run collects their attachment references
-        // before it reads attachments, which it reads last.
+        // Their attachment references are not collected: rules come only from a vanity domain,
+        // where a run scoped to `redirect_rule` declares no companions and reads no
+        // attachments, and an unscoped run reads every attachment anyway.
         foreach ($this->redirectPluginPosts($client, $channel, $contentType) as $post) {
-            if ($collector instanceof AttachmentReferenceCollector) {
-                $collector->collect($post);
-            }
-
             $write($post);
         }
 
