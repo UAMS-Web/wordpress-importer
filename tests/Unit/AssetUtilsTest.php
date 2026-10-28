@@ -14,6 +14,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AssetUtilsTest.php
  */
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
@@ -75,4 +76,30 @@ it('follows a redirect between two public hosts', function (): void {
     Http::assertSent(
         static fn (Request $request): bool => $request->url() === 'https://8.8.8.8/file.pdf'
     );
+});
+
+it('checks a file exists with a HEAD request and reports a failing status as missing', function (int $status, bool $expected): void {
+    Http::fake(['https://93.184.216.34/file.pdf' => Http::response('', $status)]);
+
+    expect(AssetUtils::fileExists('https://93.184.216.34/file.pdf'))->toBe($expected);
+
+    // An existence check never needs the body
+    Http::assertSent(static fn (Request $request): bool => $request->method() === 'HEAD');
+})->with([
+    'found' => [200, true],
+    'not found' => [404, false],
+    'a server error' => [500, false],
+]);
+
+it('lets a transport failure reach the caller rather than reporting the file missing', function (): void {
+    Http::fake(static function (): never {
+        throw new ConnectionException('Connection refused');
+    });
+
+    expect(fn (): bool => AssetUtils::fileExists('https://93.184.216.34/file.pdf'))
+        ->toThrow(ConnectionException::class, 'Connection refused');
+});
+
+it('gives an existence check thirty seconds', function (): void {
+    expect(AssetUtils::EXISTENCE_CHECK_TIMEOUT_SECONDS)->toBe(30);
 });
