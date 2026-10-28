@@ -340,11 +340,17 @@ class TablePressEntryCreator extends BaseEntryCreator
                 // The Tiptap parser finds no document body in an excerpt with no body
                 // content (whitespace, comments, or head-only markup such as a title or
                 // a script), and throws a TypeError from its DOM reader. That is an
-                // excerpt with no description, so it must not end the import.
+                // excerpt with no description, so it must not end the import. Any other
+                // TypeError is let through: an excerpt that decodes as JSON throws one
+                // of its own, and its text would be lost (#267).
                 // ---
                 try {
                     $document = $editor->setContent($html)->getDocument();
-                } catch (\TypeError) {
+                } catch (\TypeError $error) {
+                    if (! \str_contains($error->getMessage(), 'DOMParser::getDocumentBody()')) {
+                        throw $error;
+                    }
+
                     $document = null;
                 }
 

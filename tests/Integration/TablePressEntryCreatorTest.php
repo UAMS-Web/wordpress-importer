@@ -870,6 +870,7 @@ describe('the defaults and the description', function (): void {
         'a double-encoded quote' => ['<p>Say &AMP;quot;hi&AMP;quot;</p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Say "hi"']]]]],
         'only a comment' => ['<!-- note -->', null],
         'only whitespace' => [" \n ", null],
+        'only a title' => ['<title>Head only</title>', null],
     ]);
 });
 
@@ -1064,4 +1065,11 @@ describe('mapping options and reporting Premium features', function (): void {
         'absent' => [[]],
         'not digits' => [['datatables_paginate_entries' => 'abc']],
     ]);
+});
+
+describe('an excerpt Tiptap reads as JSON', function (): void {
+    it('lets the TypeError for a quoted-string excerpt through, as main does (#267)', function (): void {
+        expect(fn () => tablePressRun(tablePressExport([['excerpt' => '"Quoted caption"', 'meta' => tablePressMeta()]])))
+            ->toThrow(TypeError::class, 'Cannot access offset of type string on string');
+    });
 });
