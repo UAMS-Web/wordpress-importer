@@ -1906,11 +1906,9 @@ The following classes are located in `src/Services/WordPressImport/Tiptap/Nodes/
 - **Inheritance**: Extends [`AbstractSetRenderer`](#abstractsetrenderer)
 - **Key Functionality**:
   - Handles shortcode-based set parsing.
-  - Provides configuration for Tiptap parsing.
   - Supports future shortcode-based sets.
 - **Methods**:
   - `__construct()`: Initializes the shortcode renderer.
-  - `getShortcodeConfig()`: Gets shortcode parsing configuration.
   - `renderHTML()`: Renders a shortcode-based set node to HTML.
 
 ##### Table

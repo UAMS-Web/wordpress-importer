@@ -63,7 +63,3 @@ it('starts a shortcode set renderer as a people renderer', function (): void {
 
     expect((new ReflectionProperty($renderer, 'setType'))->getValue($renderer))->toBe('people');
 });
-
-it('offers no shortcode parsing configuration', function (): void {
-    expect((new Shortcode)->getShortcodeConfig())->toBe([]);
-});
