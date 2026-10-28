@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators;
 
+use Carbon\Carbon;
 use DateTime;
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Illuminate\Support\Facades\Log;
@@ -99,13 +100,6 @@ class TablePressEntryCreator extends BaseEntryCreator
     protected $overwriteBehavior = 'Overwrite matching files';
 
     /**
-     * Cache of imported table entry IDs.
-     *
-     * @var array<string, string>
-     */
-    protected static $tableCache = [];
-
-    /**
      * Sets the overwrite behavior for table entry imports.
      *
      * Configures how existing entries with matching IDs are handled: overwrite,
@@ -118,17 +112,6 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $behavior
     ): void {
         $this->overwriteBehavior = $behavior;
-    }
-
-    /**
-     * Clears the table entry cache.
-     *
-     * Resets the cache of imported table entry IDs to prevent reuse across import
-     * runs.
-     */
-    public static function clearTableCache(): void
-    {
-        self::$tableCache = [];
     }
 
     /**
@@ -335,8 +318,12 @@ class TablePressEntryCreator extends BaseEntryCreator
             // Log progress for the current table
             $output->writeln("Processing table '$entrySlug' with content length: ".\strlen($contentEncoded));
 
-            // Convert excerpt to Bard format for 'description' field
-            if ($excerptEncoded !== '') {
+            // ---
+            // Convert excerpt to Bard format for 'description' field. A blank one is
+            // skipped: the Tiptap parser finds no document body in whitespace alone
+            // and throws a TypeError, which would end the import.
+            // ---
+            if (\trim($excerptEncoded) !== '') {
                 $editor = new Editor([
                     'extensions' => [
                         new Document,
@@ -619,8 +606,7 @@ class TablePressEntryCreator extends BaseEntryCreator
      * Checks for existing entries with matching IDs or slugs and applies the
      * configured overwrite behavior: overwrite, skip, or create additional entries
      * with modified slugs. Deletes any entries with incorrect slugs
-     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Caches
-     * the entry ID for reuse in the current import run. Determines the published
+     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Determines the published
      * status from status_and_visibility if $published is null, defaulting to true
      * for TablePress entries when the field is absent, as tables are typically
      * published.
@@ -830,7 +816,8 @@ class TablePressEntryCreator extends BaseEntryCreator
         if ($finalEntryDate instanceof DateTime) {
             // Only set date if the collection is dated
             if ($isCollectionDated) {
-                $entry->date($finalEntryDate);
+                // Statamic reads a date that is not a Carbon as a string, so wrap it
+                $entry->date(Carbon::instance($finalEntryDate));
             } else {
                 // Enhance log context with entry information
                 $logData = LogContextHelper::enhanceWithEntryContext(
@@ -856,12 +843,6 @@ class TablePressEntryCreator extends BaseEntryCreator
         $entry->save();
 
         $output->writeln("  - <info>Saving entry with slug '$entrySlug' for collection '$collectionHandle'</info>");
-
-        // Cache the entry ID
-        $savedEntryId = $entry->id();
-        self::$tableCache[$entryId] = \is_string($savedEntryId)
-            ? $savedEntryId
-            : $entryId;
 
         return $entry;
     }
