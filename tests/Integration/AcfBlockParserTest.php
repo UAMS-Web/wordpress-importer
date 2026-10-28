@@ -333,7 +333,7 @@ final class AcfBlockContext
     {
         $this->assetImporter = new FakeAssetImporter;
         $this->output = new NullOutput;
-        $this->items = [(object) ['link' => 'https://example.edu/source-page/']];
+        $this->items = [acfBlockObject(['link' => 'https://example.edu/source-page/'])];
     }
 
     /**
@@ -360,6 +360,23 @@ final class AcfBlockContext
             default => throw new InvalidArgumentException('Unknown argument'),
         }, array_values($template));
     }
+}
+
+/**
+ * An object with the given properties, as a WXR item stands in for one.
+ *
+ * @param  array<string, mixed>  $properties  The properties
+ * @return stdClass The object
+ */
+function acfBlockObject(array $properties): stdClass
+{
+    $object = new stdClass;
+
+    foreach ($properties as $name => $value) {
+        $object->{$name} = $value;
+    }
+
+    return $object;
 }
 
 /**
@@ -572,9 +589,9 @@ describe('a self-closing block', function (): void {
     })->with([
         'no items' => [[]],
         'an array item' => [[['link' => 'https://example.edu/']]],
-        'no link' => [[(object) ['title' => 'Page']]],
-        'a link that is not a string' => [[(object) ['link' => 42]]],
-        'the link on the second item' => [[(object) [], (object) ['link' => 'https://example.edu/']]],
+        'no link' => [[acfBlockObject(['title' => 'Page'])]],
+        'a link that is not a string' => [[acfBlockObject(['link' => 42])]],
+        'the link on the second item' => [[acfBlockObject([]), acfBlockObject(['link' => 'https://example.edu/'])]],
     ]);
 });
 

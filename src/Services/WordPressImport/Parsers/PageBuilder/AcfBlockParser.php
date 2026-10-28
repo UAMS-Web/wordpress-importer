@@ -51,7 +51,7 @@ class AcfBlockParser
      * The supported ACF block types, in the order a comment is matched against
      * them, each mapped to whether its block comment may omit the attribute JSON.
      */
-    private const BLOCK_TYPES = [
+    private const array BLOCK_TYPES = [
         'action-bar' => true,
         'uams-section' => true,
         'uams-content' => true,
