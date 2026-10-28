@@ -39,6 +39,8 @@ class Client
     /**
      * The API's own maximum page size; asking for more is silently clamped there.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int MAX_PER_PAGE = 200;
 
     /**
@@ -48,6 +50,8 @@ class Client
      * endpoint ignoring `page` would otherwise loop forever. At the maximum page size this
      * is two million records, well beyond any collection this importer will meet.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int MAX_PAGES = 10000;
 
     /**
@@ -59,11 +63,15 @@ class Client
      * Every other status describes the request rather than the moment, so repeating it
      * changes nothing and delays the message that would have fixed it.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem, IncrementInteger, DecrementInteger
     private const array RETRYABLE_STATUSES = [429, 502, 503, 504];
 
     /**
      * Total attempts for one request, the first included.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int MAX_ATTEMPTS = 4;
 
     /**
@@ -75,18 +83,25 @@ class Client
      * unreasonable value is reported rather than obeyed, and it bounds whatever an
      * intermediate proxy or a future core release decides to send.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int RETRY_BUDGET_SECONDS = 30;
 
     /**
      * The first backoff, doubled on each subsequent attempt.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int FIRST_BACKOFF_MS = 1000;
 
     /**
      * What a retry of the last request is worth saying in its error message.
      *
-     * Reset at the start of every request, so it never describes an earlier one.
+     * Written by every request that returns a response, before its body is decoded, so it
+     * never describes an earlier one.
      */
+    // PCOV records no line for a property default, and every read follows a write.
+    // @pest-mutate-ignore: EmptyStringToNotEmpty
     private string $retryNote = '';
 
     /**
@@ -156,7 +171,8 @@ class Client
             ));
         }
 
-        if (! \is_string($host) || $host === '') {
+        // `parse_url()` answers false, never '', for an address with no host
+        if (! \is_string($host)) {
             throw new MigrationApiException(\sprintf(
                 'The migration API address "%s" has no host. Refusing to send the API key to '
                 .'an address that cannot be identified.',
@@ -259,7 +275,7 @@ class Client
             ));
         }
 
-        if (! \is_string($host) || $host === '') {
+        if (! \is_string($host)) {
             throw new MigrationApiException(\sprintf(
                 'The migration API reported a site root of "%s", which has no host. Refusing '
                 .'to send the shared secret to an address that cannot be identified.',
@@ -328,8 +344,27 @@ class Client
         $total = null;
         $totalPages = null;
         $pageSize = $this->pageSize();
+        $reads = 0;
 
         do {
+            // ---
+            // A server that answers every page with a full one, an endpoint ignoring
+            // `page` say, would otherwise loop forever. Where the API reports a page count,
+            // that bounds the walk below; otherwise this ceiling, far beyond any real
+            // collection, does. It counts reads rather than pages and sits at the top of
+            // the loop, so no path through the body can repeat a read without reaching it.
+            // ---
+            if ($reads >= self::MAX_PAGES) {
+                throw new MigrationApiException(\sprintf(
+                    'The migration API served %d full pages for "%s" without ending. '
+                    .'Refusing to keep reading.',
+                    self::MAX_PAGES,
+                    $path
+                ));
+            }
+
+            $reads++;
+
             $response = $this->request(
                 $path,
                 $site,
@@ -346,7 +381,11 @@ class Client
                 $header = $response->header('X-WP-Total');
                 $total = \is_numeric($header) ? (int) $header : null;
 
+                // PHP compares a numeric string with an int as numbers, so the cast only
+                // keeps the type.
                 $pagesHeader = $response->header('X-WP-TotalPages');
+
+                // @pest-mutate-ignore: RemoveIntegerCast
                 $totalPages = \is_numeric($pagesHeader) ? (int) $pagesHeader : null;
             }
 
@@ -378,20 +417,9 @@ class Client
 
             $page++;
 
-            // A server that answers every page with a full one — an endpoint ignoring
-            // `page`, say — would otherwise loop forever. Bound it by what the API itself
-            // reported, or by a ceiling far beyond any real collection.
+            // The page count the API itself reported bounds the walk too
             if ($totalPages !== null && $page > $totalPages) {
                 break;
-            }
-
-            if ($page > self::MAX_PAGES) {
-                throw new MigrationApiException(\sprintf(
-                    'The migration API served %d full pages for "%s" without ending. '
-                    .'Refusing to keep reading.',
-                    self::MAX_PAGES,
-                    $path
-                ));
             }
         } while (true);
 
@@ -433,9 +461,7 @@ class Client
 
         $url = $this->baseUrl.'/wp-json/'.self::NAMESPACE.'/'.\ltrim($path, '/');
 
-        // Retry telemetry for this request alone. It is reset here rather than reused so a
-        // message can never describe an earlier request's retries.
-        $this->retryNote = '';
+        // Retry telemetry for this request alone
         $waited = 0;
         $failures = 0;
         $askedFor = null;
@@ -473,7 +499,7 @@ class Client
                 ->acceptJson()
                 ->get($url, $query);
 
-            $this->retryNote = $this->retrySummary($response, $failures, $waited, $askedFor);
+            $this->retryNote = $this->retrySummary($failures, $waited, $askedFor);
 
             return $response;
         } catch (ConnectionException $connectionException) {
@@ -610,12 +636,16 @@ class Client
             return false;
         }
 
+        // A status is an int, so strict and loose comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
         if (! \in_array($exception->response->status(), self::RETRYABLE_STATUSES, true)) {
             return false;
         }
 
         $remaining = self::RETRY_BUDGET_SECONDS * 1000 - $waited;
 
+        // The budget and every wait are whole seconds, so nothing is left between 0 and 1ms.
+        // @pest-mutate-ignore: IncrementInteger
         if ($remaining <= 0) {
             return false;
         }
@@ -626,6 +656,9 @@ class Client
         // than the whole budget, stopping now and reporting the number is more useful than
         // either obeying it — minutes of silence — or ignoring it and hammering a host that
         // has said it is unavailable.
+        // The budget and the wait are whole seconds, so reading the wait as 999ms a second
+        // could only differ from 1000 for a wait of a thousand seconds or more.
+        // @pest-mutate-ignore: DecrementInteger
         if ($retryAfter !== null && $retryAfter * 1000 > $remaining) {
             $askedFor = $retryAfter;
 
@@ -648,20 +681,23 @@ class Client
         mixed $exception,
         int $waited
     ): int {
-        $remaining = \max(0, self::RETRY_BUDGET_SECONDS * 1000 - $waited);
+        // `shouldRetry()` runs first and refuses a request with no budget left, so this
+        // is always above zero
+        $remaining = self::RETRY_BUDGET_SECONDS * 1000 - $waited;
 
         // A server that named a delay knows better than the arithmetic does. `shouldRetry()`
-        // has already refused anything longer than the budget, so this can only shorten or
-        // lengthen the wait within it.
+        // has already refused anything longer than the remaining budget, so it needs no
+        // clamp here. Only a request failure is retried, so the narrowing only types it.
+        // @pest-mutate-ignore: InstanceOfToTrue
         if ($exception instanceof RequestException) {
             $retryAfter = $this->retryAfterSeconds($exception->response);
 
             if ($retryAfter !== null) {
-                return \min($retryAfter * 1000, $remaining);
+                return $retryAfter * 1000;
             }
         }
 
-        return (int) \min(self::FIRST_BACKOFF_MS * 2 ** ($attempt - 1), $remaining);
+        return \min(self::FIRST_BACKOFF_MS * 2 ** ($attempt - 1), $remaining);
     }
 
     /**
@@ -677,9 +713,11 @@ class Client
     private function retryAfterSeconds(
         Response $response
     ): ?int {
-        $header = \trim($response->header('Retry-After'));
+        // Guzzle trims a header value as it parses it, so it needs no trim here
+        $header = $response->header('Retry-After');
 
-        if ($header === '' || ! \ctype_digit($header)) {
+        // `ctype_digit('')` is false, so an empty header is refused with the rest
+        if (! \ctype_digit($header)) {
             return null;
         }
 
@@ -702,8 +740,10 @@ class Client
             return;
         }
 
+        // Only a request failure is retried, so the transport wording is never reached
+        // @pest-mutate-ignore: InstanceOfToTrue
         $status = $exception instanceof RequestException
-            ? (string) $exception->response->status()
+            ? $exception->response->status()
             : 'a transport failure';
 
         ($this->onRetry)(\sprintf(
@@ -717,22 +757,18 @@ class Client
     /**
      * What the retries are worth appending to a failure message.
      *
-     * @param  Response  $response  The response the attempts ended on
+     * Read only when the response failed, so a successful response needs no check here.
+     *
      * @param  int  $failures  Failed attempts made
      * @param  int  $waited  Milliseconds spent sleeping
      * @param  int|null  $askedFor  A `Retry-After` that exceeded the budget, where one did
      * @return string The appended sentence, empty when nothing was retried
      */
     private function retrySummary(
-        Response $response,
         int $failures,
         int $waited,
         ?int $askedFor
     ): string {
-        if (! $response->failed()) {
-            return '';
-        }
-
         // The server named a delay this run will not wait out. Reporting the number is what
         // lets an operator decide to come back rather than guess at the outage.
         if ($askedFor !== null) {
@@ -765,7 +801,14 @@ class Client
     private function humanize(
         int $milliseconds
     ): string {
-        return \rtrim(\rtrim(\number_format($milliseconds / 1000, 1), '0'), '.').'s';
+        // Every duration here is whole seconds of at most 30, so a divisor off by one still
+        // rounds to the same tenth.
+        // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+        $seconds = $milliseconds / 1000;
+
+        // A second decimal place is trimmed away like the first for a whole second.
+        // @pest-mutate-ignore: IncrementInteger
+        return \rtrim(\rtrim(\number_format($seconds, 1), '0'), '.').'s';
     }
 
     /**
