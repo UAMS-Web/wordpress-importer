@@ -907,6 +907,7 @@ it('decodes a double-encoded numeric entity to the same character with WpAutoP a
     'em dash, above 255' => ['&amp;#8212;', "\u{2014}"],
     'e acute, 128 to 255' => ['&amp;#233;', "\u{00E9}"],
     'ASCII' => ['&amp;#65;', 'A'],
+    'a carriage return' => ['&amp;#13;', "\n"],
     'the digit zero, which is falsy' => ['&amp;#48;', '0'],
     'outside the BMP' => ['&amp;#128512;', "\u{1F600}"],
     'NUL' => ['&amp;#0;', "\u{FFFD}"],
