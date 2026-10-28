@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
+use DOMComment;
 use DOMNode;
 use DOMNodeList;
 use Statamic\Fieldtypes\RowId;
@@ -176,8 +177,7 @@ class NonAcfBlockParser
 
         // Handle wp:* comment nodes for specific blocks
         if ($node->nodeType === XML_COMMENT_NODE) {
-            $nodeValue = $node->nodeValue;
-            $comment = \is_string($nodeValue) ? \trim($nodeValue) : '';
+            $comment = \trim($node->textContent);
             $attributes = [];
             if (
                 \preg_match(
@@ -188,8 +188,7 @@ class NonAcfBlockParser
             ) {
                 $decodedAttributes = \json_decode(
                     $matches[0],
-                    true,
-                    512
+                    true
                 );
                 $attributes = \is_array($decodedAttributes) ? $decodedAttributes : [];
             }
@@ -314,9 +313,6 @@ class NonAcfBlockParser
                     && isset($result['page_builder_set'])
                     && \is_array($result['page_builder_set'])
                 ) {
-                    // Mark that we processed this block
-                    $processed = true;
-
                     // Use skip count from shortcode processor result
                     $skipCount = $this->resolveSkipCount($result);
 
@@ -355,18 +351,13 @@ class NonAcfBlockParser
                         $skipCount++;
 
                         $candidateNode = $nodes->item($i);
-                        $candidateNodeValue = $candidateNode?->nodeValue;
-                        $candidateComment = \is_string($candidateNodeValue)
-                            ? \trim($candidateNodeValue)
-                            : '';
 
                         // Check if this node is the closing wp:shortcode comment
                         if (
-                            $candidateNode !== null
-                            && $candidateNode->nodeType === XML_COMMENT_NODE
+                            $candidateNode instanceof DOMComment
                             && \preg_match(
                                 '/^\/wp:shortcode\s*$/',
-                                $candidateComment
+                                \trim($candidateNode->data)
                             ) === 1
                         ) {
                             // Stop counting when closing comment is found
@@ -387,19 +378,17 @@ class NonAcfBlockParser
                 );
 
                 // Check if block was successfully processed by a common processor
-                if ($result !== null && $result !== []) {
-                    $resultHtml = $this->extractHtmlFromFragment($result);
+                $resultHtml = $this->extractHtmlFromFragment($result);
 
-                    if ($resultHtml !== null) {
-                        // Add the processed HTML to the accumulator
-                        $accumulator[] = ['html' => $resultHtml];
+                if ($resultHtml !== null) {
+                    // Add the processed HTML to the accumulator
+                    $accumulator[] = ['html' => $resultHtml];
 
-                        // Mark this node as processed
-                        $processed = true;
+                    // Mark this node as processed
+                    $processed = true;
 
-                        // Set the skip count from the processor result
-                        $skipCount = $this->resolveSkipCount($result);
-                    }
+                    // Set the skip count from the processor result
+                    $skipCount = $this->resolveSkipCount($result);
                 }
             }
 
@@ -415,8 +404,6 @@ class NonAcfBlockParser
                 $processed = true;
                 $skipCount = 1;
             }
-
-            return ['processed' => $processed, 'skipCount' => $skipCount];
         }
 
         // Skip <div> nodes containing [formidable] shortcodes if inside a Formidable Forms block
@@ -502,10 +489,6 @@ class NonAcfBlockParser
         AssetImporter $assetImporter,
         OutputInterface $output
     ): ?array {
-        if ($nonAcfContent === []) {
-            return null;
-        }
-
         // Concatenate HTML fragments
         $htmlFragments = [];
         foreach ($nonAcfContent as $fragment) {
@@ -612,14 +595,8 @@ class NonAcfBlockParser
     private function extractHtmlFromFragment(
         ?array $fragment
     ): ?string {
-        if (
-            $fragment === null
-            || ! isset($fragment['html'])
-            || ! \is_string($fragment['html'])
-        ) {
-            return null;
-        }
+        $html = $fragment['html'] ?? null;
 
-        return $fragment['html'];
+        return \is_string($html) ? $html : null;
     }
 }
