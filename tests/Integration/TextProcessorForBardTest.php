@@ -1172,15 +1172,33 @@ it('keeps a later node identical to one a block processor processed', function (
     expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:pull_quote', 'paragraph:Between', 'paragraph:Q', 'paragraph:After']);
 });
 
-it('does not parse a block\'s figure again when the figure lies past the nodes it skips', function (): void {
+it('skips a table block through its closing comment, and keeps what follows it', function (string $html, array $summary): void {
     textProcessorForBardFakes();
+    textProcessorForBardWarnings();
 
-    // Characterization of #197: the table processor finds its figure past three
-    // paragraphs, and its fixed skip count consumes the first two of them; the figure
-    // itself is tracked as processed, so it is not parsed again
-    $content = textProcessorForBard('<!-- wp:table --><p>A</p><p>B</p><p>C</p><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>');
+    // #197: the table processor finds its figure among the block's own nodes and
+    // skips exactly those, so nothing after the closing comment is lost; content in
+    // the block besides the figure is dropped with a warning, which
+    // TableProcessorTest asserts
+    $content = textProcessorForBard($html);
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:table', 'paragraph:C']);
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe($summary);
+})->with([
+    'content ahead of the figure' => ['<!-- wp:table --><p>A</p><p>B</p><p>C</p><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><!-- /wp:table --><p>After</p>', ['set:table', 'paragraph:After']],
+    'the figure alone, with whitespace' => ["<!-- wp:table -->\n<figure class=\"wp-block-table\"><table><tbody><tr><td>T</td></tr></tbody></table></figure>\n<!-- /wp:table -->\n<p>After</p>", ['set:table', 'paragraph:After']],
+    'a block that is never closed, before another block' => ['<!-- wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure><!-- wp:paragraph --><p>Next</p><!-- /wp:paragraph -->', ['set:table', 'paragraph:Next']],
+]);
+
+it('takes no table figure from past a table block that holds none', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    // The figure after the closing comment is ordinary content, so it is parsed as
+    // HTML rather than imported as this block's table
+    $content = textProcessorForBard('<!-- wp:table --><p>A</p><!-- /wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->not->toContain('set:table')
+        ->and(array_map(textProcessorForBardSummary(...), $content)[0] ?? null)->toBe('paragraph:A');
 });
 
 it('reads nothing past a shortcode block that ends the content', function (): void {

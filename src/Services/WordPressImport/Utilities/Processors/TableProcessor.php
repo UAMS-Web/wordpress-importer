@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
+use DOMComment;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
-use DOMXPath;
+use DOMText;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -94,22 +95,11 @@ class TableProcessor implements BlockProcessorInterface
             return null;
         }
 
-        // Create an XPath helper scoped to the owner document.
-        $xpath = new DOMXPath($doc);
+        // Read the block's own nodes, up to its closing comment (#197)
+        $extent = self::blockExtent($node);
+        $figureNode = $extent['figure'];
 
-        // Find the next figure node after the wp:table comment. query() returns
-        // false only for a malformed expression or context node, which this
-        // constant expression and in-document node cannot be.
-        $figureNodes = $xpath->query(
-            'following-sibling::figure[contains(@class, "wp-block-table")][1]',
-            $node
-        );
-
-        // query() never returns false here, as above.
-        // @pest-mutate-ignore: FalseToTrue
-        $figureNode = $figureNodes === false ? null : $figureNodes->item(0);
-
-        // The expression selects only figure elements, so anything else is no match.
+        // A block with no table figure among its own nodes has nothing to import
         if (! $figureNode instanceof DOMElement) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
@@ -343,10 +333,108 @@ class TableProcessor implements BlockProcessorInterface
             $attrs
         );
 
+        // ---
+        // The skip covers the whole block, so anything else in it is not imported.
+        // WordPress writes a table block as its figure alone, so this records a
+        // block that was written some other way rather than losing it silently.
+        // ---
+        if ($extent['others'] !== []) {
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'pageSlug' => $pageSlug ?? 'none',
+                    'dropped_html' => \substr(
+                        \implode('', \array_map(
+                            static fn (DOMNode $other): string => (string) $doc->saveHTML($other),
+                            $extent['others']
+                        )),
+                        0,
+                        100
+                    ),
+                ]
+            );
+
+            // Log warning about the content dropped with the block
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    'TableProcessor::process: Dropped content in a wp:table block outside its figure',
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
         return [
             'html' => $html,
             'processedNode' => $figureNode,
-            'skipCount' => 3, // Skip opening comment, figure node, and closing comment
+            'skipCount' => $extent['skipCount'],
+        ];
+    }
+
+    /**
+     * Reads a wp:table block's own nodes, from its opening comment to its closing one.
+     *
+     * The block ends at its closing comment, which it includes, or at any other block
+     * comment, which it does not, so a block that is never closed takes nothing from
+     * the blocks after it. The first `wp-block-table` figure among the nodes is the
+     * block's figure; every other node but whitespace and comments is content the
+     * block holds besides it. Whitespace-only text is not counted, as the caller's
+     * walk over a skip count does not count it.
+     *
+     * @param  DOMNode  $comment  The block's opening comment
+     * @return array{figure: ?DOMElement, skipCount: int, others: list<DOMNode>} The figure, the number of nodes the block spans with its opening comment, and its other content
+     */
+    private static function blockExtent(
+        DOMNode $comment
+    ): array {
+        // Start with the opening comment and nothing found
+        $figure = null;
+        $others = [];
+        $skipCount = 1;
+
+        // Walk the siblings after the opening comment
+        for ($current = $comment->nextSibling; $current instanceof DOMNode; $current = $current->nextSibling) {
+            // A block comment ends the block; only the block's own closing one is part of it
+            if ($current instanceof DOMComment && \preg_match('/^\/?wp:/', \trim($current->data)) === 1) {
+                if (\trim($current->data) === '/wp:table') {
+                    $skipCount++;
+                }
+
+                break;
+            }
+
+            // Whitespace between the block's nodes is not counted
+            if ($current instanceof DOMText && \trim($current->data) === '') {
+                continue;
+            }
+
+            $skipCount++;
+
+            // Take the first table figure as the block's figure
+            if (
+                $figure === null
+                && $current instanceof DOMElement
+                && $current->tagName === 'figure'
+                && \str_contains($current->getAttribute('class'), 'wp-block-table')
+            ) {
+                $figure = $current;
+
+                continue;
+            }
+
+            // A comment that is not a block's holds no content
+            if ($current instanceof DOMComment) {
+                continue;
+            }
+
+            $others[] = $current;
+        }
+
+        return [
+            'figure' => $figure,
+            'skipCount' => $skipCount,
+            'others' => $others,
         ];
     }
 
