@@ -923,6 +923,23 @@ it('keeps a figure right after a block whose processor skips nodes', function ()
         ->and($fakes['image']->calls)->toHaveCount(1);
 });
 
+it('gives a later figure no attributes of an image block whose processor consumed its closing comment', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    // With image uploads off, the block's own processor builds the set from the original
+    // URL, so the block is claimed
+    $importer = Mockery::mock(AssetImporter::class);
+    $importer->allows('getUploadImages')->andReturn(false);
+    $importer->allows('getBaseBlogUrl')->andReturn('https://example.org');
+
+    // The div-wrapped figure's skip covers the closing comment, so the attributes are
+    // cleared when the block is claimed rather than at the comment (#153)
+    $result = TextProcessor::processForBard('<!-- wp:image {"id":5,"align":"left"} --><div class="wp-block-image"><figure class="alignleft"><img src="https://example.org/a.jpg"></figure></div><!-- /wp:image --><figure><img src="b.jpg"></figure>', 'default', $importer, new BufferedOutput);
+
+    expect(array_column($result, 'type'))->toBe(['set', 'set'])
+        ->and($fakes['image']->calls)->toBe([['html' => '<figure><img src="b.jpg"></figure>', 'attributes' => []]]);
+});
+
 it('gives the attributes of an unclaimed image block only to a figure', function (): void {
     $fakes = textProcessorForBardFakes();
 

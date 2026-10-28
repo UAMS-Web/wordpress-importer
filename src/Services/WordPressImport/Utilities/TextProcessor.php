@@ -1133,6 +1133,17 @@ class TextProcessor
                             }
 
                             // ---
+                            // A processor that returned a result has used the block's
+                            // attributes, and its skip can consume the closing comment that
+                            // would clear them below, so clear them here: a later figure is
+                            // not this block's (#153). A null result leaves them for the
+                            // block's figure, if one follows.
+                            // ---
+                            if ($result !== null) {
+                                $blockAttributes = [];
+                            }
+
+                            // ---
                             // The block is handled, so move to the next node. Leaving only
                             // the processor loop would add the opening comment to the
                             // accumulated content, which the Bard parser strips, so the two
@@ -1149,7 +1160,8 @@ class TextProcessor
             // Check if this is the figure of an image block its processor did not claim,
             // which keeps the block's attributes (#153). They are an image block's only:
             // another unclaimed block's attributes describe that block, not a figure
-            // after it, and the closing image comment below clears them. A figure with
+            // after it. The closing image comment below clears them, and so does a
+            // processor that claims a block. A figure with
             // no image is ordinary content, read further down. Only an element is
             // named `figure`, so the instanceof check only narrows the type.
             // ---
