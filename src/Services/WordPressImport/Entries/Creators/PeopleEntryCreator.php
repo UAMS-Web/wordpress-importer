@@ -624,11 +624,7 @@ class PeopleEntryCreator extends BaseEntryCreator
                         \strlen($metaKeyPrefix)
                     );
 
-                    // ---
-                    // Process meta fields based on suffix. A `continue` that targets a
-                    // switch acts as `break`, so the breaks below cannot be told apart.
-                    // ---
-                    // @pest-mutate-ignore: BreakToContinue
+                    // Process meta fields based on suffix
                     switch ($suffix) {
                         // Handle sort text field
                         case 'sorttext':

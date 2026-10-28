@@ -644,7 +644,7 @@ describe('importing a person', function (): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'bare', 'content' => '']]), PeopleEntryTestConverter::returning(['content' => [], 'page_builder' => []]));
         $data = peopleEntryData(peopleEntry('bare'));
 
-        expect($data)->toMatchArray([
+        $expected = [
             'sort_text_alpha' => null,
             'job_title' => null,
             'people_groups' => [],
@@ -666,7 +666,10 @@ describe('importing a person', function (): void {
             'institutional_video_url' => null,
             'institutional_video_link_text' => null,
             'portrait' => null,
-        ])
+        ];
+
+        // toMatchArray() compares loosely, which would let '' or false stand for null
+        expect(\array_intersect_key($data, $expected))->toBe($expected)
             ->and(PeopleEntryTestPhone::$calls)->toBe([]);
     });
 
@@ -929,4 +932,36 @@ describe('landing a person video', function (): void {
         'an earlier note' => ['Earlier.', 'Earlier. Video imported to the Institutional context; WordPress recorded no academic, clinical, institutional or research context for it.'],
         'a blank note' => ['', 'Video imported to the Institutional context; WordPress recorded no academic, clinical, institutional or research context for it.'],
     ]);
+});
+
+describe('the class itself', function (): void {
+    it('compiles without a warning, which the host application would raise as an exception', function (): void {
+        // ---
+        // The class is already loaded here, so its source is compiled again under a new
+        // name with warnings thrown. A compile warning, such as `continue` targeting a
+        // switch, fails this test, where in the host it would abort the import.
+        // ---
+        $file = (new ReflectionClass(PeopleEntryCreator::class))->getFileName();
+        $source = \is_string($file) ? \file_get_contents($file) : false;
+
+        if (! \is_string($source)) {
+            throw new RuntimeException('Could not read the class source.');
+        }
+
+        $name = 'PeopleEntryCreatorCompileCheck'.\bin2hex(\random_bytes(4));
+        $copy = TemporaryFileRegistry::create('people-compile');
+        \file_put_contents($copy, \str_replace('class PeopleEntryCreator extends', "class {$name} extends", $source));
+
+        \set_error_handler(static function (int $level, string $message): never {
+            throw new ErrorException($message, 0, $level);
+        });
+
+        try {
+            require $copy;
+        } finally {
+            \restore_error_handler();
+        }
+
+        expect(\class_exists('UAMSWeb\\WordPressImporter\\Services\\WordPressImport\\Entries\\Creators\\'.$name, false))->toBeTrue();
+    });
 });
