@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Carbon\CarbonInterval;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -795,4 +796,308 @@ it('carries the progress reporter across withBaseUrl and withRetryReporter', fun
         ->paginate('posts/post');
 
     expect($lines)->toHaveCount(1);
+});
+
+// ---
+// Exact messages, waits and defaults. The cases above assert that each failure raises and
+// what it names; these pin the whole message, each wait in milliseconds, and the values a
+// client starts with, so a change to any of them is seen.
+// ---
+
+/**
+ * The message a call raises.
+ *
+ * @param  Closure(): mixed  $call  The call expected to raise
+ * @return string The message, or a note that nothing was raised
+ */
+function migrationApiMessage(Closure $call): string
+{
+    try {
+        $call();
+    } catch (MigrationApiException $exception) {
+        return $exception->getMessage();
+    }
+
+    return '(nothing raised)';
+}
+
+/**
+ * Fake sleeping, and record each wait in milliseconds.
+ *
+ * @return ArrayObject<int, float> The waits, as they happen
+ */
+function migrationApiWaits(): ArrayObject
+{
+    /** @var ArrayObject<int, float> $waits */
+    $waits = new ArrayObject;
+
+    Sleep::fake();
+    Sleep::whenFakingSleep(static function (CarbonInterval $duration) use ($waits): void {
+        $waits->append($duration->totalMilliseconds);
+    });
+
+    return $waits;
+}
+
+it('names the address and its scheme when it refuses one that is not https', function (string $address, string $expected): void {
+    expect(migrationApiMessage(fn () => Client::forRun($address, 'key')))->toBe($expected);
+})->with([
+    'a cleartext scheme' => [
+        'http://network.test',
+        'The migration API address must be an absolute `https://` URL, got "http://network.test" (scheme "http"). '
+        .'Refusing to send the API key over a scheme that would put it on the wire in cleartext.',
+    ],
+    'no scheme at all' => [
+        'network.test',
+        'The migration API address must be an absolute `https://` URL, got "network.test". '
+        .'Refusing to send the API key over a scheme that would put it on the wire in cleartext.',
+    ],
+]);
+
+it('names the address when it refuses one with no host', function (): void {
+    expect(migrationApiMessage(fn () => Client::forRun('https:/network.test', 'key')))->toBe(
+        'The migration API address "https:/network.test" has no host. Refusing to send the API key to '
+        .'an address that cannot be identified.'
+    );
+});
+
+it('accepts a page size of 1', function (): void {
+    config(['wordpress-import.migration_api.per_page' => 1]);
+
+    expect(Client::forRun('https://network.test', 'key')->recordsPerPage())->toBe(1);
+});
+
+it('starts a client at 100 records a page and a 30-second timeout', function (): void {
+    /** @var ArrayObject<int, mixed> $timeouts */
+    $timeouts = new ArrayObject;
+
+    Http::fake(static function (Request $request, array $options) use ($timeouts) {
+        $timeouts->append($options['timeout'] ?? null);
+
+        return Http::response([], 200);
+    });
+
+    (new Client('https://example.test', 'shhh'))->paginate('posts/post');
+
+    expect(sentQueries()[0]['per_page'] ?? null)->toBe('100')
+        ->and($timeouts->getArrayCopy())->toBe([30]);
+});
+
+it('trims a site root before using it', function (): void {
+    Http::fake(['*' => Http::response([], 200)]);
+
+    migrationApiClient()->withBaseUrl("  https://site.example.test/  \n")->get('options');
+
+    Http::assertSent(static fn (Request $request): bool => \str_starts_with($request->url(), 'https://site.example.test/wp-json/'));
+});
+
+it('names the site root, its scheme and the configured one when it refuses a site root', function (string $root, string $expected): void {
+    expect(migrationApiMessage(fn () => migrationApiClient()->withBaseUrl($root)))->toBe($expected);
+})->with([
+    'a downgraded scheme' => [
+        'http://site.example.test',
+        'The migration API reported a site root of "http://site.example.test", which is "http" rather than "https" '
+        .'as configured. Refusing to send the shared secret over a scheme the operator did not choose.',
+    ],
+    'no scheme' => [
+        'site.example.test',
+        'The migration API reported a site root of "site.example.test", which is not an absolute URL rather than '
+        .'"https" as configured. Refusing to send the shared secret over a scheme the operator did not choose.',
+    ],
+    'no host' => [
+        'https:/site.example.test',
+        'The migration API reported a site root of "https:/site.example.test", which has no host. Refusing to send the shared '
+        .'secret to an address that cannot be identified.',
+    ],
+]);
+
+it('names the configured scheme as none when the base URL carries none', function (): void {
+    $client = new Client('example.test', 'shhh');
+
+    expect(migrationApiMessage(fn () => $client->withBaseUrl('https://site.example.test')))->toBe(
+        'The migration API reported a site root of "https://site.example.test", which is "https" rather than '
+        .'"(none)" as configured. Refusing to send the shared secret over a scheme the operator did not choose.'
+    );
+});
+
+it('stops after 10,000 full pages with no total, naming the route', function (): void {
+    Http::fake(['*' => Http::response([['id' => 1]], 200)]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient(1)->paginate('posts/post')))->toBe(
+        'The migration API served 10000 full pages for "posts/post" without ending. Refusing to keep reading.'
+    );
+
+    Http::assertSentCount(10000);
+})->group('slow');
+
+it('does not retry an unreachable endpoint, and reports it with code 0', function (): void {
+    migrationApiWaits();
+
+    /** @var ArrayObject<int, bool> $attempts */
+    $attempts = new ArrayObject;
+
+    Http::fake(static function () use ($attempts): void {
+        $attempts->append(true);
+
+        throw new ConnectionException('host unreachable');
+    });
+
+    try {
+        migrationApiClient()->get('posts/page');
+        $code = null;
+    } catch (MigrationApiException $exception) {
+        $code = $exception->getCode();
+    }
+
+    expect($code)->toBe(0)
+        ->and($attempts)->toHaveCount(1);
+});
+
+it('names the route and the Location of a redirect it refuses', function (): void {
+    Http::fake(['*' => Http::response('', 301, ['Location' => 'https://elsewhere.test/x'])]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API redirected "options" to "https://elsewhere.test/x". Refusing to follow it: this '
+        .'request carries the shared secret, and a redirect can send it to another host or downgrade the '
+        .'scheme. Configure the final URL as the base URL instead.'
+    );
+});
+
+it('puts the API\'s explanation ahead of the retry note', function (): void {
+    migrationApiWaits();
+
+    Http::fake(['*' => Http::response(['code' => 'wp_die', 'message' => 'Down for maintenance.'], 503)]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('posts/post')))->toBe(
+        'The migration API returned HTTP 503 for "posts/post" (wp_die). Down for maintenance. '
+        .'Gave up after 4 attempts over 7s of backoff.'
+    );
+});
+
+it('reports a single failure with no retry note', function (): void {
+    Http::fake(['*' => Http::response(['code' => 'rest_forbidden'], 401)]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API returned HTTP 401 for "options" (rest_forbidden).'
+    );
+
+    try {
+        migrationApiClient()->get('options');
+        $apiCode = null;
+    } catch (MigrationApiException $exception) {
+        $apiCode = $exception->apiCode();
+    }
+
+    expect($apiCode)->toBe('rest_forbidden');
+});
+
+it('reports two failed attempts and the backoff between them', function (): void {
+    migrationApiWaits();
+
+    Http::fake([
+        '*' => Http::sequence()
+            ->push(['code' => 'wp_die'], 503)
+            ->push(['code' => 'rest_forbidden'], 401),
+    ]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API returned HTTP 401 for "options" (rest_forbidden). Gave up after 2 attempts over 1s of backoff.'
+    );
+});
+
+it('names the Retry-After that exceeds the budget, and the budget', function (): void {
+    migrationApiWaits();
+
+    Http::fake(['*' => Http::response(['code' => 'wp_die'], 503, ['Retry-After' => '31'])]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API returned HTTP 503 for "options" (wp_die). The server asked for 31s via Retry-After, '
+        ."which exceeds this client's 30s retry budget, so the run stopped rather than waiting it out. Re-run "
+        .'once the window has passed.'
+    );
+});
+
+it('waits out a Retry-After of exactly the budget, then stops when none is left', function (): void {
+    $waits = migrationApiWaits();
+
+    Http::fake(['*' => Http::response(['code' => 'wp_die'], 503, ['Retry-After' => '30'])]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API returned HTTP 503 for "options" (wp_die). Gave up after 2 attempts over 30s of backoff.'
+    )
+        ->and($waits->getArrayCopy())->toBe([30000.0]);
+});
+
+it('cuts a computed backoff to what is left of the budget', function (): void {
+    $waits = migrationApiWaits();
+
+    Http::fake([
+        '*' => Http::sequence()
+            ->push('', 503, ['Retry-After' => '25'])
+            ->push('', 503)
+            ->push('', 503)
+            ->push([], 200),
+    ]);
+
+    migrationApiClient()->get('options');
+
+    // 25s asked for, then the computed 2s, then the computed 4s cut to the 3s remaining
+    expect($waits->getArrayCopy())->toBe([25000.0, 2000.0, 3000.0]);
+});
+
+it('reads a Retry-After with surrounding whitespace', function (): void {
+    $waits = migrationApiWaits();
+
+    Http::fake(['*' => Http::sequence()->push('', 503, ['Retry-After' => ' 2 '])->push([], 200)]);
+
+    migrationApiClient()->get('options');
+
+    expect($waits->getArrayCopy())->toBe([2000.0]);
+});
+
+it('writes a whole number of seconds without a decimal, including 10', function (): void {
+    migrationApiWaits();
+
+    Http::fake(['*' => Http::sequence()->push('', 503, ['Retry-After' => '10'])->push([], 200)]);
+
+    $messages = [];
+    retryingClient($messages)->get('posts/post');
+
+    expect($messages)->toBe(['The migration API answered 503 for "posts/post". Waiting 10s before trying again.']);
+});
+
+it('trims the API\'s message and parameter guidance, and leaves out blank ones', function (): void {
+    Http::fake(['*' => Http::response([
+        'code' => 'rest_invalid_param',
+        'message' => '  Invalid parameter(s): modified_after  ',
+        'data' => ['params' => ['modified_after' => '  Use an ISO 8601 date.  ', 'blank' => '   ']],
+    ], 400)]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('posts/post')))->toBe(
+        'The migration API returned HTTP 400 for "posts/post" (rest_invalid_param). '
+        .'Invalid parameter(s): modified_after modified_after: Use an ISO 8601 date.'
+    );
+});
+
+it('leaves out a blank message', function (): void {
+    Http::fake(['*' => Http::response(['code' => 'rest_forbidden', 'message' => '   '], 403)]);
+
+    expect(migrationApiMessage(fn () => migrationApiClient()->get('options')))->toBe(
+        'The migration API returned HTTP 403 for "options" (rest_forbidden).'
+    );
+});
+
+it('retries a gateway that answers 502 or 504 while an upstream restarts', function (): void {
+    migrationApiWaits();
+
+    Http::fake([
+        '*' => Http::sequence()
+            ->push('', 502)
+            ->push('', 504)
+            ->push([['id' => 7]], 200),
+    ]);
+
+    expect(migrationApiClient()->get('posts/post'))->toBe([['id' => 7]]);
+
+    Http::assertSentCount(3);
 });
