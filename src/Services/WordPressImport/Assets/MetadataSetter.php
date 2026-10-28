@@ -160,7 +160,7 @@ class MetadataSetter
      *
      * @param  StatamicAsset  $asset  The asset whose blueprint gates the handles
      * @param  array<int|string, mixed>  $metadata  Caller-supplied metadata
-     * @return array<int|string, mixed> Metadata limited to handles the blueprint defines
+     * @return array<int|string, mixed> The metadata without the gated handles the blueprint does not define
      */
     private function filterToBlueprintFields(
         StatamicAsset $asset,
@@ -259,7 +259,7 @@ class MetadataSetter
                 && $additionalMetadata !== []
             ) {
                 // ---
-                // Drop any handle the destination container's blueprint does not define,
+                // Drop any gated handle the destination container's blueprint does not define,
                 // so routing image metadata to non-`images` containers cannot push a
                 // stray key onto a container that lacks the field (wordpress-importer-archive#435). Only the
                 // caller-supplied extras are filtered — the URL and title above are
