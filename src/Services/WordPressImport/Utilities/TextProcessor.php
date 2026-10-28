@@ -616,8 +616,9 @@ class TextProcessor
             // Convert numeric HTML entities for proper WpAutoP processing. Each
             // is decoded as the content is decoded everywhere else, so a code
             // point above 127 keeps its character rather than becoming one byte,
-            // and NUL or a code point that names no character becomes U+FFFD
-            // (#154).
+            // and an entity html_entity_decode() leaves alone, such as NUL, a
+            // carriage return or a surrogate, reaches the steps after WpAutoP as
+            // it does without it (#154).
             $formattedContent = preg_replace_callback(
                 '/&#\d+;/',
                 static fn (array $matches): string => self::decodeEntities($matches[0]),
