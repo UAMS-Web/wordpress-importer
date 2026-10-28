@@ -17,9 +17,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestio
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
-use function Laravel\Prompts\confirm;
-use function Laravel\Prompts\select;
-
 /**
  * Handles interactive prompts for navigation menu selection during WordPress
  * import.
@@ -58,6 +55,9 @@ class NavigationMenuSelector
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails a test in NavigationMenuApiSourceTest (#100)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array PRIMARY_NAVIGATION_LOCATIONS = [
         'uams-2020' => 'primary',
         'uams-2016' => 'white-bar',
@@ -146,7 +146,7 @@ class NavigationMenuSelector
         // prompt exists because a WXR export carries no options row, so a human had to read
         // the menu-locations screen; that constraint does not apply here (wordpress-importer-archive#1145).
         if ($this->client instanceof Client) {
-            $resolved = $this->resolvePrimaryNavigation($output);
+            $resolved = $this->resolvePrimaryNavigation($this->client, $output);
 
             $output->writeln('');
             $output->writeln('<info>Navigation Menu Import</info>');
@@ -190,14 +190,8 @@ class NavigationMenuSelector
             return $default;
         }
 
-        if ($this->isPromptsSupported()) {
-            return confirm(
-                label: $question,
-                default: $default
-            );
-        }
-
-        // Use Symfony Console to ask for confirmation.
+        // Ask with Laravel Prompts where they are supported, and with the command's own
+        // question where they are not
         return $this->askConfirmation(
             $question,
             $default,
@@ -218,11 +212,14 @@ class NavigationMenuSelector
      * The result is cached for the run, so `/options` is fetched once even though both
      * navigation prompts consult it.
      *
+     * @param  Client  $client  The migration API client, passed in rather than re-read from
+     *                          the property so this method needs no unreachable guard
      * @param  OutputInterface  $output  Console output interface
      * @return array{location: string, menu_id: int}|false The resolution, or false when no
      *                                                     active menu could be established
      */
     private function resolvePrimaryNavigation(
+        Client $client,
         OutputInterface $output
     ): array|false {
         // Answer from the cache when this run already asked.
@@ -230,17 +227,16 @@ class NavigationMenuSelector
             return $this->resolution;
         }
 
-        if (! $this->client instanceof Client) {
-            return $this->resolution = false;
-        }
-
         // Read the options table. A failure here is reported and treated as "no active
         // menu" rather than raised: the navigation section is optional, and an API-sourced
         // run has no terminal to fall back to.
         try {
-            $payload = $this->client->get('options', $this->site);
+            $payload = $client->get('options', $this->site);
         } catch (MigrationApiException $migrationApiException) {
-            $output->writeln('<comment>Could not read the options table to resolve the primary navigation menu: '.$migrationApiException->getMessage().'</comment>');
+            $output->writeln(\sprintf(
+                '<comment>Could not read the options table to resolve the primary navigation menu: %s</comment>',
+                $migrationApiException->getMessage()
+            ));
 
             return $this->resolution = false;
         }
@@ -281,7 +277,10 @@ class NavigationMenuSelector
 
         $locations = \is_array($themeMods) ? ($themeMods['nav_menu_locations'] ?? null) : null;
 
+        // A missing offset read with `??` from a value that is not an array is null as well, and
+        // a null id resolves nothing, so this only narrows the type for phpstan
         if (! \is_array($locations)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return $this->resolution = false;
         }
 
@@ -330,7 +329,7 @@ class NavigationMenuSelector
         // API-sourced run picks it by term id rather than asking. Without this the run still
         // stops at the second prompt and --key-from-stdin cannot complete (wordpress-importer-archive#1145).
         if ($this->client instanceof Client) {
-            $resolved = $this->resolvePrimaryNavigation($output);
+            $resolved = $this->resolvePrimaryNavigation($this->client, $output);
 
             if ($resolved === false) {
                 return null;
@@ -383,49 +382,12 @@ class NavigationMenuSelector
             return $menuSlugs[$defaultIndex];
         }
 
-        if ($this->isPromptsSupported()) {
-            $selectedChoice = select(
-                label: $question,
-                options: $choices,
-                default: $choices[$defaultIndex]
-            );
-            // Find the index of the selected choice
-            $selectedIndex = \array_search(
-                $selectedChoice,
-                $choices,
-                true
-            );
-            if ($selectedIndex !== false && isset($menuSlugs[$selectedIndex])) {
-                return $menuSlugs[$selectedIndex];
-            }
-
-            if (
-                is_int($selectedChoice)
-                && isset($choices[$selectedChoice])
-            ) {
-                $selectedChoice = $choices[$selectedChoice];
-            }
-
-            if (! is_string($selectedChoice)) {
-                return null;
-            }
-
-            // If array_search failed, try to extract the slug from the choice text
-            // Format: "Menu Name (slug)"
-            if (
-                \preg_match(
-                    '/\(([^)]+)\)$/',
-                    $selectedChoice,
-                    $matches
-                ) === 1
-            ) {
-                return $matches[1];
-            }
-
-            return null;
-        }
-
-        // Use Symfony Console to select the navigation menu
+        // ---
+        // Ask with Laravel Prompts where they are supported, and with the command's own
+        // question where they are not. Either answers a single choice over a list with one of
+        // the listed strings, and no two menus share one, since a term id is listed once and
+        // a slug names one menu (#100).
+        // ---
         $selectedChoice = $this->askChoice(
             $question,
             $choices,
@@ -435,29 +397,18 @@ class NavigationMenuSelector
             $command
         );
 
-        // Find the index of the selected choice
+        // Return the slug of the menu chosen. Every choice ends in a slug in parentheses, so
+        // no two compare equal loosely that are not the same string.
+        // @pest-mutate-ignore: TrueToFalse
         $selectedIndex = \array_search(
             $selectedChoice,
             $choices,
             true
         );
-        if ($selectedIndex !== false && isset($menuSlugs[$selectedIndex])) {
-            return $menuSlugs[$selectedIndex];
-        }
 
-        // If array_search failed, try to extract the slug from the choice text
-        // Format: "Menu Name (slug)"
-        if (
-            \preg_match(
-                '/\(([^)]+)\)$/',
-                $selectedChoice,
-                $matches
-            ) === 1
-        ) {
-            return $matches[1];
-        }
-
-        return null;
+        // The answer is always listed, so the null only narrows the type for phpstan
+        // @pest-mutate-ignore: FalseToTrue
+        return $selectedIndex === false ? null : $menuSlugs[$selectedIndex];
     }
 
     /**
@@ -477,6 +428,8 @@ class NavigationMenuSelector
         $termDataMap = []; // Map term IDs to their data, preferring terms with metadata
 
         foreach ($terms as $term) {
+            // getTerms() answers with elements only, so this only narrows the type for phpstan
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof SimpleXMLElement) {
                 continue;
             }
