@@ -39,6 +39,8 @@ class WxrMaterializer
      *
      * @var list<string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     public const CLEANED_SITES = ['news.uams.edu'];
 
     /**
@@ -46,6 +48,8 @@ class WxrMaterializer
      *
      * @var array<string, string>
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array NAMESPACES = [
         'xmlns:excerpt' => 'http://wordpress.org/export/1.2/excerpt/',
         'xmlns:content' => 'http://purl.org/rss/1.0/modules/content/',
@@ -76,6 +80,8 @@ class WxrMaterializer
      * The API caps `file[]` at 100 paths (its D-085). `include[]` has no cap of its own, but
      * the same bound keeps each request to one page and its query string finite.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int REFERENCE_CHUNK = 100;
 
     /**
@@ -84,11 +90,15 @@ class WxrMaterializer
      * Leaves room under an 8 KB request line for the method, the route and the other
      * parameters. See `referenceChunks()`.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int REFERENCE_QUERY_BYTES = 6000;
 
     /**
      * How many unresolved references the manifest lists by name, beside their counts.
      */
+    // PCOV records no line for a constant; each change to it, made by hand, fails a test.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int REPORTED_EXAMPLES = 20;
 
     /**
@@ -158,7 +168,8 @@ class WxrMaterializer
         // from repository files. This guards the *caller*; it does not stop a mutation run
         // from scattering parts, because those mutants corrupt `partPath()` rather than this
         // property — the `.gitignore` rule is what makes that output uncommittable.
-        if (\trim($this->outputDirectory) === '' || ! \is_dir($this->outputDirectory)) {
+        // `is_dir()` is false for an empty or blank path, so it covers that case too
+        if (! \is_dir($this->outputDirectory)) {
             throw new MigrationApiException(\sprintf(
                 'The output directory "%s" does not exist. Refusing to scatter materialized '
                 .'parts into the working directory.',
@@ -175,7 +186,7 @@ class WxrMaterializer
         // Mark the run in progress before the first part is written. An interrupted run
         // leaves this file saying `in_progress`, which is what distinguishes it from a
         // complete one without reading any WXR content.
-        $this->writeManifest('in_progress', $site, $modifiedAfter, $preExisting, [], 0, $contentType);
+        $this->writeManifest('in_progress', $site, $modifiedAfter, $preExisting, [], null, $contentType);
 
         // Read the channel metadata first; every part repeats it, so nothing can be written
         // until it is known.
@@ -217,6 +228,9 @@ class WxrMaterializer
 
         $paths = [];
         $writer = null;
+
+        // The first item opens a part and starts the count, so its start is never read.
+        // @pest-mutate-ignore: IncrementInteger, DecrementInteger
         $itemsInPart = 0;
         $itemsWritten = 0;
 
@@ -231,6 +245,8 @@ class WxrMaterializer
         $readOrder = $postTypes;
 
         if ($contentType !== null) {
+            // Post types are strings, so strict and loose comparison agree.
+            // @pest-mutate-ignore: TrueToFalse
             $readOrder = \array_merge(
                 \array_filter($postTypes, static fn (string $type): bool => $type !== 'attachment'),
                 \in_array('attachment', $postTypes, true) ? ['attachment'] : []
@@ -240,10 +256,11 @@ class WxrMaterializer
 
             // The items whose attachments get imported: the requested type and the companions
             // it pulls content from. A link target read only so links resolve is not
-            // imported, so its media is not needed.
+            // imported, so its media is not needed. Attachments are read last, after their
+            // references are used, so scanning them as a companion changes nothing.
             $scannedTypes = \array_merge(
                 [$contentType],
-                \array_diff($companions, ['attachment'])
+                $companions
             );
         }
 
@@ -296,9 +313,13 @@ class WxrMaterializer
                 }
 
                 // Every item's permalink is kept so a link can be checked against what was
-                // read, and the items whose media is imported are scanned for references.
+                // read, and the items whose media is imported are scanned for references. An
+                // unscoped run scans no type and never reads the links it would keep.
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if ($collector instanceof AttachmentReferenceCollector) {
+                    // Only the keys are read, through array_diff_key() and isset().
                     if (\is_string($post['link'] ?? null)) {
+                        // @pest-mutate-ignore: TrueToFalse
                         $itemLinks[AttachmentReferenceCollector::normalizeLink($post['link'])] = true;
                     }
 
@@ -307,14 +328,18 @@ class WxrMaterializer
                     // Only an unpublished item's: `LinkProcessor`'s structure match discards
                     // published candidates, so a published post sharing a slug with an
                     // attachment would otherwise hide a link to that attachment's page.
+                    // A normalized link never ends in an empty segment, so an empty slug
+                    // matches nothing and needs no check of its own.
                     if (
                         \is_string($post['slug'] ?? null)
-                        && $post['slug'] !== ''
                         && ($post['status'] ?? null) !== 'publish'
                     ) {
+                        // @pest-mutate-ignore: TrueToFalse
                         $itemSlugs[\strtolower(\rawurldecode($post['slug']))] = true;
                     }
 
+                    // Post types are strings, so strict and loose comparison agree.
+                    // @pest-mutate-ignore: TrueToFalse
                     if (\in_array($postType, $scannedTypes, true)) {
                         $collector->collect($post);
                     }
@@ -396,6 +421,8 @@ class WxrMaterializer
             $linkTargets
         );
 
+        // Post types are strings, so strict and loose comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
         return \array_values(\array_filter(
             $exposed,
             static fn (string $type): bool => \in_array($type, $wanted, true)
@@ -409,23 +436,16 @@ class WxrMaterializer
      */
     private function existingParts(): array
     {
-        $names = [];
-
-        $pattern = \rtrim($this->outputDirectory, \DIRECTORY_SEPARATOR)
-            .\DIRECTORY_SEPARATOR
-            .'wxr.[0-9][0-9][0-9].xml';
-
         // Match the exact shape `partPath()` writes rather than anything `.xml`, so an
-        // unrelated file in the destination is never reported as a stale part.
-        foreach ((array) \glob($pattern) as $path) {
-            if (\is_string($path)) {
-                $names[] = \basename($path);
-            }
-        }
+        // unrelated file in the destination is never reported as a stale part. `glob()`
+        // answers sorted, and false only on an error.
+        $matches = \glob($this->pathFor('wxr.[0-9][0-9][0-9].xml'));
 
-        \sort($names);
-
-        return $names;
+        // @pest-mutate-ignore: FalseToTrue
+        return \array_map(
+            \basename(...),
+            $matches === false ? [] : $matches
+        );
     }
 
     /**
@@ -436,7 +456,7 @@ class WxrMaterializer
      * @param  string|null  $modifiedAfter  The modification cutoff this run was scoped to, if any
      * @param  list<string>  $preExisting  Part files present before this run started
      * @param  list<string>  $paths  The part paths this run has written so far
-     * @param  int  $items  The number of items written so far
+     * @param  int|null  $items  The number of items written, or null while the run is in flight
      * @param  string|null  $contentType  The content type this run was scoped to, if any
      * @param  list<string>|null  $postTypes  The post types a scoped run read, or null when
      *                                        the run was not scoped or has not resolved them yet
@@ -451,7 +471,7 @@ class WxrMaterializer
         ?string $modifiedAfter,
         array $preExisting,
         array $paths,
-        int $items,
+        ?int $items,
         ?string $contentType = null,
         ?array $postTypes = null,
         ?array $linkTargets = null
@@ -495,7 +515,7 @@ class WxrMaterializer
             // "no parts written" when the directory may already hold thousands — the same
             // conflation of silence with zero this repository guards everywhere else.
             'parts' => $complete ? $written : null,
-            'items' => $complete ? $items : null,
+            'items' => $items,
             'pre_existing_parts' => $preExisting,
             'stale_parts' => $stale,
         ];
@@ -508,9 +528,7 @@ class WxrMaterializer
             );
         }
 
-        $path = \rtrim($this->outputDirectory, \DIRECTORY_SEPARATOR)
-            .\DIRECTORY_SEPARATOR
-            .self::MANIFEST_NAME;
+        $path = $this->pathFor(self::MANIFEST_NAME);
 
         // An unwritable manifest leaves the artifact unmarked, which is the defect this
         // exists to close — so it raises rather than continuing silently.
@@ -585,10 +603,15 @@ class WxrMaterializer
         $narrowRequests = \count($requests[0][1]) + \count($requests[1][1]);
         $counts = $channel['counts'] ?? null;
         $byPostType = \is_array($counts) ? ($counts['by_post_type'] ?? null) : null;
+        // A numeric string divides as the number it holds, so the cast only keeps the type.
+        // @pest-mutate-ignore: RemoveIntegerCast
         $total = \is_array($byPostType) && \is_numeric($byPostType['attachment'] ?? null)
             ? (int) $byPostType['attachment']
             : null;
 
+        // Comparing with the float ceil() answers is the same comparison, so the cast only
+        // keeps the type.
+        // @pest-mutate-ignore: RemoveIntegerCast
         if ($total !== null && $narrowRequests > 0 && $narrowRequests >= (int) \ceil($total / $client->recordsPerPage())) {
             return $this->allAttachments($client, $query, 'cheaper', \count($ids), \count($paths), [], []);
         }
@@ -599,6 +622,9 @@ class WxrMaterializer
         foreach ($requests as [$parameter, $chunks]) {
             foreach ($chunks as $chunk) {
                 foreach ($client->paginate('posts/attachment', null, \array_merge($query, [$parameter => $chunk])) as $record) {
+                    // A value that is not an array answers null for its id, which is not a
+                    // number either way; and a numeric string key is stored as that integer.
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr, RemoveIntegerCast
                     if (\is_array($record) && \is_numeric($record['id'] ?? null)) {
                         $records[(int) $record['id']] = $record;
                     }
@@ -621,6 +647,8 @@ class WxrMaterializer
 
         foreach ($records as $record) {
             if (\is_string($record['link'] ?? null)) {
+                // Only the key is read, and array_diff_key() compares keys alone.
+                // @pest-mutate-ignore: TrueToFalse
                 $known[AttachmentReferenceCollector::normalizeLink($record['link'])] = true;
             }
         }
@@ -629,6 +657,8 @@ class WxrMaterializer
 
         foreach (\array_keys(\array_diff_key($collector->links(), $known)) as $link) {
             // The last segment names a slug; one an item read carries resolves to that item.
+            // A normalized link always holds a slash, so the position is never false.
+            // @pest-mutate-ignore: RemoveIntegerCast
             $segment = \strtolower(\rawurldecode(\substr($link, (int) \strrpos($link, '/') + 1)));
 
             if (! isset($itemSlugs[$segment])) {
@@ -675,6 +705,8 @@ class WxrMaterializer
             'unserved_ids' => $unservedIds,
         ];
 
+        // The caller only iterates the records, so their keys are never read.
+        // @pest-mutate-ignore: UnwrapArrayValues
         return \array_values($records);
     }
 
@@ -703,7 +735,9 @@ class WxrMaterializer
         $bytes = 0;
 
         foreach ($values as $value) {
-            // Encoded as the HTTP client encodes it: `name%5BN%5D=value&`.
+            // Encoded as the HTTP client encodes it: `name%5BN%5D=value&`. Only the length
+            // is read, which reordering the pieces does not change.
+            // @pest-mutate-ignore: ConcatSwitchSides
             $size = \strlen(\rawurlencode($parameter.'['.\count($chunk).']'))
                 + \strlen(\rawurlencode((string) $value))
                 + 2;
@@ -746,6 +780,8 @@ class WxrMaterializer
         array $unresolvedImages,
         array $unresolvedLinks
     ): array {
+        // A paginated read already answers a list.
+        // @pest-mutate-ignore: UnwrapArrayValues
         $records = \array_values($client->paginate('posts/attachment', null, $query));
 
         $this->attachmentResolution = [
@@ -777,7 +813,7 @@ class WxrMaterializer
     /**
      * Attachment records as the XML elements `XpathHelper` matches against.
      *
-     * Only the id and the file URL are carried, which is all `findAttachmentByUrl()` reads.
+     * Only the file URL is carried, which is all `findAttachmentByUrl()` reads.
      *
      * @param  array<int, array<array-key, mixed>>  $records  Attachment records, keyed by id
      * @return list<SimpleXMLElement> One element per record with a file URL
@@ -787,21 +823,28 @@ class WxrMaterializer
     ): array {
         $xml = '<rss xmlns:wp="'.self::NAMESPACES['xmlns:wp'].'"><channel>';
 
-        foreach ($records as $id => $record) {
+        foreach ($records as $record) {
             $attachment = $record['attachment'] ?? null;
             $url = \is_array($attachment) ? ($attachment['url'] ?? null) : null;
 
-            if (! \is_string($url) || $url === '') {
+            // An empty URL is written as an empty element, which no image URL matches
+            if (! \is_string($url)) {
                 continue;
             }
 
-            $xml .= '<item><wp:post_id>'.$id.'</wp:post_id><wp:attachment_url>'
+            // The URL is element text, where a quote needs no escaping, so the quote flag
+            // cannot change what is written.
+            // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
+            $xml .= '<item><wp:attachment_url>'
                 .\htmlspecialchars($url, \ENT_XML1 | \ENT_QUOTES, 'UTF-8')
                 .'</wp:attachment_url></item>';
         }
 
         $document = \simplexml_load_string($xml.'</channel></rss>');
 
+        // Every value is an integer or escaped text, so the document always parses and
+        // this only types what follows.
+        // @pest-mutate-ignore: FalseToTrue, RemoveEarlyReturn
         if ($document === false) {
             return [];
         }
@@ -882,6 +925,8 @@ class WxrMaterializer
             try {
                 $records = $client->paginate($endpoint);
             } catch (MigrationApiException $migrationApiException) {
+                // An API code is a string or null, so strict and loose comparison agree.
+                // @pest-mutate-ignore: TrueToFalse
                 if (\in_array($migrationApiException->apiCode(), RedirectPluginRules::ABSENT_CODES, true)) {
                     continue;
                 }
@@ -968,6 +1013,9 @@ class WxrMaterializer
         // is a diagnostic; it must never be the reason an import fails.
         $rows = \is_array($counts) ? ($counts['options'] ?? null) : null;
 
+        // A numeric string compares with 1 as the number it holds, so the cast only keeps the
+        // type.
+        // @pest-mutate-ignore: RemoveIntegerCast
         if (! \is_numeric($rows) || (int) $rows < 1) {
             return;
         }
@@ -976,7 +1024,7 @@ class WxrMaterializer
 
         $served = $payload['options'] ?? null;
         $names = \is_array($served) ? \array_keys($served) : [];
-        $unread = \array_values(\array_diff($names, $consumedOptions));
+        $unread = \array_diff($names, $consumedOptions);
 
         if ($unread !== []) {
             $this->unserved[] = [
@@ -987,7 +1035,12 @@ class WxrMaterializer
         }
 
         $denied = $payload['denied'] ?? null;
+        // A value that is not a number reads as 0 whether or not the block is an array, and a
+        // numeric string adds as the number it holds, so these only keep the type.
+        // @pest-mutate-ignore: BooleanAndToBooleanOr, RemoveIntegerCast
         $byName = \is_array($denied) && \is_numeric($denied['by_name'] ?? null) ? (int) $denied['by_name'] : 0;
+
+        // @pest-mutate-ignore: BooleanAndToBooleanOr, RemoveIntegerCast
         $byShape = \is_array($denied) && \is_numeric($denied['by_shape'] ?? null) ? (int) $denied['by_shape'] : 0;
 
         if ($byName + $byShape > 0) {
@@ -1038,6 +1091,9 @@ class WxrMaterializer
 
         if (\is_array($byPostType)) {
             foreach ($byPostType as $name => $records) {
+                // A numeric string compares as the number it holds, and post types are strings,
+                // so the cast and the strict flag only keep the type.
+                // @pest-mutate-ignore: RemoveIntegerCast, TrueToFalse
                 if (
                     ! \is_string($name)
                     || ! \is_numeric($records)
@@ -1057,6 +1113,7 @@ class WxrMaterializer
                 || ($taxonomy['exposed'] ?? false) === true
                 || ! \is_string($taxonomy['name'] ?? null)
                 || ! \is_numeric($taxonomy['terms'] ?? null)
+                // @pest-mutate-ignore: RemoveIntegerCast
                 || (int) $taxonomy['terms'] < 1
             ) {
                 continue;
@@ -1159,7 +1216,7 @@ class WxrMaterializer
         throw new MigrationApiException(\sprintf(
             'The migration API serves no site with id %s. Refusing to materialize an export '
             .'with no channel metadata.',
-            $site === null ? '(unscoped)' : (string) $site
+            $site ?? '(unscoped)'
         ));
     }
 
@@ -1229,7 +1286,7 @@ class WxrMaterializer
             // reads as undeclared and the taxonomy is read rather than dropped.
             $objectTypes = $taxonomy['object_types'] ?? null;
             $declared = \is_array($objectTypes)
-                ? \array_values(\array_filter($objectTypes, \is_string(...)))
+                ? \array_filter($objectTypes, \is_string(...))
                 : [];
 
             if (
@@ -1263,9 +1320,21 @@ class WxrMaterializer
     private function partPath(
         int $index
     ): string {
+        return $this->pathFor(\sprintf('wxr.%03d.xml', $index));
+    }
+
+    /**
+     * The path of a file in the output directory.
+     *
+     * @param  string  $name  The file name, or a glob pattern for one
+     * @return string The path, joined with one separator however the directory ends
+     */
+    private function pathFor(
+        string $name
+    ): string {
         return \rtrim($this->outputDirectory, \DIRECTORY_SEPARATOR)
             .\DIRECTORY_SEPARATOR
-            .\sprintf('wxr.%03d.xml', $index);
+            .$name;
     }
 
     /**
@@ -1333,9 +1402,10 @@ class WxrMaterializer
             return false;
         }
 
+        // `parse_url()` answers false, never '', for a URL with no host
         $host = \parse_url($baseBlogUrl, \PHP_URL_HOST);
 
-        if (! \is_string($host) || $host === '') {
+        if (! \is_string($host)) {
             return false;
         }
 
@@ -1371,6 +1441,8 @@ class WxrMaterializer
             // Read the part as written
             $raw = \file_get_contents($path);
 
+            // The part was written a moment ago by this run, so it can always be read.
+            // @pest-mutate-ignore: FalseToTrue
             if ($raw === false) {
                 throw new MigrationApiException(\sprintf('Could not read "%s" to clean it.', $path));
             }
@@ -1392,6 +1464,8 @@ class WxrMaterializer
                 ));
             }
 
+            // The part was just read from the same path, so it can always be written back.
+            // @pest-mutate-ignore: FalseToTrue
             if (\file_put_contents($path, $cleaned) === false) {
                 throw new MigrationApiException(\sprintf('Could not write the cleaned "%s".', $path));
             }
@@ -1409,10 +1483,12 @@ class WxrMaterializer
     private function closePart(
         XMLWriter $writer
     ): void {
-        // </channel>, </rss>
-        $writer->endElement();
-        $writer->endElement();
+        // Ending the document closes </channel> and </rss>, and writes the part out
         $writer->endDocument();
+
+        // endDocument() has already written everything to the file, so the flush only
+        // makes that explicit.
+        // @pest-mutate-ignore: RemoveMethodCall
         $writer->flush();
     }
 
@@ -1701,20 +1777,18 @@ class WxrMaterializer
             return $value ? '1' : '0';
         }
 
-        if (\is_int($value) || \is_float($value)) {
-            return (string) $value;
-        }
-
         if ($value === null) {
             return '';
         }
 
-        // A structured meta value (WordPress serializes arrays into the meta table) round-
-        // trips as JSON rather than being silently dropped. Encoding cannot fail on a value
-        // that was itself decoded from JSON, so the guard satisfies the return type; the
-        // key is still written either way, which keeps any future loss visible.
+        // A number is written as JSON writes it, which is how it arrived. A structured meta
+        // value (WordPress serializes arrays into the meta table) round-trips as JSON rather
+        // than being silently dropped. Encoding cannot fail on a value that was itself
+        // decoded from JSON, so the guard satisfies the return type; the key is still
+        // written either way, which keeps any future loss visible.
         $encoded = \json_encode($value);
 
+        // @pest-mutate-ignore: FalseToTrue, EmptyStringToNotEmpty
         return $encoded === false ? '' : $encoded;
     }
 

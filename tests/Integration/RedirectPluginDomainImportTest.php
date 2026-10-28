@@ -507,3 +507,23 @@ it('does not collapse the same source on two domains, or two sources on one (#10
         ->and(redirectPluginEntries('go.uams.edu')['/a']->get('target_url'))->toBe('https://uams.edu/go-a/')
         ->and(ImportWarningManager::getWarnings('redirects', 'shadowed_rules'))->toBe([]);
 });
+
+it('counts each unsupported feature by the rules that carry it, passing over a rule that is not one', function (): void {
+    $caseless = ['match_data' => ['source' => ['flag_query' => 'exact', 'flag_case' => true, 'flag_trailing' => false, 'flag_regex' => false]]];
+
+    fakeRedirectPluginApi('https://go.uams.edu', [
+        'not a rule',
+        servedRedirectionRule(1, '/a', 'https://uams.edu/a', $caseless),
+        servedRedirectionRule(2, '/b', 'https://uams.edu/b', $caseless),
+    ], []);
+
+    [$materializer] = materializeRedirectPlugins($this->workingDirectory);
+
+    expect($materializer->redirectPluginRules()[0] ?? null)->toBe([
+        'host' => 'go.uams.edu',
+        'plugin' => 'Redirection',
+        'rules' => 3,
+        'written' => 2,
+        'unsupported' => ['matches the source ignoring case' => 2],
+    ]);
+});

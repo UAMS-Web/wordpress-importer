@@ -77,25 +77,35 @@ function referencedAttachment(
  * @param  list<array<string, mixed>>  $attachments  The attachments
  * @param  int|null  $attachmentInventory  `counts.by_post_type.attachment`, or null to omit it
  * @param  array<string, list<array<string, mixed>>>  $others  Items of other types, keyed by type
+ * @param  ?string  $baseBlogUrl  The site's base blog URL, or null to leave it out
+ * @param  mixed  $inventoryValue  A raw `counts.by_post_type.attachment`, used in place of the inventory
  */
 function fakeReferenceSite(
     array $posts,
     array $attachments,
     ?int $attachmentInventory = null,
-    array $others = []
+    array $others = [],
+    ?string $baseBlogUrl = 'https://example.test',
+    mixed $inventoryValue = null
 ): void {
     $page = static fn (array $records) => Http::response($records, 200, ['X-WP-Total' => (string) \count($records)]);
 
-    Http::fake(function (Request $request) use ($posts, $attachments, $attachmentInventory, $others, $page) {
+    Http::fake(function (Request $request) use ($posts, $attachments, $attachmentInventory, $others, $page, $baseBlogUrl, $inventoryValue) {
         $path = (string) \parse_url($request->url(), \PHP_URL_PATH);
         \parse_str((string) \parse_url($request->url(), \PHP_URL_QUERY), $query);
 
         if (\str_ends_with($path, '/sites')) {
-            return Http::response([[
-                'id' => 1, 'title' => 'Refs', 'link' => 'https://example.test',
-                'base_blog_url' => 'https://example.test', 'wxr_version' => '1.2',
-                'counts' => $attachmentInventory === null ? [] : ['by_post_type' => ['attachment' => $attachmentInventory]],
-            ]], 200);
+            $inventory = $inventoryValue ?? $attachmentInventory;
+            $site = [
+                'id' => 1, 'title' => 'Refs', 'link' => 'https://example.test', 'wxr_version' => '1.2',
+                'counts' => $inventory === null ? [] : ['by_post_type' => ['attachment' => $inventory]],
+            ];
+
+            if ($baseBlogUrl !== null) {
+                $site['base_blog_url'] = $baseBlogUrl;
+            }
+
+            return Http::response([$site], 200);
         }
 
         // `attachment` is listed first, as a site can, so a run that did not move it last
@@ -542,4 +552,202 @@ it('keeps each file request under the query-string budget', function (): void {
     expect(\count($requests))->toBeGreaterThan(1)
         ->and(\max([0, ...$requests]))->toBeLessThan(6200)
         ->and(\array_sum(\array_map(static fn (array $query): int => \count((array) ($query['file'] ?? [])), attachmentQueries())))->toBe(100);
+});
+
+it('records a narrow read in full, with the unserved named ids sorted', function (): void {
+    fakeReferenceSite(
+        [referencingPost([
+            'content' => '<img class="wp-image-900" src="https://example.test/wp-content/uploads/2020/09/a.jpg">',
+            'meta' => ['_thumbnail_id' => ['905']],
+        ]), referencingPost(['id' => 102, 'slug' => 'post-102', 'link' => 'https://example.test/post-102/', 'meta' => ['_thumbnail_id' => ['902']]])],
+        [referencedAttachment(900, '2020/09/a.jpg')]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory))->toBe([
+        'resolution' => 'by_reference',
+        'reason' => 'all_references_resolved',
+        'ids_requested' => 3,
+        'paths_requested' => 1,
+        'records' => 1,
+        'unresolved_image_count' => 0,
+        'unresolved_images' => [],
+        'unresolved_link_count' => 0,
+        'unresolved_links' => [],
+        'unserved_ids' => [902, 905],
+    ]);
+});
+
+it('records a widened read in full, listing 20 of its unresolved images and warning with 5', function (): void {
+    $content = '<a href="https://example.test/nowhere/">x</a>';
+
+    for ($image = 1; $image <= 21; $image++) {
+        $content .= '<img src="https://example.test/wp-content/uploads/2020/09/orphan-'.$image.'.webp">';
+    }
+
+    fakeReferenceSite([referencingPost(['content' => $content])], [referencedAttachment(900, '2020/09/a.jpg')]);
+
+    materializeReferences($this->workingDirectory);
+
+    $images = [];
+
+    for ($image = 1; $image <= 21; $image++) {
+        $images[] = 'https://example.test/wp-content/uploads/2020/09/orphan-'.$image.'.webp';
+    }
+
+    expect(manifestAttachments($this->workingDirectory))->toBe([
+        'resolution' => 'full',
+        'reason' => 'unresolved_references',
+        'ids_requested' => 0,
+        'paths_requested' => 21,
+        'records' => 1,
+        'unresolved_image_count' => 21,
+        'unresolved_images' => \array_slice($images, 0, 20),
+        'unresolved_link_count' => 1,
+        'unresolved_links' => ['//example.test/nowhere'],
+        'unserved_ids' => [],
+    ])
+        ->and(ImportWarningManager::getWarnings('migration_api', 'attachment_read_widened'))->toBe([[
+            'unresolved_images' => 21,
+            'unresolved_links' => 1,
+            'examples' => \array_slice($images, 0, 5),
+        ]]);
+});
+
+it('widens for cost only when the narrow read would cost as much as the whole one', function (int $references, mixed $inventory, string $resolution): void {
+    $meta = $references === 0 ? [] : ['_thumbnail_id' => ['900']];
+    $content = $references === 2 ? '<a href="https://example.test/wp-content/uploads/2020/09/b.jpg">file</a>' : '';
+
+    fakeReferenceSite(
+        [referencingPost(['meta' => $meta, 'content' => $content])],
+        [referencedAttachment(900, '2020/09/a.jpg'), referencedAttachment(901, '2020/09/b.jpg')],
+        inventoryValue: $inventory
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe($resolution);
+})->with([
+    'one request against one page' => [1, 50, 'full'],
+    'no request against an empty inventory' => [0, 0, 'by_reference'],
+    'an inventory that is not a number' => [1, 'many', 'by_reference'],
+    'an id and a file, two requests against two pages' => [2, 150, 'full'],
+    'an id and a file, two requests against three pages' => [2, 250, 'by_reference'],
+]);
+
+it('chunks references at 100 even when a page holds more', function (): void {
+    $posts = [];
+
+    for ($id = 1; $id <= 101; $id++) {
+        $posts[] = referencingPost(['id' => $id, 'slug' => 'post-'.$id, 'link' => 'https://example.test/post-'.$id.'/', 'meta' => ['_thumbnail_id' => [(string) (1000 + $id)]]]);
+    }
+
+    fakeReferenceSite($posts, []);
+
+    materializeReferences($this->workingDirectory, perPage: 200);
+
+    $chunks = [];
+
+    foreach (attachmentQueries() as $query) {
+        if (\is_array($query['include'] ?? null)) {
+            $chunks[] = \count($query['include']);
+        }
+    }
+
+    expect($chunks)->toBe([100, 1]);
+});
+
+it('resolves an image whose file name needs escaping in XML', function (): void {
+    // A raw ampersand, which the matching elements have to escape to parse
+    fakeReferenceSite(
+        [referencingPost(['content' => '<img src="https://example.test/wp-content/uploads/2020/09/R&D.jpg">'])],
+        [referencedAttachment(900, '2020/09/R&D.jpg')]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe('by_reference')
+        ->and(writtenAttachmentIds($this->workingDirectory))->toBe([900]);
+});
+
+it('passes over a served attachment with no file URL', function (): void {
+    $noUrl = referencedAttachment(901, '2020/09/b.jpg');
+    unset($noUrl['attachment']);
+
+    fakeReferenceSite(
+        [referencingPost([
+            'content' => '<img src="https://example.test/wp-content/uploads/2020/09/a.jpg">',
+            'meta' => ['_thumbnail_id' => ['901']],
+        ])],
+        [referencedAttachment(900, '2020/09/a.jpg'), $noUrl]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe('by_reference')
+        ->and(writtenAttachmentIds($this->workingDirectory))->toBe([900, 901]);
+});
+
+it('resolves a link to a draft whose slug is percent-encoded in capitals', function (): void {
+    fakeReferenceSite(
+        [referencingPost(['content' => '<a href="https://example.test/%44raft-page/">draft</a>'])],
+        [referencedAttachment(900, '2020/09/a.jpg')],
+        others: ['page' => [['id' => 300, 'type' => 'page', 'slug' => 'Draft-Page', 'status' => 'draft', 'link' => 'https://example.test/?page_id=300']]]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe('by_reference');
+});
+
+it('ignores an image on another site', function (): void {
+    fakeReferenceSite(
+        [referencingPost(['content' => '<img src="https://elsewhere.test/wp-content/uploads/2020/09/x.jpg">'])],
+        [referencedAttachment(900, '2020/09/a.jpg')]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe('by_reference')
+        ->and(writtenAttachmentIds($this->workingDirectory))->toBe([]);
+});
+
+it('treats every image as on the site when the site reports no base URL', function (): void {
+    fakeReferenceSite(
+        [referencingPost(['content' => '<img src="https://example.test/wp-content/uploads/2020/09/a.jpg">'])],
+        [referencedAttachment(900, '2020/09/a.jpg')],
+        baseBlogUrl: null
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    expect(writtenAttachmentIds($this->workingDirectory))->toBe([900]);
+});
+
+it('lists 20 of a widened read\'s unresolved links, and warns with the image first', function (): void {
+    $content = '<img src="https://example.test/wp-content/uploads/2020/09/orphan.webp">';
+    $links = [];
+
+    for ($link = 1; $link <= 21; $link++) {
+        $content .= '<a href="https://example.test/missing-'.$link.'/">x</a>';
+        $links[] = '//example.test/missing-'.$link;
+    }
+
+    fakeReferenceSite([referencingPost(['content' => $content])], [referencedAttachment(900, '2020/09/a.jpg')]);
+
+    materializeReferences($this->workingDirectory);
+
+    $manifest = manifestAttachments($this->workingDirectory);
+
+    expect($manifest['unresolved_link_count'] ?? null)->toBe(21)
+        ->and($manifest['unresolved_links'] ?? null)->toBe(\array_slice($links, 0, 20))
+        ->and(ImportWarningManager::getWarnings('migration_api', 'attachment_read_widened'))->toBe([[
+            'unresolved_images' => 1,
+            'unresolved_links' => 21,
+            'examples' => [
+                'https://example.test/wp-content/uploads/2020/09/orphan.webp',
+                ...\array_slice($links, 0, 4),
+            ],
+        ]]);
 });
