@@ -142,3 +142,10 @@ it('trims a padded aggregate', function (): void {
         articleEngagementItem(['_mkb_likes' => '  7  '])
     )['likes'])->toBe(7);
 })->group('kb-engagement');
+
+it('reads the aggregates after one it cannot use', function (): void {
+    // An unusable value skips only its own tally (#102)
+    expect(ArticleEngagementSeeder::extractCounts(
+        articleEngagementItem(['_mkb_views' => 'many', '_mkb_likes' => '3', '_mkb_dislikes' => "\n2\n"])
+    ))->toBe(['views' => 0, 'likes' => 3, 'dislikes' => 2]);
+})->group('kb-engagement');
