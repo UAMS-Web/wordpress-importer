@@ -393,7 +393,7 @@ it('reads the module footer button target through LinkHelper', function (): void
         'gallery_more' => '1',
         'gallery_more_text' => 'More',
         'gallery_more_button_text' => 'See all',
-        'gallery_more_button_url' => ['url' => 'https://example.com/more', 'target' => '_self'],
+        'gallery_more_button_url' => ['url' => 'https://example.com/more', 'target' => '_blank'],
     ]);
 
     expect($set['more_button_target'] ?? null)->toBeTrue();
@@ -452,9 +452,9 @@ it('maps every gallery field onto the set', function (string $entry, bool $targe
         'more_button_link_description' => 'All the photos',
     ]);
 })->with([
-    // The block reads a `_blank` target as a new tab, while the module's LinkHelper reads it as false
+    // The block and the module's LinkHelper both read a `_blank` target as a new window
     'block' => ['block', true],
-    'module' => ['module', false],
+    'module' => ['module', true],
 ]);
 
 it('gives each field its default when the gallery leaves it out', function (string $entry): void {

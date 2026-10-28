@@ -131,13 +131,13 @@ it('gathers each hero slide from its flat meta keys', function (): void {
 });
 
 it('maps a hero button link to its url and target', function (): void {
-    // Characterization of #150: a `_blank` target imports as false
+    // A _blank target opens in a new window, which the host reads as true
     [$data] = fieldMapperRun($this, ['page_hero_hero_0_hero_button_url' => ['url' => 'https://example.com/apply', 'target' => '_blank']]);
 
     $slide = fieldMapperSlide($data, 0);
 
     expect($slide['button_url'] ?? null)->toBe('https://example.com/apply')
-        ->and($slide['button_target'] ?? null)->toBeFalse();
+        ->and($slide['button_target'] ?? null)->toBeTrue();
 });
 
 it('skips hero slides when the entry has no site', function (): void {

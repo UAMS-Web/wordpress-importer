@@ -314,7 +314,7 @@ it('maps the body-only layout, with every optional field filled', function (stri
     ]);
 })->with([
     'block' => ['block', true],
-    'module' => ['module', false],
+    'module' => ['module', true],
 ]);
 
 it('maps the link-list layout from the row format a duplicated block stores', function (): void {
@@ -331,13 +331,13 @@ it('maps the link-list layout from the row format a duplicated block stores', fu
             'side_link_list' => [
                 'row-0' => [
                     'field_side_link_list_text_b' => '<b>A</b>',
-                    'field_side_link_list_url_b' => ['url' => 'https://example.com/a', 'target' => '_self'],
+                    'field_side_link_list_url_b' => ['url' => 'https://example.com/a', 'target' => '_blank'],
                     'field_side_link_list_description_b' => 'Da',
                 ],
                 'other' => ['field_side_link_list_text_b' => 'Other', 'field_side_link_list_url_b' => ['url' => 'https://example.com/o']],
                 5 => ['field_side_link_list_text_b' => 'Int', 'field_side_link_list_url_b' => ['url' => 'https://example.com/i']],
                 'row-1' => 'not an array',
-                'row-2' => ['field_side_link_list_url_b' => ['url' => 'https://example.com/b', 'target' => '_blank']],
+                'row-2' => ['field_side_link_list_url_b' => ['url' => 'https://example.com/b', 'target' => '_self']],
                 'row-3' => ['field_side_link_list_text_b' => 'No URL'],
             ],
         ]);
@@ -435,7 +435,7 @@ it('reads a link list already stored as a list of links', function (): void {
             'side_layout_link_text' => 'Lead',
             'side_image_side_image_image' => '7',
             'side_link_list' => [
-                ['side_link_list_text' => 'A', 'side_link_list_url' => ['url' => 'https://example.com/a', 'target' => 'x']],
+                ['side_link_list_text' => 'A', 'side_link_list_url' => ['url' => 'https://example.com/a', 'target' => '_blank']],
                 'not a link',
                 ['side_link_list_description' => 'Nothing else'],
                 ['side_link_list_url' => 'https://example.com/n'],
@@ -550,8 +550,8 @@ it('reads the module button link through LinkHelper', function (mixed $link, str
     expect(array_slice($set, -3))->toBe(['button_text' => 'Go', 'button_url' => $url, 'button_target' => $target]);
 })->with([
     'a URL string' => ['https://example.com/go', 'https://example.com/go', false],
-    'a link opening in a new tab' => [['url' => 'https://example.com/go', 'target' => '_blank'], 'https://example.com/go', false],
-    'a link opening in the same tab' => [['url' => 'https://example.com/go', 'target' => '_self'], 'https://example.com/go', true],
+    'a link opening in a new tab' => [['url' => 'https://example.com/go', 'target' => '_blank'], 'https://example.com/go', true],
+    'a link opening in the same tab' => [['url' => 'https://example.com/go', 'target' => '_self'], 'https://example.com/go', false],
 ]);
 
 it('drops the button under the quote layout that hides it', function (string $entry): void {
@@ -705,7 +705,7 @@ it('maps the module link-list layout from its indexed rows', function (mixed $co
             'side_image_side_image_image' => '7',
             'side_link_list' => $count,
             'side_link_list_0_side_link_list_text' => '<b>A</b>',
-            'side_link_list_0_side_link_list_url' => ['url' => 'https://example.com/a', 'target' => '_self'],
+            'side_link_list_0_side_link_list_url' => ['url' => 'https://example.com/a', 'target' => '_blank'],
             'side_link_list_0_side_link_list_description' => 'Da',
             'side_link_list_1_side_link_list_url' => ['url' => 'https://example.com/b'],
             'side_link_list_2_side_link_list_text' => 'Beyond the count',

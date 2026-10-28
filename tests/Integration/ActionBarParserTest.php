@@ -111,7 +111,7 @@ it('maps the heading and color, and one item per counted section', function (str
         'action_bar_section_0_action_bar_section_heading' => 'Apply <b>now</b>',
         'action_bar_section_0_action_bar_section_body' => '<p>Start here.</p>',
         'action_bar_section_0_action_bar_section_button_text' => '<span>Apply</span>',
-        'action_bar_section_0_action_bar_section_button_url' => ['url' => 'https://example.com/apply', 'target' => '_self'],
+        'action_bar_section_0_action_bar_section_button_url' => ['url' => 'https://example.com/apply', 'target' => '_blank'],
         'action_bar_section_0_action_bar_section_button_description' => 'Apply <i>online</i>',
         'action_bar_section_1_action_bar_section_heading' => 'Visit',
         'action_bar_section_1_action_bar_section_button_url' => 'https://example.com/visit',
