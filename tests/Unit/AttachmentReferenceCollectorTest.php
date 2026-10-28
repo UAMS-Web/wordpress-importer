@@ -268,3 +268,148 @@ it('normalizes a link the way an item link is normalized', function (): void {
     expect(AttachmentReferenceCollector::normalizeLink('HTTPS://Example.test/Dept/Page/?x=1#y'))
         ->toBe('//example.test/dept/page');
 });
+
+// --- #102: the edges of each reader ---------------------------------------------------
+
+it('records a named id from an item without an id as item 0', function (): void {
+    $collector = referenceCollector();
+    $collector->collect(['meta' => ['_thumbnail_id' => ['901']]]);
+
+    expect($collector->namedIds())->toBe([901 => ['shape' => 'meta:_thumbnail_id', 'item' => 0]]);
+});
+
+it('reads a meta value served bare, as a number, or after a key that is not text', function (): void {
+    $collector = referenceCollector();
+    $collector->collect(['id' => 42, 'meta' => [5 => ['77'], '_thumbnail_id' => 901, 'logo_image' => '902']]);
+
+    expect($collector->ids())->toBe([901, 902])
+        ->and(\array_keys($collector->namedIds()))->toBe([901, 902]);
+});
+
+it('lists ids and paths in order whatever order they were found in', function (): void {
+    $collector = collectedFrom(
+        '<img class="wp-image-30"><img class="wp-image-10">'
+        .'<img src="https://example.test/dept/wp-content/uploads/2021/b.png">'
+        .'<img src="https://example.test/dept/wp-content/uploads/2020/a.png">'
+    );
+
+    expect($collector->ids())->toBe([10, 30])
+        ->and($collector->paths())->toBe(['2020/a.png', '2021/b.png']);
+});
+
+it('keeps the first item a link or an image was seen on', function (): void {
+    $collector = referenceCollector();
+    $collector->collect(['id' => 1, 'content' => '<a href="https://example.test/dept/team/">x</a><img src="https://example.test/dept/wp-content/uploads/a.png">']);
+    $collector->collect(['id' => 2, 'content' => '<a href="https://example.test/dept/team/">x</a><img src="https://example.test/dept/wp-content/uploads/a.png">']);
+
+    expect($collector->links())->toBe(['//example.test/dept/team' => 1])
+        ->and($collector->imageUrls())->toBe(['https://example.test/dept/wp-content/uploads/a.png' => 1]);
+});
+
+it('takes ids up to the largest a WordPress post id can be', function (string $id, array $ids): void {
+    expect(collectedFrom('', ['_thumbnail_id' => [$id]])->ids())->toBe($ids);
+})->with([
+    'the largest' => ['2147483647', [2147483647]],
+    'one past it' => ['2147483648', []],
+    'one below it' => ['2147483646', [2147483646]],
+]);
+
+it('reads image and gallery block ids served as text', function (): void {
+    $collector = collectedFrom('<!-- wp:image {"id":"501"} /--><!-- wp:gallery {"ids":["502","x"]} /-->');
+
+    expect($collector->namedIds())->toBe([
+        501 => ['shape' => 'block:image:id', 'item' => 42],
+        502 => ['shape' => 'block:gallery:ids', 'item' => 42],
+    ]);
+});
+
+it('takes the integers of block attributes it cannot decode', function (): void {
+    expect(collectedFrom('<!-- wp:acf/broken {"image": 612, oops} /-->')->ids())->toBe([612]);
+});
+
+it('reads a URL whose slashes are escaped as code points', function (): void {
+    // Each slash written as a backslash, `u` and its four hex digits, as json_encode() writes it
+    // when told to escape slashes that way
+    $escaped = \str_replace('/', \chr(92).'u002f', 'https://example.test/dept/wp-content/uploads/wide.png');
+    $collector = collectedFrom('<!-- wp:acf/hero {"data":{"bg":"'.$escaped.'"}} /-->');
+
+    expect($collector->paths())->toBe(['wide.png']);
+});
+
+it('keeps every image extension the image pipeline resolves', function (string $extension): void {
+    $collector = collectedFrom('<img src="https://example.test/dept/wp-content/uploads/2020/a.'.$extension.'">');
+
+    expect(\array_keys($collector->imageUrls()))->toBe(['https://example.test/dept/wp-content/uploads/2020/a.'.$extension]);
+})->with(['avif', 'bmp', 'gif', 'heic', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp']);
+
+it('does not treat any archive or system path as a permalink', function (string $segment): void {
+    expect(collectedFrom('<a href="https://example.test/dept/'.$segment.'/something">x</a>')->links())->toBe([]);
+})->with(['author', 'category', 'feed', 'page', 'tag', 'wp-admin', 'wp-content', 'wp-includes', 'wp-json', 'wp-login.php']);
+
+it('names the KB attachments and advert gallery meta keys', function (string $key): void {
+    expect(collectedFrom('', [$key => ['903']])->namedIds())->toBe([903 => ['shape' => 'meta:'.$key, 'item' => 42]]);
+})->with(['_mkb_article_attachments', '_adverts_attachments_order']);
+
+it('reads the base of the site the way it is written, in any case and with or without its slash', function (string $base, string $href, array $links): void {
+    $collector = new AttachmentReferenceCollector($base);
+    $collector->collect(['id' => 42, 'content' => '<a href="'.$href.'">x</a>']);
+
+    expect($collector->links())->toBe($links);
+})->with([
+    'a root site' => ['https://example.test', 'https://example.test/team', ['//example.test/team' => 42]],
+    'the subsite home, cased differently' => ['https://example.test/Dept', 'https://example.test/dept/', []],
+    'the subsite home, against a base with its slash' => ['https://example.test/dept/', 'https://example.test/dept', []],
+]);
+
+it('reads no upload path from a URL with no path, or a path with no file', function (string $url): void {
+    expect(AttachmentReferenceCollector::uploadsRelativePath($url))->toBeNull();
+})->with([
+    'no path' => ['https://example.test'],
+    'a directory' => ['https://example.test/wp-content/uploads/2020/09'],
+]);
+
+it('trims a link before normalizing it', function (): void {
+    expect(AttachmentReferenceCollector::normalizeLink('  https://Example.test/Team/  '))->toBe('//example.test/team');
+});
+
+it('reads an item id served as text', function (): void {
+    $collector = referenceCollector();
+    $collector->collect(['id' => '42', 'meta' => ['_thumbnail_id' => ['901']]]);
+
+    expect($collector->namedIds())->toBe([901 => ['shape' => 'meta:_thumbnail_id', 'item' => 42]]);
+});
+
+it('reads the meta values after one that is neither text nor a list', function (): void {
+    $collector = referenceCollector();
+    $collector->collect(['id' => 42, 'meta' => ['_thumbnail_id' => [null, '901']]]);
+
+    expect($collector->ids())->toBe([901]);
+});
+
+it('takes another block\'s numeric id as a candidate without naming it', function (): void {
+    $collector = collectedFrom('<!-- wp:cover {"id":77} /-->');
+
+    expect($collector->ids())->toBe([77])
+        ->and($collector->namedIds())->toBe([]);
+});
+
+it('takes 1, the smallest attachment id', function (): void {
+    expect(collectedFrom('', ['_thumbnail_id' => ['1']])->ids())->toBe([1]);
+});
+
+it('reads a subsite base and an archive segment in any case', function (string $base, string $href): void {
+    $collector = new AttachmentReferenceCollector($base);
+    $collector->collect(['id' => 42, 'content' => '<a href="'.$href.'">x</a>']);
+
+    expect($collector->links())->toBe([]);
+})->with([
+    'the home of a base written in capitals' => ['https://example.test/Dept', 'https://example.test/Dept/'],
+    'an archive segment written in capitals' => ['https://example.test/dept', 'https://example.test/dept/Category/news'],
+]);
+
+it('takes another block\'s list of ids as candidates without naming them', function (): void {
+    $collector = collectedFrom('<!-- wp:acf/logos {"ids":[88]} /-->');
+
+    expect($collector->ids())->toBe([88])
+        ->and($collector->namedIds())->toBe([]);
+});
