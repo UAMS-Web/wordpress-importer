@@ -29,8 +29,6 @@ beforeEach(function (): void {
     Site::setSites([
         'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
     ]);
-
-    TablePressEntryCreator::clearTableCache();
 });
 
 /**
