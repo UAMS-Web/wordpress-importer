@@ -589,7 +589,12 @@ class SideBySideParser
         // Extract include more setting
         $includeMore = ($normalizedData['side_link_include_more'] ?? '0') === '1';
 
-        // Process link list for link-list layout
+        // ---
+        // Only the link-list layout carries a link list: the fieldset shows link_list and
+        // include_more only for it, and the template renders the list only for it, so a
+        // list saved under another layout is never shown (#199). parseModule() applies
+        // the same rule.
+        // ---
         if ($textLayout === 'link-list') {
             // Extract link list data
             $linkListData = $normalizedData['side_link_list'] ?? null;
@@ -673,11 +678,22 @@ class SideBySideParser
         // Extract image alt text
         $altText = $normalizedData['side_image_side_image_alt_text'] ?? '';
 
-        // Extract image crop setting
-        $imageCrop = $normalizedData['side_image_side_image_crop'] ?? 'center';
+        // Extract the image crop setting, kept to the fieldset's options as parseModule()
+        // keeps it: the template's validity guard needs a truthy image_crop, so the old '0'
+        // for 'none' hid the whole block, and a value outside the options renders no crop
+        // the stylesheet knows (#199, wordpress-importer-archive#1346)
+        $imageCrop = $this->radioOption(
+            $normalizedData['side_image_side_image_crop'] ?? null,
+            ['top', 'bottom'],
+            'center'
+        );
 
-        // Extract image anchor setting
-        $imageAnchor = $normalizedData['side_image_side_image_anchor'] ?? 'center';
+        // Extract the image anchor setting, kept to the fieldset's options for the same reason
+        $imageAnchor = $this->radioOption(
+            $normalizedData['side_image_side_image_anchor'] ?? null,
+            ['left', 'right'],
+            'center'
+        );
 
         // Extract image ID for processing
         $imageId = $this->normalizeStringValue(
@@ -1115,8 +1131,16 @@ class SideBySideParser
         // Initialize link list array
         $linkList = [];
 
+        // ---
+        // Only the link-list layout carries a link list, as in parse(): the fieldset and
+        // the template show one only for it, so the rows of any other layout are not read,
+        // and their URLs are not run through LinkProcessor, which can import the files
+        // they link to (#199)
+        // ---
+        $linkRowCount = $textLayout === 'link-list' ? $linkListCount : 0;
+
         // Process each link in the list
-        for ($i = 0; $i < $linkListCount; $i++) {
+        for ($i = 0; $i < $linkRowCount; $i++) {
             // Add link data to the list
             $linkList[] = [
                 'side_link_list_text' => HtmlTagStripper::strip(

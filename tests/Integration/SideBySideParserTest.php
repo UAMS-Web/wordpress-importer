@@ -599,24 +599,22 @@ it('uses the export URL while uploads are off, and imports a block without one',
     'no attachment' => [[], null],
 ]);
 
-it('passes the block image options through as stored', function (): void {
-    $set = sbsSet('block', sbsMinimal() + ['side_image_side_image_crop' => 'none', 'side_image_side_image_anchor' => 'middle']);
-
-    expect([$set['image_crop'] ?? null, $set['image_anchor'] ?? null])->toBe(['none', 'middle']);
-});
-
-it('keeps the module image options to the radio options', function (mixed $crop, mixed $anchor, string $cropOption, string $anchorOption): void {
-    $set = sbsSet('module', sbsMinimal() + array_filter(
+it('keeps the image options to the radio options, for a block as for a module', function (string $entry, mixed $crop, mixed $anchor, string $cropOption, string $anchorOption): void {
+    // #199: the template's validity guard needs a truthy crop and anchor, and a value
+    // outside the options renders no crop the stylesheet knows, so both entry points
+    // keep the values to the fieldset's options
+    $set = sbsSet($entry, sbsMinimal() + array_filter(
         ['side_image_side_image_crop' => $crop, 'side_image_side_image_anchor' => $anchor],
         static fn (mixed $value): bool => $value !== null
     ));
 
     expect([$set['image_crop'] ?? null, $set['image_anchor'] ?? null])->toBe([$cropOption, $anchorOption]);
-})->with([
+})->with(['block', 'module'])->with([
     'top and left' => ['top', 'left', 'top', 'left'],
     'bottom and right' => ['bottom', 'right', 'bottom', 'right'],
     'center and center' => ['center', 'center', 'center', 'center'],
-    'not options' => ['0', 'middle', 'center', 'center'],
+    'the old zero for none' => ['0', '0', 'center', 'center'],
+    'not options' => ['none', 'middle', 'center', 'center'],
     'absent' => [null, null, 'center', 'center'],
 ]);
 
@@ -756,16 +754,38 @@ it('skips a module link with no URL, and warns', function (): void {
         ]]);
 });
 
-it('reads a module link list under the body-only layout too', function (): void {
-    $set = sbsSet('module', sbsMinimal() + [
+it('reads no link list outside the link-list layout, for a block as for a module', function (string $entry): void {
+    $assetImporter = new FakeAssetImporter(true, 'assets::photo.jpg');
+
+    // #199: the fieldset and the template show a link list only for the link-list
+    // layout, so its rows under another layout are neither written nor run through
+    // LinkProcessor, which would import the file they link to
+    $set = sbsSet($entry, sbsMinimal() + [
         'side_link_list' => '1',
         'side_link_list_0_side_link_list_text' => 'A',
-        'side_link_list_0_side_link_list_url' => 'https://example.com/a',
-    ]);
+        'side_link_list_0_side_link_list_url' => 'https://example.com/wp-content/uploads/2020/01/a.pdf',
+        'side_link_include_more' => '1',
+    ], $assetImporter);
 
-    expect($set['link_list'] ?? null)->toBe([sbsRow('A', 'https://example.com/a')])
-        ->and(array_key_exists('body_link_list', $set))->toBeFalse();
-});
+    expect(array_intersect_key($set, ['link_list' => true, 'include_more' => true, 'body_link_list' => true]))->toBe([])
+        ->and($assetImporter->importedFiles)->toBe([]);
+})->with(['block', 'module']);
+
+it('runs the link rows of the link-list layout through LinkProcessor, for a block as for a module', function (string $entry): void {
+    $assetImporter = new FakeAssetImporter(true, 'assets::photo.jpg');
+
+    // The control for the test above: the same row under the link-list layout imports
+    // the file it links to
+    sbsSet($entry, sbsMinimal() + [
+        'side_text_layout' => 'link-list',
+        'side_layout_link_text' => 'Lead',
+        'side_link_list' => '1',
+        'side_link_list_0_side_link_list_text' => 'A',
+        'side_link_list_0_side_link_list_url' => 'https://example.com/wp-content/uploads/2020/01/a.pdf',
+    ], $assetImporter);
+
+    expect(array_column($assetImporter->importedFiles, 0))->toBe(['https://example.com/wp-content/uploads/2020/01/a.pdf']);
+})->with(['block', 'module']);
 
 it('imports a module of another layout without a layout body', function (): void {
     $warnings = sbsWarnings(function () use (&$set): void {
