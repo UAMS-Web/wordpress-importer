@@ -381,3 +381,64 @@ it('degrades to a warning when the sideband table is absent', function (): void 
         Mockery::any(),
     ]);
 })->group('kb-engagement');
+
+it('writes no row when the entry id is only whitespace', function (): void {
+    createEngagementTable();
+
+    expect(ArticleEngagementSeeder::seed(engagementSeedItem(['_mkb_views' => '9']), '   '))->toBeFalse()
+        ->and(DB::table('article_engagement_counts')->count())->toBe(0);
+})->group('kb-engagement');
+
+it('names the entry and the table when the sideband table is absent', function (): void {
+    $logSpy = Log::spy();
+
+    ArticleEngagementSeeder::seed(engagementSeedItem(['_mkb_views' => '59']), 'article-123');
+
+    $logSpy->shouldHaveReceived('warning', [
+        Mockery::any(),
+        Mockery::on(static fn (mixed $context): bool => \is_array($context)
+            && ($context['entry_id'] ?? null) === 'article-123'
+            && ($context['table'] ?? null) === 'article_engagement_counts'),
+    ]);
+})->group('kb-engagement');
+
+it('stamps a new row, and refreshes every tally and updated_at but not created_at on a re-import', function (): void {
+    createEngagementTable();
+    $id = 'reset-my-password-4211-'.\str_repeat('a', 16);
+
+    $this->travelTo('2026-01-01 00:00:00');
+    ArticleEngagementSeeder::seed(engagementSeedItem(['_mkb_views' => '1', '_mkb_likes' => '1', '_mkb_dislikes' => '1']), $id);
+
+    $first = \get_object_vars(engagementRow($id) ?? new stdClass);
+
+    $this->travelTo('2026-02-01 00:00:00');
+    ArticleEngagementSeeder::seed(engagementSeedItem(['_mkb_views' => '5', '_mkb_likes' => '6', '_mkb_dislikes' => '7']), $id);
+
+    $row = engagementRow($id);
+    $second = \get_object_vars($row ?? new stdClass);
+
+    expect([engagementCount($row, 'views'), engagementCount($row, 'likes'), engagementCount($row, 'dislikes')])->toBe([5, 6, 7])
+        ->and($first['updated_at'] ?? null)->toStartWith('2026-01-01')
+        ->and($second['updated_at'] ?? null)->toStartWith('2026-02-01')
+        ->and($second['created_at'] ?? null)->toStartWith('2026-01-01');
+})->group('kb-engagement');
+
+it('prunes only rows of the same article whose id this importer minted', function (string $existing, string $written, bool $pruned): void {
+    createEngagementTable();
+
+    DB::table('article_engagement_counts')->insert(['entry_id' => $existing, 'views' => 7, 'likes' => 0, 'dislikes' => 0]);
+
+    ArticleEngagementSeeder::seed(engagementSeedItem(['_mkb_views' => '5']), $written);
+
+    expect(engagementRow($existing) === null)->toBe($pruned);
+})->with([
+    'the same article' => ['a-1-'.\str_repeat('x', 16), 'a-1-'.\str_repeat('y', 16), true],
+    'an id whose tail is too short' => ['slug-4211-'.\str_repeat('x', 16), 'slug-4211-'.\str_repeat('y', 15), false],
+    'an id with one separator' => ['slug-'.\str_repeat('x', 16), 'slug-'.\str_repeat('y', 16), false],
+    'a post id that starts the same' => ['news-123-'.\str_repeat('x', 16), 'news-12-'.\str_repeat('y', 16), false],
+    'a percent sign in the slug' => ['aXXb-1-'.\str_repeat('x', 16), 'a%b-1-'.\str_repeat('y', 16), false],
+    'a backslash in the slug' => ['ab-1-'.\str_repeat('x', 16), 'a\\b-1-'.\str_repeat('y', 16), false],
+    'the same article, with a percent sign in its slug' => ['a%b-1-'.\str_repeat('x', 16), 'a%b-1-'.\str_repeat('y', 16), true],
+    'the same article, with an underscore in its slug' => ['a_b-1-'.\str_repeat('x', 16), 'a_b-1-'.\str_repeat('y', 16), true],
+    'the same article, with a backslash in its slug' => ['a\\b-1-'.\str_repeat('x', 16), 'a\\b-1-'.\str_repeat('y', 16), true],
+])->group('kb-engagement');
