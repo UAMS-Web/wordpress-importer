@@ -30,6 +30,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PageEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
@@ -212,6 +213,13 @@ final class PageEntryTestMapper extends MetadataMapper
     public array $mapped = [];
 
     /**
+     * Fields the mapper writes over the data, as a real metadata mapper would.
+     *
+     * @var array<mixed>
+     */
+    public array $sets = [];
+
+    /**
      * Record the page and mark the data.
      *
      * @param  SimpleXMLElement  $page  The page
@@ -231,6 +239,10 @@ final class PageEntryTestMapper extends MetadataMapper
     ): void {
         $this->mapped[] = (string) $page->children('wp', true)->post_id;
         $data['mapped'] = true;
+
+        foreach ($this->sets as $key => $value) {
+            $data[$key] = $value;
+        }
     }
 }
 
@@ -337,18 +349,21 @@ XML);
  * @param  ?PageEntryTestEntryCreator  $entryCreator  The block stand-in, or null for one with no blocks
  * @param  ?array<int|string, mixed>  $minervaKbSettings  The MinervaKB settings
  * @param  ?PageEntryCreator  $creator  The creator, or null for one built on the stand-in
+ * @param  array<mixed>  $mapperSets  Fields the metadata mapper writes over the data
+ * @param  string  $baseUrl  The export's base URL
  * @return array{output: string, result: array<int|string, mixed>, mapper: PageEntryTestMapper, creator: PageEntryCreator, blocks: PageEntryTestEntryCreator} What the run produced
  */
-function pageEntryRun(string $export, PageEntryTestConverter $converter, ?PageEntryTestEntryCreator $entryCreator = null, ?array $minervaKbSettings = null, ?PageEntryCreator $creator = null): array
+function pageEntryRun(string $export, PageEntryTestConverter $converter, ?PageEntryTestEntryCreator $entryCreator = null, ?array $minervaKbSettings = null, ?PageEntryCreator $creator = null, array $mapperSets = [], string $baseUrl = 'https://example.test'): array
 {
     $parser = new XmlParser;
     $parser->parse($export);
     $output = new BufferedOutput;
     $mapper = new PageEntryTestMapper;
+    $mapper->sets = $mapperSets;
     $entryCreator ??= PageEntryTestEntryCreator::make();
     $creator ??= new PageEntryCreator($entryCreator);
     $assetImporter = new AssetImporter;
-    $assetImporter->setBaseBlogUrl('https://example.test');
+    $assetImporter->setBaseBlogUrl($baseUrl);
 
     $result = $creator->createEntries('default', 'pages', $parser, $assetImporter, $output, $mapper, $converter, $minervaKbSettings);
 
@@ -1005,5 +1020,342 @@ describe('people and the knowledge base', function (): void {
             ->and($run['creator']->getPeopleGroups())->toBe(PeopleShortcodeProcessor::getTermsUsed())
             ->and($run['creator']->getPostCategories())->toBe([])
             ->and($run['creator']->getPostTags())->toBe([]);
+    });
+});
+
+/**
+ * A class whose unserializing would be recorded, to show the import never builds one.
+ */
+final class PageEntryWakeupProbe
+{
+    /**
+     * Whether any instance has been unserialized.
+     */
+    public static bool $woken = false;
+
+    /**
+     * Record that an instance was unserialized.
+     */
+    public function __wakeup(): void
+    {
+        self::$woken = true;
+    }
+}
+
+/**
+ * Make a collection for a test.
+ *
+ * @param  string  $handle  The collection handle
+ * @param  string  $blueprint  The blueprint handle
+ * @param  bool  $structured  Whether the collection has a structure
+ */
+function pageEntryCollection(string $handle, string $blueprint, bool $structured = false): void
+{
+    $made = BlueprintFacade::make($blueprint);
+    $made->setNamespace("collections.{$handle}");
+    $made->setContents(['fields' => [['handle' => 'title', 'field' => ['type' => 'text']]]]);
+    $made->save();
+
+    $collection = CollectionFacade::make($handle);
+    $collection->sites(['default']);
+
+    if ($structured) {
+        $collection->structureContents(['root' => false]);
+    }
+
+    $collection->save();
+}
+
+describe('what else a run reads and writes', function (): void {
+    it('runs the post and logo list term passes before any page', function (): void {
+        pageEntryCollection('post_categories', 'post_category', true);
+        pageEntryCollection('logos_item_categories', 'logos_item_category', true);
+        $export = TemporaryFileRegistry::create('page-terms');
+        \file_put_contents($export, \str_replace(
+            '<wp:base_blog_url>https://example.test</wp:base_blog_url>',
+            '<wp:base_blog_url>https://example.test</wp:base_blog_url>'
+                .'<wp:category><wp:term_id>11</wp:term_id><wp:category_nicename>news</wp:category_nicename><wp:category_parent></wp:category_parent><wp:cat_name><![CDATA[News]]></wp:cat_name></wp:category>'
+                .'<wp:term><wp:term_id>71</wp:term_id><wp:term_taxonomy>logo-list-category</wp:term_taxonomy><wp:term_slug>partners</wp:term_slug><wp:term_name><![CDATA[Partners]]></wp:term_name></wp:term>',
+            (string) \file_get_contents(pageEntryExport([['slug' => 'termed']]))
+        ));
+
+        pageEntryRun($export, PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(TermDestinationRegistry::referenceFor('category', '11'))->toBeString()
+            ->and(TermDestinationRegistry::referenceFor('logo-list-category', '71'))->toBeString();
+
+        foreach (['collections.post_categories.post_category', 'collections.logos_item_categories.logos_item_category'] as $handle) {
+            BlueprintFacade::find($handle)?->delete();
+        }
+    });
+
+    it('hands the converter the export\'s attachments, and decodes a double-encoded title', function (): void {
+        $export = TemporaryFileRegistry::create('page-attachment');
+        \file_put_contents($export, \str_replace(
+            '<wp:base_blog_url>https://example.test</wp:base_blog_url>',
+            '<wp:base_blog_url>https://example.test</wp:base_blog_url><item><title>img</title><link>https://example.test/img/</link><wp:post_id>900</wp:post_id><wp:post_type>attachment</wp:post_type><wp:attachment_url>https://example.test/img.png</wp:attachment_url></item>',
+            (string) \file_get_contents(pageEntryExport([['slug' => 'pictured', 'title' => 'Say &AMP;quot;hi&AMP;quot;']]))
+        ));
+        $converter = PageEntryTestConverter::returning(pageEntryBody());
+
+        pageEntryRun($export, $converter);
+
+        expect($converter->calls[0]['attachments'] ?? null)->toBe(1)
+            ->and(pageEntry('pictured')->get('title'))->toBe('Say "hi"');
+    });
+
+    it('records the missing status warning\'s context, and reads a missing menu order as zero', function (): void {
+        $warnings = pageEntryWarnings();
+        $export = TemporaryFileRegistry::create('page-no-order');
+        \file_put_contents($export, \str_replace('<wp:menu_order>2</wp:menu_order>', '', (string) \file_get_contents(pageEntryExport([['id' => '880', 'slug' => 'unordered', 'title' => 'Unordered', 'status' => null]]))));
+
+        $run = pageEntryRun($export, PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect($warnings[0][1] ?? null)->toMatchArray(['site' => 'default', 'title' => 'Unordered'])
+            ->and(\is_array($run['result'][880] ?? null) ? ($run['result'][880]['menu_order'] ?? null) : null)->toBe(0);
+    });
+
+    it('falls back to the SEO description, then the meta description, for the excerpt', function (array $meta, ?string $expected): void {
+        pageEntryRun(pageEntryExport([['slug' => 'described', 'meta' => $meta]]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(pageEntry('described')->get('excerpt'))->toBe($expected);
+    })->with([
+        'the SEO description' => [['_seopress_titles_desc' => 'Seo', 'seo_meta_description' => 'Meta'], 'Seo'],
+        'the meta description' => [['seo_meta_description' => 'Meta'], 'Meta'],
+    ]);
+
+    it('imports the next page after one it skips as existing, and a new one under skip', function (): void {
+        pageEntryRun(pageEntryExport([['id' => '881', 'slug' => 'old']]), PageEntryTestConverter::returning(pageEntryBody()));
+        LinkProcessor::clearDeferredData();
+        BaseEntryCreator::clearTaxonomyCaches();
+        $creator = new PageEntryCreator(PageEntryTestEntryCreator::make());
+        $creator->setEntryOverwriteBehavior('Skip matching files');
+
+        pageEntryRun(pageEntryExport([['id' => '881', 'slug' => 'old'], ['id' => '882', 'slug' => 'new']]), PageEntryTestConverter::returning(pageEntryBody()), creator: $creator);
+
+        expect(\array_values(\array_unique(pageEntrySlugs())))->toBe(['old', 'new']);
+    });
+
+    it('sets the knowledge base for the site in the processing context', function (): void {
+        pageEntryCollection('knowledge_bases', 'knowledge_base');
+        foreach ([['kb', 'knowledge_base', 'kb-entry'], ['other', 'knowledge_base', 'other-entry']] as [$slug, $blueprint, $id]) {
+            $kb = new Entry;
+            $kb->collection('knowledge_bases');
+            $kb->blueprint($blueprint);
+            $kb->locale('default');
+            $kb->slug($slug);
+            $kb->id($id);
+            $kb->save();
+        }
+
+        pageEntryRun(pageEntryExport([['slug' => 'with-kb']]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(ProcessingContext::getKnowledgeBaseId())->toBe('kb-entry');
+
+        BlueprintFacade::find('collections.knowledge_bases.knowledge_base')?->delete();
+    });
+
+    it('validates people groups found in show-people shortcodes as shortcodes', function (): void {
+        $run = pageEntryRun(pageEntryExport([['slug' => 'staff', 'content' => '[show-people]']]), PageEntryTestConverter::returning(pageEntryBody()));
+        (new ReflectionProperty(PeopleShortcodeProcessor::class, 'termsUsed'))->setValue(null, ['faculty' => [['page_slug' => 'staff', 'original' => 'faculty', 'name' => 'Faculty', 'site_specific' => 'default_faculty']]]);
+        $output = new BufferedOutput;
+
+        $run['creator']->validateTaxonomies('pages', 'default', $output);
+
+        expect($run['creator']->getPeopleGroups())->toHaveKey('faculty')
+            ->and($output->fetch())->toContain('shortcodes');
+
+        PeopleShortcodeProcessor::resetTermsUsed();
+    });
+});
+
+describe('modules and their hero', function (): void {
+    it('reports a hero module it does not use for the title, and not one it does', function (): void {
+        $warnings = pageEntryWarnings();
+        $modules = 'a:2:{i:0;s:11:"modules_cta";i:1;s:12:"modules_hero";}';
+
+        pageEntryRun(pageEntryExport([
+            ['id' => '883', 'slug' => 'm-plain', 'parent' => '7', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'uamswp_modules' => $modules, 'uamswp_modules_1_hero_heading' => 'H']],
+            ['id' => '884', 'slug' => 'm-hero', 'parent' => '7', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'uamswp_modules' => $modules, 'uamswp_modules_1_hero_heading' => 'H', 'page_title_options' => 'hidden']],
+        ]), PageEntryTestConverter::returning(pageEntryBody()));
+        $notImplemented = \array_values(\array_filter(pageEntryMessages($warnings), static fn (string $message): bool => \str_contains($message, "'modules_hero' is not yet implemented")));
+
+        expect($notImplemented)->toHaveCount(1)
+            ->and(pageEntry('m-hero')->get('title_options'))->toBe('hero')
+            ->and(pageEntry('m-plain')->get('title_options'))->toBe('normal');
+    });
+
+    it('uses no hero module for the title when it cannot read one', function (array $meta): void {
+        pageEntryRun(pageEntryExport([['slug' => 'm-none', 'parent' => '7', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'page_title_options' => 'none', ...$meta]]]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(pageEntry('m-none')->get('title_options'))->toBe('normal');
+    })->with([
+        'modules that are not serialized' => [['uamswp_modules' => 'broken']],
+        'no hero module' => [['uamswp_modules' => 'a:1:{i:0;s:11:"modules_cta";}']],
+        'a hero module with no fields' => [['uamswp_modules' => 'a:1:{i:0;s:12:"modules_hero";}']],
+    ]);
+
+    it('ignores a hero module on a page without the modules template', function (): void {
+        pageEntryRun(pageEntryExport([['slug' => 'not-modular-hero', 'parent' => '7', 'meta' => [
+            'uamswp_modules' => 'a:1:{i:0;s:12:"modules_hero";}',
+            'uamswp_modules_0_hero_heading' => 'H',
+            'page_title_options' => 'none',
+        ]]]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(pageEntry('not-modular-hero')->get('title_options'))->toBe('normal');
+    });
+
+    it('records the entry data and the export path for the module parsers', function (): void {
+        $export = pageEntryExport([['id' => '885', 'slug' => 'm-context', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'uamswp_modules' => 'a:0:{}']]]);
+
+        pageEntryRun($export, PageEntryTestConverter::returning(pageEntryBody()));
+        $entryData = ProcessingContext::getEntryData();
+
+        expect($entryData['post_name'] ?? null)->toBe('m-context')
+            ->and(ProcessingContext::getXmlPath())->toBe($export);
+    });
+
+    it('logs the page and its modules when they do not unserialize', function (): void {
+        $warnings = pageEntryWarnings();
+
+        pageEntryRun(pageEntryExport([['id' => '886', 'slug' => 'm-broken', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'uamswp_modules' => 'broken']]]), PageEntryTestConverter::returning(pageEntryBody()));
+        $error = \array_values(\array_filter($warnings->getArrayCopy(), static fn (array $warning): bool => \is_string($warning[0]) && \str_starts_with($warning[0], 'ERROR')));
+
+        expect($error[0][1] ?? null)->toBe(['postId' => '886', 'slug' => 'm-broken', 'uamswp_modules' => 'broken']);
+    });
+
+    it('builds no object from serialized modules', function (string $option): void {
+        PageEntryWakeupProbe::$woken = false;
+
+        pageEntryRun(pageEntryExport([['slug' => 'm-objects', 'meta' => [
+            '_wp_page_template' => 'templates/modules.php',
+            'uamswp_modules' => 'a:1:{i:0;O:20:"PageEntryWakeupProbe":0:{}}',
+            'page_title_options' => $option,
+        ]]]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect((new ReflectionProperty(PageEntryWakeupProbe::class, 'woken'))->getValue())->toBeFalse();
+    })->with(['normal', 'hidden']);
+
+    it('warns about a basic page with a page builder', function (): void {
+        $warnings = pageEntryWarnings();
+
+        pageEntryRun(pageEntryExport([['id' => '887', 'slug' => 'm-built', 'parent' => '7', 'meta' => [
+            '_wp_page_template' => 'templates/modules.php',
+            'uamswp_modules' => 'a:1:{i:0;s:11:"modules_cta";}',
+            'uamswp_modules_0_cta_heading' => 'Call',
+        ]]]), PageEntryTestConverter::returning(pageEntryBody()));
+        $built = \array_values(\array_filter($warnings->getArrayCopy(), static fn (array $warning): bool => \is_string($warning[0]) && \str_contains($warning[0], 'but has page_builder field')));
+
+        expect($built)->toHaveCount(1)
+            ->and($built[0][0] ?? null)->toBe('Page entry created with basic_page blueprint but has page_builder field (from entry: https://example.test/pages/887/)')
+            ->and($built[0][1] ?? null)->toMatchArray(['entry_slug' => 'm-built', 'blueprint' => 'basic_page', 'has_content' => false, 'has_page_builder' => true, 'source_url' => 'https://example.test/pages/887/']);
+    });
+});
+
+describe('heroes and reusable blocks, more closely', function (): void {
+    it('reads a hero block keyed by numbers, and one at a later slide index', function (): void {
+        pageEntryRun(pageEntryExport([
+            ['slug' => 'hero-numeric', 'content' => '<!-- wp:acf/hero {"data":{"0":"x","hero_0_hero_heading":"Numbered"}} /-->', 'meta' => ['page_title_options' => 'hidden']],
+            ['id' => '888', 'slug' => 'hero-later', 'content' => '<!-- wp:acf/hero {"data":{"field":"x","hero_1_hero_heading":"Later"}} /-->', 'meta' => ['page_title_options' => 'hidden']],
+        ]), PageEntryTestConverter::returning(pageEntryBody([], [['type' => 'set']])));
+
+        expect(pageEntryHero(pageEntry('hero-numeric')))->toBe([['type' => 'new_set', 'enabled' => true, 'heading' => 'Numbered']])
+            ->and(pageEntryHero(pageEntry('hero-later')))->toBe([1 => ['type' => 'new_set', 'enabled' => true, 'heading' => 'Later']]);
+    });
+
+    it('goes on to the next reusable block after one that is missing', function (): void {
+        pageEntryRun(pageEntryExport([
+            ['id' => '889', 'slug' => 'reuse-after-missing', 'content' => '<!-- wp:block {"ref":999} /--><!-- wp:block {"ref":890} /-->'],
+            ['id' => '890', 'type' => 'wp_block', 'content' => '<!-- wp:acf/text {"data":{}} /-->'],
+        ]), PageEntryTestConverter::returning(pageEntryBody([], [['type' => 'set']])));
+
+        expect(pageEntry('reuse-after-missing')->get('blueprint'))->toBe('landing_page');
+    });
+});
+
+describe('the title options a metadata mapper leaves', function (): void {
+    it('gives a landing page whose title option is none the graphic title over the mapper\'s value, and leaves other values', function (array $meta, string $expected): void {
+        pageEntryRun(pageEntryExport([['slug' => 'mapped-landing', 'parent' => '7', 'content' => '<!-- wp:acf/text {"data":{}} /-->', 'meta' => $meta]]), PageEntryTestConverter::returning(pageEntryBody([], [['type' => 'set']])), mapperSets: ['title_options' => 'hidden']);
+
+        expect(pageEntry('mapped-landing')->get('title_options'))->toBe($expected);
+    })->with([
+        'none, after another key' => [['other' => 'none', 'page_title_options' => 'none'], 'graphic'],
+        'another option' => [['page_title_options' => 'normal'], 'hidden'],
+        'none under another key' => [['page_title_option' => 'none'], 'hidden'],
+    ]);
+
+    it('leaves a basic page whose title option is none to the other rules', function (): void {
+        pageEntryRun(pageEntryExport([['slug' => 'basic-none', 'parent' => '7', 'meta' => ['page_title_options' => 'none']]]), PageEntryTestConverter::returning(pageEntryBody()), mapperSets: ['title_options' => 'hidden']);
+
+        expect(pageEntry('basic-none')->get('title_options'))->toBe('hidden');
+    });
+
+    it('leaves a landing page\'s or a non-normal title alone, and honors a subsection the mapper set', function (array $page, array $sets, string $expected): void {
+        pageEntryRun(pageEntryExport([['slug' => 'mapped', ...$page]]), PageEntryTestConverter::returning(pageEntryBody([], [['type' => 'set']])), mapperSets: $sets);
+
+        expect(pageEntry('mapped')->get('title_options'))->toBe($expected);
+    })->with([
+        'a top-level landing page the mapper made normal' => [['content' => '<!-- wp:acf/text {"data":{}} /-->'], ['title_options' => 'normal'], 'normal'],
+        'a top-level basic page the mapper made hidden' => [[], ['title_options' => 'hidden'], 'hidden'],
+        'a child the mapper made a subsection' => [['parent' => '7'], ['subsection' => true], 'graphic'],
+        'a child whose subsection is a string' => [['parent' => '7'], ['subsection' => '1'], 'normal'],
+    ]);
+
+    it('matches the homepage against a base URL with a trailing slash', function (): void {
+        pageEntryRun(pageEntryExport([['slug' => 'home', 'parent' => '7', 'link' => 'https://example.test']]), PageEntryTestConverter::returning(pageEntryBody()), baseUrl: 'https://example.test/');
+
+        expect(pageEntry('home')->get('title_options'))->toBe('graphic');
+    });
+});
+
+describe('the warnings a save raises, in full', function (): void {
+    it('records the ids and slug of an id mismatch, and of a save that returns nothing', function (): void {
+        $warnings = pageEntryWarnings();
+        $other = new Entry;
+        $other->id('other-id');
+
+        pageEntryRun(pageEntryExport([['id' => '891', 'slug' => 'mismatch-context']]), PageEntryTestConverter::returning(pageEntryBody()), creator: pageEntryCreatorSaving($other));
+        pageEntryRun(pageEntryExport([['id' => '892', 'slug' => 'null-context']]), PageEntryTestConverter::returning(pageEntryBody()), creator: pageEntryCreatorSaving(null));
+        $byMessage = [];
+
+        foreach ($warnings->getArrayCopy() as [$message, $context]) {
+            if (\is_string($message) && \is_array($context)) {
+                $byMessage[\explode(' (from entry', $message)[0]] = $context;
+            }
+        }
+
+        $mismatch = $byMessage['PageEntryCreator::createEntries: Entry ID mismatch detected'] ?? [];
+        $null = $byMessage['PageEntryCreator::createEntries: saveEntry returned null for page, attempting to find existing entry'] ?? [];
+        $fallback = $byMessage['PageEntryCreator::createEntries: Could not find existing entry, adding to pageData with generated ID'] ?? [];
+
+        expect($mismatch)->toHaveKeys(['postId', 'generated_entry_id', 'actual_entry_id', 'slug'])
+            ->and($mismatch['postId'] ?? null)->toBe('891')
+            ->and($mismatch['actual_entry_id'] ?? null)->toBe('other-id')
+            ->and($mismatch['slug'] ?? null)->toBe('mismatch-context')
+            ->and($mismatch['generated_entry_id'] ?? '')->toBeString()->toStartWith('mismatch-context-891-')
+            ->and($null['entryId'] ?? '')->toBeString()->toStartWith('null-context-892-')
+            ->and($fallback['entryId'] ?? '')->toBeString()->toStartWith('null-context-892-');
+    });
+
+    it('records the full context of a basic page with no content', function (): void {
+        $warnings = pageEntryWarnings();
+
+        pageEntryRun(pageEntryExport([['id' => '893', 'slug' => 'bare-context', 'parent' => '7']]), PageEntryTestConverter::returning(pageEntryBody([])));
+
+        $context = \is_array($warnings[0][1] ?? null) ? $warnings[0][1] : [];
+
+        expect(\array_diff_key($context, ['entry_url' => true]))->toBe([
+            'entry_slug' => 'bare-context',
+            'blueprint' => 'basic_page',
+            'has_content' => false,
+            'has_page_builder' => false,
+            'source_url' => 'https://example.test/pages/893/',
+        ]);
+    });
+});
+
+describe('the creator\'s state', function (): void {
+    it('starts with no show-people shortcode noted', function (): void {
+        expect((new PageEntryCreator(PageEntryTestEntryCreator::make()))->hasShowPeople())->toBeFalse();
     });
 });

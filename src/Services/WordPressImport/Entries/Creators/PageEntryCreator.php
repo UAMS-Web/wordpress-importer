@@ -218,8 +218,11 @@ class PageEntryCreator extends BaseEntryCreator
                 );
             }
 
-            $passwordNodes = XpathHelper::xpathElements($page, 'wp:post_password');
-            $postPassword = $passwordNodes !== [] ? (string) $passwordNodes[0] : '';
+            // Extract the post password, blank when the page has none
+            $postPassword = XpathHelper::getStringValue(
+                $page,
+                'wp:post_password'
+            );
 
             // Extract post date with fallback to pubDate
             $postDate = $this->extractPostDateString($page);
@@ -227,8 +230,11 @@ class PageEntryCreator extends BaseEntryCreator
             $parentNodes = XpathHelper::xpathElements($page, 'wp:post_parent');
             $parentId = $parentNodes !== [] ? (string) $parentNodes[0] : '0';
 
-            $menuOrderNodes = XpathHelper::xpathElements($page, 'wp:menu_order');
-            $menuOrder = $menuOrderNodes !== [] ? (int) $menuOrderNodes[0] : 0;
+            // Extract the menu order, zero when the page has none
+            $menuOrder = XpathHelper::getIntValue(
+                $page,
+                'wp:menu_order'
+            );
 
             // Extract the encoded content from WordPress XML
             $contentEncoded = XpathHelper::getStringValue(
@@ -257,8 +263,7 @@ class PageEntryCreator extends BaseEntryCreator
                 $postmeta[$key] = $value;
             }
 
-            $template = $postmeta['_wp_page_template'] ?? '';
-            $hasModulesTemplate = ($template === 'templates/modules.php');
+            $hasModulesTemplate = ($postmeta['_wp_page_template'] ?? null) === 'templates/modules.php';
             $hasUamswpModules = isset($postmeta['uamswp_modules']);
 
             // Extract thumbnail ID from postmeta for featured image
@@ -285,24 +290,15 @@ class PageEntryCreator extends BaseEntryCreator
             // ---
             $isKnowledgeBaseHomePage = false;
 
-            // Check MinervaKB settings for kb_page value if settings are provided
-            if (
-                $minervaKbSettings !== null
-                && isset($minervaKbSettings['kb_page'])
-                && $minervaKbSettings['kb_page'] !== ''
-                && $minervaKbSettings['kb_page'] !== false
-            ) {
-                // Extract kb_page setting and normalize it to a comparable string
-                $kbPageValue = $minervaKbSettings['kb_page'];
-                if (\is_scalar($kbPageValue)) {
-                    $kbPageId = (string) $kbPageValue;
+            // ---
+            // Check MinervaKB settings for a kb_page naming this page. A blank or false
+            // value reads as a string no post id equals, so it names no page.
+            // ---
+            $kbPageValue = $minervaKbSettings['kb_page'] ?? null;
 
-                    // Check if current page's post ID matches kb_page value
-                    if ($postId === $kbPageId) {
-                        // Mark this page as the knowledge base home page
-                        $isKnowledgeBaseHomePage = true;
-                    }
-                }
+            if (\is_scalar($kbPageValue) && (string) $kbPageValue === $postId) {
+                // Mark this page as the knowledge base home page
+                $isKnowledgeBaseHomePage = true;
             }
 
             // ---
@@ -471,6 +467,8 @@ class PageEntryCreator extends BaseEntryCreator
             // Check if page_title_options is one of the values that should trigger hero
             // detection
             // ---
+            // The needles are not numeric, so a loose comparison matches the strict one
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 \in_array(
                     $pageTitleOptions,
@@ -494,6 +492,7 @@ class PageEntryCreator extends BaseEntryCreator
                 ) {
                     // Extract hero module data from postmeta
                     $heroModuleData = $this->extractHeroModuleData(
+                        $postmeta['uamswp_modules'],
                         $postmeta
                     );
                 }
@@ -516,11 +515,11 @@ class PageEntryCreator extends BaseEntryCreator
             // If hero should be used for title, remove hero block from content
             // ---
 
-            // Check if hero should be used for title and hero block data exists
-            if (
-                $shouldUseHeroForTitle
-                && $heroBlockData !== null
-            ) {
+            // ---
+            // Check if hero block data exists, which is only read when the hero is used
+            // for the title
+            // ---
+            if ($heroBlockData !== null) {
                 // Remove hero block from content before processing
                 $contentEncoded = $this->removeHeroBlockFromContent(
                     $contentEncoded
@@ -543,7 +542,8 @@ class PageEntryCreator extends BaseEntryCreator
                     $modulesData = [];
                 }
 
-                $data['post_name'] ??= $entrySlug !== '' ? $entrySlug : $title;
+                // The generated slug is never blank: it falls back to the title, then the id
+                $data['post_name'] = $entrySlug;
 
                 // Set entry data in processing context for module parsers
                 ProcessingContext::setEntryData($data);
@@ -1476,16 +1476,14 @@ class PageEntryCreator extends BaseEntryCreator
             $contentEncoded
         );
 
-        // Check if any wp:block references were found
-        if ($wpBlockPostIds === []) {
-            // Return false if no wp:block references found
-            return false;
-        }
-
         // Get XML file path for finding wp_block items
         $xmlPath = $xmlParser->getFilePath();
 
-        // Return early when XML path is unavailable
+        // ---
+        // Return early when XML path is unavailable. A run streams its pages from the
+        // export's files, so the parser always has one; the check narrows the type.
+        // ---
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, EmptyStringToNotEmpty, FalseToTrue, RemoveEarlyReturn
         if (! \is_string($xmlPath) || $xmlPath === '') {
             return false;
         }
@@ -1494,11 +1492,6 @@ class PageEntryCreator extends BaseEntryCreator
         foreach ($wpBlockPostIds as $wpBlockPostId) {
             // Normalize wp:block ID to string before XML lookup
             $normalizedWpBlockPostId = $this->normalizeMixedString($wpBlockPostId);
-
-            // Skip invalid wp:block IDs
-            if ($normalizedWpBlockPostId === '') {
-                continue;
-            }
 
             // Find wp_block item by post ID
             $wpBlockItem = XpathHelper::findItemByPostId(
@@ -1582,14 +1575,8 @@ class PageEntryCreator extends BaseEntryCreator
             true
         );
 
-        // Check if attributes decoded successfully
-        if (! \is_array($attributes)) {
-            // Return null if JSON decode failed
-            return null;
-        }
-
-        // Extract hero data from attributes
-        $heroData = $attributes['data'] ?? [];
+        // Extract hero data from attributes, none when the JSON did not decode
+        $heroData = \is_array($attributes) ? ($attributes['data'] ?? null) : null;
 
         // ---
         // Return null if no hero data found
@@ -1612,28 +1599,15 @@ class PageEntryCreator extends BaseEntryCreator
      * hero module data from postmeta. Returns the hero data array if found, or null
      * if not found.
      *
+     * @param  string  $serializedModules  The serialized uamswp_modules value
      * @param  array<int|string, mixed>  $postmeta  The postmeta array
      * @return array<int|string, mixed>|null The hero data array or null if not found
      */
     private function extractHeroModuleData(
+        string $serializedModules,
         array $postmeta
     ): ?array {
-        // Check if uamswp_modules exists in postmeta
-        if (! isset($postmeta['uamswp_modules'])) {
-            // Return null if uamswp_modules not found
-            return null;
-        }
-
-        // ---
-        // Parse the serialized uamswp_modules array
-        // ---
-
         // Unserialize the uamswp_modules array from postmeta
-        $serializedModules = $postmeta['uamswp_modules'];
-        if (! \is_string($serializedModules)) {
-            return null;
-        }
-
         $modulesData = @\unserialize($serializedModules, ['allowed_classes' => false]);
 
         // Check if unserialize was successful
@@ -1658,7 +1632,11 @@ class PageEntryCreator extends BaseEntryCreator
         // Extract module data for modules_hero
         // ---
 
-        // Extract module data using shared method from ModulesParser
+        // ---
+        // Extract module data using shared method from ModulesParser. An unserialized
+        // list is keyed by ints, so the cast only narrows the type.
+        // ---
+        // @pest-mutate-ignore: RemoveIntegerCast
         $moduleData = ModulesParser::extractModuleDataFromPostmeta(
             $postmeta,
             (int) $heroModuleIndex
@@ -1857,7 +1835,7 @@ class PageEntryCreator extends BaseEntryCreator
         // ---
 
         // Check if blueprint is not basic_page
-        if (($data['blueprint'] ?? '') !== 'basic_page') {
+        if (($data['blueprint'] ?? null) !== 'basic_page') {
             // Return early if not basic_page blueprint
             return;
         }
@@ -1867,7 +1845,7 @@ class PageEntryCreator extends BaseEntryCreator
         // ---
 
         // Check if title_options is not normal
-        if (($data['title_options'] ?? 'normal') !== 'normal') {
+        if (($data['title_options'] ?? null) !== 'normal') {
             // Return early if title_options is not normal
             return;
         }
@@ -1920,7 +1898,7 @@ class PageEntryCreator extends BaseEntryCreator
         }
 
         // Check if this entry has subsection: true
-        $hasSubsection = ($data['subsection'] ?? false) === true;
+        $hasSubsection = ($data['subsection'] ?? null) === true;
 
         // ---
         // Check if this is an immediate child of an entry with subsection: true
@@ -1934,7 +1912,12 @@ class PageEntryCreator extends BaseEntryCreator
             // Resolve XML path for parent page lookup
             $xmlPath = $xmlParser->getFilePath();
 
-            // Skip parent lookup when XML path is unavailable
+            // ---
+            // Skip parent lookup when XML path is unavailable. A run streams its pages
+            // from the export's files, so the parser always has one; the check narrows
+            // the type.
+            // ---
+            // @pest-mutate-ignore: BooleanOrToBooleanAnd, EmptyStringToNotEmpty, RemoveEarlyReturn
             if (! \is_string($xmlPath) || $xmlPath === '') {
                 return;
             }
@@ -1974,7 +1957,7 @@ class PageEntryCreator extends BaseEntryCreator
                 }
 
                 // Check if parent has page_subsection set to '1'
-                if (($parentPostmeta['page_subsection'] ?? '') === '1') {
+                if (($parentPostmeta['page_subsection'] ?? null) === '1') {
                     // Set subsection child flag to true
                     $isSubsectionChild = true;
                 }
@@ -2025,26 +2008,11 @@ class PageEntryCreator extends BaseEntryCreator
             $site
         );
 
-        // Fetch matching entries and validate query result type
-        $entries = $query->get();
-        if (! \is_iterable($entries)) {
-            return null;
-        }
+        // Return the first matching entry's ID, or null when there is none
+        $entry = $query->first();
+        $entryId = $entry instanceof Entry ? $entry->id() : null;
 
-        // Return first valid string entry ID from matching entries
-        foreach ($entries as $entry) {
-            if (! $entry instanceof Entry) {
-                continue;
-            }
-
-            $entryId = $entry->id();
-            if (\is_string($entryId) && $entryId !== '') {
-                return $entryId;
-            }
-        }
-
-        // Return null when no valid entry ID is found
-        return null;
+        return \is_string($entryId) ? $entryId : null;
     }
 
     /**
@@ -2079,7 +2047,11 @@ class PageEntryCreator extends BaseEntryCreator
         // Normalize entry ID to a string
         $normalizedEntryId = $this->normalizeMixedString($entryId);
 
-        // Return normalized ID when available, otherwise fallback ID
+        // ---
+        // Return normalized ID when available, otherwise fallback ID. A saved entry's
+        // id is never blank, so the fallback is for the type the entry declares.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return $normalizedEntryId !== '' ? $normalizedEntryId : $fallbackId;
     }
 }
