@@ -23,16 +23,6 @@ class Shortcode extends AbstractSetRenderer
     }
 
     /**
-     * Get shortcode parsing configuration for Tiptap's parseHTML.
-     *
-     * @return array<int, mixed> Array of configurations
-     */
-    public function getShortcodeConfig(): array
-    {
-        return [];
-    }
-
-    /**
      * Render a shortcode-based set node to HTML for Tiptap processing.
      *
      * @param  object  $node  The Tiptap node object containing set data
