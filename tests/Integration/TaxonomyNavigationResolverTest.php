@@ -8,6 +8,7 @@ use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationDestination;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
@@ -319,3 +320,131 @@ it('refuses a menu item that names no term', function (): void {
     expect($destination->entryId)->toBeNull()
         ->and($destination->skipCode)->toBe('incomplete_menu_item');
 });
+
+/**
+ * A resolver over an export carrying the given `<wp:term>` elements only.
+ *
+ * @param  list<array{taxonomy: string, id: string, slug: string}>  $terms
+ */
+function navResolverFromTerms(array $terms): TaxonomyNavigationResolver
+{
+    $xml = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/"><channel>';
+
+    foreach ($terms as $term) {
+        $xml .= '<wp:term>'
+            .($term['id'] === '' ? '' : '<wp:term_id>'.$term['id'].'</wp:term_id>')
+            .'<wp:term_taxonomy><![CDATA['.$term['taxonomy'].']]></wp:term_taxonomy>'
+            .($term['slug'] === '' ? '' : '<wp:term_slug><![CDATA['.$term['slug'].']]></wp:term_slug>')
+            .'<wp:term_name><![CDATA[Name]]></wp:term_name>'
+            .'</wp:term>';
+    }
+
+    $path = (string) tempnam(sys_get_temp_dir(), 'wxr_nav_terms_');
+    file_put_contents($path, $xml.'</channel></rss>');
+
+    $xmlParser = new XmlParser;
+    $xmlParser->parse($path);
+    $resolver = TaxonomyNavigationResolver::fromExport($xmlParser);
+    unlink($path);
+
+    return $resolver;
+}
+
+/**
+ * Make the collection a structured taxonomy imports into.
+ */
+function navCollection(string $handle): void
+{
+    $collection = CollectionFacade::make($handle);
+    $collection->sites(['default', 'news']);
+    $collection->save();
+}
+
+it('reads a structured taxonomy declared as a term, after a term of one that is not structured', function (): void {
+    navCollection('logos_item_categories');
+    $entryId = navCategoryEntry('partners', 'default', 'logos_item_categories');
+
+    $resolver = navResolverFromTerms([
+        ['taxonomy' => 'advert_category', 'id' => '42', 'slug' => 'for-sale'],
+        ['taxonomy' => 'logo-list-category', 'id' => '77', 'slug' => 'partners'],
+    ]);
+
+    expect($resolver->resolve('logo-list-category', '77', 'default')->entryId)->toBe($entryId);
+});
+
+it('keeps the first declaration of a term, and skips one with no id or no slug', function (): void {
+    navCollection('logos_item_categories');
+    $partners = navCategoryEntry('partners', 'default', 'logos_item_categories');
+    navCategoryEntry('second', 'default', 'logos_item_categories');
+    $sponsors = navCategoryEntry('sponsors', 'default', 'logos_item_categories');
+
+    $resolver = navResolverFromTerms([
+        ['taxonomy' => 'logo-list-category', 'id' => '77', 'slug' => 'partners'],
+        ['taxonomy' => 'logo-list-category', 'id' => '77', 'slug' => 'second'],
+        ['taxonomy' => 'logo-list-category', 'id' => '', 'slug' => 'orphan'],
+        ['taxonomy' => 'logo-list-category', 'id' => '78', 'slug' => ''],
+        ['taxonomy' => 'logo-list-category', 'id' => '78', 'slug' => 'sponsors'],
+    ]);
+
+    expect($resolver->resolve('logo-list-category', '77', 'default')->entryId)->toBe($partners)
+        ->and($resolver->resolve('logo-list-category', '78', 'default')->entryId)->toBe($sponsors);
+});
+
+it('finds the entry by its slug in the taxonomy\'s own collection only', function (): void {
+    navCollection('logos_item_categories');
+    // The slug in another collection, and another slug in this one, are not it
+    navCategoryEntry('partners');
+    navCategoryEntry('sponsors', 'default', 'logos_item_categories');
+
+    $destination = navResolverFromTerms([
+        ['taxonomy' => 'logo-list-category', 'id' => '77', 'slug' => 'partners'],
+    ])->resolve('logo-list-category', '77', 'default');
+
+    expect($destination->skipCode)->toBe('not_imported_into_site');
+});
+
+it('refuses a menu item that names no taxonomy', function (): void {
+    expect(navResolverFromFixture()->resolve('', '19', 'default')->skipCode)->toBe('incomplete_menu_item');
+});
+
+it('gives each reason it skips an item in full', function (Closure $resolve, string $code, string $reason): void {
+    $destination = $resolve();
+    assert($destination instanceof TaxonomyNavigationDestination);
+
+    expect([$destination->skipCode, $destination->skipReason])->toBe([$code, $reason]);
+})->with([
+    'the registry recorded a flat taxonomy' => [
+        function (): TaxonomyNavigationDestination {
+            TermDestinationRegistry::registerTaxonomyTerm('advert_category', 42, 'classified_categories', 'default_for-sale');
+
+            return TaxonomyNavigationResolver::registryOnly()->resolve('advert_category', '42', 'default');
+        },
+        'flat_destination',
+        "'advert_category' imports as a term in the flat Statamic taxonomy 'classified_categories', and a navigation branch can only reference an entry or a literal URL.",
+    ],
+    'a kbtopic term the run did not register' => [
+        fn (): TaxonomyNavigationDestination => navResolverFromFixture()->resolve('kbtopic', '4', 'default'),
+        'kbtopic_term_not_imported',
+        "no Statamic entry is registered for 'kbtopic' term 4. Those mappings are built by the knowledge-base import and last only for that run, so import the KB content in the same command as the navigation.",
+    ],
+    'a flat taxonomy, the registry cold' => [
+        fn (): TaxonomyNavigationDestination => navResolverFromFixture()->resolve('advert_category', '42', 'default'),
+        'flat_destination',
+        "'advert_category' imports as a flat Statamic taxonomy term, and a navigation branch can only reference an entry or a literal URL.",
+    ],
+    'a taxonomy with no destination' => [
+        fn (): TaxonomyNavigationDestination => navResolverFromFixture()->resolve('tshowcase-taxonomy', '101', 'default'),
+        'no_statamic_destination',
+        "'tshowcase-taxonomy' has no Statamic destination, so its terms are not imported at all.",
+    ],
+    'a term the export never declared' => [
+        fn (): TaxonomyNavigationDestination => navResolverFromFixture()->resolve('category', '9999', 'default'),
+        'term_absent_from_export',
+        "the export declares no 'category' term with id 9999, so the menu item points at a term this import never saw.",
+    ],
+    'a term not imported into the site' => [
+        fn (): TaxonomyNavigationDestination => navResolverFromFixture()->resolve('category', '19', 'default'),
+        'not_imported_into_site',
+        "no 'post_categories' entry is slugged 'publications' on the 'default' site. Import the content type that creates those terms into this site, then re-run the navigation import.",
+    ],
+]);
