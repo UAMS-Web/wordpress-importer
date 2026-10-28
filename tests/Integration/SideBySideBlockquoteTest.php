@@ -17,7 +17,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * `side_text_layout`, with a quote field for each, a speaker name and an optional
  * speaker title (`UAMS-Web/uams-2020#612`). The Statamic fieldset names the layouts
  * `blockquote_with_citation` and `blockquote_with_citation_and_link`
- * (`UAMS-Web/uams-statamic#2757`), and shows a button only for the second.
+ * (`UAMS-Web/uams-statamic-archive#2757`), and shows a button only for the second.
  *
  * @command  php vendor/bin/pest tests/Integration/SideBySideBlockquoteTest.php
  */

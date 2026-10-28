@@ -212,7 +212,7 @@ class ImportWordPress extends Command
                 'handle' => 'logo_list_items',
                 'name' => 'Logo List Items',
             ],
-            // WP Adverts listings, into the board built by UAMS-Web/uams-statamic#2096
+            // WP Adverts listings, into the board built by UAMS-Web/uams-statamic-archive#2096
             'advert' => [
                 'type' => 'collection',
                 'handle' => 'classifieds',
@@ -2133,7 +2133,7 @@ class ImportWordPress extends Command
                 } elseif ($contentType === 'post') { // Posts reference no taxonomy terms left to validate
                     // ---
                     // Post CATEGORIES are not validated here. `post_categories`
-                    // stopped being a taxonomy in `UAMS-Web/uams-statamic#1433`
+                    // stopped being a taxonomy in `UAMS-Web/uams-statamic-archive#1433`
                     // and is now a structured collection, so the validator that
                     // ran here scanned an absent `content/taxonomies/post_categories`,
                     // judged every category missing, and tried to create terms in
@@ -2143,7 +2143,7 @@ class ImportWordPress extends Command
 
                     // ---
                     // Post TAGS are not validated either, for the same reason:
-                    // `UAMS-Web/uams-statamic#2532` made `post_tags` a
+                    // `UAMS-Web/uams-statamic-archive#2532` made `post_tags` a
                     // site-scoped structured collection, and the term pass
                     // creates the entries a post references (wordpress-importer-archive#1220).
                     // ---
@@ -3221,7 +3221,7 @@ class ImportWordPress extends Command
     ): bool {
         // Resolve the destination in whichever shape it takes. Asking only about a
         // taxonomy reported `logos_item_categories` and `people_groups` as missing
-        // once `uams-statamic#1863` converted them to structured collections, and
+        // once `uams-statamic-archive#1863` converted them to structured collections, and
         // every caller of this method skips a whole content type on a false answer.
         $result = $this->siteManager->enableDestinationForSite(
             $site,
@@ -4085,7 +4085,7 @@ class ImportWordPress extends Command
             // Attribute the hub-audit failure this designation will cause, so it is
             // expected rather than discovered by whoever runs the audit later.
             if ($designation->isDesignated() && $designation->schemaSubjectMissing) {
-                $this->warn("Organization '{$designation->organizationSlug}' has no schema_subject - 'multisite:audit-department-hubs' will report site '$site' until UAMS-Web/uams-statamic#2095 authors it.");
+                $this->warn("Organization '{$designation->organizationSlug}' has no schema_subject - 'multisite:audit-department-hubs' will report site '$site' until UAMS-Web/uams-statamic#197 authors it.");
             }
         }
 

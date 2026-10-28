@@ -11,7 +11,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * Tests that an imported Find-a-Doc Providers block preserves the WordPress
  * theme's always-on facet filtering (issue wordpress-importer-archive#421).
  *
- * `UAMS-Web/uams-statamic#1242` gates reader-facing facet filtering behind an
+ * `UAMS-Web/uams-statamic-archive#1242` gates reader-facing facet filtering behind an
  * `enable_filtering` toggle on the `uamsweb_block_fad_providers` fieldset that
  * defaults to `false` (a static list). The WordPress theme filtered facets over
  * `admin-ajax.php` unconditionally, so without an explicit flag every imported

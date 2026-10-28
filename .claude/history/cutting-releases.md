@@ -4,7 +4,7 @@ The incident history, measurements and worked examples behind [`cutting-releases
 
 ## Overview
 
-**Why this is a standing order.** The consuming app pins this package by a **tagged caret range** (`"uams-web/wordpress-importer": "^0.20"` in `uams-statamic`'s `composer.json`, read 2026-09-21), not `dev-main`. So a batch of merged importer work is **unreachable by the app until a tag exists** — and a raw `dev-main` commit does not survive a force-push to `main`, which is the failure behind `UAMS-Web/uams-statamic#904` / `#905`. Anchoring the cut to "before the app adopts the work" ties the tag to the moment it actually matters and makes "cut the release" a checklist item someone owns rather than a thing everyone assumes someone else did.
+**Why this is a standing order.** The consuming app pins this package by a **tagged caret range** (`"uams-web/wordpress-importer": "^0.20"` in `uams-statamic`'s `composer.json`, read 2026-09-21), not `dev-main`. So a batch of merged importer work is **unreachable by the app until a tag exists** — and a raw `dev-main` commit does not survive a force-push to `main`, which is the failure behind `UAMS-Web/uams-statamic-archive#904` / `#905`. Anchoring the cut to "before the app adopts the work" ties the tag to the moment it actually matters and makes "cut the release" a checklist item someone owns rather than a thing everyone assumes someone else did.
 
 ## What counts as breaking
 

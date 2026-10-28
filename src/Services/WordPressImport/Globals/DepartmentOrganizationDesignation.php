@@ -15,7 +15,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Globals;
  * than an error. Designating a site whose organization has no schema subject is
  * the accepted outcome recorded on `UAMS-Web/wordpress-importer-archive#768` — the
  * host app's `multisite:audit-department-hubs` command will report it, and the
- * authoring that clears it belongs to `UAMS-Web/uams-statamic#2095`. The flag
+ * authoring that clears it belongs to `UAMS-Web/uams-statamic#197`. The flag
  * exists so those failures are *attributed* by this import rather than
  * discovered later by whoever runs the audit.
  */

@@ -547,7 +547,7 @@ class PeopleEntryCreator extends BaseEntryCreator
 
                 // ---
                 // `people_groups` became a structured collection in
-                // `UAMS-Web/uams-statamic#1863`, so the blueprint's field is an
+                // `UAMS-Web/uams-statamic-archive#1863`, so the blueprint's field is an
                 // `entries` fieldtype expecting an entry id — a term slug written
                 // here no longer resolves to anything. The term pass runs before
                 // any entry is created, so the destination is already recorded.

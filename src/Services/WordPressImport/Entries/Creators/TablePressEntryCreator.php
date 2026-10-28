@@ -1134,7 +1134,7 @@ class TablePressEntryCreator extends BaseEntryCreator
      * Covers the free-tier options (footers, striping, row hover, and the
      * DataTables sort / filter / paginate / info / scroll-x family) plus the
      * Premium "Tier 1" options whose Statamic fields landed in
-     * `UAMS-Web/uams-statamic#243`: Column Filter Dropdowns and Responsive
+     * `UAMS-Web/uams-statamic-archive#243`: Column Filter Dropdowns and Responsive
      * Tables stacking.
      *
      * The two Premium families sit on different sides of the DataTables gate.
@@ -1311,7 +1311,7 @@ class TablePressEntryCreator extends BaseEntryCreator
     /**
      * Reports TablePress Premium features a table enables that Statamic cannot express.
      *
-     * `UAMS-Web/uams-statamic#243` shipped destinations for two Premium modules —
+     * `UAMS-Web/uams-statamic-archive#243` shipped destinations for two Premium modules —
      * Column Filter Dropdowns and Responsive Tables stacking — both mapped by
      * mapTableOptions(). Every other Premium module is a feature the imported table
      * silently loses, so an enabled one is named here rather than disappearing.

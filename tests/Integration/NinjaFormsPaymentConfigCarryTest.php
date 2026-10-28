@@ -16,7 +16,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  *
  * Statamic has no payment infrastructure, so nothing here is applied — this records what
  * WordPress does today so it is not lost before someone can act on it. The Statamic-side
- * decision is `UAMS-Web/uams-statamic#821` and the implementation `#295`; neither is
+ * decision is `UAMS-Web/uams-statamic#48` and the implementation `#295`; neither is
  * needed to preserve configuration, which is why this did not wait on them.
  *
  * Exactly one production form is affected — Miracle Stars, the only one with an active

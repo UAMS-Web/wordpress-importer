@@ -22,7 +22,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  * Pins how a WP-Members-gated item maps its status (wordpress-importer-archive#1240).
  *
  * WP-Members stores `_wpmem_block` postmeta: `1` blocks an item for logged-out visitors, `2`
- * hides it, and `0` or no value leaves it open. `UAMS-Web/uams-statamic#2114` decided that a
+ * hides it, and `0` or no value leaves it open. `UAMS-Web/uams-statamic#207` decided that a
  * front-end account gates only per-person content, so these pages do not migrate behind login.
  * Importing one as `published` would make it public before its owner has decided how it
  * migrates, so a published gated item imports as `private` and the import names it.

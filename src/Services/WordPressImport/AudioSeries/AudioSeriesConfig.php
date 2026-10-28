@@ -20,7 +20,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries;
  *   - Custom filename prefix for asset naming
  *   - Asset container and directory structure preferences
  *
- * `UAMS-Web/uams-statamic#1611` retired the parallel `podcast_series` taxonomy and
+ * `UAMS-Web/uams-statamic-archive#1611` retired the parallel `podcast_series` taxonomy and
  * folded podcast into `audio_series` as a multi-select `subtype`. The shared `audio`
  * blueprint's podcast-episode fields and its `PodcastEpisode` / `PodcastSeries`
  * JSON-LD are now gated on the selected series term's `subtype` containing

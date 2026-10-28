@@ -24,7 +24,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  * Pins how a WordPress `future` post maps when its blueprint schedules through
  * `publish_at` (wordpress-importer-archive#1233).
  *
- * `UAMS-Web/uams-statamic#2552` made the host app's `people` collection undated. A
+ * `UAMS-Web/uams-statamic-archive#2552` made the host app's `people` collection undated. A
  * scheduled person is now a `draft` with `publish_at` set, and a scheduled job
  * publishes it once that time passes. The importer used to map `future` to
  * `scheduled`, which the host treats as live, so a scheduled person was public at

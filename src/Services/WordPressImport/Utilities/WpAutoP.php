@@ -34,7 +34,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
  * (BardParserScriptStrippingTest, WordPressImportScriptStrippingTest), which
  * pins the tiptap-php build that actually parses production content.
  *
- * @see  https://github.com/UAMS-Web/uams-statamic/issues/1742
+ * @see  https://github.com/UAMS-Web/uams-statamic-archive/issues/1742
  */
 class WpAutoP
 {

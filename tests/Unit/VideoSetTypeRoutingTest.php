@@ -7,7 +7,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\VideoSe
 /**
  * Tests the video URL → Bard set routing (issue wordpress-importer-archive#298).
  *
- * `UAMS-Web/uams-statamic#589` retired the single `video` Bard set and replaced it
+ * `UAMS-Web/uams-statamic-archive#589` retired the single `video` Bard set and replaced it
  * with `youtube` / `vimeo` / `box`. `VideoSetType` is the one place that decides
  * which of the three a source URL belongs to, so `EmbedProcessor` (Gutenberg
  * `wp:embed`) and `ContentParser` (raw iframes) cannot drift apart on the answer.

@@ -15,7 +15,7 @@ use RuntimeException;
  * in the checkout already.
  *
  * **This watches the live submodules, and what a failure means differs by
- * which one.** For `content/`, `UAMS-Web/uams-statamic#1995` re-roots every
+ * which one.** For `content/`, `UAMS-Web/uams-statamic-archive#1995` re-roots every
  * content-backed Stache store, and the asset-metadata dual-write, at a
  * disposable mirror under `APP_ENV=testing` — so a Stache save cannot reach it
  * at all. What that re-rooting does **not** cover is a raw

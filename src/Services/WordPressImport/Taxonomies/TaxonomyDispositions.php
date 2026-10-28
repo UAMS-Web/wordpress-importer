@@ -20,9 +20,9 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
  * were two shapes and is wrong now: an unmapped taxonomy is recorded *precisely*
  * because nothing receives it. Ask {@see self::isUnmapped()} — or compare
  * {@see self::shapeFor()} against the constant you mean — rather than inferring a
- * shape from mere presence in the table. `UAMS-Web/uams-statamic#252` settled that hierarchy is delivered by
+ * shape from mere presence in the table. `UAMS-Web/uams-statamic-archive#252` settled that hierarchy is delivered by
  * native structured collections rather than a separate "Structured Taxonomies"
- * concept, and `UAMS-Web/uams-statamic#1863` converted `people_groups` and
+ * concept, and `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` and
  * `logos_item_categories` from flat taxonomies into exactly that.
  *
  * That conversion is why this class exists. The destination *handles* were
@@ -77,7 +77,7 @@ final class TaxonomyDispositions
         // by every site the taxonomy is enabled on, so a flat destination had to
         // carry the site in each title and slug. `wordpress-importer-archive#1215` moved these four to
         // collections, where an entry belongs to one site and keeps its plain
-        // name; the host converted each (`UAMS-Web/uams-statamic#2532`–`#2535`).
+        // name; the host converted each (`UAMS-Web/uams-statamic-archive#2532`–`#2535`).
         // ---
         'post_tag' => self::SHAPE_COLLECTION,
         'logo-list-label' => self::SHAPE_COLLECTION,
@@ -86,7 +86,7 @@ final class TaxonomyDispositions
 
         // Flat — inherently non-hierarchical in WordPress.
         // WP Adverts' categories are flat in WordPress and land in the flat
-        // `classified_categories` taxonomy UAMS-Web/uams-statamic#2096 built (#774).
+        // `classified_categories` taxonomy UAMS-Web/uams-statamic-archive#2096 built (#774).
         'advert_category' => self::SHAPE_TAXONOMY,
 
         // Unmapped — recorded as having no Statamic destination. Both Team

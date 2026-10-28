@@ -26,7 +26,7 @@ use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 /**
  * A vanity domain's Safe Redirect Manager rules import into the redirect domains collection (wordpress-importer-archive#1306).
  *
- * `UAMS-Web/uams-statamic#2594` decided that domains which are not Statamic sites keep their
+ * `UAMS-Web/uams-statamic-archive#2594` decided that domains which are not Statamic sites keep their
  * redirects in a `redirect_domains` collection, one entry per rule carrying its host. These
  * tests run the real creator against a WXR whose `base_blog_url` is a listed vanity domain, and
  * read the stored entries back.

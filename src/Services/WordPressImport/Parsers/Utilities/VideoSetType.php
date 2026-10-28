@@ -8,7 +8,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities;
  * Routes a source video URL to the Bard set that hosts it, and canonicalizes the
  * URL into the shape that set's own validation accepts.
  *
- * `UAMS-Web/uams-statamic#589` retired the single `video` Bard set and replaced it
+ * `UAMS-Web/uams-statamic-archive#589` retired the single `video` Bard set and replaced it
  * with three platform-specific sets — `youtube`, `vimeo`, and `box` — each with its
  * own URL validation, its own `url` field handle, and an `embed_mode` toggle. The
  * importer previously emitted `type: video` with a `video_url` handle, which no

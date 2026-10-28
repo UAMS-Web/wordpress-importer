@@ -24,7 +24,7 @@ afterEach(function (): void {
  * Tests that `GalleryParser`'s output renders through the real gallery partial
  * (issue wordpress-importer-archive#430).
  *
- * `UAMS-Web/uams-statamic#1514` repaired `_uamsweb_block_gallery.antlers.html`,
+ * `UAMS-Web/uams-statamic-archive#1514` repaired `_uamsweb_block_gallery.antlers.html`,
  * whose validity guard used loose `!= null` on `crop` / `modal` / `more_query`. A
  * falsy-but-answered value therefore invalidated the whole block and it rendered
  * nothing — and those are exactly the values the importer emits for the COMMON

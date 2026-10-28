@@ -66,7 +66,7 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
      *
      * This is the third writer of a `uamsweb_block_news` set, alongside
      * `NewsParser::parse()` and `NewsParser::parseModule()`, so it tracks the
-     * same reshaped fieldset (`UAMS-Web/uams-statamic#76`): `source_sites`
+     * same reshaped fieldset (`UAMS-Web/uams-statamic-archive#76`): `source_sites`
      * replaces `local`, `advanced_cat` is gone, and `category` holds
      * `post_categories` entry ids rather than a slug.
      *

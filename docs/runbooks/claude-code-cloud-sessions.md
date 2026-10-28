@@ -142,7 +142,7 @@ Nothing about the prompt or the commands was wrong, which is exactly what made i
 
 It is loud on stderr and in `$?` — but **silent through a pipe**: `gh api --paginate … | wc -l` discards the non-zero exit, so a truncated count reads as complete. Set `pipefail`, or walk pages explicitly with `&page=N`, which keeps every URL in the accepted `repos/{owner}/{repo}/…` form.
 
-**For this repo the bug is latent, not live** — at 51 open `afk` issues against `per_page=100` there is no page 2 today. It becomes live silently the moment the count crosses 100. Sanity-check any paginated count against a known total. Tracked upstream in the sibling repo as `UAMS-Web/uams-statamic#1823`.
+**For this repo the bug is latent, not live** — at 51 open `afk` issues against `per_page=100` there is no page 2 today. It becomes live silently the moment the count crosses 100. Sanity-check any paginated count against a known total. Tracked upstream in the sibling repo as `UAMS-Web/uams-statamic-archive#1823`.
 
 ## `dependencies/blocked_by` under-reports — read dependency edges locally
 
@@ -156,7 +156,7 @@ That is not a cosmetic loss. A blocker list is how a ticket is judged buildable,
 # cloud session                          # local gh
 issues/299 → total_blocked_by: 1         issues/299 → total_blocked_by: 1
 issues/299/dependencies/blocked_by       issues/299/dependencies/blocked_by
-  → 200 []                                 → 200 [ UAMS-Web/uams-statamic#300 ]
+  → 200 []                                 → 200 [ UAMS-Web/uams-statamic-archive#300 ]
 ```
 
 **Do not narrow this to cross-repo edges.** That was the first hypothesis and it is wrong: 19 of the 20 affected tickets happened to have a cross-repo blocker, but `wordpress-importer-archive#492`'s only blocker is the **local** `wordpress-importer-archive#496` — an edge added 2026-07-30, a day before the proxied crawl — and its list came back short too. Treat every dependency list read through the proxy as untrustworthy.

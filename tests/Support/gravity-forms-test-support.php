@@ -3116,7 +3116,7 @@ function gravityFieldtypeMappingProvider(): array
             'assertion_type' => 'assertNull',
         ],
         // Resolves to the Statamic `username` fieldtype since
-        // `UAMS-Web/uams-statamic#312` shipped it; before that it fell back to `text` (#300)
+        // `UAMS-Web/uams-statamic-archive#312` shipped it; before that it fell back to `text` (#300)
         'username fieldtype' => [
             'gravity_forms_type' => 'username',
             'expected_statamic_type' => 'username',
@@ -3128,7 +3128,7 @@ function gravityFieldtypeMappingProvider(): array
             'assertion_type' => 'assertNull',
         ],
         // Resolves to the Statamic `option` fieldtype since
-        // `UAMS-Web/uams-statamic#316` shipped it; before that it fell back to `text` (#302)
+        // `UAMS-Web/uams-statamic-archive#316` shipped it; before that it fell back to `text` (#302)
         'option fieldtype' => [
             'gravity_forms_type' => 'option',
             'expected_statamic_type' => 'option',

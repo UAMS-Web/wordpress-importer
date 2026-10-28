@@ -502,7 +502,7 @@ class XpathHelper
     /**
      * Extracts the WordPress metadata the migration redirect generator needs.
      *
-     * `UAMS-Web/uams-statamic#1641` synthesizes structural WordPress redirects —
+     * `UAMS-Web/uams-statamic-archive#1641` synthesizes structural WordPress redirects —
      * `?p=<id>` / `?page_id=<id>` ugly permalinks and `/author/<nicename>/` archives —
      * from values the importer otherwise discards: the numeric post id is folded into
      * the Statamic entry id rather than stored, and the author is dropped entirely.

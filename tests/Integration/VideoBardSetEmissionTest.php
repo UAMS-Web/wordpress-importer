@@ -12,7 +12,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * Tests that imported video content emits the platform-specific Bard sets
  * (issue wordpress-importer-archive#298).
  *
- * `UAMS-Web/uams-statamic#589` replaced the `video` Bard set with `youtube` /
+ * `UAMS-Web/uams-statamic-archive#589` replaced the `video` Bard set with `youtube` /
  * `vimeo` / `box`, each with a `url` handle (not `video_url`) and an `embed_mode`
  * toggle. The importer kept emitting `type: video` with `video_url`, which no
  * longer matches any set declared in `uamsweb_common.yaml`, so imported video

@@ -7,7 +7,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 /**
  * Maps a WordPress news block's "local" flag to the reshaped `source_sites` field.
  *
- * `UAMS-Web/uams-statamic#76` replaced the block's boolean `local` — a flag on a
+ * `UAMS-Web/uams-statamic-archive#76` replaced the block's boolean `local` — a flag on a
  * remote `news.uams.edu` syndication bridge — with `source_sites`, a required
  * checkboxes field naming which site(s) the block queries. The two tokens mirror
  * the host's own selector: `news` is the migrated `news.uams.edu` content, and
@@ -20,7 +20,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
  * **This governs which sites the block *queries*. Where its category selection
  * is looked up is a separate question, and the two now agree rather than
  * conflicting.** The host resolves `current` to the placement's site at render
- * time and can query any site's posts; since `uams-statamic#2165` the `category`
+ * time and can query any site's posts; since `uams-statamic-archive#2165` the `category`
  * field sets `select_across_sites`, so an id from the `news` site survives the
  * read instead of being dropped. {@see PostCategoryEntryResolver} resolves
  * against the placement's site first and that site second, which is the same
