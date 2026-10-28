@@ -583,14 +583,61 @@ it('adds the set a reusable block returns', function (): void {
         ->toBe(['type' => 'reusable_content', 'import_wordpress_notes' => 'wp_block post ID 12']);
 });
 
-it('drops the node right after a block whose processor skips nodes', function (): void {
+it('keeps the node right after a block whose processor skips nodes', function (): void {
     textProcessorForBardFakes();
 
-    // Characterization of #152: the spacer counts its opening comment among the
-    // nodes to skip, so with nothing between them the paragraph after it is lost
+    // The spacer counts its opening comment among the nodes to skip, so the loop skips
+    // one fewer after it, and the paragraph that directly follows is kept (#152)
     $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer"></div><!-- /wp:spacer --><p>After</p><p>Next</p>');
 
-    expect($content)->toBe([textProcessorForBardParagraph('Next')]);
+    expect($content)->toBe([textProcessorForBardParagraph('After'), textProcessorForBardParagraph('Next')]);
+});
+
+it('skips a block to its closing comment, however its processor counts whitespace', function (string $html, array $summary): void {
+    textProcessorForBardFakes();
+
+    // Whitespace text between a block's nodes does not count toward its skip, and the
+    // skip never passes the block's closing comment (#152)
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard($html)))->toBe($summary);
+})->with([
+    'a spacer with whitespace, then tight content' => ["<!-- wp:spacer -->\n<div class=\"wp-block-spacer\"></div>\n<!-- /wp:spacer --><p>After</p>", ['paragraph:After']],
+    'a quote whose processor counts the paragraph inside it' => ["<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\"></blockquote><p>Para</p><!-- /wp:quote --><p>After</p>", ['set:pull_quote', 'paragraph:After']],
+    'a spacer left open before a closed one' => ["<!-- wp:spacer {\"height\":70} -->\n<p>&nbsp;</p>\n<!-- wp:spacer -->\n<div class=\"wp-block-spacer\"></div>\n<!-- /wp:spacer -->\n<p>Kept</p>\n<p>Also</p>", ['paragraph:Kept', 'paragraph:Also']],
+    'a group nested as a sibling, with whitespace between' => ["<!-- wp:group -->\n<!-- wp:group -->\n<p>In</p>\n<!-- /wp:group -->\n<p>Outer</p>\n<!-- /wp:group -->\n<p>After</p>", ['paragraph:In', 'paragraph:Outer', 'paragraph:After']],
+    'a group nested as a sibling inside a group' => ['<!-- wp:group --><!-- wp:group --><p>In</p><!-- /wp:group --><p>Outer</p><!-- /wp:group --><p>After</p>', ['paragraph:In', 'paragraph:Outer', 'paragraph:After']],
+    'a group nested in a group' => ["<!-- wp:group -->\n<div class=\"wp-block-group\"><!-- wp:group -->\n<div class=\"wp-block-group\"><p>In</p></div>\n<!-- /wp:group --></div>\n<!-- /wp:group --><p>After</p>", ['paragraph:In', 'paragraph:After']],
+]);
+
+it('keeps a later node whose markup matches a node a block skipped', function (): void {
+    textProcessorForBardFakes();
+
+    // The spacer's div is skipped by identity, so the same div outside the block is
+    // read as content (#152)
+    $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer">X</div><!-- /wp:spacer --><div class="wp-block-spacer">X</div><p>End</p>');
+
+    expect($content)->toBe([['type' => 'text', 'text' => 'X', 'attrs' => []], textProcessorForBardParagraph('End')]);
+});
+
+it('keeps the text on either side of a spacer apart', function (): void {
+    textProcessorForBardFakes();
+
+    // The spacer processor ends the content before it, so the text after it starts anew
+    $content = textProcessorForBard('lead<!-- wp:spacer --><div class="wp-block-spacer"></div><!-- /wp:spacer -->tail');
+
+    expect($content)->toBe([
+        ['type' => 'text', 'text' => 'lead', 'attrs' => []],
+        ['type' => 'text', 'text' => 'tail', 'attrs' => []],
+    ]);
+});
+
+it('keeps a later node whose markup matches one a block skipped', function (): void {
+    textProcessorForBardFakes();
+
+    // Skipped nodes are held by identity, so a paragraph sharing their markup elsewhere
+    // is not skipped with them (#152)
+    $content = textProcessorForBard('<p>Same</p><!-- wp:spacer --><div class="wp-block-spacer"></div><!-- /wp:spacer --><p>Same</p><p>Other</p><div class="wp-block-spacer"></div><p>Same</p>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Same', 'paragraph:Same', 'paragraph:Other', 'paragraph:Same']);
 });
 
 it('warns when a block comment carries JSON that does not decode', function (): void {
@@ -730,12 +777,18 @@ it('filters out empty paragraphs', function (): void {
     expect(textProcessorForBard('<p></p><p>Kept</p><p>  </p>'))->toBe([textProcessorForBardParagraph('Kept')]);
 });
 
-it('marks the raw shortcode text after a shortcode block as processed', function (): void {
+it('marks the raw shortcode text inside a shortcode block as processed, and only that text', function (): void {
     textProcessorForBardFakes();
 
+    // The block's own text is consumed; the identical text after its closing comment is
+    // a separate node and is kept (#152)
     $content = textProcessorForBard("<!-- wp:shortcode -->\n[unknown_thing]\n<!-- /wp:shortcode -->\n[unknown_thing]\n<p>Q</p>");
 
-    expect($content)->toBe([['type' => 'text', 'text' => '[unknown_thing]', 'attrs' => []], textProcessorForBardParagraph('Q')]);
+    expect($content)->toBe([
+        ['type' => 'text', 'text' => '[unknown_thing]', 'attrs' => []],
+        ['type' => 'text', 'text' => '[unknown_thing]', 'attrs' => []],
+        textProcessorForBardParagraph('Q'),
+    ]);
 });
 
 /**
@@ -774,6 +827,7 @@ it('hands each block type to its processor', function (string $html, array $summ
     'TablePress' => ["<!-- wp:tablepress/table {\"id\":\"1\"} -->\n[table id=1 /]\n<!-- /wp:tablepress/table -->", ['set:table'], []],
     'Gravity Forms' => ['<!-- wp:gravityforms/form {"formId":"3"} /-->', ['set:form'], []],
     'Formidable' => ['<!-- wp:formidable/simple-form {"formId":"4"} /-->', ['set:form'], []],
+    'Formidable with its inner div' => ["<!-- wp:formidable/simple-form {\"formId\":\"2\"} -->\n<div>[formidable id=\"2\"]</div>\n<!-- /wp:formidable/simple-form --><p>After</p>", ['set:form', 'paragraph:After'], []],
     'Ninja Forms' => ['<!-- wp:ninja-forms/form {"formID":5} /-->', ['set:form'], []],
 ]);
 
@@ -848,14 +902,14 @@ it('processes the blocks inside a group block', function (): void {
         ->and($fakes['image']->calls[0]['attributes'] ?? null)->toBe(['id' => 5]);
 });
 
-it('drops a figure right after a block whose processor skips nodes', function (): void {
+it('keeps a figure right after a block whose processor skips nodes', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    // Characterization of #152, as for the paragraph above
+    // As for the paragraph above (#152)
     $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer"></div><!-- /wp:spacer --><figure><img src="x.jpg"></figure>');
 
-    expect($content)->toBe([])
-        ->and($fakes['image']->calls)->toBe([]);
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image'])
+        ->and($fakes['image']->calls)->toHaveCount(1);
 });
 
 it('drops a figure without an image when an unclaimed block left attributes', function (): void {
@@ -952,22 +1006,24 @@ it('names the page slug in the warning for a block processor that returns nothin
     expect($warnings[0]['context'] ?? null)->toBe(['site' => 'default', 'pageSlug' => 'about', 'block_type' => 'image']);
 });
 
-it('skips a later node identical to one a block processor processed', function (): void {
+it('keeps a later node identical to one a block processor processed', function (): void {
     textProcessorForBardFakes();
 
+    // The quote outside any block shares the block's markup but is a node of its own (#152)
     $content = textProcessorForBard("<!-- wp:quote -->\n<blockquote class=\"wp-block-quote\"><p>Q</p></blockquote>\n<!-- /wp:quote -->\n\n<p>Between</p>\n<blockquote class=\"wp-block-quote\"><p>Q</p></blockquote>\n<p>After</p>");
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:pull_quote', 'paragraph:Between', 'paragraph:After']);
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:pull_quote', 'paragraph:Between', 'paragraph:Q', 'paragraph:After']);
 });
 
 it('does not parse a block\'s figure again when the figure lies past the nodes it skips', function (): void {
     textProcessorForBardFakes();
 
-    // The table processor finds its figure past three paragraphs, which its skip
-    // count marks instead (#152); the figure itself is tracked as processed
+    // Characterization of #197: the table processor finds its figure past three
+    // paragraphs, and its fixed skip count consumes the first two of them; the figure
+    // itself is tracked as processed, so it is not parsed again
     $content = textProcessorForBard('<!-- wp:table --><p>A</p><p>B</p><p>C</p><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>');
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:table']);
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:table', 'paragraph:C']);
 });
 
 it('reads nothing past a shortcode block that ends the content', function (): void {

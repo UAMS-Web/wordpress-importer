@@ -35,6 +35,11 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 class CtaParser
 {
     /**
+     * The body set when the heading and an action are set but the body is empty.
+     */
+    private const string PLACEHOLDER_BODY = "<p>Placeholder Body \u{2014} Please Replace</p>";
+
+    /**
      * Instance of BardParser for processing WYSIWYG content into Bard format.
      */
     private BardParser $bardParser;
@@ -104,24 +109,6 @@ class CtaParser
             'field_cta_bar_background_color_b' => 'cta_bar_background_color',
             'field_cta_bar_use_image_b' => 'cta_bar_use_image',
             'field_cta_bar_image_b' => 'cta_bar_image',
-            'field_cta_geo_valid_b' => 'cta_geo_valid',
-            'field_cta_bar_geo_b' => 'cta_bar_geo',
-            'field_cta_bar_geo_region_b' => 'cta_bar_geo_region',
-        ];
-    }
-
-    /**
-     * Defines which nested structures should be processed for CTA blocks.
-     *
-     * This method provides the nested structure mappings needed by AcfFieldNormalizer
-     * to handle complex ACF block structures.
-     *
-     * @return array<int|string, mixed> The nested structure mappings for CTA blocks
-     */
-    private function getNestedStructures(): array
-    {
-        return [
-            // No nested structures for CTA blocks
         ];
     }
 
@@ -159,31 +146,77 @@ class CtaParser
             $data = [];
         }
 
+        $set = $this->buildSet($data, $site, $assetImporter, $output, $attachments, $terms, 'parse');
+
+        // A block strips tags from the phone prefix
+        if (isset($set['phone_prepend'])) {
+            $set['phone_prepend'] = HtmlTagStripper::strip($this->stringFromValue($set['phone_prepend']));
+        }
+
+        return $set;
+    }
+
+    /**
+     * Parses WordPress modules template cta data into Statamic page_builder format.
+     *
+     * This method handles the conversion of modules template data (from
+     * uamswp_modules) to Statamic page_builder format, as opposed to the parse()
+     * method which handles ACF block data. The module data is read as it is,
+     * without unwrapping a `data` key, and its phone prefix is kept as it is.
+     *
+     * @param  array<int|string, mixed>  $moduleData  The module data from uamswp_modules
+     * @param  string  $site  The site handle for asset processing
+     * @param  AssetImporter  $assetImporter  The asset importer instance
+     * @param  OutputInterface  $output  The console output interface
+     * @param  array<int|string, mixed>  $attachments  Array of attachment data for image processing
+     * @param  ?XmlStreamParser  $xmlParser  The XML stream parser for additional data access
+     * @param  array<int|string, mixed>  $terms  Array of terms for shortcode processing
+     * @return array<int|string, mixed>|null The page_builder block or null if parsing failed
+     */
+    public function parseModule(
+        array $moduleData,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments = [],
+        ?XmlStreamParser $xmlParser = null,
+        array $terms = []
+    ): ?array {
+        return $this->buildSet($moduleData, $site, $assetImporter, $output, $attachments, $terms, 'parseModule');
+    }
+
+    /**
+     * Builds the uamsweb_block_cta set from block or module data.
+     *
+     * @param  array<int|string, mixed>  $data  The block or module data
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images and files
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  array<int|string, mixed>  $terms  Array of terms for shortcode processing
+     * @param  string  $method  The entry point, named in the log messages
+     * @return array<int|string, mixed> The replicator set
+     */
+    private function buildSet(
+        array $data,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        array $terms,
+        string $method
+    ): array {
         // Normalize field names using AcfFieldNormalizer
-        $normalizedData = AcfFieldNormalizer::normalize(
-            $data,
-            $this->getFieldMappings(),
-            $this->getNestedStructures()
-        );
+        $normalizedData = AcfFieldNormalizer::normalize($data, $this->getFieldMappings());
 
-        // ---
-        // Check if placeholder body should be set
-        // ---
-
-        // Get the body value from normalized data
+        // Set a placeholder body when the heading has a value, the body is empty, and an action is set
         $bodyValue = $this->stringFromValue($normalizedData['cta_bar_body'] ?? '');
-
-        // ---
-        // Check if placeholder body should be set when heading has value, body is
-        // empty, and action type scenarios are met
-        // ---
         if (
             $this->hasValue($normalizedData['cta_bar_heading'] ?? '')
             && ! $this->hasValue($bodyValue)
             && $this->shouldSetPlaceholderBody($normalizedData)
         ) {
-            // Set placeholder body value
-            $bodyValue = '<p>Placeholder Body — Please Replace</p>';
+            $bodyValue = self::PLACEHOLDER_BODY;
         }
 
         // Map basic fields using normalized data
@@ -198,67 +231,23 @@ class CtaParser
             $terms
         );
 
-        // Action type handling
+        // Action type handling: anything but a URL or a phone is no action
         $actionType = $normalizedData['cta_bar_action_type'] ?? 'url';
-        $validActionTypes = ['url', 'phone', 'none'];
-        $actionType = \in_array(
-            $actionType,
-            $validActionTypes,
-            true
-        ) ? $actionType : 'none';
-
-        // Layout, size, and background
-        $layout = $normalizedData['cta_bar_layout'] ?? 'cta-bar-centered';
-        $size = $normalizedData['cta_bar_size'] ?? 'normal';
-        $backgroundColor = $normalizedData['cta_bar_background_color'] ?? 'bg-auto';
+        if (! \in_array($actionType, ['url', 'phone'], true)) {
+            $actionType = 'none';
+        }
 
         // Background image
         $useImage = (bool) ($normalizedData['cta_bar_use_image'] ?? '0');
-        $backgroundImage = null;
-
-        // Check if CTA background image should be used
-        $ctaBarImage = $this->stringFromValue($normalizedData['cta_bar_image'] ?? '');
-        if (
-            $useImage
-            && $ctaBarImage !== ''
-        ) {
-            // Import image with disabled upload handling
-            $backgroundImage = ImageProcessor::importImageWithDisabledUploadHandling(
-                $ctaBarImage,
-                $site,
-                $assetImporter,
-                $output,
-                $attachments,
-                'CTA background image',
-                'CtaParser::parse'
-            );
-
-            // Check if image is available after import attempt
-            if (
-                $assetImporter->getUploadImages() // Missing images are only problematic when uploads are enabled
-                && ($backgroundImage === null || $backgroundImage === '')
-            ) {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'image_id' => $ctaBarImage,
-                    ]
-                );
-
-                // Log warning when uploads are enabled but no image is available
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'CtaParser::parse: Failed to import CTA background image when uploads are enabled',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                // When uploads are disabled, missing images are expected.
-                // Continue processing without the image.
-            }
-        }
+        $backgroundImage = $this->importBackgroundImage(
+            $useImage,
+            $this->stringFromValue($normalizedData['cta_bar_image'] ?? ''),
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            $method
+        );
 
         $result = [
             'id' => (new RowId)->generate(),
@@ -267,9 +256,9 @@ class CtaParser
             'hide_block_heading' => false,
             'body' => $bodyContent,
             'action_type' => $actionType,
-            'layout' => $layout,
-            'size' => $size,
-            'background_color' => $backgroundColor,
+            'layout' => $normalizedData['cta_bar_layout'] ?? 'cta-bar-centered',
+            'size' => $normalizedData['cta_bar_size'] ?? 'normal',
+            'background_color' => $normalizedData['cta_bar_background_color'] ?? 'bg-auto',
             'background_image_query' => $useImage,
             'enabled' => true,
             'sms_phone_type_group' => [
@@ -281,43 +270,99 @@ class CtaParser
 
         // URL action fields (only include if action_type is 'url')
         if ($actionType === 'url') {
+            $buttonUrl = $normalizedData['cta_bar_button_url'] ?? null;
             $result['button_text'] = HtmlTagStripper::strip(
                 $this->stringFromValue($normalizedData['cta_bar_button_text'] ?? '')
-            );
-            $originalUrl = LinkHelper::getUrl(
-                $normalizedData['cta_bar_button_url'] ?? '',
-                ''
             );
 
             // Process URL through LinkProcessor to handle internal links and file imports
             $result['button_url'] = LinkProcessor::processUrlString(
-                $originalUrl,
+                LinkHelper::getUrl($buttonUrl),
                 $site,
                 $assetImporter,
                 $output,
                 ProcessingContext::getStatamicEntryId(),
                 ProcessingContext::getCollectionHandle()
             );
-            $result['button_target'] = LinkHelper::getTarget($normalizedData['cta_bar_button_url'] ?? '');
+            $result['button_target'] = LinkHelper::getTarget($buttonUrl);
             $result['button_link_description'] = $normalizedData['cta_bar_button_description'] ?? '';
         }
 
         // Phone action fields (only include if action_type is 'phone')
         if ($actionType === 'phone') {
-            $result['phone_prepend'] = HtmlTagStripper::strip(
-                $this->stringFromValue(
-                    $normalizedData['cta_bar_phone_prepend'] ?? 'Call'
-                )
-            );
+            $result['phone_prepend'] = $normalizedData['cta_bar_phone_prepend'] ?? 'Call';
             $result['phone'] = $normalizedData['cta_bar_phone'] ?? '';
         }
 
-        // Only include background_image if it has a value, as a string (not an array)
+        // Only include background_image if it has a value
         if ($backgroundImage !== null && $backgroundImage !== '') {
             $result['background_image'] = $backgroundImage;
         }
 
         return $result;
+    }
+
+    /**
+     * Imports the background image when it is switched on and set.
+     *
+     * Warns when uploads are enabled and the import brings back no image; when
+     * uploads are disabled, a missing image is expected.
+     *
+     * @param  bool  $useImage  Whether the background image is switched on
+     * @param  string  $imageId  The attachment ID of the image
+     * @param  string  $site  The Statamic site handle
+     * @param  AssetImporter  $assetImporter  Instance for importing images
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  array<int|string, mixed>  $attachments  Array of SimpleXMLElement attachment objects
+     * @param  string  $method  The entry point, named in the log messages
+     * @return ?string The imported image, or null for none
+     */
+    private function importBackgroundImage(
+        bool $useImage,
+        string $imageId,
+        string $site,
+        AssetImporter $assetImporter,
+        OutputInterface $output,
+        array $attachments,
+        string $method
+    ): ?string {
+        if (! $useImage || $imageId === '') {
+            return null;
+        }
+
+        // Import image with disabled upload handling
+        $backgroundImage = ImageProcessor::importImageWithDisabledUploadHandling(
+            $imageId,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            'CTA background image',
+            "CtaParser::{$method}"
+        );
+
+        // Missing images are only problematic when uploads are enabled
+        if (
+            $assetImporter->getUploadImages()
+            && ($backgroundImage === null || $backgroundImage === '')
+        ) {
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'image_id' => $imageId,
+                ]
+            );
+
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    "CtaParser::{$method}: Failed to import CTA background image when uploads are enabled",
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
+        return $backgroundImage;
     }
 
     /**
@@ -398,8 +443,8 @@ class CtaParser
     /**
      * Checks if a value has content (is not empty after trimming).
      *
-     * Handles strings, arrays, and other types. For arrays, checks if the array is
-     * not empty. For strings, checks if trimmed value is not empty.
+     * For arrays, checks if the array is not empty. For scalars, checks if the
+     * trimmed string form is not empty. Anything else has no content.
      *
      * @param  mixed  $value  The value to check
      * @return bool True if the value has content, false otherwise
@@ -407,21 +452,13 @@ class CtaParser
     private function hasValue(
         mixed $value
     ): bool {
-        // Check if value is an array
+        // Return whether array is not empty
         if (\is_array($value)) {
-            // Return whether array is not empty
             return $value !== [];
         }
 
-        // Check if value is a string
-        if (\is_string($value)) {
-            // Return whether trimmed string is not empty
-            return \trim($value) !== '';
-        }
-
-        // Check if value is a scalar
+        // Return whether a scalar converted to a trimmed string has content
         if (\is_scalar($value)) {
-            // Return whether scalar converted to string has content
             return \trim((string) $value) !== '';
         }
 
@@ -445,54 +482,20 @@ class CtaParser
     private function shouldSetPlaceholderBody(
         array $normalizedData
     ): bool {
-        // Extract action type from normalized data
         $actionType = $normalizedData['cta_bar_action_type'] ?? '';
 
-        // Extract button text from normalized data
-        $buttonText = $normalizedData['cta_bar_button_text'] ?? '';
-
-        // Extract button URL from normalized data
-        $buttonUrl = $normalizedData['cta_bar_button_url'] ?? '';
-
-        // Extract phone from normalized data
-        $phone = $normalizedData['cta_bar_phone'] ?? '';
-
-        // ---
-        // Scenario 1: action_type is empty, button_text has value, button_url has value
-        // ---
-
-        // Check if scenario 1 conditions are met
+        // Scenarios 1 and 2: no action type or a URL action, with button text and a URL
         if (
-            ! $this->hasValue($actionType)
-            && $this->hasValue($buttonText)
-            && $this->hasButtonUrl($buttonUrl)
+            (! $this->hasValue($actionType) || $actionType === 'url')
+            && $this->hasValue($normalizedData['cta_bar_button_text'] ?? '')
+            && $this->hasButtonUrl($normalizedData['cta_bar_button_url'] ?? '')
         ) {
-            // Return true for scenario 1
             return true;
         }
 
-        // ---
-        // Scenario 2: action_type is 'url', button_text has value, button_url has value
-        // ---
-
-        // Check if scenario 2 conditions are met
-        if (
-            $actionType === 'url'
-            && $this->hasValue($buttonText)
-            && $this->hasButtonUrl($buttonUrl)
-        ) {
-            // Return true for scenario 2
-            return true;
-        }
-
-        // ---
-        // Scenario 3: action_type is 'phone', phone has value
-        // ---
-        // Check if scenario 3 conditions are met
-        // Return false if no scenarios match
-        // Return true for scenario 3
+        // Scenario 3: a phone action with a phone
         return $actionType === 'phone'
-        && $this->hasValue($phone);
+            && $this->hasValue($normalizedData['cta_bar_phone'] ?? '');
     }
 
     /**
@@ -506,231 +509,19 @@ class CtaParser
     private function hasButtonUrl(
         mixed $buttonUrl
     ): bool {
-        // Check if button URL is an array
-        if (\is_array($buttonUrl)) {
-            // Return whether URL value in array has content
-            return $this->hasValue($buttonUrl['url'] ?? '');
-        }
-
-        // Return whether button URL string has content
-        return $this->hasValue($buttonUrl);
-    }
-
-    /**
-     * Parses WordPress modules template cta data into Statamic page_builder format.
-     *
-     * This method handles the conversion of modules template data (from
-     * uamswp_modules) to Statamic page_builder format, as opposed to the parse()
-     * method which handles ACF block data. The modules template uses a different data
-     * structure with prefixed field names. Uses AcfFieldNormalizer for consistent
-     * field mapping.
-     *
-     * @param  array<int|string, mixed>  $moduleData  The module data from uamswp_modules
-     * @param  string  $site  The site handle for asset processing
-     * @param  AssetImporter  $assetImporter  The asset importer instance
-     * @param  OutputInterface  $output  The console output interface
-     * @param  array<int|string, mixed>  $attachments  Array of attachment data for image processing
-     * @param  ?XmlStreamParser  $xmlParser  The XML stream parser for additional data access
-     * @param  array<int|string, mixed>  $terms  Array of terms for shortcode processing
-     * @return array<int|string, mixed>|null The page_builder block or null if parsing failed
-     */
-    public function parseModule(
-        array $moduleData,
-        string $site,
-        AssetImporter $assetImporter,
-        OutputInterface $output,
-        array $attachments = [],
-        ?XmlStreamParser $xmlParser = null,
-        array $terms = []
-    ): ?array {
-        // Normalize field names using AcfFieldNormalizer
-        $normalizedData = AcfFieldNormalizer::normalize(
-            $this->arrayFromValue($moduleData),
-            $this->getFieldMappings(),
-            $this->getNestedStructures()
-        );
-
-        // ---
-        // Check if placeholder body should be set
-        // ---
-
-        // Get the body value from normalized data
-        $bodyValue = $this->stringFromValue($normalizedData['cta_bar_body'] ?? '');
-
-        // ---
-        // Check if placeholder body should be set when heading has value, body is empty,
-        // and action type scenarios are met
-        // ---
-        if (
-            $this->hasValue($normalizedData['cta_bar_heading'] ?? '')
-            && ! $this->hasValue($bodyValue)
-            && $this->shouldSetPlaceholderBody($normalizedData)
-        ) {
-            // Set placeholder body value
-            $bodyValue = '<p>Placeholder Body — Please Replace</p>';
-        }
-
-        // Map basic fields from modules template format using normalized data
-        $heading = HtmlTagStripper::strip(
-            $this->stringFromValue($normalizedData['cta_bar_heading'] ?? '')
-        );
-        $bodyContent = $this->processBody(
-            $bodyValue,
-            $site,
-            $assetImporter,
-            $output,
-            $terms
-        );
-
-        // Action type handling
-        $actionType = $normalizedData['cta_bar_action_type'] ?? 'url';
-        $validActionTypes = ['url', 'phone', 'none'];
-        $actionType = \in_array(
-            $actionType,
-            $validActionTypes,
-            true
-        ) ? $actionType : 'none';
-
-        // Layout, size, and background
-        $layout = $normalizedData['cta_bar_layout'] ?? 'cta-bar-centered';
-        $size = $normalizedData['cta_bar_size'] ?? 'normal';
-        $backgroundColor = $normalizedData['cta_bar_background_color'] ?? 'bg-auto';
-
-        // Background image
-        $useImage = (bool) ($normalizedData['cta_bar_use_image'] ?? '0');
-        $backgroundImage = null;
-
-        // Check if CTA background image should be used
-        $ctaBarImage = $this->stringFromValue($normalizedData['cta_bar_image'] ?? '');
-        if (
-            $useImage
-            && $ctaBarImage !== ''
-        ) {
-            // Import image with disabled upload handling
-            $backgroundImage = ImageProcessor::importImageWithDisabledUploadHandling(
-                $ctaBarImage,
-                $site,
-                $assetImporter,
-                $output,
-                $attachments,
-                'CTA background image',
-                'CtaParser::parseModule'
-            );
-
-            // Check if image is available after import attempt
-            if (
-                $assetImporter->getUploadImages() // Missing images are only problematic when uploads are enabled
-                && ($backgroundImage === null || $backgroundImage === '')
-            ) {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'image_id' => $ctaBarImage,
-                    ]
-                );
-
-                // Log warning when uploads are enabled but no image is available
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'CtaParser::parseModule: Failed to import CTA background image when uploads are enabled',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                // ---
-                // When uploads are disabled, missing images are expected. Continue processing
-                // without the image.
-                // ---
-            }
-        }
-
-        $result = [
-            'id' => (new RowId)->generate(),
-            'type' => 'uamsweb_block_cta',
-            'block_heading' => $heading,
-            'hide_block_heading' => false,
-            'body' => $bodyContent,
-            'action_type' => $actionType,
-            'layout' => $layout,
-            'size' => $size,
-            'background_color' => $backgroundColor,
-            'background_image_query' => $useImage,
-            'enabled' => true,
-            'sms_phone_type_group' => [
-                'type' => null,
-                'phone' => null,
-                'sms_short_code' => null,
-            ],
-        ];
-
-        // URL action fields (only include if action_type is 'url')
-        if ($actionType === 'url') {
-            $result['button_text'] = HtmlTagStripper::strip(
-                $this->stringFromValue($normalizedData['cta_bar_button_text'] ?? '')
-            );
-            $originalUrl = LinkHelper::getUrl($normalizedData['cta_bar_button_url'] ?? '');
-
-            // Process URL through LinkProcessor to handle internal links and file imports
-            $result['button_url'] = LinkProcessor::processUrlString(
-                $originalUrl,
-                $site,
-                $assetImporter,
-                $output,
-                ProcessingContext::getStatamicEntryId(),
-                ProcessingContext::getCollectionHandle()
-            );
-            $result['button_target'] = LinkHelper::getTarget($normalizedData['cta_bar_button_url'] ?? '');
-            $result['button_link_description'] = $normalizedData['cta_bar_button_description'] ?? '';
-        }
-
-        // Phone action fields (only include if action_type is 'phone')
-        if ($actionType === 'phone') {
-            $result['phone_prepend'] = $normalizedData['cta_bar_phone_prepend'] ?? 'Call';
-            $result['phone'] = $normalizedData['cta_bar_phone'] ?? '';
-        }
-
-        // Only include background_image if it has a value
-        if ($backgroundImage !== null && $backgroundImage !== '') {
-            $result['background_image'] = $backgroundImage;
-        }
-
-        return $result;
-    }
-
-    /**
-     * Convert mixed values to an array for strict consumers.
-     *
-     * @param  mixed  $value  The value to convert
-     * @return array<int|string, mixed> The original value when array, or empty array
-     */
-    private function arrayFromValue(
-        mixed $value
-    ): array {
-        // Return the value when it is already an array.
-        if (\is_array($value)) {
-            return $value;
-        }
-
-        // Return an empty array for non-array values.
-        return [];
+        // Check the URL inside an array, and the value itself otherwise
+        return $this->hasValue(\is_array($buttonUrl) ? ($buttonUrl['url'] ?? null) : $buttonUrl);
     }
 
     /**
      * Convert mixed values to safe strings.
      *
      * @param  mixed  $value  The value to normalize
-     * @return string The original string, scalar cast, or empty string
+     * @return string The scalar cast, or empty string
      */
     private function stringFromValue(
         mixed $value
     ): string {
-        // Return the value when it is already a string.
-        if (\is_string($value)) {
-            return $value;
-        }
-
         // Cast scalar values to strings while excluding null and arrays.
         if (\is_scalar($value)) {
             return (string) $value;

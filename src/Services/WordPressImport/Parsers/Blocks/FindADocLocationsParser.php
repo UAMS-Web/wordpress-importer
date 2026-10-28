@@ -63,16 +63,6 @@ class FindADocLocationsParser
     }
 
     /**
-     * Defines which nested structures should be processed.
-     *
-     * @return array<string> The nested structure keys
-     */
-    private function getNestedStructures(): array
-    {
-        return [];
-    }
-
-    /**
      * Parses a Find-a-Doc Locations block into a Statamic replicator set.
      *
      *   - Maps WordPress ACF fields to Statamic fields, validates required fields,
@@ -110,437 +100,78 @@ class FindADocLocationsParser
         // Normalize field names using AcfFieldNormalizer
         $normalizedData = AcfFieldNormalizer::normalize(
             $data,
-            $this->getFieldMappings(),
-            $this->getNestedStructures()
+            $this->getFieldMappings()
         );
 
         // Map basic fields using normalized keys
         $heading = HtmlTagStripper::strip(
-            $this->getStringFieldValue(
-                $normalizedData,
-                'block_fad_locations_heading'
-            )
+            $this->getStringFieldValue($normalizedData, 'block_fad_locations_heading')
         );
         $description = HtmlTagStripper::strip(
-            $this->getStringFieldValue(
-                $normalizedData,
-                'block_fad_locations_description'
-            )
+            $this->getStringFieldValue($normalizedData, 'block_fad_locations_description')
         );
         $backgroundColor = $this->getStringFieldValue(
             $normalizedData,
             'block_fad_locations_background_color',
             'bg-white'
         );
-        $filterType = $this->getArrayFieldValue(
-            $normalizedData,
-            'block_fad_locations_filter_type'
-        );
-        $filterAoe = $this->getArrayFieldValue(
-            $normalizedData,
-            'block_fad_locations_filter_aoe'
-        );
-        $filterRegion = $this->getArrayFieldValue(
-            $normalizedData,
-            'block_fad_locations_filter_region'
-        );
-        $filterIds = $this->getArrayFieldValue(
-            $normalizedData,
-            'block_fad_locations_filter_ids'
-        );
-        $moreQuery = $this->getStringFieldValue(
-            $normalizedData,
-            'block_fad_locations_more',
-            '0'
-        ) === '1';
+        $filterType = $this->getArrayFieldValue($normalizedData, 'block_fad_locations_filter_type');
+        $filterAoe = $this->getArrayFieldValue($normalizedData, 'block_fad_locations_filter_aoe');
+        $filterRegion = $this->getArrayFieldValue($normalizedData, 'block_fad_locations_filter_region');
+        $filterIds = $this->getArrayFieldValue($normalizedData, 'block_fad_locations_filter_ids');
+        $moreQuery = $this->getStringFieldValue($normalizedData, 'block_fad_locations_more') === '1';
         $moreHeading = HtmlTagStripper::strip(
-            $this->getStringFieldValue(
-                $normalizedData,
-                'block_fad_locations_more_text'
-            )
+            $this->getStringFieldValue($normalizedData, 'block_fad_locations_more_text')
         );
         $moreButtonText = HtmlTagStripper::strip(
-            $this->getStringFieldValue(
-                $normalizedData,
-                'block_fad_locations_more_button_text'
-            )
+            $this->getStringFieldValue($normalizedData, 'block_fad_locations_more_button_text')
         );
-        $moreButtonUrlData = $this->getArrayFieldValue(
-            $normalizedData,
-            'block_fad_locations_more_button_url'
-        );
-        $originalMoreButtonUrl = $this->getStringFieldValue(
-            $moreButtonUrlData,
-            'url'
-        );
+        $moreButtonUrlData = $this->getArrayFieldValue($normalizedData, 'block_fad_locations_more_button_url');
 
         // Process URL through LinkProcessor to handle internal links and file imports
         $moreButtonUrl = LinkProcessor::processUrlString(
-            $originalMoreButtonUrl,
+            $this->getStringFieldValue($moreButtonUrlData, 'url'),
             $site,
             $assetImporter,
             $output,
             ProcessingContext::getStatamicEntryId(),
             ProcessingContext::getCollectionHandle()
         );
-        $moreButtonTarget = $this->getStringFieldValue(
-            $moreButtonUrlData,
-            'target'
-        ) === '_blank';
+        $moreButtonTarget = $this->getStringFieldValue($moreButtonUrlData, 'target') === '_blank';
         $moreButtonDescription = HtmlTagStripper::strip(
-            $this->getStringFieldValue(
-                $normalizedData,
-                'block_fad_locations_more_button_description'
-            )
+            $this->getStringFieldValue($normalizedData, 'block_fad_locations_more_button_description')
         );
 
-        // Validate required fields
-        if ($heading === '') {
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'page_slug' => $pageSlug,
-                    'available_keys' => \array_keys($normalizedData),
-                ]
-            );
-
-            // Log warning about missing required heading
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required heading',
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
-
-            return [];
+        // Validate required fields, skipping the block at the first one missing
+        $missing = match (true) {
+            $heading === '' => 'required heading',
+            $description === '' => 'required description',
+            $filterType === [] && $filterAoe === [] && $filterRegion === [] && $filterIds === [] => 'required filters',
+            $backgroundColor === '' => 'required background color',
+            default => null,
+        };
+        if ($missing !== null) {
+            return $this->skip($missing, $site, $pageSlug, $normalizedData);
         }
 
-        if ($description === '') {
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'page_slug' => $pageSlug,
-                    'available_keys' => \array_keys($normalizedData),
-                ]
-            );
-
-            // Log warning about missing required description
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required description',
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
-
-            return [];
-        }
-
-        if ($filterType === [] && $filterAoe === [] && $filterRegion === [] && $filterIds === []) {
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'page_slug' => $pageSlug,
-                    'available_keys' => \array_keys($normalizedData),
-                ]
-            );
-
-            // Log warning about missing required filters
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required filters',
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
-
-            return [];
-        }
-
-        if ($backgroundColor === '') {
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'page_slug' => $pageSlug,
-                    'available_keys' => \array_keys($normalizedData),
-                ]
-            );
-
-            // Log warning about missing required background color
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required background color',
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
-
-            return [];
-        }
-
-        // Map location types (taxonomy: location_type)
-        $locationTypes = [];
-        foreach ($filterType as $termId) {
-            $termIdString = $this->normalizeIdentifier(
-                $termId
-            );
-            if ($termIdString === null) {
-                continue;
-            }
-
-            $termSlug = $this->getTermSlug(
-                $termIdString,
-                $terms,
-                'location_type'
-            );
-            if ($termSlug !== null && $termSlug !== '') {
-                $locationTypes[] = $termSlug;
-                // Track term for validation
-                self::$termsUsed['location_type'][$termIdString] = [
-                    'slug' => $pageSlug ?? 'unknown',
-                    'link' => $this->getStringFieldValue(
-                        $data,
-                        'link'
-                    ),
-                ];
-            } else {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'term_id' => $termIdString,
-                    ]
-                );
-
-                // Log warning about missing term
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        "FindADocLocationsParser::parse: Location type term ID '$termIdString' not found in XML terms for wp:acf/fad-locations block",
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-            }
-        }
-
-        // Map areas of expertise (post_type: expertise)
-        $expertise = [];
-        foreach ($filterAoe as $postId) {
-            $postIdString = $this->normalizeIdentifier(
-                $postId
-            );
-            if ($postIdString === null) {
-                continue;
-            }
-
-            $postName = $this->getPostName(
-                $postIdString,
-                'expertise',
-                $items
-            );
-            if ($postName !== null && $postName !== '') {
-                $expertise[] = "{$postName}-{$postIdString}";
-            } else {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'post_id' => $postIdString,
-                        'post_type' => 'expertise',
-                    ]
-                );
-
-                // Log warning about missing post
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        "FindADocLocationsParser::parse: Expertise post ID '$postIdString' not found in XML items for wp:acf/fad-locations block",
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-            }
-        }
-
-        // Map regions (taxonomy: region)
-        $regions = [];
-        foreach ($filterRegion as $termId) {
-            $termIdString = $this->normalizeIdentifier(
-                $termId
-            );
-            if ($termIdString === null) {
-                continue;
-            }
-
-            $termSlug = $this->getTermSlug(
-                $termIdString,
-                $terms,
-                'region'
-            );
-            if ($termSlug !== null && $termSlug !== '') {
-                $regions[] = $termSlug;
-                // Track term for validation
-                self::$termsUsed['region'][$termIdString] = [
-                    'slug' => $pageSlug ?? 'unknown',
-                    'link' => $this->getStringFieldValue(
-                        $data,
-                        'link'
-                    ),
-                ];
-            } else {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'term_id' => $termIdString,
-                    ]
-                );
-
-                // Log warning about missing term
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        "FindADocLocationsParser::parse: Region term ID '$termIdString' not found in XML terms for wp:acf/fad-locations block",
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-            }
-        }
-
-        // Map locations (post_type: location)
-        $locations = [];
-        foreach ($filterIds as $postId) {
-            $postIdString = $this->normalizeIdentifier(
-                $postId
-            );
-            if ($postIdString === null) {
-                continue;
-            }
-
-            $postName = $this->getPostName(
-                $postIdString,
-                'location',
-                $items
-            );
-            if ($postName !== null && $postName !== '') {
-                $locations[] = "{$postName}-{$postIdString}";
-            } else {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'post_id' => $postIdString,
-                        'post_type' => 'location',
-                    ]
-                );
-
-                // Log warning about missing post
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        "FindADocLocationsParser::parse: Location post ID '$postIdString' not found in XML items for wp:acf/fad-locations block",
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-            }
-        }
+        // Resolve the filters, tracking the terms and warning about each miss
+        $link = $this->getStringFieldValue($data, 'link');
+        $locationTypes = $this->resolveTerms($filterType, $terms, 'location_type', 'Location type', $site, $pageSlug, $link);
+        $expertise = $this->resolvePosts($filterAoe, $items, 'expertise', 'Expertise', $site, $pageSlug);
+        $regions = $this->resolveTerms($filterRegion, $terms, 'region', 'Region', $site, $pageSlug, $link);
+        $locations = $this->resolvePosts($filterIds, $items, 'location', 'Location', $site, $pageSlug);
 
         // Validate "more" link fields if enabled
         if ($moreQuery) {
-            if ($moreHeading === '') {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'available_keys' => \array_keys($normalizedData),
-                    ]
-                );
-
-                // Log warning about missing required more heading
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required more heading',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                return [];
-            }
-
-            if ($moreButtonText === '') {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'available_keys' => \array_keys($normalizedData),
-                    ]
-                );
-
-                // Log warning about missing required more button text
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required more button text',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                return [];
-            }
-
-            if ($moreButtonUrl === '') {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'available_keys' => \array_keys($normalizedData),
-                    ]
-                );
-
-                // Log warning about missing or invalid required more button URL
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing or invalid required more button URL',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                return [];
-            }
-
-            if ($moreButtonDescription === '') {
-                // Enhance log context with entry information
-                $logData = LogContextHelper::enhanceWithEntryContext(
-                    [
-                        'site' => $site,
-                        'page_slug' => $pageSlug,
-                        'available_keys' => \array_keys($normalizedData),
-                    ]
-                );
-
-                // Log warning about missing required more button description
-                Log::warning(
-                    LogContextHelper::formatMessageWithEntry(
-                        'FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing required more button description',
-                        $logData['page_url']
-                    ),
-                    $logData['context']
-                );
-
-                return [];
+            $missing = match (true) {
+                $moreHeading === '' => 'required more heading',
+                $moreButtonText === '' => 'required more button text',
+                $moreButtonUrl === '' => 'or invalid required more button URL',
+                $moreButtonDescription === '' => 'required more button description',
+                default => null,
+            };
+            if ($missing !== null) {
+                return $this->skip($missing, $site, $pageSlug, $normalizedData);
             }
         }
 
@@ -582,6 +213,163 @@ class FindADocLocationsParser
         }
 
         return $result;
+    }
+
+    /**
+     * Logs that the block is skipped for a missing field, and returns the empty
+     * skip result.
+     *
+     * @param  string  $missing  What is missing, as the warning names it
+     * @param  string  $site  Statamic site handle
+     * @param  ?string  $pageSlug  Page slug for logging
+     * @param  array<int|string, mixed>  $normalizedData  The normalized block data
+     * @return array<int|string, mixed> The empty skip result
+     */
+    private function skip(
+        string $missing,
+        string $site,
+        ?string $pageSlug,
+        array $normalizedData
+    ): array {
+        // Enhance log context with entry information
+        $logData = LogContextHelper::enhanceWithEntryContext(
+            [
+                'site' => $site,
+                'page_slug' => $pageSlug,
+                'available_keys' => \array_keys($normalizedData),
+            ]
+        );
+
+        // Log warning about the missing field
+        Log::warning(
+            LogContextHelper::formatMessageWithEntry(
+                "FindADocLocationsParser::parse: Skipping wp:acf/fad-locations block due to missing {$missing}",
+                $logData['page_url']
+            ),
+            $logData['context']
+        );
+
+        return [];
+    }
+
+    /**
+     * Resolves filtered term IDs to their slugs, tracking each term found and
+     * warning about each one missing.
+     *
+     * @param  array<int|string, mixed>  $termIds  The filtered term IDs
+     * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from the WordPress XML
+     * @param  string  $taxonomy  The taxonomy handle (e.g., 'location_type', 'region')
+     * @param  string  $label  The taxonomy as the warning names it
+     * @param  string  $site  Statamic site handle
+     * @param  ?string  $pageSlug  Page slug for logging and term tracking
+     * @param  string  $link  The block link recorded with each term
+     * @return list<string> The slugs of the terms found
+     */
+    private function resolveTerms(
+        array $termIds,
+        array $terms,
+        string $taxonomy,
+        string $label,
+        string $site,
+        ?string $pageSlug,
+        string $link
+    ): array {
+        $slugs = [];
+        foreach ($termIds as $termId) {
+            $termIdString = $this->normalizeIdentifier($termId);
+            if ($termIdString === null) {
+                continue;
+            }
+
+            $termSlug = $this->getTermSlug($termIdString, $terms, $taxonomy);
+            if ($termSlug !== null && $termSlug !== '') {
+                $slugs[] = $termSlug;
+                // Track term for validation
+                self::$termsUsed[$taxonomy][$termIdString] = [
+                    'slug' => $pageSlug ?? 'unknown',
+                    'link' => $link,
+                ];
+
+                continue;
+            }
+
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'page_slug' => $pageSlug,
+                    'term_id' => $termIdString,
+                ]
+            );
+
+            // Log warning about missing term
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    "FindADocLocationsParser::parse: {$label} term ID '$termIdString' not found in XML terms for wp:acf/fad-locations block",
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
+        return $slugs;
+    }
+
+    /**
+     * Resolves filtered post IDs to `<post_name>-<post_id>`, warning about each
+     * one missing.
+     *
+     * @param  array<int|string, mixed>  $postIds  The filtered post IDs
+     * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement item objects from the WordPress XML
+     * @param  string  $postType  The post type (e.g., 'expertise', 'location')
+     * @param  string  $label  The post type as the warning names it
+     * @param  string  $site  Statamic site handle
+     * @param  ?string  $pageSlug  Page slug for logging
+     * @return list<string> The references to the posts found
+     */
+    private function resolvePosts(
+        array $postIds,
+        array $items,
+        string $postType,
+        string $label,
+        string $site,
+        ?string $pageSlug
+    ): array {
+        $references = [];
+        foreach ($postIds as $postId) {
+            $postIdString = $this->normalizeIdentifier($postId);
+            if ($postIdString === null) {
+                continue;
+            }
+
+            $postName = $this->getPostName($postIdString, $postType, $items);
+            if ($postName !== null && $postName !== '') {
+                $references[] = "{$postName}-{$postIdString}";
+
+                continue;
+            }
+
+            // Enhance log context with entry information
+            $logData = LogContextHelper::enhanceWithEntryContext(
+                [
+                    'site' => $site,
+                    'page_slug' => $pageSlug,
+                    'post_id' => $postIdString,
+                    'post_type' => $postType,
+                ]
+            );
+
+            // Log warning about missing post
+            Log::warning(
+                LogContextHelper::formatMessageWithEntry(
+                    "FindADocLocationsParser::parse: {$label} post ID '$postIdString' not found in XML items for wp:acf/fad-locations block",
+                    $logData['page_url']
+                ),
+                $logData['context']
+            );
+        }
+
+        return $references;
     }
 
     /**
