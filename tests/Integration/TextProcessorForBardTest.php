@@ -19,6 +19,7 @@ declare(strict_types=1);
  */
 
 use Illuminate\Support\Facades\Log;
+use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -682,23 +683,34 @@ it('reads a block comment without JSON as carrying no attributes', function (): 
         ->and($warnings->getArrayCopy())->toBe([]);
 });
 
-it('gives the next figure the attributes of an unclaimed block, and places it ahead of the content before it', function (): void {
+it('gives a figure no attributes of another block, and keeps it after the content before it', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    // Characterization of #153
+    // A heading's attributes describe the heading, not the figure after it (#153)
     $content = textProcessorForBard('<!-- wp:heading {"level":3} --><h3>H</h3><!-- /wp:heading --><figure><img src="h.jpg"></figure><figure><img src="i.jpg"></figure>');
 
     expect($fakes['image']->calls)->toBe([
-        ['html' => '<figure><img src="h.jpg"></figure>', 'attributes' => ['level' => 3]],
+        ['html' => '<figure><img src="h.jpg"></figure>', 'attributes' => []],
         ['html' => '<figure><img src="i.jpg"></figure>', 'attributes' => []],
     ])
-        ->and(array_column($content, 'type'))->toBe(['set', 'heading', 'set']);
+        ->and(array_column($content, 'type'))->toBe(['heading', 'set', 'set']);
+});
+
+it('gives an unclaimed image block\'s figure its attributes, after the content ahead of it', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    // The image block's processor fails here, so its figure takes the attribute
+    // branch, which parses the paragraph held before it first (#153)
+    $content = textProcessorForBard('<!-- wp:image {"id":2} --><p>Lead</p><figure><img src="a.jpg"></figure><!-- /wp:image -->');
+
+    expect(array_column($fakes['image']->calls, 'attributes'))->toBe([['id' => 2]])
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'set:image']);
 });
 
 it('drops the attributes an unclaimed block left at a closing image comment', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    textProcessorForBard('<!-- wp:heading {"level":3} --><h3>H</h3><!--   /wp:image   --><figure><img src="h.jpg"></figure>');
+    textProcessorForBard('<!-- wp:image {"id":7} --><p>x</p><!--   /wp:image   --><figure><img src="h.jpg"></figure>');
 
     expect($fakes['image']->calls[0]['attributes'] ?? null)->toBe([]);
 });
@@ -706,9 +718,9 @@ it('drops the attributes an unclaimed block left at a closing image comment', fu
 it('keeps the attributes at a comment that only resembles a closing image comment', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    textProcessorForBard('<!-- wp:heading {"level":3} --><h3>H</h3><!-- /wp:image x --><figure><img src="h.jpg"></figure>');
+    textProcessorForBard('<!-- wp:image {"id":7} --><p>x</p><!-- /wp:image x --><figure><img src="h.jpg"></figure>');
 
-    expect($fakes['image']->calls[0]['attributes'] ?? null)->toBe(['level' => 3]);
+    expect($fakes['image']->calls[0]['attributes'] ?? null)->toBe(['id' => 7]);
 });
 
 it('warns when a block processor returns nothing, and keeps the content after it', function (): void {
@@ -912,24 +924,61 @@ it('keeps a figure right after a block whose processor skips nodes', function ()
         ->and($fakes['image']->calls)->toHaveCount(1);
 });
 
-it('drops a figure without an image when an unclaimed block left attributes', function (): void {
+it('gives a later figure no attributes of an image block whose processor consumed its closing comment', function (): void {
     $fakes = textProcessorForBardFakes();
 
-    // Characterization of #153: the branch for a figure with attributes reads no
-    // content, so the figure's paragraph is lost
-    $content = textProcessorForBard('<!-- wp:heading {"level":3} --><h3>H</h3><!-- /wp:heading --><figure><p>No image</p></figure><figure><img src="i.jpg"></figure>');
+    // With image uploads off, the block's own processor builds the set from the original
+    // URL, so the block is claimed
+    /** @var AssetImporter&MockInterface $importer */
+    $importer = Mockery::mock(AssetImporter::class, ['getUploadImages' => false, 'getBaseBlogUrl' => 'https://example.org']);
 
-    expect($fakes['image']->calls)->toBe([['html' => '<figure><img src="i.jpg"></figure>', 'attributes' => []]])
-        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['heading:H', 'set:image']);
+    // The div-wrapped figure's skip covers the closing comment, so the attributes are
+    // cleared when the block is claimed rather than at the comment (#153)
+    $result = TextProcessor::processForBard('<!-- wp:image {"id":5,"align":"left"} --><div class="wp-block-image"><figure class="alignleft"><img src="https://example.org/a.jpg"></figure></div><!-- /wp:image --><figure><img src="b.jpg"></figure>', 'default', $importer, new BufferedOutput);
+
+    expect(array_column($result, 'type'))->toBe(['set', 'set'])
+        ->and($fakes['image']->calls)->toBe([['html' => '<figure><img src="b.jpg"></figure>', 'attributes' => []]]);
 });
+
+it('gives the attributes of an unclaimed image block only to a figure', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    // A paragraph holding an image is not the block's figure, so it is read as content
+    $content = textProcessorForBard('<!-- wp:image {"id":5} --><p>See <img src="p.jpg"></p>');
+
+    expect($fakes['image']->calls)->toBe([])
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:See ']);
+});
+
+it('imports an image once, when an unclaimed image block\'s figure repeats later', function (): void {
+    $fakes = textProcessorForBardFakes();
+
+    $content = textProcessorForBard('<!-- wp:image {"id":5} --><figure><img src="a.jpg"></figure><!-- /wp:image --><figure class="later"><img src="a.jpg"></figure>');
+
+    expect(array_column($fakes['image']->calls, 'attributes'))->toBe([['id' => 5]])
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image']);
+});
+
+it('keeps a figure without an image as content, whatever attributes an earlier block left', function (string $opening): void {
+    $fakes = textProcessorForBardFakes();
+
+    // A figure with no image is not an image block's figure, so its paragraph is read (#153)
+    $content = textProcessorForBard($opening.'<h3>H</h3><figure><p>No image</p></figure><figure><img src="i.jpg"></figure>');
+
+    expect(array_column($fakes['image']->calls, 'html'))->toBe(['<figure><img src="i.jpg"></figure>'])
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['heading:H', 'paragraph:No image', 'set:image']);
+})->with([
+    'a heading' => ['<!-- wp:heading {"level":3} -->'],
+    'an image block' => ['<!-- wp:image {"id":4} -->'],
+]);
 
 it('adds nothing for a figure with attributes whose image imports nothing, and retries the image', function (string $src): void {
     $fakes = textProcessorForBardFakes();
 
-    $content = textProcessorForBard("<!-- wp:heading {\"level\":3} --><h3>H</h3><!-- /wp:heading --><figure><img src=\"{$src}\"></figure><figure class=\"again\"><img src=\"{$src}\"></figure>");
+    $content = textProcessorForBard("<!-- wp:image {\"id\":3} --><figure><img src=\"{$src}\"></figure><!-- /wp:image --><figure class=\"again\"><img src=\"{$src}\"></figure>");
 
-    expect(array_column($fakes['image']->calls, 'attributes'))->toBe([['level' => 3], []])
-        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['heading:H']);
+    expect(array_column($fakes['image']->calls, 'attributes'))->toBe([['id' => 3], []])
+        ->and($content)->toBe([]);
 })->with(['an image processor that returns nothing' => ['none.jpg'], 'one that returns an empty set' => ['empty.jpg']]);
 
 it('imports each different image in a figure', function (): void {
@@ -938,7 +987,7 @@ it('imports each different image in a figure', function (): void {
     $content = textProcessorForBard('<!-- wp:heading {"level":3} --><h3>H</h3><!-- /wp:heading --><figure><img src="a.jpg"></figure><figure><img src="b.jpg"></figure><figure><img src="c.jpg"></figure>');
 
     expect(array_column($fakes['image']->calls, 'html'))->toBe(['<figure><img src="a.jpg"></figure>', '<figure><img src="b.jpg"></figure>', '<figure><img src="c.jpg"></figure>'])
-        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:image', 'heading:H', 'set:image', 'set:image']);
+        ->and(array_map(textProcessorForBardSummary(...), $content))->toBe(['heading:H', 'set:image', 'set:image', 'set:image']);
 });
 
 it('keeps whitespace between images to join the text after it', function (): void {
