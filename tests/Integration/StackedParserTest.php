@@ -389,7 +389,7 @@ it('maps every block field, in the order the set carries them', function (): voi
         'stacked_section_0_stacked_section_image' => '5',
         'stacked_section_0_stacked_section_alt_override' => 'Alt',
         'stacked_section_0_stacked_section_button_text' => 'Go',
-        'stacked_section_0_stacked_section_button_url' => ['url' => 'https://example.org/go/', 'target' => '_self'],
+        'stacked_section_0_stacked_section_button_url' => ['url' => 'https://example.org/go/', 'target' => '_blank'],
         'stacked_section_0_stacked_section_button_description' => 'Go now',
     ], $assetImporter))->toBe([
         'type' => 'uamsweb_block_stacked',
@@ -428,7 +428,7 @@ it('maps every module field, in the order the set carries them', function (): vo
         'field_stacked_more_b' => '1',
         'field_stacked_more_text_b' => '<i>More</i>',
         'field_stacked_more_button_text_b' => '<i>All</i>',
-        'field_stacked_more_button_url_b' => ['url' => 'https://example.org/all/', 'target' => '_self'],
+        'field_stacked_more_button_url_b' => ['url' => 'https://example.org/all/', 'target' => '_blank'],
         'field_stacked_more_button_description_b' => '<b>See all</b>',
         'stacked_section' => '1',
         'stacked_section_0_stacked_section_heading' => '<b>One</b>',
@@ -682,7 +682,7 @@ it('adds the button only when it has text', function (string $entry, array $butt
     'no text' => [['button_url' => 'https://example.org/', 'button_description' => 'D'], null],
     'text and a URL array' => [
         ['button_text' => 'Go', 'button_url' => ['url' => 'https://example.org/go/', 'target' => '_self'], 'button_description' => 'D'],
-        ['button_text' => 'Go', 'button_url' => 'https://example.org/go/', 'button_target' => true, 'button_link_description' => 'D'],
+        ['button_text' => 'Go', 'button_url' => 'https://example.org/go/', 'button_target' => false, 'button_link_description' => 'D'],
     ],
     'text and a URL string' => [
         ['button_text' => 'Go', 'button_url' => 'https://example.org/go/'],
@@ -690,7 +690,7 @@ it('adds the button only when it has text', function (string $entry, array $butt
     ],
     'text, a new-tab target and an empty description' => [
         ['button_text' => 'Go', 'button_url' => ['url' => 'https://example.org/go/', 'target' => '_blank'], 'button_description' => ''],
-        ['button_text' => 'Go', 'button_url' => 'https://example.org/go/', 'button_target' => false],
+        ['button_text' => 'Go', 'button_url' => 'https://example.org/go/', 'button_target' => true],
     ],
     'text and no URL' => [
         ['button_text' => 'Go'],
@@ -738,7 +738,7 @@ it('adds the footer heading and button only when each is set', function (string 
     ],
 ]);
 
-it('reads the footer button target differently for a block and a module', function (string $entry, mixed $url, bool $target): void {
+it('reads the footer button target the same for a block and a module', function (string $entry, mixed $url, bool $target): void {
     expect(stkEntry($entry, [
         'stacked_more' => '1',
         'stacked_more_button_text' => 'All',
@@ -748,8 +748,8 @@ it('reads the footer button target differently for a block and a module', functi
     'a block, _blank' => ['block', ['url' => 'https://example.org/', 'target' => '_blank'], true],
     'a block, _self' => ['block', ['url' => 'https://example.org/', 'target' => '_self'], false],
     'a block, no target' => ['block', ['url' => 'https://example.org/'], false],
-    'a module, _blank' => ['module', ['url' => 'https://example.org/', 'target' => '_blank'], false],
-    'a module, _self' => ['module', ['url' => 'https://example.org/', 'target' => '_self'], true],
+    'a module, _blank' => ['module', ['url' => 'https://example.org/', 'target' => '_blank'], true],
+    'a module, _self' => ['module', ['url' => 'https://example.org/', 'target' => '_self'], false],
     'a module, no target' => ['module', ['url' => 'https://example.org/'], false],
 ]);
 

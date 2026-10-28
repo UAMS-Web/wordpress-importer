@@ -325,7 +325,7 @@ it('maps every field of a full URL block', function (string $entry): void {
         'field_cta_bar_body_b' => 'Body',
         'field_cta_bar_action_type_b' => 'url',
         'field_cta_bar_button_text_b' => 'Book <i>now</i>',
-        'field_cta_bar_button_url_b' => ['url' => 'https://example.org/book/', 'target' => '_self'],
+        'field_cta_bar_button_url_b' => ['url' => 'https://example.org/book/', 'target' => '_blank'],
         'field_cta_bar_button_description_b' => 'Book an appointment',
         'field_cta_bar_layout_b' => 'cta-bar-left',
         'field_cta_bar_size_b' => 'large',
@@ -367,10 +367,11 @@ it('reads non-scalar text values as empty', function (string $entry): void {
         ->toBe(ctaExpected());
 })->with('ctaEntries');
 
-it('opens the button in a new tab only for a target other than _blank', function (string $entry, mixed $url, bool $target): void {
+it('opens the button in a new window only for a _blank target', function (string $entry, mixed $url, bool $target): void {
     expect(ctaParse($entry, ['cta_bar_button_url' => $url])['button_target'] ?? null)->toBe($target);
 })->with('ctaEntries')->with([
-    '_blank' => [['url' => 'https://example.org/', 'target' => '_blank'], false],
+    '_blank' => [['url' => 'https://example.org/', 'target' => '_blank'], true],
+    '_self' => [['url' => 'https://example.org/', 'target' => '_self'], false],
     'none' => [['url' => 'https://example.org/'], false],
     'a string URL' => ['https://example.org/', false],
 ]);
