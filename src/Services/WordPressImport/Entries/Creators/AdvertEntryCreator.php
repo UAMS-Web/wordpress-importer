@@ -439,7 +439,10 @@ class AdvertEntryCreator extends BaseEntryCreator
         // Read the nicename-to-term-id map the term pass built
         $termIds = $this->nicenameToTermIdMap[self::CATEGORY_TAXONOMY] ?? [];
 
+        // The map builder keeps an array for every taxonomy, so this return is for the
+        // analyser rather than for any map an import can produce
         if (! \is_array($termIds)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
         }
 
@@ -653,13 +656,13 @@ class AdvertEntryCreator extends BaseEntryCreator
 
         // Consider only WP Adverts categories, so the progress total counts the terms
         // this loop finishes. `getTerms()` returns only elements, so the type test is
-        // for the analyzer.
+        // for the analyzer. The loop reads no key, so the filtered keys can stay.
         // @pest-mutate-ignore: InstanceOfToTrue
-        $categoryTerms = \array_values(\array_filter(
+        $categoryTerms = \array_filter(
             $xmlParser->getTerms(),
             static fn (mixed $wpTerm): bool => $wpTerm instanceof SimpleXMLElement
                 && XpathHelper::getStringValue($wpTerm, 'wp:term_taxonomy') === self::CATEGORY_TAXONOMY
-        ));
+        );
 
         foreach (ImportProgress::track($output, 'advert category terms finished', $categoryTerms) as $wpTerm) {
             // Find the term the term pass wrote for this category
@@ -675,8 +678,9 @@ class AdvertEntryCreator extends BaseEntryCreator
             $term = TermFacade::find($destination['handle'].'::'.$destination['reference']);
 
             // A recorded destination was written to disk and the store rebuilt from it,
-            // so the lookup resolves; the type test narrows it for the analyser
-            // @pest-mutate-ignore: InstanceOfToTrue
+            // so the lookup resolves; the type test narrows it for the analyser, and the
+            // `continue` it guards is never reached
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof LocalizedTerm) {
                 continue;
             }
@@ -684,8 +688,9 @@ class AdvertEntryCreator extends BaseEntryCreator
             // Work on the term as it reads in the site being imported
             $localized = $term->in($site);
 
-            // `in()` on a term of this site returns the localized term; narrowed for the analyser
-            // @pest-mutate-ignore: InstanceOfToTrue
+            // `in()` on a term of this site returns the localized term; narrowed for the
+            // analyser, so the `continue` it guards is never reached
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $localized instanceof LocalizedTerm) {
                 continue;
             }

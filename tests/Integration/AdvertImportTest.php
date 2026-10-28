@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use DateTime;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -353,6 +354,81 @@ it('fills a category description an editor left blank', function (): void {
     expect(advertTerm('48')->get('description'))->toBe('Items purchased with UAMS funds, offered to other departments.');
 });
 
+it('keeps a category once when a listing names it twice, and carries on to the next', function (): void {
+    advertImportRun(advertExport(['bike-categories' => '<category domain="advert_category" nicename="general"><![CDATA[General]]></category>
+  <category domain="advert_category" nicename="general"><![CDATA[General]]></category>
+  <category domain="advert_category" nicename="uams-property-reallocation"><![CDATA[UAMS Property Reallocation]]></category>']));
+
+    expect(advertEntry('bike-for-sale')->get('classified_categories'))->toBe([
+        TermDestinationRegistry::referenceFor('advert_category', '44'),
+        TermDestinationRegistry::referenceFor('advert_category', '48'),
+    ]);
+});
+
+it('reports no page data for a listing that was not saved', function (): void {
+    $creator = new class extends AdvertEntryCreator
+    {
+        /**
+         * Fail every save.
+         *
+         * @param  string  $collectionHandle  The collection
+         * @param  string  $site  The site
+         * @param  string  $entrySlug  The slug
+         * @param  array<int|string, mixed>  $data  The data
+         * @param  OutputInterface  $output  The output
+         * @param  ?DateTime  $entryDate  The date
+         * @param  ?bool  $published  Whether published
+         * @param  ?string  $postDateStr  The post date
+         */
+        protected function saveEntry(
+            string $collectionHandle,
+            string $site,
+            string $entrySlug,
+            array $data,
+            OutputInterface $output,
+            ?DateTime $entryDate = null,
+            ?bool $published = null,
+            ?string $postDateStr = null
+        ): ?Entry {
+            return null;
+        }
+    };
+
+    expect(advertImportRun(creator: $creator)['pageData'])->toBe([]);
+});
+
+it('finishes a category after one it has no record of', function (): void {
+    advertImportRun();
+    advertEditTerm('40', 'title', '');
+
+    // Term 999 was never written, so the pass has no destination for it
+    $path = \sys_get_temp_dir().'/advert-terms-'.\bin2hex(\random_bytes(6)).'.xml';
+    \file_put_contents($path, '<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:wp="http://wordpress.org/export/1.2/"><channel>
+<wp:term><wp:term_id>999</wp:term_id><wp:term_taxonomy>advert_category</wp:term_taxonomy><wp:term_slug>gone</wp:term_slug><wp:term_name>Gone</wp:term_name></wp:term>
+<wp:term><wp:term_id>40</wp:term_id><wp:term_taxonomy>advert_category</wp:term_taxonomy><wp:term_slug>wanted</wp:term_slug><wp:term_name><![CDATA[Wanted ]]></wp:term_name></wp:term>
+</channel></rss>');
+    $parser = new XmlParser;
+    $parser->parse($path);
+
+    // The parser reads the file as it is asked for terms, so it stays until then
+    (new ReflectionMethod(AdvertEntryCreator::class, 'finishCategoryTerms'))->invoke(new AdvertEntryCreator, $parser, 'default', new BufferedOutput);
+    \unlink($path);
+
+    expect(advertTerm('40')->get('title'))->toBe('Wanted');
+});
+
+it('has no people, post categories or post tags, and nothing further to validate', function (): void {
+    $creator = new AdvertEntryCreator;
+    $output = new BufferedOutput;
+    $creator->validateTaxonomies('classifieds', 'default', $output);
+
+    expect($creator->hasShowPeople())->toBeFalse()
+        ->and($creator->getPostCategories())->toBe([])
+        ->and($creator->getPostTags())->toBe([])
+        ->and($output->fetch())->toBe('');
+});
+
 it('skips listings that already exist when told to', function (): void {
     // Skipping applies only to listings that exist, so a first run under it imports all three
     advertImportRun(entryBehavior: 'Skip matching files');
@@ -472,7 +548,8 @@ function advertImportRun(
     ?AssetImporter $assetImporter = null,
     string $entryBehavior = 'Overwrite matching files',
     string $taxonomyBehavior = 'Overwrite matching terms',
-    ?array $body = null
+    ?array $body = null,
+    ?AdvertEntryCreator $creator = null
 ): array {
     $parser = new XmlParser;
     $parser->parse($export ?? advertExport());
@@ -480,7 +557,7 @@ function advertImportRun(
     $contentProcessor = AdvertBodyConverter::returning($body ?? advertBody());
     $output = new BufferedOutput;
 
-    $creator = new AdvertEntryCreator;
+    $creator ??= new AdvertEntryCreator;
     $creator->setEntryOverwriteBehavior($entryBehavior);
     $creator->setTaxonomyOverwriteBehavior($taxonomyBehavior);
 
@@ -685,6 +762,8 @@ function advertExport(array $overrides = []): string
     $price = $overrides['bike-price'] ?? '25';
     $truckTitle = $overrides['truck-title'] ?? 'Old Truck';
     $truckExpiration = $overrides['truck-expiration'] ?? '1719763200';
+    $bikeCategories = $overrides['bike-categories'] ?? '<category domain="advert_category" nicename="general"><![CDATA[General]]></category>
+  <category domain="advert_category" nicename="uams-property-reallocation"><![CDATA[UAMS Property Reallocation]]></category>';
 
     // Attachments 9001 to 9015, each at its own URL
     $attachments = '';
@@ -735,8 +814,7 @@ XML;
   <wp:post_modified>2025-02-20 10:30:00</wp:post_modified>
   <wp:status>publish</wp:status>
   <wp:post_type>advert</wp:post_type>
-  <category domain="advert_category" nicename="general"><![CDATA[General]]></category>
-  <category domain="advert_category" nicename="uams-property-reallocation"><![CDATA[UAMS Property Reallocation]]></category>
+  {$bikeCategories}
   <wp:postmeta><wp:meta_key>adverts_person</wp:meta_key><wp:meta_value><![CDATA[Pat Poster]]></wp:meta_value></wp:postmeta>
   <wp:postmeta><wp:meta_key>adverts_email</wp:meta_key><wp:meta_value><![CDATA[poster@example.test]]></wp:meta_value></wp:postmeta>
   <wp:postmeta><wp:meta_key>adverts_phone</wp:meta_key><wp:meta_value><![CDATA[501-555-0100]]></wp:meta_value></wp:postmeta>
