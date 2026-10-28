@@ -23,18 +23,33 @@ trait HasPromptsSupport
      */
     protected function isPromptsSupported(): bool
     {
-        // Get the current operating system name in lowercase
-        $os = \strtolower(PHP_OS);
+        return self::promptsSupportedOn(PHP_OS, getenv('PATH'));
+    }
 
+    /**
+     * Check whether Laravel Prompts is supported on an operating system with a given PATH.
+     *
+     * Separate from `isPromptsSupported()`, which reads the running platform, so every branch
+     * can be tested from any platform (#100).
+     *
+     * @param  string  $os  The operating system name, as `PHP_OS` gives it
+     * @param  string|false  $path  The PATH, or false when it is not set
+     * @return bool True unless the system is Windows without WSL on its PATH
+     */
+    public static function promptsSupportedOn(
+        string $os,
+        string|false $path
+    ): bool {
         // Check if the operating system is Windows
         $isWindows = \str_starts_with(
-            $os,
+            \strtolower($os),
             'win'
         );
 
-        // Check if running on Windows Subsystem for Linux (WSL)
-        $isWsl = $isWindows && \str_contains(
-            (($path = getenv('PATH')) !== false ? $path : ''),
+        // Check if running on Windows Subsystem for Linux (WSL), which a PATH that is not set
+        // cannot show
+        $isWsl = $isWindows && $path !== false && \str_contains(
+            $path,
             'wsl'
         );
 
