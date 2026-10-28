@@ -92,9 +92,9 @@ function wpBlockBlockExpects(LegacyMockInterface|MockInterface $mock, string $me
  *
  * @param  array<int|string, mixed>  $attributes  The block's attributes
  * @param  ?string  $pageSlug  The page slug
- * @return array<int|string, mixed>|string|null The processor's result
+ * @return array<int|string, mixed>|null The processor's result
  */
-function processWpBlock(array $attributes, ?string $pageSlug = null): array|string|null
+function processWpBlock(array $attributes, ?string $pageSlug = null): ?array
 {
     return (new WpBlockBlockProcessor)->process(
         new DOMComment(' wp:block {"ref":1} /'),

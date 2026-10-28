@@ -270,149 +270,81 @@ class PageBuilderParser
         // be checked before ACF and non-ACF parsers.
         // ---
 
-        // Check if node is a comment node
-        if ($node->nodeType === XML_COMMENT_NODE) {
-            // Extract and trim comment content
-            $nodeValue = $node->nodeValue;
-            $comment = \is_string($nodeValue) ? \trim($nodeValue) : '';
+        // Create wp:block processor instance
+        $wpBlockProcessor = new WpBlockBlockProcessor;
 
-            // Initialize attributes array
-            $attributes = [];
+        // Check if processor can handle this node, which only a wp:block comment passes
+        if (
+            $wpBlockProcessor->canProcess(
+                $node,
+                $site,
+                $pageSlug
+            )
+        ) {
+            // ---
+            // Finalize any accumulated non-ACF content before adding wp:block set
+            // ---
+            $this->finalizeNonAcfContentIfNeeded(
+                $content,
+                $site,
+                $assetImporter,
+                $output
+            );
 
-            // Check if comment contains JSON attributes
-            if (
-                \preg_match(
-                    '/{.+?}/s',
-                    $comment,
-                    $matches
-                ) === 1
-            ) {
-                // Decode JSON attributes from comment
-                $decodedAttributes = \json_decode(
-                    $matches[0],
-                    true,
-                    512
-                );
-                $attributes = \is_array($decodedAttributes)
-                    ? $decodedAttributes
-                    : [];
-            }
+            // Decode the JSON attributes in the comment, which canProcess() found there
+            $attributes = \preg_match('/{.+?}/s', $node->textContent, $matches) === 1
+                ? \json_decode($matches[0], true)
+                : null;
 
-            // Create wp:block processor instance
-            $wpBlockProcessor = new WpBlockBlockProcessor;
+            // Process wp:block node
+            $result = $wpBlockProcessor->process(
+                $node,
+                \is_array($attributes) ? $attributes : [],
+                $site,
+                $assetImporter,
+                $output,
+                $attachments,
+                $terms,
+                $pageSlug
+            );
 
-            // Check if processor can handle this node
-            if (
-                $wpBlockProcessor->canProcess(
-                    $node,
-                    $site,
-                    $pageSlug
-                )
-            ) {
+            // Check if processing was successful
+            if ($result !== null) {
                 // ---
-                // Finalize any accumulated non-ACF content before adding wp:block set
+                // Create a replicator set for landing_page blueprint with the entry ID, or a
+                // placeholder with the wp_block post ID when the entry is not imported yet
                 // ---
-                $this->finalizeNonAcfContentIfNeeded(
-                    $content,
-                    $site,
-                    $assetImporter,
-                    $output
-                );
-
-                // Process wp:block node
-                $result = $wpBlockProcessor->process(
-                    $node,
-                    $attributes,
-                    $site,
-                    $assetImporter,
-                    $output,
-                    $attachments,
-                    $terms,
-                    $pageSlug
-                );
-
-                // Mark node as processed (even if entry ID not found yet, post ID is tracked for later import)
-                $processed = true;
-
-                // Set skip count from result or default to 1
-                $skipCountRaw = \is_array($result)
-                    ? ($result['skipCount'] ?? 1)
-                    : 1;
-                $skipCount = \is_numeric($skipCountRaw)
-                    ? (int) $skipCountRaw
-                    : 1;
-
-                // Check if processing was successful
-                if (\is_array($result) && $result !== []) {
-                    // Check if entry ID is available
-                    if (isset($result['entryId']) && \is_scalar($result['entryId'])) {
-                        // Create replicator set for landing_page blueprint with entry ID
-                        $replicatorSet = $wpBlockProcessor->createReplicatorSet(
-                            (string) $result['entryId']
-                        );
-
-                        // Add replicator set to ordered sets
-                        self::$orderedSets[] = $replicatorSet;
-                    } elseif (
-                        isset($result['wpBlockPostId'])
-                        && \is_scalar($result['wpBlockPostId'])
-                    ) { // Otherwise, create placeholder replicator set if wp_block post ID is available
-                        // Create placeholder replicator set for landing_page blueprint
-                        $replicatorSet = $wpBlockProcessor->createPlaceholderReplicatorSet(
-                            (string) $result['wpBlockPostId']
-                        );
-
-                        // Add placeholder replicator set to ordered sets
-                        self::$orderedSets[] = $replicatorSet;
-                    } else { // Otherwise, log warning if result exists but has no entry ID or wpBlockPostId
-                        // Enhance log context with entry information
-                        $logData = LogContextHelper::enhanceWithEntryContext(
-                            [
-                                'page_slug' => $pageSlug ?? 'none',
-                                'result_keys' => \array_keys($result),
-                            ]
-                        );
-
-                        // Log warning about missing entry ID or wpBlockPostId
-                        Log::warning(
-                            LogContextHelper::formatMessageWithEntry(
-                                'PageBuilderParser::parseNode: wp:block processed but no entry ID or wpBlockPostId in result',
-                                $logData['page_url']
-                            ),
-                            $logData['context']
-                        );
-                    }
-                } else { // Otherwise, log warning if result is null/false
-                    // Enhance log context with entry information
-                    $logData = LogContextHelper::enhanceWithEntryContext(
-                        [
-                            'page_slug' => $pageSlug ?? 'none',
-                            'node_value' => \substr(
-                                $node->nodeValue ?? '',
-                                0,
-                                200
-                            ),
-                        ]
-                    );
-
-                    // Log warning about null/false result
-                    Log::warning(
-                        LogContextHelper::formatMessageWithEntry(
-                            'PageBuilderParser::parseNode: wp:block processing returned null/false',
-                            $logData['page_url']
+                self::$orderedSets[] = $result['entryId'] !== null
+                    ? $wpBlockProcessor->createReplicatorSet($result['entryId'])
+                    : $wpBlockProcessor->createPlaceholderReplicatorSet($result['wpBlockPostId']);
+            } else { // Otherwise, log warning if the block has no ref
+                // Enhance log context with entry information
+                $logData = LogContextHelper::enhanceWithEntryContext(
+                    [
+                        'page_slug' => $pageSlug ?? 'none',
+                        'node_value' => \substr(
+                            $node->textContent,
+                            0,
+                            200
                         ),
-                        $logData['context']
-                    );
-                }
-            }
-        }
+                    ]
+                );
 
-        // Check if wp:block was processed, return early
-        if ($processed) {
-            // Return early with processed status and skip count
+                // Log warning about null result
+                Log::warning(
+                    LogContextHelper::formatMessageWithEntry(
+                        'PageBuilderParser::parseNode: wp:block processing returned null/false',
+                        $logData['page_url']
+                    ),
+                    $logData['context']
+                );
+            }
+
+            // Return early, skipping the comment node, even if the entry ID was not
+            // found yet, since the post ID is tracked for later import
             return [
-                'processed' => $processed,
-                'skipCount' => $skipCount,
+                'processed' => true,
+                'skipCount' => 1,
             ];
         }
 
@@ -580,7 +512,7 @@ class PageBuilderParser
                 $logData = LogContextHelper::enhanceWithEntryContext(
                     [
                         'node_value' => \substr(
-                            $node->nodeValue ?? '',
+                            $node->textContent,
                             0,
                             200
                         ),
@@ -651,98 +583,87 @@ class PageBuilderParser
                 // (e.g., from unwrapped wp:group blocks). If so, parse them and add to
                 // orderedSets, removing the ACF block HTML from the accumulator.
                 // ---
+
+                // Extract HTML content from the last item in the accumulator, if it is an
+                // item with HTML
+                $lastItem = self::$nonAcfAccumulator[\count(self::$nonAcfAccumulator) - 1] ?? null;
+                $html = \is_array($lastItem) ? ($lastItem['html'] ?? null) : null;
+
+                // Check if HTML contains ACF blocks
                 if (
-                    self::$nonAcfAccumulator !== []
+                    \is_string($html)
+                    && \preg_match(
+                        '/<!--\s*wp:acf\//',
+                        $html
+                    ) === 1
                 ) {
-                    $lastIndex = \count(self::$nonAcfAccumulator) - 1;
-                    $lastItemRaw = self::$nonAcfAccumulator[$lastIndex] ?? null;
+                    // Parse ACF blocks from the HTML
+                    $acfParseResult = $this->acfParser->parseAcfBlocksFromHtml(
+                        $html,
+                        $site,
+                        $assetImporter,
+                        $output,
+                        $attachments,
+                        $terms,
+                        $items,
+                        $pageSlug
+                    );
 
-                    if (! \is_array($lastItemRaw)) {
-                        // Skip ACF extraction when the accumulator tail is malformed
-                    } else {
-                        // Get reference to last item in accumulator
-                        $lastItem = &self::$nonAcfAccumulator[$lastIndex];
+                    // Check if any ACF sets were parsed
+                    $acfSets = $acfParseResult['acfSets'] ?? [];
 
-                        // Extract HTML content from last item
-                        $htmlRaw = $lastItemRaw['html'] ?? '';
-                        $html = \is_string($htmlRaw) ? $htmlRaw : '';
+                    if (! \is_array($acfSets)) {
+                        $acfSets = [];
+                    }
 
-                        // Check if HTML contains ACF blocks
-                        if (
-                            \preg_match(
-                                '/<!--\s*wp:acf\//',
-                                $html
-                            ) === 1
-                        ) {
-                            // Parse ACF blocks from the HTML
-                            $acfParseResult = $this->acfParser->parseAcfBlocksFromHtml(
-                                $html,
-                                $site,
-                                $assetImporter,
-                                $output,
-                                $attachments,
-                                $terms,
-                                $items,
-                                $pageSlug
-                            );
+                    if ($acfSets !== []) {
+                        // ---
+                        // Finalize any accumulated non-ACF content before adding ACF sets
+                        // (accumulator is guaranteed non-empty at this point)
+                        // ---
 
-                            // Check if any ACF sets were parsed
-                            $acfSets = $acfParseResult['acfSets'] ?? [];
+                        // Finalize accumulated non-ACF content into a set
+                        $nonAcfSet = $this->nonAcfParser->finalizeNonAcfContent(
+                            self::$nonAcfAccumulator,
+                            $content,
+                            $site,
+                            $assetImporter,
+                            $output
+                        );
 
-                            if (! \is_array($acfSets)) {
-                                $acfSets = [];
-                            }
+                        // Check if non-ACF set was successfully created
+                        if ($nonAcfSet !== null && $nonAcfSet !== []) {
+                            // Add finalized non-ACF set to ordered sets
+                            self::$orderedSets[] = $nonAcfSet;
+                        }
 
-                            if ($acfSets !== []) {
-                                // ---
-                                // Finalize any accumulated non-ACF content before adding ACF sets
-                                // (accumulator is guaranteed non-empty at this point)
-                                // ---
+                        // Clear accumulator after finalizing content
+                        self::$nonAcfAccumulator = [];
 
-                                // Finalize accumulated non-ACF content into a set
-                                $nonAcfSet = $this->nonAcfParser->finalizeNonAcfContent(
-                                    self::$nonAcfAccumulator,
-                                    $content,
-                                    $site,
-                                    $assetImporter,
-                                    $output
-                                );
+                        // ---
+                        // Add ACF sets to ordered sets
+                        // ---
 
-                                // Check if non-ACF set was successfully created
-                                if ($nonAcfSet !== null && $nonAcfSet !== []) {
-                                    // Add finalized non-ACF set to ordered sets
-                                    self::$orderedSets[] = $nonAcfSet;
-                                }
+                        // Loop through each parsed ACF set and add to ordered sets
+                        foreach ($acfSets as $acfSet) {
+                            // Add ACF set to ordered sets array
+                            self::$orderedSets[] = $acfSet;
+                        }
 
-                                // Clear accumulator after finalizing content
-                                self::$nonAcfAccumulator = [];
+                        // ---
+                        // Add remaining non-ACF HTML back to accumulator if it exists
+                        // ---
 
-                                // ---
-                                // Add ACF sets to ordered sets
-                                // ---
+                        // Extract and trim remaining HTML after ACF block extraction
+                        $remainingHtmlRaw = $acfParseResult['remainingHtml'] ?? '';
+                        $remainingHtml = \is_string($remainingHtmlRaw)
+                            ? \trim($remainingHtmlRaw)
+                            : '';
 
-                                // Loop through each parsed ACF set and add to ordered sets
-                                foreach ($acfSets as $acfSet) {
-                                    // Add ACF set to ordered sets array
-                                    self::$orderedSets[] = $acfSet;
-                                }
-
-                                // ---
-                                // Add remaining non-ACF HTML back to accumulator if it exists
-                                // ---
-
-                                // Extract and trim remaining HTML after ACF block extraction
-                                $remainingHtmlRaw = $acfParseResult['remainingHtml'] ?? '';
-                                $remainingHtml = \is_string($remainingHtmlRaw)
-                                    ? \trim($remainingHtmlRaw)
-                                    : '';
-
-                                // Check if there is remaining HTML to add back
-                                if ($remainingHtml !== '') {
-                                    // Add remaining non-ACF HTML back to accumulator
-                                    self::$nonAcfAccumulator[] = ['html' => $remainingHtml];
-                                }
-                            }
+                        // Check if there is remaining HTML to add back
+                        if ($remainingHtml !== '') {
+                            // Add remaining non-ACF HTML back to accumulator
+                            self::$nonAcfAccumulator[] = ['html' => $remainingHtml];
                         }
                     }
                 }
