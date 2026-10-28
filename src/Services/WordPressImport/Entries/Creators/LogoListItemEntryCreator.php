@@ -225,14 +225,11 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             );
 
             // ---
-            // Check if we've processed 50 items. Collecting garbage bounds memory over
-            // a large export and changes no output, so how often it runs cannot be seen.
+            // Collect garbage after each item, as the other creators do. This bounds
+            // memory over a large export and changes no output.
             // ---
-            // @pest-mutate-ignore: PlusToMinus, ModulusToMultiplication, IfNegated, IdenticalToNotIdentical, DecrementInteger, IncrementInteger, RemoveFunctionCall
-            if (($processedCount + $skippedCount) % 50 === 0) {
-                // Force garbage collection every to prevent memory buildup
-                gc_collect_cycles();
-            }
+            // @pest-mutate-ignore: RemoveFunctionCall
+            gc_collect_cycles();
         }
 
         // Clear taxonomy validator cache to ensure newly created terms are found during validation
@@ -736,7 +733,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         $normalizedLabelId = $this->normalizeTermId($metaData['logo_label'] ?? null);
 
         if ($normalizedLabelId !== null) {
-
             // ---
             // `logos_item_labels` became a site-scoped structured collection in
             // `UAMS-Web/uams-statamic-archive#2533`, so the field is an `entries` picker
