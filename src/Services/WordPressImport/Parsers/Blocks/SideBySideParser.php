@@ -153,7 +153,7 @@ class SideBySideParser
         // Process sequential indexed link list entries
         while (isset($data["side_link_list_{$index}_side_link_list_text"])) {
             $normalized[] = [
-                'side_link_list_text' => $data["side_link_list_{$index}_side_link_list_text"] ?? '',
+                'side_link_list_text' => $data["side_link_list_{$index}_side_link_list_text"],
                 'side_link_list_url' => $data["side_link_list_{$index}_side_link_list_url"] ?? [],
                 'side_link_list_description' => $data["side_link_list_{$index}_side_link_list_description"] ?? '',
             ];
@@ -270,9 +270,6 @@ class SideBySideParser
             // Extract URL from link data
             $url = LinkHelper::getUrl($link['side_link_list_url'] ?? '');
 
-            // Extract target attribute from link data
-            $target = LinkHelper::getTarget($link['side_link_list_url'] ?? '');
-
             // Skip links with empty URLs
             if ($url === '') {
                 // Enhance log context with entry information
@@ -294,13 +291,15 @@ class SideBySideParser
                 // Clean up variables to free up memory
                 unset(
                     $link,
-                    $url,
-                    $target
+                    $url
                 );
 
                 // Skip to next link
                 continue;
             }
+
+            // Extract target attribute from link data, which a non-empty URL means is present
+            $target = LinkHelper::getTarget($link['side_link_list_url']);
 
             // Process URL through LinkProcessor to handle internal links and file imports
             $url = LinkProcessor::processUrlString(
@@ -370,10 +369,6 @@ class SideBySideParser
             'field_side_image_anchor_b' => 'side_image_side_image_anchor',
             'field_side_image_position_b' => 'side_image_position',
             'field_side_image_background_color_b' => 'side_image_background_color',
-            // Individual link list item fields for nested structure
-            'field_side_link_list_text_b' => 'side_link_list_text',
-            'field_side_link_list_url_b' => 'side_link_list_url',
-            'field_side_link_list_description_b' => 'side_link_list_description',
             // Blockquote with Citation fields (wordpress-importer-archive#1281)
             'field_side_quote_text_b' => 'side_quote_text',
             'field_side_quote_text_link_b' => 'side_quote_text_link',
@@ -503,7 +498,6 @@ class SideBySideParser
         return [
             'field_side_cta_b',
             'field_side_image_b',
-            'field_side_link_list_b',
         ];
     }
 
@@ -636,14 +630,8 @@ class SideBySideParser
             $buttonText = '';
         }
 
-        // Initialize CTA button URL
-        $buttonUrl = '';
-
-        // Initialize CTA button target
-        $buttonTarget = false;
-
-        // Initialize CTA button description
-        $buttonDescription = '';
+        // Initialize the CTA button fields, none without its text
+        $buttonFields = [];
 
         // Process CTA button data if text is provided
         if ($buttonText !== '') {
@@ -666,15 +654,21 @@ class SideBySideParser
                 ProcessingContext::getCollectionHandle()
             );
 
-            // Extract button target (new window or same window)
-            $buttonTarget = isset($urlData['target']) && $urlData['target'] === '_blank';
+            // Set the button text, URL and target (new window or same window)
+            $buttonFields = [
+                'button_text' => $buttonText, // Optional
+                'button_url' => $buttonUrl, // Conditional, required if button_text
+                'button_target' => isset($urlData['target']) && $urlData['target'] === '_blank', // Conditional, required if button_text
+            ];
 
             // Extract button description
             $buttonDescription = $normalizedData['side_cta_side_cta_description'] ?? '';
-        }
 
-        // Initialize image variable
-        $image = null;
+            // Set the button link description when it is provided
+            if ($buttonDescription !== '') {
+                $buttonFields['button_link_description'] = $buttonDescription; // Conditional
+            }
+        }
 
         // Extract image alt text
         $altText = $normalizedData['side_image_side_image_alt_text'] ?? '';
@@ -690,19 +684,16 @@ class SideBySideParser
             $normalizedData['side_image_side_image_image'] ?? ''
         );
 
-        // Check if image ID is provided
-        if ($imageId !== '') {
-            // Import image with disabled upload handling
-            $image = ImageProcessor::importImageWithDisabledUploadHandling(
-                $imageId,
-                $site,
-                $assetImporter,
-                $output,
-                $attachments,
-                'side-by-side image',
-                'SideBySideParser::parse'
-            );
-        }
+        // Import image with disabled upload handling; an empty id imports nothing
+        $image = ImageProcessor::importImageWithDisabledUploadHandling(
+            $imageId,
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            'side-by-side image',
+            'SideBySideParser::parse'
+        );
 
         // Check if image is available after import attempt
         if (
@@ -734,7 +725,7 @@ class SideBySideParser
                 $normalizedLinkList,
                 $buttonText,
                 $buttonUrl,
-                $buttonTarget,
+                $buttonFields,
                 $buttonDescription,
                 $urlData,
                 $image,
@@ -803,23 +794,8 @@ class SideBySideParser
             $result['alt_text'] = $altText; // Optional, include only if non-empty
         }
 
-        // Check if button text is provided
-        if ($buttonText !== '') {
-            // Set button text field
-            $result['button_text'] = $buttonText; // Optional
-
-            // Set button URL field
-            $result['button_url'] = $buttonUrl; // Conditional, required if button_text
-
-            // Set button target field
-            $result['button_target'] = $buttonTarget; // Conditional, required if button_text
-
-            // Check if button description is provided
-            if ($buttonDescription !== '') {
-                // Set button link description field
-                $result['button_link_description'] = $buttonDescription; // Conditional
-            }
-        }
+        // Add the button fields, when the button has text
+        $result += $buttonFields;
 
         // Clean up variables to free up memory
         unset(
@@ -837,7 +813,7 @@ class SideBySideParser
             $normalizedLinkList,
             $buttonText,
             $buttonUrl,
-            $buttonTarget,
+            $buttonFields,
             $buttonDescription,
             $urlData,
             $image,
@@ -914,6 +890,9 @@ class SideBySideParser
 
         // Extract background color setting
         $backgroundColor = $moduleData['side_image_background_color'] ?? 'bg-auto';
+
+        // Get the count of links in the link list from module data
+        $linkListCount = $this->normalizeIntValue($moduleData['side_link_list'] ?? 0);
 
         // Get current entry data from processing context for logging
         $entryData = ProcessingContext::getEntryData();
@@ -1009,9 +988,6 @@ class SideBySideParser
                 return null;
             }
 
-            // Get the count of links in the link list from module data
-            $linkListCount = $this->normalizeIntValue($moduleData['side_link_list'] ?? 0);
-
             // Validate that link list has content for link-list layout
             if ($linkListCount === 0) {
                 // Log warning with post context for debugging
@@ -1075,58 +1051,16 @@ class SideBySideParser
             }
         }
 
-        // Initialize image variable
-        $image = null;
-
-        // Initialize alt text variable
-        $altText = '';
-
-        // Initialize crop setting to the fieldset's default
-        $crop = 'center';
-
-        // Initialize anchor setting to the fieldset's default
-        $anchor = 'center';
-
-        // Check if side image is provided
-        if (
-            isset($moduleData['side_image_side_image_image'])
-            && $moduleData['side_image_side_image_image'] !== ''
-        ) {
-            // Normalize image ID before import
-            $imageId = $this->normalizeStringValue(
-                $moduleData['side_image_side_image_image']
-            );
-
-            // Import image with disabled upload handling
-            $image = ImageProcessor::importImageWithDisabledUploadHandling(
-                $imageId,
-                $site,
-                $assetImporter,
-                $output,
-                $attachments,
-                'side-by-side image',
-                'SideBySideParser::parseModule'
-            );
-
-            // Set alt text from module data
-            $altText = $moduleData['side_image_side_image_alt_text'] ?? '';
-
-            // Set crop value from module data. Only the fieldset's options survive: the template's
-            // validity guard needs a truthy image_crop, so the old '0' for 'none' or an absent
-            // value hid the whole block (wordpress-importer-archive#1346).
-            $crop = $this->radioOption(
-                $moduleData['side_image_side_image_crop'] ?? null,
-                ['top', 'center', 'bottom'],
-                'center'
-            );
-
-            // Set anchor value from module data, kept to the fieldset's options
-            $anchor = $this->radioOption(
-                $moduleData['side_image_side_image_anchor'] ?? null,
-                ['left', 'center', 'right'],
-                'center'
-            );
-        }
+        // Import the side image with disabled upload handling; an absent or empty id imports nothing
+        $image = ImageProcessor::importImageWithDisabledUploadHandling(
+            $this->normalizeStringValue($moduleData['side_image_side_image_image'] ?? ''),
+            $site,
+            $assetImporter,
+            $output,
+            $attachments,
+            'side-by-side image',
+            'SideBySideParser::parseModule'
+        );
 
         // Validate required fields - image is now required
         if ($image === null || $image === '') {
@@ -1152,9 +1086,6 @@ class SideBySideParser
                 $entryData,
                 $postName,
                 $image,
-                $altText,
-                $crop,
-                $anchor,
                 $quoteFields
             );
 
@@ -1162,10 +1093,27 @@ class SideBySideParser
             return null;
         }
 
+        // Set alt text from module data
+        $altText = $moduleData['side_image_side_image_alt_text'] ?? '';
+
+        // Set crop value from module data. Only the fieldset's options survive: the template's
+        // validity guard needs a truthy image_crop, so the old '0' for 'none' or an absent
+        // value hid the whole block (wordpress-importer-archive#1346).
+        $crop = $this->radioOption(
+            $moduleData['side_image_side_image_crop'] ?? null,
+            ['top', 'bottom'],
+            'center'
+        );
+
+        // Set anchor value from module data, kept to the fieldset's options
+        $anchor = $this->radioOption(
+            $moduleData['side_image_side_image_anchor'] ?? null,
+            ['left', 'right'],
+            'center'
+        );
+
         // Initialize link list array
         $linkList = [];
-
-        $linkListCount ??= $this->normalizeIntValue($moduleData['side_link_list'] ?? 0);
 
         // Process each link in the list
         for ($i = 0; $i < $linkListCount; $i++) {
@@ -1205,38 +1153,44 @@ class SideBySideParser
             $ctaText = '';
         }
 
-        // Initialize CTA button URL
-        $ctaUrl = '';
+        // Initialize the CTA button fields, none without its text
+        $buttonFields = [];
 
-        // Initialize CTA button target
-        $ctaTarget = false;
+        // Process CTA button data if text is provided
+        if ($ctaText !== '') {
+            // A button without a link has an empty URL and opens in the same window
+            $buttonFields = [
+                'button_text' => $ctaText,
+                'button_url' => '',
+                'button_target' => false,
+            ];
 
-        // Initialize CTA button description
-        $ctaDescription = '';
+            // Read the link when the module has one
+            if (isset($moduleData['side_cta_side_cta_url'])) {
+                // Extract original CTA button URL
+                $originalCtaUrl = LinkHelper::getUrl($moduleData['side_cta_side_cta_url']);
 
-        // Process CTA button data if text and URL are provided
-        if (
-            $ctaText !== ''
-            && isset($moduleData['side_cta_side_cta_url'])
-        ) {
-            // Extract original CTA button URL
-            $originalCtaUrl = LinkHelper::getUrl($moduleData['side_cta_side_cta_url']);
+                // Process URL through LinkProcessor to handle internal links and file imports
+                $buttonFields['button_url'] = LinkProcessor::processUrlString(
+                    $originalCtaUrl,
+                    $site,
+                    $assetImporter,
+                    $output,
+                    ProcessingContext::getStatamicEntryId(),
+                    ProcessingContext::getCollectionHandle()
+                );
 
-            // Process URL through LinkProcessor to handle internal links and file imports
-            $ctaUrl = LinkProcessor::processUrlString(
-                $originalCtaUrl,
-                $site,
-                $assetImporter,
-                $output,
-                ProcessingContext::getStatamicEntryId(),
-                ProcessingContext::getCollectionHandle()
-            );
+                // Extract CTA button target
+                $buttonFields['button_target'] = LinkHelper::getTarget($moduleData['side_cta_side_cta_url']);
 
-            // Extract CTA button target
-            $ctaTarget = LinkHelper::getTarget($moduleData['side_cta_side_cta_url']);
+                // Extract CTA button description
+                $ctaDescription = $moduleData['side_cta_side_cta_description'] ?? '';
 
-            // Extract CTA button description
-            $ctaDescription = $moduleData['side_cta_side_cta_description'] ?? '';
+                // Set the button link description when it is provided
+                if ($ctaDescription !== '') {
+                    $buttonFields['button_link_description'] = $ctaDescription;
+                }
+            }
         }
 
         // Build the replicator set with the fieldset's handles, the same keys parse() writes
@@ -1287,23 +1241,8 @@ class SideBySideParser
             $result['alt_text'] = $altText;
         }
 
-        // Check if CTA text is provided
-        if ($ctaText !== '') {
-            // Set button text field
-            $result['button_text'] = $ctaText;
-
-            // Set button URL field
-            $result['button_url'] = $ctaUrl;
-
-            // Set button target field
-            $result['button_target'] = $ctaTarget;
-
-            // Check if CTA description is provided
-            if ($ctaDescription !== '') {
-                // Set button link description field
-                $result['button_link_description'] = $ctaDescription;
-            }
-        }
+        // Add the button fields, when the button has text
+        $result += $buttonFields;
 
         // Clean up variables to free up memory
         unset(
@@ -1324,8 +1263,7 @@ class SideBySideParser
             $linkListCount,
             $processedLinkList,
             $ctaText,
-            $ctaUrl,
-            $ctaTarget,
+            $buttonFields,
             $ctaDescription,
             $quoteFields
         );
@@ -1430,9 +1368,9 @@ class SideBySideParser
      * A radio field's value, kept to the field's options.
      *
      * @param  mixed  $value  The stored value
-     * @param  list<string>  $options  The radio field's option keys
+     * @param  list<string>  $options  The radio field's option keys other than its default
      * @param  string  $default  The field's default, used for anything else
-     * @return string One of the options
+     * @return string One of the options or the default
      */
     private function radioOption(
         mixed $value,
@@ -1441,6 +1379,9 @@ class SideBySideParser
     ): string {
         $value = $this->normalizeStringValue($value);
 
+        // A string loosely equals a non-numeric option only when identical, so the strict flag
+        // phpstan-strict-rules requires changes nothing and TrueToFalse cannot be killed
+        // @pest-mutate-ignore: TrueToFalse
         return \in_array($value, $options, true) ? $value : $default;
     }
 
