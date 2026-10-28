@@ -172,6 +172,10 @@ class TextProcessor
             // The captured delimiters sit at the odd indexes
             $isTag = $index % 2 === 1 && ! \str_starts_with($segment, '<!--');
 
+            // libxml 2.14 and later decode an HTML5 named entity in an attribute value
+            // themselves, so the doc type flag changes nothing with them; an older
+            // libxml leaves one such as `&bigstar;` encoded without it
+            // @pest-mutate-ignore: BitwiseOrToBitwiseAnd
             $result .= $isTag
                 ? \html_entity_decode($segment, ENT_NOQUOTES | ENT_HTML5, 'UTF-8')
                 : self::decodeEntities($segment);

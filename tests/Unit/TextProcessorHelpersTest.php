@@ -196,6 +196,28 @@ it('decodes the other entities inside a tag', function (): void {
     expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe("\u{2605} & <b>");
 });
 
+it('decodes a comment whole, quotes and all', function (): void {
+    $doc = TextProcessor::loadHtml('<!-- a &quot;b&quot; --><p>x</p>');
+    $comment = $doc->getElementsByTagName('div')->item(0)?->firstChild;
+
+    expect($comment instanceof DOMComment ? $comment->data : null)->toBe(' a "b" ');
+});
+
+it('decodes an entity inside a tag that decodes to another entity, as it does in text', function (): void {
+    // The markup is decoded once here and once more by libxml, so the value is
+    // decoded twice, as it was before #157
+    $doc = TextProcessor::loadHtml('<p title="a &amp;lt;b">x</p>');
+
+    expect($doc->getElementsByTagName('p')->item(0)?->getAttribute('title'))->toBe('a <b');
+});
+
+it('decodes the markup whole when it cannot split it into tags and text', function (): void {
+    // At the PCRE limit the split fails, and the full decode before #157 still runs
+    $doc = textProcessorHelpersAtPcreLimit(static fn (): DOMDocument => TextProcessor::loadHtml('<p>a &quot;b&quot;</p>'));
+
+    expect($doc->getElementsByTagName('p')->item(0)?->textContent)->toBe('a "b"');
+});
+
 it('decodes the quotes in text', function (): void {
     $doc = TextProcessor::loadHtml('<p>a &quot;b&quot; &#39;c&#39; &apos;d&apos;</p>');
 
