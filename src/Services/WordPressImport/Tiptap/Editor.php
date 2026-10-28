@@ -258,9 +258,10 @@ class Editor extends BaseEditor
     private static function isTextNode(
         mixed $child
     ): bool {
-        // Content that is not an array is not a node at all. Without this
-        // return the isset() below is false for it anyway, so the guard is
-        // here for the offset read's type, not for the result
+        // Content that is not an array is not a node at all. A document only
+        // ever holds arrays and scalars here, since setContent() decodes array
+        // input from JSON, and isset() is false for a scalar anyway: the guard
+        // is here for the offset read's type, not for the result
         if (! \is_array($child)) {
             // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
