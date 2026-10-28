@@ -274,17 +274,6 @@ class PageEntryCreator extends BaseEntryCreator
                 $postmeta['seo_meta_description'] ?? ''
             );
 
-            // ---
-            // Skip items with statuses that should be excluded (redundant due to getItems
-            // filter, but explicit)
-            // ---
-
-            // Check if status should be skipped
-            if (XpathHelper::shouldSkipStatus($status)) {
-                // Skip to next item in loop
-                continue;
-            }
-
             // Skip posts with classifieds_type meta key
             if (isset($postmeta['classifieds_type'])) {
                 continue;
