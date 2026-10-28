@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators;
 
+use Carbon\Carbon;
 use DateTime;
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Illuminate\Support\Facades\Log;
@@ -99,13 +100,6 @@ class TablePressEntryCreator extends BaseEntryCreator
     protected $overwriteBehavior = 'Overwrite matching files';
 
     /**
-     * Cache of imported table entry IDs.
-     *
-     * @var array<string, string>
-     */
-    protected static $tableCache = [];
-
-    /**
      * Sets the overwrite behavior for table entry imports.
      *
      * Configures how existing entries with matching IDs are handled: overwrite,
@@ -118,17 +112,6 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $behavior
     ): void {
         $this->overwriteBehavior = $behavior;
-    }
-
-    /**
-     * Clears the table entry cache.
-     *
-     * Resets the cache of imported table entry IDs to prevent reuse across import
-     * runs.
-     */
-    public static function clearTableCache(): void
-    {
-        self::$tableCache = [];
     }
 
     /**
@@ -335,7 +318,11 @@ class TablePressEntryCreator extends BaseEntryCreator
             // Log progress for the current table
             $output->writeln("Processing table '$entrySlug' with content length: ".\strlen($contentEncoded));
 
-            // Convert excerpt to Bard format for 'description' field
+            // ---
+            // Convert excerpt to Bard format for 'description' field. A blank one
+            // converts to nothing either way, so the check only saves the parse.
+            // ---
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             if ($excerptEncoded !== '') {
                 $editor = new Editor([
                     'extensions' => [
@@ -349,14 +336,29 @@ class TablePressEntryCreator extends BaseEntryCreator
                     ENT_QUOTES | ENT_HTML5,
                     'UTF-8'
                 );
-                $document = $editor->setContent($html)->getDocument();
-                if (
-                    \is_array($document)
-                    && isset($document['content'])
-                    && \is_array($document['content'])
-                    && $document['content'] !== []
-                ) {
-                    $data['description'] = $document['content'];
+                // ---
+                // The Tiptap parser finds no document body in an excerpt with no body
+                // content (whitespace, comments, or head-only markup such as a title or
+                // a script), and throws a TypeError from its DOM reader. That is an
+                // excerpt with no description, so it must not end the import. Any other
+                // TypeError is let through: an excerpt that decodes as JSON throws one
+                // of its own, and its text would be lost (#267).
+                // ---
+                try {
+                    $document = $editor->setContent($html)->getDocument();
+                } catch (\TypeError $error) {
+                    if (! \str_contains($error->getMessage(), 'DOMParser::getDocumentBody()')) {
+                        throw $error;
+                    }
+
+                    $document = null;
+                }
+
+                $description = \is_array($document) ? ($document['content'] ?? null) : null;
+
+                // Store the description only when it converted to some content
+                if (\is_array($description) && $description !== []) {
+                    $data['description'] = $description;
                 }
             }
 
@@ -603,12 +605,6 @@ class TablePressEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Check if streaming parser was used and clean it up to prevent memory leaks
-        if ($xmlStreamParser instanceof XmlStreamParser) {
-            // Clean up variables to free up memory
-            unset($xmlStreamParser);
-        }
-
         // Return collected page data for tree building
         return $this->pageData;
     }
@@ -619,8 +615,7 @@ class TablePressEntryCreator extends BaseEntryCreator
      * Checks for existing entries with matching IDs or slugs and applies the
      * configured overwrite behavior: overwrite, skip, or create additional entries
      * with modified slugs. Deletes any entries with incorrect slugs
-     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Caches
-     * the entry ID for reuse in the current import run. Determines the published
+     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Determines the published
      * status from status_and_visibility if $published is null, defaulting to true
      * for TablePress entries when the field is absent, as tables are typically
      * published.
@@ -666,6 +661,9 @@ class TablePressEntryCreator extends BaseEntryCreator
         // Initialize the Statamic entry
         $collection = CollectionFacade::findByHandle($collectionHandle);
         $entry = EntryFacade::make();
+
+        // The facade always builds an Entry; the guard narrows the type it returns
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (! $entry instanceof Entry) {
             throw new \RuntimeException(
                 'TablePressEntryCreator::saveEntry: Failed to instantiate Statamic entry.'
@@ -680,6 +678,11 @@ class TablePressEntryCreator extends BaseEntryCreator
         // Determine published status: use status_and_visibility if present,
         // otherwise default to true for TablePress entries
         if ($published === null) {
+            // ---
+            // The needles are not numeric, so a loose comparison matches exactly what
+            // the strict one does.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
             $published = isset($data['status_and_visibility']) && \in_array(
                 $data['status_and_visibility'],
                 ['published', 'private', 'scheduled'],
@@ -718,8 +721,14 @@ class TablePressEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Check for existing entry with matching ID or slug
+        // ---
+        // Check for existing entry with matching ID or slug. Statamic keeps entry ids
+        // unique across collections, so the collection criterion on the id query
+        // changes nothing it can find.
+        // ---
         $existingByIdQuery = $this->makeEntryQuery();
+
+        // @pest-mutate-ignore: RemoveMethodCall
         $existingByIdQuery->where(
             'collection',
             $collectionHandle
@@ -739,6 +748,12 @@ class TablePressEntryCreator extends BaseEntryCreator
             'slug',
             $entrySlug
         );
+        // ---
+        // Leave out the entry the id query already found. Without this the same entry
+        // is found twice and deleted twice under an overwrite, which Statamic allows,
+        // so the clause changes no outcome.
+        // ---
+        // @pest-mutate-ignore: RemoveMethodCall
         $existingBySlugQuery->where(
             'id',
             '!=',
@@ -763,6 +778,13 @@ class TablePressEntryCreator extends BaseEntryCreator
                         ) > 0
                     ) {
                         $newSlug = "$entrySlug.$counter";
+
+                        // ---
+                        // Statamic stores the slug without its dot, so the dotted slug
+                        // never counts and the loop runs once whichever way the counter
+                        // moves (#265).
+                        // ---
+                        // @pest-mutate-ignore: PostIncrementToPostDecrement
                         $counter++;
                     }
 
@@ -772,7 +794,6 @@ class TablePressEntryCreator extends BaseEntryCreator
                         $entryId
                     );
                     $data['id'] = $entryId;
-                    $entry->data($data);
                     break;
                 case 'Overwrite matching files':
                     if ($existingById instanceof Entry) {
@@ -798,29 +819,30 @@ class TablePressEntryCreator extends BaseEntryCreator
             $isCollectionDated
             && ! $finalEntryDate instanceof DateTime
         ) {
-            // Try to create date from post date string if provided
-            if ($postDateStr !== null && $postDateStr !== '') {
-                try {
-                    $finalEntryDate = new DateTime($postDateStr);
-                } catch (\Exception $e) {
-                    // Enhance log context with entry information
-                    $logData = LogContextHelper::enhanceWithEntryContext(
-                        [
-                            'collection_handle' => $collectionHandle,
-                            'post_date_str' => $postDateStr,
-                            'error' => $e->getMessage(),
-                        ]
-                    );
+            // ---
+            // Create the date from the post date string, which reads as now when it is
+            // absent or blank
+            // ---
+            try {
+                $finalEntryDate = new DateTime($postDateStr ?? 'now');
+            } catch (\Exception $e) {
+                // Enhance log context with entry information
+                $logData = LogContextHelper::enhanceWithEntryContext(
+                    [
+                        'collection_handle' => $collectionHandle,
+                        'post_date_str' => $postDateStr,
+                        'error' => $e->getMessage(),
+                    ]
+                );
 
-                    // Log warning for failed date parsing
-                    Log::warning(
-                        LogContextHelper::formatMessageWithEntry(
-                            'TablePressEntryCreator::saveEntry: Failed to parse post date string',
-                            $logData['page_url']
-                        ),
-                        $logData['context']
-                    );
-                }
+                // Log warning for failed date parsing
+                Log::warning(
+                    LogContextHelper::formatMessageWithEntry(
+                        'TablePressEntryCreator::saveEntry: Failed to parse post date string',
+                        $logData['page_url']
+                    ),
+                    $logData['context']
+                );
             }
 
             $finalEntryDate ??= new DateTime;
@@ -830,7 +852,8 @@ class TablePressEntryCreator extends BaseEntryCreator
         if ($finalEntryDate instanceof DateTime) {
             // Only set date if the collection is dated
             if ($isCollectionDated) {
-                $entry->date($finalEntryDate);
+                // Statamic reads a date that is not a Carbon as a string, so wrap it
+                $entry->date(Carbon::instance($finalEntryDate));
             } else {
                 // Enhance log context with entry information
                 $logData = LogContextHelper::enhanceWithEntryContext(
@@ -856,12 +879,6 @@ class TablePressEntryCreator extends BaseEntryCreator
         $entry->save();
 
         $output->writeln("  - <info>Saving entry with slug '$entrySlug' for collection '$collectionHandle'</info>");
-
-        // Cache the entry ID
-        $savedEntryId = $entry->id();
-        self::$tableCache[$entryId] = \is_string($savedEntryId)
-            ? $savedEntryId
-            : $entryId;
 
         return $entry;
     }
@@ -961,7 +978,7 @@ class TablePressEntryCreator extends BaseEntryCreator
         array $visibility,
         string $entrySlug,
         string $postId,
-        bool $addedHeaderRow = false
+        bool $addedHeaderRow
     ): array {
         // Extract rows visibility array from visibility data
         $rowsVisibility = $visibility['rows'];
@@ -999,8 +1016,8 @@ class TablePressEntryCreator extends BaseEntryCreator
         // Calculate original table dimensions for logging purposes
         $originalRowCount = \count($tableData);
 
-        // Calculate original column count from first row if table has data
-        $originalColumnCount = $tableData !== [] ? \count($tableData[0]['cells']) : 0;
+        // Calculate original column count from first row; the caller only passes a table with rows
+        $originalColumnCount = \count($tableData[0]['cells']);
 
         // Initialize array to store filtered table data
         $filteredTableData = [];
@@ -1024,8 +1041,7 @@ class TablePressEntryCreator extends BaseEntryCreator
 
             // Check if this row should be visible (1) or hidden (0)
             if (
-                $visibilityIndex >= 0
-                && isset($rowsVisibility[$visibilityIndex])
+                isset($rowsVisibility[$visibilityIndex])
                 && $rowsVisibility[$visibilityIndex] === 1
             ) {
                 // Row is visible, keep it
@@ -1267,6 +1283,8 @@ class TablePressEntryCreator extends BaseEntryCreator
                 )
             )
         );
+        // The needles are not numeric, so a loose comparison matches the strict one
+        // @pest-mutate-ignore: TrueToFalse
         $data['responsive_stack_enable'] = \in_array(
             $responsive,
             [
@@ -1442,10 +1460,6 @@ class TablePressEntryCreator extends BaseEntryCreator
             return false;
         }
 
-        if (\is_bool($value)) {
-            return $value;
-        }
-
         // Normalize the string and numeric off-states TablePress writes
         return ! \in_array(
             \strtolower(\trim((string) $value)),
@@ -1597,8 +1611,14 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $collectionHandle,
         string $slug
     ): int {
-        // Create a typed query for collection and slug criteria
+        // ---
+        // Create a typed query for collection and slug criteria. Only the dotted slugs
+        // of #265 are counted, which no entry in any collection is stored under, so the
+        // collection criterion changes no count.
+        // ---
         $query = $this->makeEntryQuery();
+
+        // @pest-mutate-ignore: RemoveMethodCall
         $query->where(
             'collection',
             $collectionHandle
@@ -1608,9 +1628,13 @@ class TablePressEntryCreator extends BaseEntryCreator
             $slug
         );
 
-        // Normalize the count result to an integer
         $count = $query->count();
 
+        // ---
+        // The Stache query counts a collection of keys, so the result is always an
+        // integer and the fallback is for the type the builder declares
+        // ---
+        // @pest-mutate-ignore: DecrementInteger, IncrementInteger
         return \is_int($count) ? $count : 0;
     }
 }
