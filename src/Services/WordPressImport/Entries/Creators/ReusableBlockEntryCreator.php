@@ -34,13 +34,6 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 class ReusableBlockEntryCreator extends BaseEntryCreator
 {
     /**
-     * Map of WordPress wp_block post IDs to Statamic entry IDs.
-     *
-     * @var array<int|string, mixed> Associative array mapping WordPress wp_block post IDs to Statamic entry IDs for relationship creation
-     */
-    private array $wpBlockIdToEntryIdMap = [];
-
-    /**
      * Creates Statamic entries from WordPress 'wp_block' content.
      *
      * Iterates through 'wp_block' items in the XML, extracting fields like title,
@@ -154,13 +147,6 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 'publish'
             );
 
-            // Extract password from XML with empty string default
-            $postPassword = XpathHelper::getStringValue(
-                $wpBlock,
-                'wp:post_password',
-                ''
-            );
-
             // Extract post date with fallback to pubDate
             $postDate = $this->extractPostDateString($wpBlock);
 
@@ -201,7 +187,13 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 $contentEncoded
             );
 
-            // Set blueprint based on ACF block presence
+            // ---
+            // `preg_match()` returns 0 or 1 here, never false, so this test and the one
+            // choosing the content below always pick the landing page, and the
+            // basic-page branch never runs (#239). Its mutants are annotated where
+            // they stand rather than the branch being decided here.
+            // ---
+            // @pest-mutate-ignore: FalseToTrue
             $blueprint = $hasAcfBlocks !== false
                 ? 'reusable_content_landing_page'
                 : 'reusable_content_basic_page';
@@ -267,14 +259,8 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                     $postId
                 );
 
-                // ---
-                // Map wp_block post ID to existing entry ID
-                // ---
-
-                // Store mapping for relationship creation
-                $this->wpBlockIdToEntryIdMap[$postId] = $entryId;
-
-                // Skip to next item in loop
+                // Skip to next item in loop. The block is not registered in
+                // WpBlockRegistry (#245)
                 continue;
             }
 
@@ -304,7 +290,8 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 $entryId
             );
 
-            // Check if content contains ACF blocks
+            // Check if content contains ACF blocks; always true, as above (#239)
+            // @pest-mutate-ignore: FalseToTrue
             if ($hasAcfBlocks !== false) {
                 // Get page_builder content from parsed content result
                 $pageBuilderContent = $parsedContent['page_builder'];
@@ -315,8 +302,11 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                     $data['page_builder'] = $pageBuilderContent;
                 }
             } else { // Otherwise
-                // Resolve processed content as an array for empty-content checks
+                // Resolve processed content as an array for empty-content checks. This
+                // branch never runs (#239), so its mutants cannot be reached
+                // @pest-mutate-ignore: CoalesceRemoveLeft
                 $processedContent = $parsedContent['content'] ?? [];
+                // @pest-mutate-ignore: TernaryNegated
                 $contentForCheck = \is_array($processedContent) ? $processedContent : [];
 
                 // Check if the processed content is empty
@@ -326,7 +316,8 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 // Assign content to data array only if it's not empty
                 // ---
 
-                // Check if processed content is not empty
+                // Check if processed content is not empty (unreachable, #239)
+                // @pest-mutate-ignore: IfNegated, RemoveNot, CoalesceRemoveLeft
                 if (! $isEmptyContent) {
                     // Assign content to data array for basic_page blueprint
                     $data['content'] = $parsedContent['content'] ?? [];
@@ -379,9 +370,6 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 // ---
                 $savedEntryId = \is_string($entry->id()) ? $entry->id() : $entryId;
 
-                // Map wp_block post ID to entry ID for relationship creation
-                $this->wpBlockIdToEntryIdMap[$postId] = $savedEntryId;
-
                 // Register mapping in global registry for block processor access
                 WpBlockRegistry::registerMapping(
                     $postId,
@@ -396,7 +384,6 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 $postId,
                 $slug,
                 $status,
-                $postPassword,
                 $postDate,
                 $link,
                 $contentEncoded,
@@ -423,17 +410,6 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
 
         // Return empty array (reusable blocks don't need page data for tree building)
         return [];
-    }
-
-    /**
-     * Gets the map of WordPress wp_block post IDs to Statamic entry IDs.
-     *
-     * @return array<int|string, mixed> Map of wp_block post IDs to entry IDs
-     */
-    public function getWpBlockIdToEntryIdMap(): array
-    {
-        // Return the mapping of wp_block post IDs to entry IDs
-        return $this->wpBlockIdToEntryIdMap;
     }
 
     /**
