@@ -158,15 +158,12 @@ class MetadataSetter
      * blanket filter silently dropped it. Pre-existing extras therefore pass through
      * untouched, exactly as before this change.
      *
-     * A blueprint that cannot be resolved is treated as permissive, matching the
-     * defensive `method_exists` checks in `BaseEntryCreator`.
-     *
-     * @param  object  $asset  The asset whose blueprint gates the handles
+     * @param  StatamicAsset  $asset  The asset whose blueprint gates the handles
      * @param  array<int|string, mixed>  $metadata  Caller-supplied metadata
      * @return array<int|string, mixed> Metadata limited to handles the blueprint defines
      */
     private function filterToBlueprintFields(
-        object $asset,
+        StatamicAsset $asset,
         array $metadata
     ): array {
         // ---
@@ -184,26 +181,18 @@ class MetadataSetter
             return $metadata;
         }
 
-        // Resolve the blueprint, tolerating an asset implementation without one
-        $blueprint = \method_exists($asset, 'blueprint')
-            ? $asset->blueprint()
-            : null;
-
-        // Treat an unresolvable blueprint as permissive rather than dropping everything
-        if (
-            ! \is_object($blueprint)
-            || ! \method_exists($blueprint, 'hasField')
-        ) {
-            return $metadata;
-        }
+        // Resolve the blueprint of the asset's container
+        $blueprint = $asset->blueprint();
 
         // Drop only a gated handle the container does not define; pass the rest through
-        return \array_filter(
-            $metadata,
-            static fn (int|string $handle): bool => ! \in_array((string) $handle, $gatedHandles, true)
-                || (bool) $blueprint->hasField((string) $handle),
-            \ARRAY_FILTER_USE_KEY
-        );
+        foreach ($gatedHandles as $handle) {
+            // Unsetting a handle the caller did not supply changes nothing
+            if ($blueprint->hasField($handle) !== true) {
+                unset($metadata[$handle]);
+            }
+        }
+
+        return $metadata;
     }
 
     /**
@@ -340,12 +329,8 @@ class MetadataSetter
         // Trim so a padded export value still stamps
         $trimmed = \trim($attachmentPageUrl);
 
-        // Reject an empty value
-        if ($trimmed === '') {
-            return null;
-        }
-
-        // Require an absolute http(s) URL, which a redirect target has to be
+        // Require an absolute http(s) URL, which a redirect target has to be. An
+        // empty value fails it too
         if (
             \preg_match(
                 '#^https?://[^\s"\'<>`\\\\]+$#i',
