@@ -791,3 +791,270 @@ describe('the content type\'s other answers', function (): void {
             ->and($output->fetch())->toBe('');
     });
 });
+
+describe('the sources a run reads', function (): void {
+    it('imports nothing, and fails nothing, for an export with no tables', function (): void {
+        $run = tablePressRun(tablePressExport([]));
+
+        expect($run['result'])->toBe([])
+            ->and(tablePressEntries())->toBe([])
+            ->and($run['output'])->toBe('');
+    });
+
+    it('imports only the tables handed to it, and skips a trashed one among them', function (): void {
+        $export = tablePressExport([
+            ['id' => '620', 'meta' => tablePressMeta()],
+            ['id' => '621', 'status' => 'trash', 'meta' => tablePressMeta(['_tablepress_export_table_id' => '13'])],
+            ['id' => '622', 'meta' => tablePressMeta(['_tablepress_export_table_id' => '14'])],
+        ]);
+        $xml = \simplexml_load_file($export);
+        $found = $xml instanceof SimpleXMLElement ? $xml->xpath('//item') : null;
+        $items = \is_array($found) ? $found : [];
+        $parser = new XmlParser;
+        $parser->parse($export);
+        $parser->setItems(\array_slice($items, 1));
+
+        $run = tablePressRun($export, parser: $parser);
+
+        expect(\array_keys(tablePressEntries()))->toBe(['default_tablepress-14'])
+            ->and(\array_keys($run['result']))->toBe([622]);
+    });
+
+    it('reads the first export id when a table carries two', function (): void {
+        tablePressRun(tablePressExport([['meta' => [
+            '_tablepress_export_table_id' => '12',
+            '_tablepress_export_table_id ' => 'x',
+        ]]]));
+        tablePressRun(tablePressExport([['id' => '623', 'meta' => [
+            '_tablepress_export_table_id' => '15',
+        ]]]));
+        $export = TemporaryFileRegistry::create('tablepress-two-ids');
+        \file_put_contents($export, \str_replace(
+            '<wp:postmeta><wp:meta_key>_tablepress_export_table_id</wp:meta_key><wp:meta_value><![CDATA[16]]></wp:meta_value></wp:postmeta>',
+            '<wp:postmeta><wp:meta_key>_tablepress_export_table_id</wp:meta_key><wp:meta_value><![CDATA[16]]></wp:meta_value></wp:postmeta><wp:postmeta><wp:meta_key>_tablepress_export_table_id</wp:meta_key><wp:meta_value><![CDATA[17]]></wp:meta_value></wp:postmeta>',
+            (string) \file_get_contents(tablePressExport([['id' => '624', 'meta' => ['_tablepress_export_table_id' => '16']]]))
+        ));
+
+        tablePressRun($export);
+
+        expect(tablePressEntries())->toHaveKey('default_tablepress-16')
+            ->not->toHaveKey('default_tablepress-17');
+    });
+});
+
+describe('the defaults and the description', function (): void {
+    it('writes the blueprint defaults for a table with no options', function (): void {
+        tablePressRun(tablePressExport([['meta' => tablePressMeta()]]));
+        $data = tablePressData(tablePressEntry('default_tablepress-12'));
+
+        expect(\array_intersect_key($data, \array_flip(['first_row_headers', 'first_column_headers', 'fixed_width_table_cells', 'sorting_enable', 'search_enable', 'pagination_enable', 'info_enable', 'horizontal_scroll_enable'])))->toBe([
+            'first_row_headers' => true,
+            'first_column_headers' => false,
+            'fixed_width_table_cells' => false,
+            'sorting_enable' => false,
+            'search_enable' => false,
+            'pagination_enable' => false,
+            'info_enable' => false,
+            'horizontal_scroll_enable' => true,
+        ]);
+    });
+
+    it('keeps only paragraphs and text in the description, decoding entities twice', function (string $excerpt, mixed $expected): void {
+        tablePressRun(tablePressExport([['excerpt' => $excerpt, 'meta' => tablePressMeta()]]));
+
+        expect(tablePressEntry('default_tablepress-12')->get('description'))->toBe($expected);
+    })->with([
+        'bold text' => ['<p>Plain <strong>bold</strong></p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Plain bold']]]]],
+        'a double-encoded quote' => ['<p>Say &AMP;quot;hi&AMP;quot;</p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Say "hi"']]]]],
+        'only a comment' => ['<!-- note -->', null],
+        'only whitespace' => [" \n ", null],
+    ]);
+});
+
+describe('the warnings a table raises', function (): void {
+    it('raises no table-data warning for a table with no content', function (): void {
+        $warnings = tablePressWarnings();
+
+        tablePressRun(tablePressExport([['content' => '', 'meta' => tablePressMeta()]]));
+
+        expect(tablePressMessages($warnings))->toBe([]);
+    });
+
+    it('quotes the first 100 bytes of a payload that does not parse, and the offset where it broke', function (): void {
+        $warnings = tablePressWarnings();
+        $payload = '[["a " b"]]'.\str_repeat(' ', 120);
+
+        tablePressRun(tablePressExport([['id' => '625', 'content' => $payload, 'meta' => tablePressMeta()]]));
+
+        expect(tablePressMessages($warnings))->toBe(["TablePressEntryCreator::createEntries: Invalid table data JSON for table 'default_tablepress-12' (ID: 625): Syntax error at byte offset 7 (from entry: https://example.test/tables/625/)"])
+            ->and($warnings[0][1] ?? null)->toMatchArray(['content' => \substr($payload, 0, 100).'...', 'json_error_offset' => 7]);
+    });
+
+    it('adds a header row as wide as the first row', function (): void {
+        tablePressRun(tablePressExport([['content' => '[["a","b","c"],["d"]]', 'meta' => tablePressMeta(['_tablepress_table_options' => '{"table_head":false}'])]]));
+
+        expect(tablePressEntry('default_tablepress-12')->get('table_data'))->toBe([['cells' => [null, null, null]], ['cells' => ['a', 'b', 'c']], ['cells' => ['d']]]);
+    });
+
+    it('logs a filter that hides one row and no column, or one column and no row, measured from the first row', function (string $visibility, array $expected): void {
+        $infos = new ArrayObject;
+        Log::shouldReceive('info')->andReturnUsing(static function (mixed $message, mixed $context = []) use ($infos): void {
+            $infos->append($context);
+        });
+
+        tablePressRun(tablePressExport([['content' => '[["a","b","c"],["d","e"]]', 'meta' => tablePressMeta(['_tablepress_table_visibility' => $visibility])]]));
+
+        expect($infos->getArrayCopy())->toBe([$expected]);
+    })->with([
+        'one row' => ['{"rows":[1,0],"columns":[1,1,1]}', ['original_dimensions' => '2x3', 'filtered_dimensions' => '1x3', 'hidden_rows' => 1, 'hidden_columns' => 0]],
+        'one column' => ['{"rows":[1,1],"columns":[1,1,0]}', ['original_dimensions' => '2x3', 'filtered_dimensions' => '2x2', 'hidden_rows' => 0, 'hidden_columns' => 1]],
+    ]);
+});
+
+describe('saving rules', function (): void {
+    it('saves a table for the site it imports into', function (): void {
+        Site::setSites([
+            'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+            'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
+        ]);
+        $collection = CollectionFacade::find('tables');
+        $collection?->sites(['default', 'other']);
+        $collection?->save();
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+
+        $entry = $method->invoke(new TablePressEntryCreator, 'tables', 'other', 'other_tablepress-1', ['id' => 'other_tablepress-1-9-x'], new BufferedOutput);
+
+        expect($entry instanceof Entry ? $entry->locale() : null)->toBe('other');
+    });
+
+    it('replaces a table that already exists by id under a new slug', function (): void {
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+        $creator = new TablePressEntryCreator;
+        $method->invoke($creator, 'tables', 'default', 'first-slug', ['id' => 'same-id', 'title' => 'First'], new BufferedOutput);
+
+        $method->invoke($creator, 'tables', 'default', 'second-slug', ['id' => 'same-id', 'title' => 'Second'], new BufferedOutput);
+        $entries = tablePressEntries();
+
+        expect(\array_keys($entries))->toBe(['second-slug'])
+            ->and($entries['second-slug']->get('title'))->toBe('Second');
+    });
+
+    it('leaves an entry in another collection with the same slug alone', function (): void {
+        $otherBlueprint = BlueprintFacade::make('other_item');
+        $otherBlueprint->setNamespace('collections.other_items');
+        $otherBlueprint->setContents(['fields' => [['handle' => 'title', 'field' => ['type' => 'text']]]]);
+        $otherBlueprint->save();
+        $other = CollectionFacade::make('other_items');
+        $other->sites(['default']);
+        $other->save();
+        $otherEntry = new Entry;
+        $otherEntry->collection('other_items');
+        $otherEntry->locale('default');
+        $otherEntry->slug('default_tablepress-12');
+        $otherEntry->id('other-id');
+        $otherEntry->save();
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+
+        $method->invoke(new TablePressEntryCreator, 'tables', 'default', 'default_tablepress-12', ['id' => 'shared-id'], new BufferedOutput);
+
+        expect(EntryFacade::find('other-id'))->toBeInstanceOf(Entry::class);
+
+        BlueprintFacade::find('collections.other_items.other_item')?->delete();
+    });
+
+    it('gives an additional copy\'s data a fresh id built from its slug', function (): void {
+        $export = tablePressExport([['meta' => tablePressMeta()]]);
+        tablePressRun($export);
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior('Create an additional file');
+        tablePressRun($export, $creator);
+        $ids = [];
+
+        foreach (EntryFacade::all() as $entry) {
+            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables' && tablePressSlug($entry) === 'default_tablepress-121') {
+                $ids[] = $entry->get('id');
+            }
+        }
+
+        expect($ids)->toHaveCount(1)
+            ->and(\is_string($ids[0] ?? null) ? $ids[0] : '')->toMatch('/^default_tablepress-12\.1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
+    });
+});
+
+describe('dating rules', function (): void {
+    beforeEach(function (): void {
+        tablePressCollection(dated: true);
+    });
+
+    it('keeps the date it is given in a dated collection', function (): void {
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+
+        $entry = $method->invoke(new TablePressEntryCreator, 'tables', 'default', 'given', ['id' => 'given-1'], new BufferedOutput, new DateTime('2030-01-02 03:04:05'), null, '2024-01-01 00:00:00');
+
+        expect($entry instanceof Entry ? tablePressDate($entry)?->format('Y-m-d H:i:s') : null)->toBe('2030-01-02 03:04:05');
+    });
+
+    it('dates a table now when it has no post date', function (?string $postDate): void {
+        $before = \time();
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+
+        $entry = $method->invoke(new TablePressEntryCreator, 'tables', 'default', 'undated', ['id' => 'undated-1'], new BufferedOutput, null, null, $postDate);
+
+        expect($entry instanceof Entry ? tablePressDate($entry)?->getTimestamp() : null)->toBeGreaterThanOrEqual($before - 1);
+    })->with([
+        'none' => [null],
+        'blank' => [''],
+    ]);
+
+    it('records the parse error for a post date it cannot read', function (): void {
+        $warnings = tablePressWarnings();
+        $method = new ReflectionMethod(TablePressEntryCreator::class, 'saveEntry');
+
+        $method->invoke(new TablePressEntryCreator, 'tables', 'default', 'bad-date', ['id' => 'bad-date-1'], new BufferedOutput, null, null, 'not a date');
+
+        expect(\is_array($warnings[0][1] ?? null) ? ($warnings[0][1]['error'] ?? null) : null)->toBeString()->toContain('not a date');
+    });
+});
+
+describe('mapping options and reporting Premium features', function (): void {
+    it('reports a Premium feature with its reason, and no table when none is named', function (): void {
+        (new TablePressEntryCreator)->mapTableOptions(['filter' => 'x']);
+
+        expect(ImportWarningManager::getWarnings('content', 'unsupported_table_features'))->toBe([[
+            'table_slug' => '',
+            'post_id' => '',
+            'option' => 'filter',
+            'feature' => 'Row Filtering',
+            'reason' => 'The TablePress Premium "Row Filtering" feature has no field on the Statamic table, so it was not imported and needs a manual port.',
+        ]]);
+    });
+
+    it('reports a responsive mode the mapping did not carry, in full', function (string $mode): void {
+        (new TablePressEntryCreator)->warnUnsupportedPremiumFeatures(['responsive' => $mode], [], 'slug-1', '42');
+
+        expect(ImportWarningManager::getWarnings('content', 'unsupported_table_features'))->toBe([[
+            'table_slug' => 'slug-1',
+            'post_id' => '42',
+            'option' => 'responsive',
+            'feature' => "Responsive Tables ({$mode} mode)",
+            'reason' => 'The Statamic table offers stacking and horizontal scrolling only, so this responsive mode was not imported and needs a manual port.',
+        ]]);
+    })->with(['modal', 'scroll']);
+
+    it('reads FALSE and 0.0 as a gate\'s off and on states the way TablePress writes them', function (string $value, int $warnings): void {
+        (new TablePressEntryCreator)->mapTableOptions(['filter' => $value]);
+        expect(ImportWarningManager::getWarnings('content', 'unsupported_table_features'))->toHaveCount($warnings);
+    })->with([
+        'an upper-case false' => ['FALSE', 0],
+        'a decimal zero' => ['0.0', 1],
+    ]);
+
+    it('falls back to ten rows a page for a count that is absent or not digits', function (array $options): void {
+        $mapped = (new TablePressEntryCreator)->mapTableOptions(['use_datatables' => true, 'datatables_paginate' => true, ...$options]);
+
+        expect($mapped['pagination_count'] ?? null)->toBe(10);
+    })->with([
+        'absent' => [[]],
+        'not digits' => [['datatables_paginate_entries' => 'abc']],
+    ]);
+});
