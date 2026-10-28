@@ -29,6 +29,7 @@ use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
@@ -264,6 +265,7 @@ function peopleEntryExport(array $people, string $postType = 'uamspeople'): stri
         $title = peopleEntryField($person, 'title', "Person {$postId}");
         $status = peopleEntryField($person, 'status', 'publish');
         $content = peopleEntryField($person, 'content', '<p>Bio.</p>');
+        $date = peopleEntryField($person, 'date', '2025-04-01 09:00:00');
         $groups = '';
 
         foreach (peopleEntryFields($person, 'groups') as $nicename => $name) {
@@ -283,7 +285,7 @@ function peopleEntryExport(array $people, string $postType = 'uamspeople'): stri
   <content:encoded><![CDATA[{$content}]]></content:encoded>
   <wp:post_id>{$postId}</wp:post_id>
   <wp:post_name>{$slug}</wp:post_name>
-  <wp:post_date>2025-04-01 09:00:00</wp:post_date>
+  <wp:post_date>{$date}</wp:post_date>
   <wp:post_modified>2025-04-02 10:00:00</wp:post_modified>
   <wp:status>{$status}</wp:status>
   <wp:post_parent>0</wp:post_parent>
@@ -325,14 +327,89 @@ XML);
 }
 
 /**
+ * An asset importer with uploads on, which records each import and returns a chosen path.
+ */
+final class PeopleEntryTestImporter extends AssetImporter
+{
+    /**
+     * The URL, site and container of each import.
+     *
+     * @var list<array{0: string, 1: string, 2: string}>
+     */
+    public array $imports = [];
+
+    /**
+     * Build the importer.
+     *
+     * @param  string  $path  What every import returns
+     */
+    public function __construct(
+        private readonly string $path
+    ) {
+        parent::__construct();
+    }
+
+    /**
+     * Report image uploads as on.
+     *
+     * @return bool Always true
+     */
+    public function getUploadImages(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Report file uploads as on.
+     *
+     * @return bool Always true
+     */
+    public function getUploadFiles(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Record the import and return the chosen path.
+     *
+     * @param  string  $url  The file URL
+     * @param  string  $site  The site handle
+     * @param  OutputInterface  $output  Console output
+     * @param  string  $container  The container handle
+     * @param  SameSitePolicy  $sameSitePolicy  The same-site policy
+     * @param  ?string  $pageUrl  The page URL
+     * @param  ?string  $title  The title
+     * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra metadata
+     * @param  ?string  $attachmentPageUrl  The attachment page URL
+     * @return string The chosen path
+     */
+    public function importFile(
+        string $url,
+        string $site,
+        OutputInterface $output,
+        string $container = 'files',
+        SameSitePolicy $sameSitePolicy = SameSitePolicy::SKIP_DIFFERENT_SITE,
+        ?string $pageUrl = null,
+        ?string $title = null,
+        ?array $additionalFileMetadata = null,
+        ?string $attachmentPageUrl = null
+    ): string {
+        $this->imports[] = [$url, $site, $container];
+
+        return $this->path;
+    }
+}
+
+/**
  * Run the creator over an export.
  *
  * @param  string  $export  The export path
  * @param  PeopleEntryTestConverter  $converter  The bio converter
  * @param  ?PeopleEntryCreator  $creator  The creator, or null for a new recording one
+ * @param  ?AssetImporter  $assetImporter  The asset importer, or null for a new one
  * @return array{output: string, result: array<int|string, mixed>, mapper: PeopleEntryTestMapper, creator: PeopleEntryCreator} What the run produced
  */
-function peopleEntryRun(string $export, PeopleEntryTestConverter $converter, ?PeopleEntryCreator $creator = null): array
+function peopleEntryRun(string $export, PeopleEntryTestConverter $converter, ?PeopleEntryCreator $creator = null, ?AssetImporter $assetImporter = null): array
 {
     $parser = new XmlParser;
     $parser->parse($export);
@@ -340,7 +417,7 @@ function peopleEntryRun(string $export, PeopleEntryTestConverter $converter, ?Pe
     $creator ??= new PeopleEntryTestCreator;
     $mapper = new PeopleEntryTestMapper;
 
-    $result = $creator->createEntries('default', 'people', $parser, new AssetImporter, $output, $mapper, $converter);
+    $result = $creator->createEntries('default', 'people', $parser, $assetImporter ?? new AssetImporter, $output, $mapper, $converter);
 
     return ['output' => $output->fetch(), 'result' => $result, 'mapper' => $mapper, 'creator' => $creator];
 }
@@ -614,7 +691,11 @@ describe('importing a person', function (): void {
     it('lands a Vimeo URL when there is no YouTube one, and ignores blank video keys', function (array $meta, ?string $expected): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'video', 'meta' => $meta]]), PeopleEntryTestConverter::returning(peopleEntryBody()));
 
-        expect(peopleEntry('video')->get('institutional_video_url'))->toBe($expected);
+        $entry = peopleEntry('video');
+
+        expect($entry->get('institutional_video_url'))->toBe($expected)
+            ->and($entry->get('import_wordpress_notes'))->toBe($expected === null ? null : 'Video imported to the Institutional context; WordPress recorded no '
+                .'academic, clinical, institutional or research context for it.');
     })->with([
         'only Vimeo' => [['_psvimeo' => 'https://vimeo.test/v'], 'https://vimeo.test/v'],
         'a blank YouTube beside Vimeo' => [['_psyoutube' => '', '_psvimeo' => 'https://vimeo.test/v'], 'https://vimeo.test/v'],
@@ -681,14 +762,18 @@ describe('people groups', function (): void {
             ['site_specific' => 'default_alpha', 'original' => '', 'name' => ''],
             ['site_specific' => '', 'original' => 'beta', 'name' => 'Beta'],
             ['site_specific' => 'default_alpha', 'original' => 'alpha', 'name' => ''],
+            ['site_specific' => 'other_alpha', 'original' => 'alpha', 'name' => 'Alpha'],
         ]);
 
         expect($creator->getPeopleGroups())->toBe([
             'default_alpha' => [['page_slug' => 'people-entries', 'original' => 'default_alpha', 'name' => 'default_alpha', 'site_specific' => 'default_alpha']],
             'beta' => [['page_slug' => 'people-entries', 'original' => 'beta', 'name' => 'Beta', 'site_specific' => '']],
-            'alpha' => [['page_slug' => 'people-entries', 'original' => 'alpha', 'name' => 'alpha', 'site_specific' => 'default_alpha']],
+            'alpha' => [
+                ['page_slug' => 'people-entries', 'original' => 'alpha', 'name' => 'alpha', 'site_specific' => 'default_alpha'],
+                ['page_slug' => 'people-entries', 'original' => 'alpha', 'name' => 'Alpha', 'site_specific' => 'other_alpha'],
+            ],
         ])
-            ->and(\array_values($creator->getSiteSpecificPeopleGroupSlugs()))->toBe(['default_alpha']);
+            ->and(\array_values($creator->getSiteSpecificPeopleGroupSlugs()))->toBe(['default_alpha', 'other_alpha']);
     });
 });
 
@@ -767,5 +852,78 @@ describe('creating flat terms', function (): void {
         'uamspeople' => ['uamspeople-categories', []],
         'tshowcase' => ['tshowcase-categories', []],
         'another handle' => ['flat_terms', ["BaseEntryCreator::createTaxonomyTermsFromStoredData - Taxonomy 'flat_terms' does not exist"]],
+    ]);
+});
+
+describe('what else reaches the entry', function (): void {
+    it('decodes the title twice, so a double-encoded entity comes out as its character', function (): void {
+        peopleEntryRun(peopleEntryExport([['slug' => 'quoted', 'title' => 'Say &AMP;quot;hi&AMP;quot;']]), PeopleEntryTestConverter::returning(peopleEntryBody()));
+
+        expect(peopleEntry('quoted')->get('title'))->toBe('Say "hi"');
+    });
+
+    it('stores no date string for a scheduled person, whose entry carries its date', function (): void {
+        $blueprint = BlueprintFacade::find('collections.people.person');
+
+        if (! $blueprint instanceof Blueprint) {
+            throw new RuntimeException('No person blueprint.');
+        }
+
+        $blueprint->setContents(['fields' => [
+            ['handle' => 'title', 'field' => ['type' => 'text']],
+            ['handle' => 'status_and_visibility', 'field' => ['type' => 'text']],
+        ]]);
+        $blueprint->save();
+
+        peopleEntryRun(peopleEntryExport([['slug' => 'scheduled', 'status' => 'future', 'date' => '2099-01-01 09:00:00']]), PeopleEntryTestConverter::returning(peopleEntryBody()));
+
+        expect(peopleEntryData(peopleEntry('scheduled')))->not->toHaveKey('date');
+    });
+
+    it('imports the portrait to the root of the portraits container, keeping only its file name', function (string $path, ?string $expected): void {
+        $importer = new PeopleEntryTestImporter($path);
+
+        peopleEntryRun(peopleEntryExport([['slug' => 'pictured', 'meta' => ['_thumbnail_id' => '900']]]), PeopleEntryTestConverter::returning(peopleEntryBody()), assetImporter: $importer);
+
+        expect($importer->imports)->toBe([['https://example.test/wp-content/uploads/2025/04/portrait.jpg', '', 'portraits']])
+            ->and(peopleEntryData(peopleEntry('pictured')))->toHaveKey('portrait', $expected);
+    })->with([
+        'a path' => ['2025/04/portrait-1.jpg', 'portrait-1.jpg'],
+        'an empty path' => ['', null],
+    ]);
+
+    it('keeps two records for a group whose names differ only as numbers', function (): void {
+        $run = peopleEntryRun(peopleEntryExport([
+            ['slug' => 'one', 'groups' => ['numbered' => '10']],
+            ['slug' => 'two', 'groups' => ['numbered' => '1e1']],
+        ]), PeopleEntryTestConverter::returning(peopleEntryBody()));
+
+        expect($run['creator']->getPeopleGroups())->toBe(['numbered' => [
+            ['page_slug' => 'people-entries', 'original' => 'numbered', 'name' => '10', 'site_specific' => 'default_numbered'],
+            ['page_slug' => 'people-entries', 'original' => 'numbered', 'name' => '1e1', 'site_specific' => 'default_numbered'],
+        ]]);
+    });
+
+});
+
+describe('landing a person video', function (): void {
+    it('names an untitled person in the link text', function (array $data): void {
+        (new PeopleEntryCreator)->applyPersonVideo($data, 'https://youtube.test/v', null);
+
+        expect($data['institutional_video_link_text'] ?? null)->toBe('Video Referencing Untitled Person');
+    })->with([
+        'no title' => [[]],
+        'a blank title' => [['title' => '']],
+    ]);
+
+    it('extends a note already recorded, and replaces a blank one', function (string $existing, string $expected): void {
+        $data = ['title' => 'Pat', 'import_wordpress_notes' => $existing];
+
+        (new PeopleEntryCreator)->applyPersonVideo($data, null, 'https://vimeo.test/v');
+
+        expect($data['import_wordpress_notes'] ?? null)->toBe($expected);
+    })->with([
+        'an earlier note' => ['Earlier.', 'Earlier. Video imported to the Institutional context; WordPress recorded no academic, clinical, institutional or research context for it.'],
+        'a blank note' => ['', 'Video imported to the Institutional context; WordPress recorded no academic, clinical, institutional or research context for it.'],
     ]);
 });
