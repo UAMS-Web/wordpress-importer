@@ -115,15 +115,20 @@ class PostEntryCreator extends BaseEntryCreator
         $remaining = $categories;
         $position = \array_search($primaryNicename, $remaining, true);
 
-        // Remove only that entry so a duplicate nicename is not swallowed
+        // ---
+        // Remove only that entry so a duplicate nicename is not swallowed. The strict
+        // in_array() above means the search always finds it, so `false` never arrives;
+        // the guard is for the type, which unset() would otherwise index with a bool.
+        // ---
+        // @pest-mutate-ignore: FalseToTrue
         if ($position !== false) {
             unset($remaining[$position]);
         }
 
-        // Re-key so the result serializes as a list rather than a map
+        // Spreading re-keys the integer keys, so the result is a list rather than a map
         return [
             $primaryNicename,
-            ...\array_values($remaining),
+            ...$remaining,
         ];
     }
 
@@ -296,9 +301,6 @@ class PostEntryCreator extends BaseEntryCreator
             $site,
             $output
         );
-
-        // Initialize array to track slug usage counts for uniqueness
-        $slugCounts = [];
 
         // Open a streaming parser spanning every part. A source that can serve
         // none raises rather than importing nothing and reporting success (wordpress-importer-archive#662).
@@ -952,7 +954,6 @@ class PostEntryCreator extends BaseEntryCreator
 
         // Clean up variables to free up memory
         unset(
-            $slugCounts,
             $attachments,
             $audioSeriesConfig
         );
