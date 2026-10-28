@@ -205,6 +205,11 @@ class PostEntryCreator extends BaseEntryCreator
                 continue;
             }
 
+            // ---
+            // The registry builds its key by interpolation, so an int id and its string
+            // form find the same destination; the cast only narrows the type.
+            // ---
+            // @pest-mutate-ignore: RemoveStringCast
             $entryId = TermDestinationRegistry::referenceFor(
                 $wordpressTaxonomy,
                 (string) $termId
@@ -712,13 +717,11 @@ class PostEntryCreator extends BaseEntryCreator
                 'wp:postmeta[wp:meta_key="_thumbnail_id"]/wp:meta_value'
             );
 
-            // Store thumbnail ID in entry data for block processors
-            if ($thumbnailId !== '') {
-                $data['_thumbnail_id'] = $thumbnailId;
-            }
-
             // Check if a featured image thumbnail ID exists
             if ($thumbnailId !== '') {
+                // Store thumbnail ID in entry data for block processors
+                $data['_thumbnail_id'] = $thumbnailId;
+
                 // Import the featured image file with graceful handling for disabled uploads
                 $featuredImagePath = FileProcessor::importFileFromAttachmentWithDisabledUploadHandling(
                     $thumbnailId,

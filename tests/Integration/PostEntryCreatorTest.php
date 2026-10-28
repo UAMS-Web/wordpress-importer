@@ -830,6 +830,14 @@ describe('ordering categories primary first', function (): void {
         expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['a', 'b'], $primary, ['a' => '1', 'b' => $primary]))->toBe(['a', 'b']);
     })->with(['blank' => [''], 'zero' => ['0']]);
 
+    it('keeps document order when the primary is unknown, even with a blank nicename in the list', function (): void {
+        expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['a', ''], '9', ['a' => '1']))->toBe(['a', '']);
+    });
+
+    it('keeps document order when the post carries only a nicename equal to the primary\'s as a number', function (): void {
+        expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['01'], '6', ['01' => '5', '1.0' => '6']))->toBe(['01']);
+    });
+
     it('moves only the primary when two nicenames compare equal as numbers', function (): void {
         expect((new PostEntryCreator)->orderCategoriesPrimaryFirst(['01', '1.0'], '6', ['01' => '5', '1.0' => '6']))->toBe(['1.0', '01']);
     });
@@ -852,7 +860,7 @@ describe('resolving term entry references', function (): void {
         TermDestinationRegistry::registerCollectionEntry('category', '7', 'post_categories', '');
         TermDestinationRegistry::registerCollectionEntry('category', '8', 'post_categories', 'entry-eight');
 
-        expect((new PostEntryCreator)->resolveTermEntryReferences('category', ['blank', 'empty', 'eight'], ['blank' => '', 'empty' => '7', 'eight' => '8']))
+        expect((new PostEntryCreator)->resolveTermEntryReferences('category', ['blank', 'false', 'empty', 'eight'], ['blank' => '', 'false' => false, 'empty' => '7', 'eight' => '8']))
             ->toBe(['entry-eight']);
     });
 
