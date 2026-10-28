@@ -86,6 +86,8 @@ final class TaxonomyNavigationResolver
         // `<wp:term>` carries every taxonomy except the two WordPress built-ins.
         // ---
         foreach ($xmlParser->getTerms() as $term) {
+            // The parser answers with elements only, so this only narrows the type for phpstan
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof SimpleXMLElement) {
                 continue;
             }
@@ -95,6 +97,9 @@ final class TaxonomyNavigationResolver
                 'wp:term_taxonomy'
             );
 
+            // Taxonomy handles are strings, so in_array()'s strict flag, which phpstan-strict-rules
+            // requires, changes no result
+            // @pest-mutate-ignore: TrueToFalse
             if (! \in_array($taxonomy, $structured, true)) {
                 continue;
             }
@@ -115,8 +120,13 @@ final class TaxonomyNavigationResolver
         // would lose the fallback on nearly every real export (the same trap
         // `wordpress-importer-archive#441` fixed for the term maps).
         // ---
+        // Taxonomy handles are strings, so in_array()'s strict flag, which phpstan-strict-rules
+        // requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         if (\in_array('category', $structured, true)) {
             foreach ($xmlParser->getCategories() as $category) {
+                // The parser answers with elements only, so this only narrows the type for phpstan
+                // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
                 if (! $category instanceof SimpleXMLElement) {
                     continue;
                 }
@@ -135,8 +145,13 @@ final class TaxonomyNavigationResolver
         // `<wp:tag_slug>`, the same trap as categories. It needs this branch now
         // that tags import into a collection (wordpress-importer-archive#1220).
         // ---
+        // Taxonomy handles are strings, so in_array()'s strict flag, which phpstan-strict-rules
+        // requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         if (\in_array('post_tag', $structured, true)) {
             foreach ($xmlParser->getTags() as $tag) {
+                // The parser answers with elements only, so this only narrows the type for phpstan
+                // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
                 if (! $tag instanceof SimpleXMLElement) {
                     continue;
                 }
@@ -302,7 +317,9 @@ final class TaxonomyNavigationResolver
             'taxonomy'
         );
 
+        // Every structured taxonomy maps to a handle, so this only narrows the type for phpstan
         if ($collectionHandle === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return TaxonomyNavigationDestination::skipped(
                 'no_statamic_destination',
                 "'{$wordpressTaxonomy}' is recorded as structured but maps to no Statamic handle."
@@ -341,7 +358,9 @@ final class TaxonomyNavigationResolver
         string $termId,
         string $slug
     ): void {
-        if ($termId === '' || $slug === '') {
+        // A term with no slug names no entry. One with no id is never looked up, since a menu
+        // item with no term id stops at the incomplete check in resolve().
+        if ($slug === '') {
             return;
         }
 
@@ -383,8 +402,7 @@ final class TaxonomyNavigationResolver
             ? $entry->id()
             : null;
 
-        return \is_string($entryId) && $entryId !== ''
-            ? $entryId
-            : null;
+        // A saved entry always has an id
+        return \is_string($entryId) ? $entryId : null;
     }
 }
