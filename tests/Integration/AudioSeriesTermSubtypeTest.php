@@ -13,7 +13,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * Tests that `AudioSeriesManager` writes the series kind onto the terms it creates
  * (issue wordpress-importer-archive#443).
  *
- * `UAMS-Web/uams-statamic#1611` folded podcast into `audio_series` as a
+ * `UAMS-Web/uams-statamic-archive#1611` folded podcast into `audio_series` as a
  * multi-select `subtype`. The shared `audio` blueprint gates its podcast-episode
  * fields and the `PodcastEpisode` / `PodcastSeries` JSON-LD on that value, so a
  * term created WITHOUT one — which is what the importer did — is silently treated

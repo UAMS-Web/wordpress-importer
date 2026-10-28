@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Tests the shape of each redirect row the importer writes.
  *
- * `UAMS-Web/uams-statamic#1357` added an approval gate to the Statamic
+ * `UAMS-Web/uams-statamic-archive#1357` added an approval gate to the Statamic
  * `redirects` serving path: a row serves only when its `status` is `approved`,
  * checked beside the existing per-row `enabled` flag. WordPress `redirect_rule`
  * posts are already-live, trusted redirects, so they are stamped approved on

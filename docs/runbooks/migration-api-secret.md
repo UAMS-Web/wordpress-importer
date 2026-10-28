@@ -70,7 +70,7 @@ define( 'UAMSWP_MIGRATION_API_SECRET', '<generated value>' );
 
 **The importer stores no credential and no address.** Decided on wordpress-importer-archive#982: an operator starting a run pastes the network's address and that network's key when the command asks, and neither survives the process. So there is no second half to place, no `.env` line to add, and nothing to keep in step with the WordPress side.
 
-`UAMSWP_MIGRATION_API_URL` and `UAMSWP_MIGRATION_API_SECRET` still exist in `uams-statamic`'s committed `config/wordpress-import.php` and are read by nothing. Removing them is that repository's change, tracked as `UAMS-Web/uams-statamic#2358`; setting them here does nothing.
+`UAMSWP_MIGRATION_API_URL` and `UAMSWP_MIGRATION_API_SECRET` still exist in `uams-statamic`'s committed `config/wordpress-import.php` and are read by nothing. Removing them is that repository's change, tracked as `UAMS-Web/uams-statamic-archive#2358`; setting them here does nothing.
 
 The one value still read from configuration is the page size, which is neither a credential nor a network identity:
 

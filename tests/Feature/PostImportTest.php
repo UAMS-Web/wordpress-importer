@@ -279,7 +279,7 @@ it('handles site-specific taxonomy and category mapping', function (): void {
 
     // ---
     // The `news` category imports as an ENTRY in the `post_categories`
-    // collection, not as a taxonomy term. `UAMS-Web/uams-statamic#1433` migrated
+    // collection, not as a taxonomy term. `UAMS-Web/uams-statamic-archive#1433` migrated
     // that destination and repointed the `posts` field to an `entries` picker, so
     // the term pass records where each category landed and the post references
     // that entry id (wordpress-importer-archive#422).
@@ -340,7 +340,7 @@ it('handles site-specific taxonomy and category mapping', function (): void {
         ->and($importedPost->get('post_tag'))->toBeNull();
 
     // ---
-    // Tags followed categories: `UAMS-Web/uams-statamic#2532` made `post_tags`
+    // Tags followed categories: `UAMS-Web/uams-statamic-archive#2532` made `post_tags`
     // a site-scoped collection, so the tag imports as an entry on this site with
     // its plain slug and name, and the post references that entry id (wordpress-importer-archive#1220).
     // `postGetCategoryTermsXml()` declares the `lorem-ipsum` tag as term id 5.
@@ -1721,7 +1721,7 @@ https://vimeo.com/336892869
                 'attrs' => [
                     'id' => '#rowId(8)',
                     'values' => [
-                        // `UAMS-Web/uams-statamic#589` retired the `video` set for
+                        // `UAMS-Web/uams-statamic-archive#589` retired the `video` set for
                         // three platform-specific ones, with a `url` handle and an
                         // `embed_mode` toggle (wordpress-importer-archive#298)
                         'type' => 'vimeo',
@@ -1780,7 +1780,7 @@ https://www.youtube.com/watch?v=dQw4w9WgXcQ
                 'attrs' => [
                     'id' => '#rowId(8)',
                     'values' => [
-                        // `UAMS-Web/uams-statamic#589` retired the `video` set for
+                        // `UAMS-Web/uams-statamic-archive#589` retired the `video` set for
                         // three platform-specific ones, with a `url` handle and an
                         // `embed_mode` toggle (wordpress-importer-archive#298)
                         'type' => 'youtube',

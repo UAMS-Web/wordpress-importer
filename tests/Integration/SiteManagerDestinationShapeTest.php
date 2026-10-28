@@ -15,7 +15,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 /**
  * Tests that a destination gate resolves a handle in whichever shape it takes.
  *
- * `uams-statamic#1863` converted `logos_item_categories` and `people_groups` from
+ * `uams-statamic-archive#1863` converted `logos_item_categories` and `people_groups` from
  * flat taxonomies into structured collections. The gate resolved a taxonomy and
  * only a taxonomy, so it reported both as missing — and its callers skip an entire
  * content type on that answer. A 39-page import wrote nothing and exited `0` (wordpress-importer-archive#704).

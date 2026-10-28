@@ -22,7 +22,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 /**
  * Imports a hierarchical WordPress taxonomy into a structured Statamic collection.
  *
- * `UAMS-Web/uams-statamic#252` settled that hierarchy is delivered by native
+ * `UAMS-Web/uams-statamic-archive#252` settled that hierarchy is delivered by native
  * structured collections, and `#1863` converted `people_groups` and
  * `logos_item_categories` into them alongside the existing `post_categories`.
  * A term in one of those taxonomies is therefore a collection **entry**, not a

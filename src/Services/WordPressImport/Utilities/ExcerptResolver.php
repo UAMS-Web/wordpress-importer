@@ -7,7 +7,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 /**
  * Resolves an entry's `excerpt` summary from the WordPress sources that can carry one.
  *
- * The summary is required on every front-end-view blueprint (`UAMS-Web/uams-statamic#1378`),
+ * The summary is required on every front-end-view blueprint (`UAMS-Web/uams-statamic-archive#1378`),
  * so an imported entry must never land with an empty one. WordPress spreads the text across
  * three unrelated places, none of which is guaranteed to be present:
  *

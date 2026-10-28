@@ -63,7 +63,7 @@ _Refs: wordpress-importer-archive#366 (the base-class rule), wordpress-importer-
 
 A test that pulls one entry out of a query — `$query->get()`, take the first that qualifies, assert on it — is not testing the thing it names. It is testing **whichever entry the index happened to return first**, and in a Statamic app that is decided by Stache and worker state, not by the code under test. In this package the sampled set is worse than arbitrary: it is whatever a **real import of a sampled WXR export** just wrote, so it shifts whenever the export changes, the corpus clone is updated, or the importer's own write order does — and per the [`current-content-is-not-the-corpus`](../.claude/rules/current-content-is-not-the-corpus.md) rule, that corpus is a *sample* of what the importer will see, not its bound.
 
-The failure mode is not a flake, it is a **hidden green**. In the host app, `PeopleLensRouteTest` rendered the first publicly-renderable person and passed on `main` for months while four entries in the same collection returned a 500 on every page (`UAMS-Web/uams-statamic#1883`). Nothing was wrong with its assertions; it simply never drew one of the four. It surfaced only when an unrelated PR added eight tests, changed how paratest distributed work, and moved the query onto a broken entry — so the PR that *exposed* a pre-existing production bug looked like the PR that caused it. An importer `Feature` test carries the same exposure with more entries behind it: one run writes thousands, and a spot check on whichever one came back first says nothing about the rest.
+The failure mode is not a flake, it is a **hidden green**. In the host app, `PeopleLensRouteTest` rendered the first publicly-renderable person and passed on `main` for months while four entries in the same collection returned a 500 on every page (`UAMS-Web/uams-statamic-archive#1883`). Nothing was wrong with its assertions; it simply never drew one of the four. It surfaced only when an unrelated PR added eight tests, changed how paratest distributed work, and moved the query onto a broken entry — so the PR that *exposed* a pre-existing production bug looked like the PR that caused it. An importer `Feature` test carries the same exposure with more entries behind it: one run writes thousands, and a spot check on whichever one came back first says nothing about the rest.
 
 **Pin a named fixture, or iterate the whole qualifying set — never an ordinal one.** Pinning is the default here, and the helper already exists: [`WordPressImportTestTrait::findEntryBySlug()`](Feature/WordPressImportTestTrait.php) filters by site *and* slug before calling `->first()`, so that `->first()` is deterministic. `->first()` after a slug or ID filter is fine; `->first()` after only a collection or site filter is the lottery.
 
@@ -90,7 +90,7 @@ expect($failures)->toBe([]);
 
 Collecting matters as much as iterating: a bad entry then **names itself** instead of hiding the other thirty-nine behind the first stack trace. Keep a "no qualifying content" guard — `Assert::markTestSkipped(...)`, as the Formidable and Gravity Forms audit tests do when their fixture directories are absent — so a missing corpus still *skips* rather than passing vacuously over an empty set. And if iterating the full set is genuinely too slow for one of the multi-minute host-app runs, pin the named fixtures you care about and record the coverage gap; do not fall back to an ordinal sample.
 
-_Refs: `UAMS-Web/uams-statamic#1895` (ported from), `UAMS-Web/uams-statamic#1883` (the incident)._
+_Refs: `UAMS-Web/uams-statamic-archive#1895` (ported from), `UAMS-Web/uams-statamic-archive#1883` (the incident)._
 
 ## Rule — a characterization test that another repo's ticket will invert names it as `@invertsOn`
 
@@ -131,14 +131,14 @@ section should be derived from.
 **The worked example is historical, and there is currently no live instance.**
 `uams-statamic`'s `tests/Unit/WordPressImport/BardParserSetAttributePassthroughTest.php` asserted
 the `data-set-*` stored-XSS passthrough as today's behavior, written to be flipped. `wordpress-importer-archive#494` shipped
-the fix in `v0.13.0`; the moment `UAMS-Web/uams-statamic#2025` bumped the pin to `^0.13`, five
+the fix in `v0.13.0`; the moment `UAMS-Web/uams-statamic-archive#2025` bumped the pin to `^0.13`, five
 assertions inverted and blocked the host's gate — while the flip that fixed them had existed on a
 branch for weeks, unable to merge because the new assertions need `SetMarkupNonce`, which `^0.10`
 could not reach. Had that file carried `@invertsOn UAMS-Web/wordpress-importer-archive#494`, cutting
 `v0.13.0` would have surfaced it. It is now flipped, so it correctly carries **no** tag.
 
 _Refs: wordpress-importer-archive#614 (this rule), wordpress-importer-archive#494 / PR wordpress-importer-archive#612 (the fix that inverted it),
-`UAMS-Web/uams-statamic#2025` (the adopting ticket that paid for it)._
+`UAMS-Web/uams-statamic-archive#2025` (the adopting ticket that paid for it)._
 
 ## Rule — drive a prompt from a stream inside `Command::run()`, never from STDIN
 

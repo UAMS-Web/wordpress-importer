@@ -17,7 +17,7 @@ use Statamic\Entries\Entry;
  * that is not a hash cannot be verified and is denied.
  *
  * That branch used to exist, and removing it required a fix in the host app
- * first (`UAMS-Web/wordpress-importer-archive#5`). Until `UAMS-Web/uams-statamic#1862`
+ * first (`UAMS-Web/wordpress-importer-archive#5`). Until `UAMS-Web/uams-statamic-archive#1862`
  * shipped, the Control Panel wrote an editor-typed password to the entry's YAML
  * in plain text with `is_password_hashed` unset, so the plain-text fallback was
  * the only thing making Control-Panel-authored passwords work — deleting it

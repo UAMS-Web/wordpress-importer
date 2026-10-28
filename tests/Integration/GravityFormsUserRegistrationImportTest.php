@@ -13,7 +13,7 @@ uses(StatamicTestCase::class);
  * Imports the real Gravity Forms user-registration forms and asserts their
  * `username` and `password` fields keep their semantics (`wordpress-importer-archive#301`).
  *
- * `UAMS-Web/uams-statamic#312` added the Statamic `username` fieldtype and brought
+ * `UAMS-Web/uams-statamic-archive#312` added the Statamic `username` fieldtype and brought
  * `password` to public-form parity; `wordpress-importer-archive#300` pointed the importer's mapping at them.
  * Both were verified at the unit level — `GravityFormsBlueprintMappingTest` asserts
  * `getStatamicFieldtype('username') === 'username'` — but **nothing imported a real

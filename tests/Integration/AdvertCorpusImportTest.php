@@ -36,7 +36,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  *
  * `AdvertImportTest` pins each mapping on a synthetic export. This runs the same
  * creator over `WordPress/wordpress-export_inside-uams-edu_classifieds.xml` from the
- * private export corpus and checks the totals #774 and `UAMS-Web/uams-statamic#2096`
+ * private export corpus and checks the totals #774 and `UAMS-Web/uams-statamic-archive#2096`
  * measured there: 229 listings, 39 of them live, 23 declared categories, 19 listings
  * without images and three with twelve.
  *

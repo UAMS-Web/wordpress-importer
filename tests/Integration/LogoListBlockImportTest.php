@@ -36,7 +36,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * block the importer emits (loose `!= null` against bool-`false` toggles, a
  * truthy `logo_list_labels` requirement versus a `false` default, and a
  * `logo_list_filter_label_logic` requirement the importer satisfies only when
- * label filters exist). That is the bug class `UAMS-Web/uams-statamic#1514`
+ * label filters exist). That is the bug class `UAMS-Web/uams-statamic-archive#1514`
  * repaired for the gallery partial; it is filed separately and is out of scope
  * for this test-only ticket.
  *
@@ -235,7 +235,7 @@ it('still emits the prefixed slug for a term the registry never recorded', funct
 
 it('emits the label entry ids the term pass recorded, in order, unprefixed', function (): void {
     // wordpress-importer-archive#1220. `logos_item_labels` is a site-scoped collection since
-    // `UAMS-Web/uams-statamic#2533`, and the block's label filter is an
+    // `UAMS-Web/uams-statamic-archive#2533`, and the block's label filter is an
     // `entries` picker, so only entry ids resolve there.
     TermDestinationRegistry::clear();
     TermDestinationRegistry::registerCollectionEntry('logo-list-label', '31', 'logos_item_labels', 'entry-label-31');

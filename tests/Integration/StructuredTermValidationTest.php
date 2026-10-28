@@ -19,7 +19,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * Tests that the term-validation pass resolves a structured handle against its
  * collection rather than against a taxonomy that does not exist (issue wordpress-importer-archive#1144).
  *
- * `UAMS-Web/uams-statamic#1863` converted `people_groups` and
+ * `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` and
  * `logos_item_categories` into structured collections. The validation pass kept
  * asking `Taxonomy::find()`, which returns null for a collection, so **every**
  * referenced term was classified missing, creation was attempted, and it failed

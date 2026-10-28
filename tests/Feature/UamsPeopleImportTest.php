@@ -205,7 +205,7 @@ it('maps people_group taxonomy terms with site-specific slugs', function (): voi
 
         // ---
         // This test used to create two `people_groups` TAXONOMY terms here and
-        // assert them back. `UAMS-Web/uams-statamic#1863` converted
+        // assert them back. `UAMS-Web/uams-statamic-archive#1863` converted
         // `people_groups` into a structured collection, so no taxonomy of that
         // handle exists — `createTaxonomyTerm()` writes nothing and the
         // assertions fail on `main` as surely as they do here (wordpress-importer-archive#13).
@@ -288,7 +288,7 @@ it('validates individual people YAML fields', function (string $field, mixed $va
 })->with(uamsPeopleYamlFieldValidationProvider());
 
 it('points people_groups at collection entries, not taxonomy terms', function (): void {
-    // `UAMS-Web/uams-statamic#1863` converted `people_groups` into a structured
+    // `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` into a structured
     // collection and the `person` blueprint field is `type: entries`. The importer
     // used to write `default_foo` — a term slug that fieldtype cannot resolve.
     // This pins the entry-id shape AND that each id reaches a real entry in the
@@ -1001,7 +1001,7 @@ function uamsPeopleYamlFieldValidationProvider(): array
         ],
         // ---
         // `people_groups` is asserted separately, below the datasets: it became a
-        // structured collection in `UAMS-Web/uams-statamic#1863`, so the field
+        // structured collection in `UAMS-Web/uams-statamic-archive#1863`, so the field
         // holds generated entry ids rather than the fixed `default_foo` /
         // `default_foo_bar` slugs and cannot be a literal here (wordpress-importer-archive#13).
         // ---

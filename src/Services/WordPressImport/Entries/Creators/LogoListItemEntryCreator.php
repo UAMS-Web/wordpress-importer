@@ -694,7 +694,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
 
                 // ---
                 // `logos_item_categories` became a structured collection in
-                // `UAMS-Web/uams-statamic#1863`, so the blueprint field is an
+                // `UAMS-Web/uams-statamic-archive#1863`, so the blueprint field is an
                 // `entries` fieldtype holding entry ids — a `handle::slug`
                 // taxonomy reference no longer resolves to anything. The term
                 // pass runs first, so the destination is already recorded.
@@ -751,7 +751,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
 
             // ---
             // `logos_item_labels` became a site-scoped structured collection in
-            // `UAMS-Web/uams-statamic#2533`, so the field is an `entries` picker
+            // `UAMS-Web/uams-statamic-archive#2533`, so the field is an `entries` picker
             // holding entry ids, and a `logos_item_labels::slug` reference no
             // longer resolves to anything. The term pass runs first and records
             // each label's entry. An unresolved label is omitted rather than
@@ -1017,7 +1017,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         // ---
         // Labels are deliberately NOT tracked here. That map fed a taxonomy-term
         // validator, and `logos_item_labels` became a site-scoped collection in
-        // `UAMS-Web/uams-statamic#2533`; the term pass creates the entries a label
+        // `UAMS-Web/uams-statamic-archive#2533`; the term pass creates the entries a label
         // field references before any item is written (wordpress-importer-archive#1220).
         // ---
 
@@ -1129,7 +1129,7 @@ class LogoListItemEntryCreator extends BaseEntryCreator
      * Get logo labels for validation, of which there are none.
      *
      * `logos_item_labels` is a site-scoped collection since
-     * `UAMS-Web/uams-statamic#2533`, and the term pass creates its entries, so
+     * `UAMS-Web/uams-statamic-archive#2533`, and the term pass creates its entries, so
      * no label is left for a validator to create (wordpress-importer-archive#1220).
      *
      * @return array<int|string, mixed> Always empty

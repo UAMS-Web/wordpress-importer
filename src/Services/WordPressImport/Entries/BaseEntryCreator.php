@@ -1226,7 +1226,7 @@ abstract class BaseEntryCreator
 
         // ---
         // Refuse to write taxonomy terms to a handle that is a structured
-        // COLLECTION. `UAMS-Web/uams-statamic#1863` converted `people_groups` and
+        // COLLECTION. `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` and
         // `logos_item_categories` into collections alongside `post_categories`,
         // and terms written to one of those went nowhere: the preload below
         // guards on TaxonomyFacade::find(), which returns null for a collection,
@@ -2317,7 +2317,7 @@ abstract class BaseEntryCreator
             // Map the WordPress taxonomy to its Statamic destination handle. The
             // mapping table stays the single source of truth for the HANDLE; the
             // destination's SHAPE lives in TaxonomyDispositions, because
-            // `UAMS-Web/uams-statamic#1863` converted four of these destinations
+            // `UAMS-Web/uams-statamic-archive#1863` converted four of these destinations
             // into collections without changing their handles.
             // ---
             $statamicTaxonomyHandle = ImportWordPress::mapWordPressToStatamicHandle(
@@ -2725,7 +2725,7 @@ abstract class BaseEntryCreator
         // Answer for a structured destination here rather than letting the
         // TaxonomyFacade::find() guard below answer for it.
         //
-        // `UAMS-Web/uams-statamic#1863` converted `people_groups` and
+        // `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` and
         // `logos_item_categories` into collections alongside `post_categories`,
         // and find() returns null for every one of them. So that guard reports
         // "the taxonomy does not exist" for a handle that does exist, and

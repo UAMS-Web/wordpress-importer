@@ -328,7 +328,7 @@ it('forgets resolved ids when the run is cleared', function (): void {
 
 // --- cross-site resolution (wordpress-importer-archive#628) -------------------------------------------
 //
-// `uams-statamic#2165` put `select_across_sites: true` on the block's `category`
+// `uams-statamic-archive#2165` put `select_across_sites: true` on the block's `category`
 // field, so an id from the syndicating site now survives the host's read instead
 // of being dropped. These pin the behavior that change made possible, and the
 // preference order that keeps an already-correct import resolving as it did.

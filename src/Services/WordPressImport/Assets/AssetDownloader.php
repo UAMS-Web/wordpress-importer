@@ -10,6 +10,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use RuntimeException;
 use Statamic\Assets\Asset;
 use Statamic\Assets\AssetContainer as StatamicAssetContainer;
@@ -34,7 +35,13 @@ class AssetDownloader
      * Distinct from the download's own time budget: this bounds only the TCP
      * and TLS handshake, so an unresponsive host fails fast while a slow but
      * live transfer keeps whatever is left of the chain budget.
+     *
+     * A constant is not a line coverage can reach, so a mutant here always reads
+     * as uncovered. AssetDownloaderPathsTest pins 30, and changing it by hand
+     * fails that test. That the walk is handed it is not asserted: the HTTP fake does
+     * not expose the connect timeout a request was sent with.
      */
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     public const CONNECT_TIMEOUT_SECONDS = 30;
 
     /**
@@ -75,6 +82,9 @@ class AssetDownloader
         string $path,
         string $container,
         OutputInterface $output,
+        // A second either way only moves the deadline of a fetch no test lets run
+        // that long
+        // @pest-mutate-ignore: IncrementInteger, DecrementInteger
         int $timeout = 60,
         int $maxRetries = 3,
         bool $skipOnFailure = false,
@@ -243,7 +253,7 @@ class AssetDownloader
 
         // Create an UploadedFile instance for Statamic upload
         $detectedMimeType = \mime_content_type($tempPath);
-        $mimeType = $detectedMimeType !== false
+        $mimeType = \is_string($detectedMimeType)
             ? $detectedMimeType
             : AssetUtils::guessMimeType($filename);
 
@@ -436,39 +446,27 @@ class AssetDownloader
                     $detailParts = [];
 
                     // Check if file size is available
-                    if (
-                        isset($diagnostics['file_size_bytes'])
-                        && is_numeric($diagnostics['file_size_bytes'])
-                    ) {
+                    if (\is_int($diagnostics['file_size_bytes'] ?? null)) {
                         // Add file size to detail parts
                         $detailParts[] = 'size='.number_format(
-                            (float) $diagnostics['file_size_bytes']
+                            $diagnostics['file_size_bytes']
                         ).' bytes';
                     }
 
                     // Check if detected MIME type is available
-                    if (
-                        isset($diagnostics['detected_mime_type'])
-                        && is_string($diagnostics['detected_mime_type'])
-                    ) {
+                    if (\is_string($diagnostics['detected_mime_type'] ?? null)) {
                         // Add detected MIME type to detail parts
                         $detailParts[] = 'detected_mime='.$diagnostics['detected_mime_type'];
                     }
 
                     // Check if uploaded file MIME type is available
-                    if (
-                        isset($diagnostics['uploaded_file_mime_type'])
-                        && is_string($diagnostics['uploaded_file_mime_type'])
-                    ) {
+                    if (\is_string($diagnostics['uploaded_file_mime_type'] ?? null)) {
                         // Add uploaded file MIME type to detail parts
                         $detailParts[] = 'uploaded_file_mime='.$diagnostics['uploaded_file_mime_type'];
                     }
 
                     // Check if file extension is available
-                    if (
-                        isset($diagnostics['file_extension'])
-                        && is_string($diagnostics['file_extension'])
-                    ) {
+                    if (\is_string($diagnostics['file_extension'] ?? null)) {
                         // Add file extension to detail parts
                         $detailParts[] = 'extension='.$diagnostics['file_extension'];
                     }
@@ -484,10 +482,7 @@ class AssetDownloader
                     }
 
                     // Check if actual file type is available
-                    if (
-                        isset($diagnostics['actual_file_type'])
-                        && is_string($diagnostics['actual_file_type'])
-                    ) {
+                    if (\is_string($diagnostics['actual_file_type'] ?? null)) {
                         // Add actual file type to detail parts
                         $detailParts[] = 'actual_type='.$diagnostics['actual_file_type'];
                     }
@@ -568,7 +563,8 @@ class AssetDownloader
             unlink($tempPath);
         }
 
-        // Force garbage collection to free memory
+        // Force garbage collection to free memory. It changes nothing a test can see
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Log successful import
@@ -616,18 +612,17 @@ class AssetDownloader
      * cannot answer is treated as **not** stored, so an unknown state falls back to the previous
      * behavior rather than silently keeping a file that is not there.
      */
-    private function sourceReachedContainer(mixed $asset): bool
+    private function sourceReachedContainer(object $asset): bool
     {
-        if (! \is_object($asset)) {
-            return false;
-        }
-
         // Resolved as a callable rather than probed with `method_exists()`: an asset supplied
         // through a proxy answers `exists()` via `__call` and reports no such method, which would
-        // send every such asset down the delete path — the failure this guard exists to prevent.
+        // send every such asset down the delete path, the failure this guard exists to prevent.
         $probe = [$asset, 'exists'];
 
+        // Calling a probe that is not callable throws, and the catch below answers false the
+        // same way, so this return is here for the call's type rather than for the result
         if (! \is_callable($probe)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return false;
         }
 
@@ -767,7 +762,7 @@ class AssetDownloader
                     $retryDelay = $attempt * 2;
 
                     // Wait before next retry attempt
-                    sleep($retryDelay); // Exponential backoff: 2, 4, 6 seconds
+                    Sleep::sleep($retryDelay); // Exponential backoff: 2, 4, 6 seconds
                 }
             }
 
@@ -797,7 +792,7 @@ class AssetDownloader
                     $retryDelay = $attempt * 2;
 
                     // Wait before next retry attempt
-                    sleep($retryDelay);
+                    Sleep::sleep($retryDelay);
                 }
             }
 
@@ -827,7 +822,7 @@ class AssetDownloader
                     $retryDelay = $attempt * 2;
 
                     // Wait before next retry attempt
-                    sleep($retryDelay);
+                    Sleep::sleep($retryDelay);
                 }
             }
         }
@@ -993,7 +988,7 @@ class AssetDownloader
             $fileSize = \filesize($tempPath);
 
             // Check if file size was retrieved successfully
-            if ($fileSize !== false) {
+            if (\is_int($fileSize)) {
                 // Store file size in diagnostics
                 $diagnostics['file_size_bytes'] = $fileSize;
             }
@@ -1007,7 +1002,7 @@ class AssetDownloader
         $detectedMimeType = \mime_content_type($tempPath);
 
         // Check if MIME type was detected successfully
-        if ($detectedMimeType !== false) {
+        if (\is_string($detectedMimeType)) {
             // Store detected MIME type in diagnostics
             $diagnostics['detected_mime_type'] = $detectedMimeType;
         }
@@ -1104,49 +1099,19 @@ class AssetDownloader
     private function detectFileTypeFromMagicBytes(
         string $filePath
     ): ?string {
-        // Check if file exists and is readable
-        if (
-            ! \file_exists($filePath)
-            || ! \is_readable($filePath)
-        ) {
-            // Return null if file cannot be read
+        // Read the first 12 bytes, enough to identify most file types. A file that cannot be
+        // read fails here, as a warning Laravel raises or a false the check below refuses
+        try {
+            $bytes = \file_get_contents($filePath, length: 12);
+        } catch (Exception) {
             return null;
         }
 
-        // Open file for reading
-        try {
-            // Open file handle in binary read mode
-            $handle = \fopen($filePath, 'rb');
-
-            // Check if file handle was opened successfully
-            if ($handle === false) {
-                // Return null if file could not be opened
-                return null;
-            }
-
-            // ---
-            // Read first 12 bytes (enough to identify most file types)
-            // ---
-
-            // Read first 12 bytes from file
-            $bytes = \fread($handle, 12);
-
-            // Close file handle
-            \fclose($handle);
-
-            // Check if bytes were read successfully and have minimum length
-            if (
-                $bytes === false
-                || \strlen($bytes) < 4
-            ) {
-                // Return null if insufficient bytes were read
-                return null;
-            }
-        }
-
-        // Handle exceptions when reading file
-        catch (Exception) {
-            // Return null if exception occurred while reading
+        // Check the bytes were read and are enough to compare
+        if (
+            ! \is_string($bytes)
+            || \strlen($bytes) < 4
+        ) {
             return null;
         }
 
