@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use DateTime;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Collection as CollectionFacade;

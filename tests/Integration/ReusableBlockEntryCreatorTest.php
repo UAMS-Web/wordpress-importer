@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Tests `ReusableBlockEntryCreator`: how it reads each `wp_block` item, what it
  * hands the content converter and the metadata mapper, what it saves, the
- * entries it skips, and the post-id-to-entry-id map it keeps.
+ * entries it skips, and the blocks it registers in `WpBlockRegistry`.
  *
  * The content converter and the metadata mapper are recording subclasses, so the
  * test controls what a block's body converts to. Entries are saved into a

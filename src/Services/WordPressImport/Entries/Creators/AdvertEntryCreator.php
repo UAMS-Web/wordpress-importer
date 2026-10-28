@@ -440,7 +440,7 @@ class AdvertEntryCreator extends BaseEntryCreator
         $termIds = $this->nicenameToTermIdMap[self::CATEGORY_TAXONOMY] ?? [];
 
         // The map builder keeps an array for every taxonomy, so this return is for the
-        // analyser rather than for any map an import can produce
+        // analyzer rather than for any map an import can produce
         if (! \is_array($termIds)) {
             // @pest-mutate-ignore: RemoveEarlyReturn
             return [];
@@ -678,7 +678,7 @@ class AdvertEntryCreator extends BaseEntryCreator
             $term = TermFacade::find($destination['handle'].'::'.$destination['reference']);
 
             // A recorded destination was written to disk and the store rebuilt from it,
-            // so the lookup resolves; the type test narrows it for the analyser, and the
+            // so the lookup resolves; the type test narrows it for the analyzer, and the
             // `continue` it guards is never reached
             // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof LocalizedTerm) {
@@ -689,7 +689,7 @@ class AdvertEntryCreator extends BaseEntryCreator
             $localized = $term->in($site);
 
             // `in()` on a term of this site returns the localized term; narrowed for the
-            // analyser, so the `continue` it guards is never reached
+            // analyzer, so the `continue` it guards is never reached
             // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $localized instanceof LocalizedTerm) {
                 continue;
