@@ -297,13 +297,14 @@ class TreeBuilder
         }
 
         // Step 6: Verify all pages are included
-        $allEntries = self::uniqueStringList(\array_merge(
+        // A repeated entry collapses to one key in the map below, so the list is not deduplicated
+        $allEntries = \array_merge(
             self::normalizeStringList(array_column(
                 $pageData,
                 'entry'
             )),
             $frontPage !== null ? [self::extractScalarString($frontPage['entry'] ?? null)] : []
-        ));
+        );
         $missingEntries = self::normalizeStringList(array_diff(
             $allEntries,
             self::normalizeStringList($assignedEntries),
@@ -703,30 +704,6 @@ class TreeBuilder
         }
 
         return $normalized;
-    }
-
-    /**
-     * Return unique string values preserving insertion order.
-     *
-     * @param  array<int, string>  $values  Input string values
-     * @return array<int, string> Unique string values
-     */
-    private static function uniqueStringList(
-        array $values
-    ): array {
-        $seen = [];
-        $unique = [];
-
-        foreach ($values as $value) {
-            if ($value === '' || isset($seen[$value])) {
-                continue;
-            }
-
-            $seen[$value] = true;
-            $unique[] = $value;
-        }
-
-        return $unique;
     }
 
     /**
