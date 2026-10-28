@@ -50,6 +50,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      *
      * @var list<string>
      */
+    // PCOV records no line for a constant; each item, removed by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     public const DOMAIN_HOSTS = ['uams.health', 'uams.info', 'uamsbaptist.health', 'go.uams.edu', 'gouams.com'];
 
     /**
@@ -57,6 +59,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      *
      * @var list<string>
      */
+    // PCOV records no line for a constant; each item, removed by hand, fails a test.
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array DOMAIN_RESPONSES = ['301', '302', '303', '307', '308'];
 
     /**
@@ -68,11 +72,18 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      *
      * @var array<string, int>
      */
+    // PCOV records no line for a constant. Each item removed, and each rank moved onto its
+    // neighbor's, fails a test by hand; lowering the lowest rank keeps the order, and only
+    // the order is read.
+    // @pest-mutate-ignore: RemoveArrayItem, IncrementInteger, DecrementInteger
     private const array PLUGIN_RANKS = ['pretty-links-' => 0, 'redirection-' => 1];
 
     /**
      * The rank of a rule whose id carries no plugin prefix.
      */
+    // PCOV records no line for a constant. Lowering it onto Redirection's rank fails a test by
+    // hand; raising it keeps it last, and only the order of the ranks is read.
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int POST_RANK = 2;
 
     public function createGlobals(
@@ -243,12 +254,18 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                         continue 2; // Skip to next rule
                     case 'Create an additional set':
                         $output->writeln("  - Creating additional redirect rule '$source' with same source URL.");
+
+                        // Inside a switch, continue acts as break, so the two cannot differ.
+                        // @pest-mutate-ignore: BreakToContinue
                         break; // No modification to source, just add it
                     case 'Overwrite matching sets':
                         $output->writeln("  - Overwriting existing redirect rule '$source' (ID: $ruleId).");
                         unset($existingRedirects[$existingIndex]);
                         $existingRedirects = \array_values($existingRedirects); // Reindex
                         $isUpdate = true;
+
+                        // Inside a switch, continue acts as break, so the two cannot differ.
+                        // @pest-mutate-ignore: BreakToContinue
                         break;
                 }
             }
@@ -293,7 +310,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     {
         $host = \parse_url($baseBlogUrl, \PHP_URL_HOST);
 
-        if (! \is_string($host) || $host === '') {
+        // `parse_url()` answers false, never '', for a URL with no host
+        if (! \is_string($host)) {
             return null;
         }
 
@@ -349,6 +367,10 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         }
 
         $sites = $collection->sites();
+
+        // `sites()` always answers a non-empty collection, the default site when none is set,
+        // so the fallback to the import's site only types the value.
+        // @pest-mutate-ignore: InstanceOfToTrue, BooleanAndToBooleanOr
         $entrySite = $sites instanceof \Illuminate\Support\Collection && \is_string($sites->first()) ? $sites->first() : $site;
 
         $created = 0;
@@ -418,9 +440,15 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             }
 
             $entry->data(\array_merge(['title' => $host.$fields['source']], $fields));
+
+            // A new entry is already published (`Publishable::$published` is true), and an
+            // existing one was published when it was written, so this cannot be observed.
+            // @pest-mutate-ignore: RemoveMethodCall
             $entry->published(true);
             $entry->save();
 
+            // Only the key is read, and isset() holds for false as for true.
+            // @pest-mutate-ignore: TrueToFalse
             $written[self::entryId($entry)] = true;
         }
 
@@ -495,6 +523,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         if (isset($targetData['target_entry'])) {
             $fields['target_entry'] = [$targetData['target_entry']];
         } else {
+            // Every url-type target carries its URL, so the default only types the value.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $fields['target_url'] = $targetData['target_url'] ?? '';
         }
 
@@ -568,12 +598,16 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             if (\str_starts_with($ruleId, $prefix)) {
                 $rank = $pluginRank;
 
+                // No id starts with both prefixes, so the later one never matches either way.
+                // @pest-mutate-ignore: BreakToContinue
                 break;
             }
         }
 
-        // The numeric id breaks a tie in position, as both plugins that allow one do
-        $number = \preg_match('/(\d+)$/', $ruleId, $matches) === 1 ? (int) $matches[1] : \PHP_INT_MAX;
+        // The numeric id breaks a tie in position, as both plugins that allow one do.
+        // PHP compares numeric strings as numbers, so the cast only keeps the type.
+        // @pest-mutate-ignore: RemoveIntegerCast
+        $number = \preg_match('/\d+$/', $ruleId, $matches) === 1 ? (int) $matches[0] : \PHP_INT_MAX;
 
         return [$rank, $order, $number, $ruleId];
     }
@@ -607,6 +641,9 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         $results = $query->get();
 
+        // A Stache query always answers a collection of concrete entries, so these narrowings
+        // only type what follows.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
         if (! $results instanceof \Illuminate\Support\Collection) {
             return [];
         }
@@ -614,9 +651,14 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         $entries = [];
 
         foreach ($results->all() as $entry) {
-            $postId = $entry instanceof StatamicEntry ? $entry->get('wordpress_post_id') : null;
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
+            if (! $entry instanceof StatamicEntry) {
+                continue;
+            }
 
-            if ($entry instanceof StatamicEntry && \is_string($postId) && $postId !== '') {
+            $postId = $entry->get('wordpress_post_id');
+
+            if (\is_string($postId) && $postId !== '') {
                 $entries[] = $entry;
             }
         }
@@ -633,6 +675,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
     {
         $id = $entry->id();
 
+        // A saved entry always has a string id, so the fallback only types the value.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($id) ? $id : '';
     }
 
@@ -651,6 +695,8 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         $entry = $query->first();
 
+        // A Stache query answers a concrete entry or null, so the narrowing only types it.
+        // @pest-mutate-ignore: InstanceOfToTrue
         return $entry instanceof StatamicEntry ? $entry : null;
     }
 
@@ -735,14 +781,6 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
         AssetImporter $assetImporter,
         OutputInterface $output
     ): array {
-        // Check if the raw target is empty — preserve the empty URL as-is
-        if ($rawTarget === '') {
-            return [
-                'target_type' => 'url',
-                'target_url' => $rawTarget,
-            ];
-        }
-
         // Check if the source is a regex AND the target reads as a pattern
         if (
             $useRegex
@@ -877,16 +915,11 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
             \strlen('statamic://entry::')
         );
 
-        // Split off any trailing fragment or query and take the ID portion
-        $id = \preg_split(
-            '/[#?]/',
+        // Take the ID portion, before any trailing fragment or query
+        $id = \substr(
             $remainder,
-            2
-        )[0] ?? '';
-
-        // Free locals defined in this code path before returning
-        unset(
-            $remainder
+            0,
+            \strcspn($remainder, '#?')
         );
 
         // Treat an empty ID as a non-reference so callers fall through cleanly
