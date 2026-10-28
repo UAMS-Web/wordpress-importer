@@ -72,7 +72,7 @@ use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
  *   terms be handled?', …)` directly, and five more routed one through its
  *   `handlePrompt()` helper (removed with the rest of that harness in wordpress-importer-archive#533) — a
  *   question `TaxonomyOverwriteBehaviorSelector` never
- *   asks, because it returns `OVERWRITE_OPTIONS[0]` before any I/O under
+ *   asks, because it returns `getDefault()` before any I/O under
  *   `runningUnitTests()`. Each stranded expectation desynced Laravel's
  *   `->ordered()` question chain.
  *

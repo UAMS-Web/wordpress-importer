@@ -30,17 +30,6 @@ class TaxonomyOverwriteBehaviorSelector
     use HasQuestionHelper;
 
     /**
-     * Available taxonomy overwrite behavior options.
-     *
-     * @var array<string>
-     */
-    private const array OVERWRITE_OPTIONS = [
-        'Overwrite matching terms',
-        'Skip matching terms',
-        'Create an additional term',
-    ];
-
-    /**
      * Prompt the user to select how existing taxonomy terms should be handled.
      *
      * Displays a list of available overwrite behaviors and returns the user's
@@ -60,14 +49,14 @@ class TaxonomyOverwriteBehaviorSelector
         // Check if the application is running unit tests
         if (app()->runningUnitTests()) {
             // Return the first option during automated tests
-            return self::OVERWRITE_OPTIONS[0];
+            return $this->getDefault();
         }
 
         // Use Symfony Console to select the taxonomy overwrite behavior
         return $this->askChoice(
             'How should existing taxonomy terms be handled?',
-            self::OVERWRITE_OPTIONS,
-            self::OVERWRITE_OPTIONS[0], // Default to first option
+            $this->getOptions(),
+            $this->getDefault(), // Default to first option
             $input,
             $output,
             $command
@@ -77,11 +66,19 @@ class TaxonomyOverwriteBehaviorSelector
     /**
      * Get all available overwrite behavior options.
      *
-     * @return array<string> Array of available overwrite behaviors
+     * The list is returned from here rather than held in a class constant, whose literal a
+     * coverage driver records no line of, so that mutation testing runs the tests that
+     * assert it (#100).
+     *
+     * @return list<string> Array of available overwrite behaviors
      */
     public function getOptions(): array
     {
-        return self::OVERWRITE_OPTIONS;
+        return [
+            'Overwrite matching terms',
+            'Skip matching terms',
+            'Create an additional term',
+        ];
     }
 
     /**
@@ -91,6 +88,6 @@ class TaxonomyOverwriteBehaviorSelector
      */
     public function getDefault(): string
     {
-        return self::OVERWRITE_OPTIONS[0];
+        return $this->getOptions()[0];
     }
 }
