@@ -360,11 +360,21 @@ class StructuredTermImporter
         // Group each term id under its parent term id.
         $childrenByParent = [];
 
-        // A parent naming a term this export does not contain, or naming the term
-        // itself, is never reached from the roots, so the promotion below makes
-        // it a root exactly as an empty parent is.
         foreach ($nodes as $termId => $node) {
-            $childrenByParent[$node['parent']][] = (string) $termId;
+            $parent = $node['parent'];
+
+            // A parent naming a term this export does not contain, or naming the
+            // term itself, is treated as no parent at all. No node is keyed '',
+            // so an empty parent is among the absent ones. Grouping these with
+            // the roots here, rather than leaving them to the promotion below,
+            // keeps a root that shares another's title in export order.
+            if (! isset($nodes[$parent]) || $parent === (string) $termId) {
+                $childrenByParent[''][] = (string) $termId;
+
+                continue;
+            }
+
+            $childrenByParent[$parent][] = (string) $termId;
         }
 
         $visited = [];

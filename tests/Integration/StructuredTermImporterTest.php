@@ -945,3 +945,30 @@ it('imports the terms after a repeated term id', function (): void {
     expect($result['imported'])->toBe(2)
         ->and(\array_column($result['importer']->written, 'slug'))->toBe(['health', 'cardiology']);
 });
+
+it('keeps an orphan ahead of a root of the same title, in export order', function (): void {
+    // The sort is stable, so roots of one title stay in the order they were
+    // grouped. An orphan is grouped with the roots as it is read, not appended
+    // after them, so it keeps its place in the export.
+    $tree = StructuredTermImporter::buildNestedTree([
+        '20' => ['entry' => 'entry-orphan', 'parent' => '99', 'title' => 'Health'],
+        '10' => ['entry' => 'entry-root', 'parent' => '', 'title' => 'Health'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-orphan'],
+        ['entry' => 'entry-root'],
+    ]);
+});
+
+it('keeps a self-parented term ahead of a root of the same title, in export order', function (): void {
+    $tree = StructuredTermImporter::buildNestedTree([
+        '20' => ['entry' => 'entry-self', 'parent' => '20', 'title' => 'Health'],
+        '10' => ['entry' => 'entry-root', 'parent' => '', 'title' => 'Health'],
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'entry-self'],
+        ['entry' => 'entry-root'],
+    ]);
+});
