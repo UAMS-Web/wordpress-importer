@@ -892,32 +892,38 @@ it('strips link targets in every excluded block, wherever the earlier ones chang
     );
 });
 
-it('decodes a double-encoded numeric entity to the same character with WpAutoP as without', function (string $entity, string $character): void {
+it('decodes a double-encoded numeric entity to the same character with WpAutoP as without', function (string $entity, ?string $character): void {
     textProcessorForBardFakes();
 
     // #154: the entity pass ahead of WpAutoP used chr(), which wrapped 8212 to
     // U+0014 and turned 233 into a lone byte; it now decodes each entity with
     // html_entity_decode(), as the path without WpAutoP does
-    $withAutoP = textProcessorForBard("<p>A {$entity} B</p>", autoP: true);
-    $without = textProcessorForBard("<p>A {$entity} B</p>");
+    $withAutoP = textProcessorForBardPath(textProcessorForBard("<p>A {$entity} B</p>", autoP: true), [0, 'content', 0, 'text']);
+    $without = textProcessorForBardPath(textProcessorForBard("<p>A {$entity} B</p>"), [0, 'content', 0, 'text']);
 
-    expect(textProcessorForBardPath($withAutoP, [0, 'content', 0, 'text']))->toBe("A {$character} B")
-        ->and(textProcessorForBardPath($without, [0, 'content', 0, 'text']))->toBe("A {$character} B");
+    expect($withAutoP)->toBe($without);
+
+    // An entity html_entity_decode() leaves alone has no expected character:
+    // libxml turns it into U+FFFD on macOS and drops it on the CI runner, so
+    // only the agreement between the two paths is asserted for it
+    if ($character !== null) {
+        expect($withAutoP)->toBe("A {$character} B");
+    }
 })->with([
     'em dash, above 255' => ['&amp;#8212;', "\u{2014}"],
     'e acute, 128 to 255' => ['&amp;#233;', "\u{00E9}"],
     'ASCII' => ['&amp;#65;', 'A'],
-    'a carriage return' => ['&amp;#13;', "\n"],
+    'a carriage return' => ['&amp;#13;', null],
     'the digit zero, which is falsy' => ['&amp;#48;', '0'],
     'outside the BMP' => ['&amp;#128512;', "\u{1F600}"],
-    'NUL' => ['&amp;#0;', "\u{FFFD}"],
+    'NUL' => ['&amp;#0;', null],
     'the last code point before the surrogates' => ['&amp;#55295;', "\u{D7FF}"],
-    'the first surrogate' => ['&amp;#55296;', "\u{FFFD}"],
-    'the last surrogate' => ['&amp;#57343;', "\u{FFFD}"],
+    'the first surrogate' => ['&amp;#55296;', null],
+    'the last surrogate' => ['&amp;#57343;', null],
     'the first code point after the surrogates' => ['&amp;#57344;', "\u{E000}"],
     'U+10FFFF' => ['&amp;#1114111;', "\u{10FFFF}"],
-    'above U+10FFFF' => ['&amp;#1114112;', "\u{FFFD}"],
-    'beyond the integer range' => ['&amp;#99999999999999999999;', "\u{FFFD}"],
+    'above U+10FFFF' => ['&amp;#1114112;', null],
+    'beyond the integer range' => ['&amp;#99999999999999999999;', null],
 ]);
 
 it('decodes one more level of a nested numeric entity with WpAutoP than without', function (): void {
