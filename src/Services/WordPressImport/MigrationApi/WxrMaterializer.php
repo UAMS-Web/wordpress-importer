@@ -732,10 +732,8 @@ class WxrMaterializer
         $bytes = 0;
 
         foreach ($values as $value) {
-            // Encoded as the HTTP client encodes it: `name%5BN%5D=value&`. Only the length
-            // is read, which reordering the pieces does not change.
-            // @pest-mutate-ignore: ConcatSwitchSides
-            $size = \strlen(\rawurlencode($parameter.'['.\count($chunk).']'))
+            // Encoded as the HTTP client encodes it: `name%5BN%5D=value&`.
+            $size = \strlen(\rawurlencode(\sprintf('%s[%d]', $parameter, \count($chunk))))
                 + \strlen(\rawurlencode((string) $value))
                 + 2;
 
@@ -1105,12 +1103,14 @@ class WxrMaterializer
         }
 
         foreach ($client->get('taxonomies') as $taxonomy) {
+            // A numeric string compares with 1 as the number it holds, so the cast only keeps
+            // the type.
+            // @pest-mutate-ignore: RemoveIntegerCast
             if (
                 ! \is_array($taxonomy)
                 || ($taxonomy['exposed'] ?? false) === true
                 || ! \is_string($taxonomy['name'] ?? null)
                 || ! \is_numeric($taxonomy['terms'] ?? null)
-                // @pest-mutate-ignore: RemoveIntegerCast
                 || (int) $taxonomy['terms'] < 1
             ) {
                 continue;
