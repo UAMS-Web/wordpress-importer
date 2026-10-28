@@ -1101,7 +1101,6 @@ The following classes in `src/Services/WordPressImport/Entries/Creators` extend 
   - Processes table content and shortcodes.
 - **Methods**:
   - `setOverwriteBehavior()`: Configures how to handle existing table entries.
-  - `clearTableCache()`: Clears the cache of imported table entry IDs.
   - `createEntries()`: Creates Statamic entries from WordPress TablePress content.
   - `generateSlugAndId()`: Generates unique slugs and IDs for table entries.
   - `saveEntry()`: Saves table entries with overwrite behavior handling.
