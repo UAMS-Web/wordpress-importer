@@ -292,11 +292,16 @@ class PageEntryCreator extends BaseEntryCreator
 
             // ---
             // Check MinervaKB settings for a kb_page naming this page. A blank or false
-            // value reads as a string no post id equals, so it names no page.
+            // value names no page, even for a page whose post id is blank.
             // ---
             $kbPageValue = $minervaKbSettings['kb_page'] ?? null;
 
-            if (\is_scalar($kbPageValue) && (string) $kbPageValue === $postId) {
+            if (
+                \is_scalar($kbPageValue)
+                && $kbPageValue !== ''
+                && $kbPageValue !== false
+                && (string) $kbPageValue === $postId
+            ) {
                 // Mark this page as the knowledge base home page
                 $isKnowledgeBaseHomePage = true;
             }
@@ -542,8 +547,8 @@ class PageEntryCreator extends BaseEntryCreator
                     $modulesData = [];
                 }
 
-                // The generated slug is never blank: it falls back to the title, then the id
-                $data['post_name'] = $entrySlug;
+                // A title of punctuation alone generates a blank slug, so keep the title
+                $data['post_name'] = $entrySlug !== '' ? $entrySlug : $title;
 
                 // Set entry data in processing context for module parsers
                 ProcessingContext::setEntryData($data);
@@ -700,7 +705,7 @@ class PageEntryCreator extends BaseEntryCreator
                     $isEmptyContent = $this->isEmptyContent($parsedBodyContent);
 
                     // The assignment above is unconditional for this branch, so
-                    // page_builder is always set here — the warning that used to
+                    // page_builder is always set here, so the warning that used to
                     // guard the opposite case was unreachable.
                     if ($hasAcfBlocks) {
                         $data['page_builder'] = $parsedContent['page_builder'];
@@ -1635,10 +1640,8 @@ class PageEntryCreator extends BaseEntryCreator
         // ---
 
         // ---
-        // Extract module data using shared method from ModulesParser. An unserialized
-        // list is keyed by ints, so the cast only narrows the type.
+        // Extract module data using shared method from ModulesParser
         // ---
-        // @pest-mutate-ignore: RemoveIntegerCast
         $moduleData = ModulesParser::extractModuleDataFromPostmeta(
             $postmeta,
             (int) $heroModuleIndex

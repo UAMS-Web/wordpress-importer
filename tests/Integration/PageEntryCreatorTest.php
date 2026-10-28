@@ -30,6 +30,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PageEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
@@ -460,6 +461,7 @@ beforeEach(function (): void {
 afterEach(function (): void {
     LinkProcessor::clearDeferredData();
     BaseEntryCreator::clearTaxonomyCaches();
+    BaseTaxonomyValidator::clearCaches();
     ImportWarningManager::clearWarnings();
     ProcessingContext::clearXmlPath();
     ProcessingContext::clearWordPressPageLink();
@@ -653,6 +655,16 @@ describe('importing a page', function (): void {
         'a false kb page' => [['kb_page' => false]],
         'a list' => [['kb_page' => ['807']]],
         'another page' => [['kb_page' => '9']],
+    ]);
+
+    it('imports a page with a blank post id when the kb page is blank too', function (array $settings): void {
+        $run = pageEntryRun(pageEntryExport([['id' => '', 'slug' => 'no-id']]), PageEntryTestConverter::returning(pageEntryBody()), minervaKbSettings: $settings);
+
+        expect(pageEntrySlugs())->toBe(['no-id'])
+            ->and($run['output'])->not->toContain('Skipping page ID');
+    })->with([
+        'a blank kb page' => [['kb_page' => '']],
+        'a false kb page' => [['kb_page' => false]],
     ]);
 
     it('skips a page that already exists when told to, still reporting it as page data', function (): void {
@@ -1216,6 +1228,24 @@ describe('modules and their hero', function (): void {
 
         expect($entryData['post_name'] ?? null)->toBe('m-context')
             ->and(ProcessingContext::getXmlPath())->toBe($export);
+    });
+
+    it('records the title as the post name when the title generates no slug', function (): void {
+        pageEntryRun(pageEntryExport([['id' => '887', 'slug' => '', 'title' => '???', 'meta' => ['_wp_page_template' => 'templates/modules.php', 'uamswp_modules' => 'a:0:{}']]]), PageEntryTestConverter::returning(pageEntryBody()));
+        $entryData = ProcessingContext::getEntryData();
+
+        expect($entryData['post_name'] ?? null)->toBe('???');
+    });
+
+    it('reads a hero module listed under a string key at the first module index', function (): void {
+        pageEntryRun(pageEntryExport([['id' => '888', 'slug' => 'm-keyed', 'parent' => '7', 'meta' => [
+            '_wp_page_template' => 'templates/modules.php',
+            'uamswp_modules' => 'a:1:{s:1:"x";s:12:"modules_hero";}',
+            'uamswp_modules_0_hero_heading' => 'H',
+            'page_title_options' => 'hidden',
+        ]]]), PageEntryTestConverter::returning(pageEntryBody()));
+
+        expect(pageEntry('m-keyed')->get('title_options'))->toBe('hero');
     });
 
     it('logs the page and its modules when they do not unserialize', function (): void {
