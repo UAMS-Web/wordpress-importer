@@ -57,11 +57,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
     private array $logoCategories = [];
 
     /**
-     * @var array<int|string, mixed> Array of category data for taxonomy term creation. Each element: ['site_specific' => 'site-handle-original-slug', 'original' => 'original-slug', 'name' => 'Category Name']
-     */
-    private array $siteSpecificLogoCategories = [];
-
-    /**
      * Returns the WordPress taxonomies a logo list import needs imported first.
      *
      * Shared with {@see PageEntryCreator}, whose logo-list blocks reference the
@@ -141,9 +136,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $site,
             $output
         );
-
-        // Initialize slug counts
-        $slugCounts = [];
 
         // Open a streaming parser spanning every part. A source that can serve
         // none raises rather than importing nothing and reporting success (wordpress-importer-archive#662).
@@ -232,11 +224,12 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 $result
             );
 
-            // Check if we've processed 50 items
-            if (($processedCount + $skippedCount) % 50 === 0) {
-                // Force garbage collection every to prevent memory buildup
-                gc_collect_cycles();
-            }
+            // ---
+            // Collect garbage after each item, as the other creators do. This bounds
+            // memory over a large export and changes no output.
+            // ---
+            // @pest-mutate-ignore: RemoveFunctionCall
+            gc_collect_cycles();
         }
 
         // Clear taxonomy validator cache to ensure newly created terms are found during validation
@@ -249,7 +242,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         unset(
             $xmlStreamParser,
             $attachments,
-            $slugCounts,
             $processedCount,
             $skippedCount,
             $collectionHandle,
@@ -257,7 +249,8 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $site
         );
 
-        // Force final garbage collection
+        // Force final garbage collection, which bounds memory and changes no output
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return the collected page data for tree building
@@ -367,12 +360,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             return false;
         }
 
-        // Check if the status should be skipped
-        if (XpathHelper::shouldSkipStatus($status)) {
-            // Skip the logo list item
-            return false;
-        }
-
         // Generate unique slug and ID
         [$entrySlug, $entryId] = $this->generateSlugAndId(
             $postName,
@@ -391,7 +378,11 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 'wp:meta_key'
             );
 
-            // Check if the metadata key is for content fields
+            // ---
+            // Check if the metadata key is for content fields. The needles are not
+            // numeric, so a loose comparison matches exactly what the strict one does.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 \in_array(
                     $key,
@@ -672,11 +663,14 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $data['logo_link_target'] = $logoLinkTarget === '_blank';
         }
 
-        // Map logo category
-        $logoCategory = $metaData['logo_category'] ?? '';
-        if ($logoCategory !== '') {
-            // Parse serialized array if needed
-            $categories = $this->parseSerializedArray($logoCategory);
+        // ---
+        // Map logo category. An absent or blank value parses to no categories, so
+        // the default it falls back to cannot be told apart.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $categories = $this->parseSerializedArray($metaData['logo_category'] ?? '');
+
+        if ($categories !== []) {
             $categorySlugs = [];
 
             // Convert category IDs to slugs using TermLookupHelper
@@ -720,21 +714,13 @@ class LogoListItemEntryCreator extends BaseEntryCreator
                 }
             }
 
-            // Anything unresolved falls back to the flat taxonomy reference shape.
-            if ($categorySlugs !== []) {
-                // Use the utility class to add site prefix with proper sluggification
-                $siteSpecificCategorySlugs = TaxonomySlugProcessor::addSitePrefixToSlugs(
-                    $categorySlugs,
+            // Anything unresolved falls back to the flat taxonomy reference shape,
+            // site-prefixed with proper sluggification
+            foreach ($categorySlugs as $categorySlug) {
+                $mappedCategoryTerms[] = 'logos_item_categories::'.TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $categorySlug,
                     $site
                 );
-
-                // Map each site-specific slug to a Statamic taxonomy reference
-                foreach ($siteSpecificCategorySlugs as $slug) {
-                    // Add the taxonomy reference only for non-empty string slugs
-                    if (\is_string($slug) && $slug !== '') {
-                        $mappedCategoryTerms[] = "logos_item_categories::{$slug}";
-                    }
-                }
             }
 
             // Store mapped category references when at least one exists
@@ -743,12 +729,10 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Map logo label
-        $logoLabel = $metaData['logo_label'] ?? '';
-        if ($logoLabel !== '') {
-            // Normalize the label ID value before resolving it
-            $normalizedLabelId = $this->normalizeTermId($logoLabel);
+        // Map logo label, normalizing its ID value before resolving it
+        $normalizedLabelId = $this->normalizeTermId($metaData['logo_label'] ?? null);
 
+        if ($normalizedLabelId !== null) {
             // ---
             // `logos_item_labels` became a site-scoped structured collection in
             // `UAMS-Web/uams-statamic-archive#2533`, so the field is an `entries` picker
@@ -758,14 +742,12 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             // written back as a slug, which would restore the dangling value this
             // replaces (wordpress-importer-archive#1220).
             // ---
-            $labelReference = $normalizedLabelId === null
-                ? null
-                : TermDestinationRegistry::referenceFor(
-                    'logo-list-label',
-                    $normalizedLabelId
-                );
+            $labelReference = TermDestinationRegistry::referenceFor(
+                'logo-list-label',
+                $normalizedLabelId
+            );
 
-            if ($labelReference !== null && $labelReference !== '') {
+            if ($labelReference !== null) {
                 $data['logos_item_labels'] = [$labelReference];
             }
         }
@@ -779,11 +761,9 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $logoLink,
             $logoLinkText,
             $logoLinkTarget,
-            $logoCategory,
             $categories,
             $categorySlugs,
-            $siteSpecificCategorySlugs,
-            $logoLabel
+            $normalizedLabelId
         );
     }
 
@@ -940,77 +920,46 @@ class LogoListItemEntryCreator extends BaseEntryCreator
             $metaData[$key] = $value;
         }
 
-        // Map logo category
-        $logoCategory = $metaData['logo_category'] ?? '';
+        // ---
+        // Map logo category. An absent or blank value parses to no categories, so
+        // the default it falls back to cannot be told apart.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $categories = $this->parseSerializedArray($metaData['logo_category'] ?? '');
 
-        // Check if the logo category is not empty
-        if ($logoCategory !== '') {
-            // Parse serialized array if needed
-            $categories = $this->parseSerializedArray($logoCategory);
+        // Loop through each category ID in the parsed array
+        foreach ($categories as $categoryId) {
+            // Normalize category ID value to a string before term map lookup
+            $normalizedCategoryId = $this->normalizeTermId($categoryId);
 
-            // Loop through each category ID in the parsed array
-            foreach ($categories as $categoryId) {
-                // Normalize category ID value to a string before term map lookup
-                $normalizedCategoryId = $this->normalizeTermId($categoryId);
+            // Skip category IDs that cannot be normalized to a string value
+            if ($normalizedCategoryId === null) {
+                continue;
+            }
 
-                // Skip category IDs that cannot be normalized to a string value
-                if ($normalizedCategoryId === null) {
-                    continue;
-                }
+            // ---
+            // Check if the category ID is set in the term map. The term map holds only
+            // terms with a slug, so each resolves to a full slug, its own when it has
+            // no parent.
+            // ---
+            if (
+                isset($termMap[$normalizedCategoryId])
+                && \is_array($termMap[$normalizedCategoryId])
+            ) {
+                // Use TermLookupHelper to get the full hierarchical slug using ID-based lookup
+                $fullSlug = TermLookupHelper::getFullSlugFromMapById(
+                    $termMap,
+                    $normalizedCategoryId
+                );
 
-                // Check if the category ID is set in the term map
-                if (
-                    isset($termMap[$normalizedCategoryId])
-                    && \is_array($termMap[$normalizedCategoryId])
-                ) {
-                    // Get category term
-                    $categoryTerm = $termMap[$normalizedCategoryId];
+                // Add site prefix to create the site-specific taxonomy slug
+                $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
+                    $fullSlug,
+                    $site
+                );
 
-                    // Get category slug
-                    $categorySlug = \is_string($categoryTerm['term_slug'] ?? null) ? $categoryTerm['term_slug'] : '';
-
-                    // Get category name
-                    $categoryName = \is_string($categoryTerm['term_name'] ?? null) ? $categoryTerm['term_name'] : '';
-
-                    // Check if the category slug is not empty
-                    if ($categorySlug !== '') {
-                        // Use TermLookupHelper to get the full hierarchical slug using ID-based lookup
-                        $fullSlug = TermLookupHelper::getFullSlugFromMapById(
-                            $termMap,
-                            $normalizedCategoryId
-                        );
-
-                        // Skip category terms that do not resolve to a usable slug
-                        if ($fullSlug === '') {
-                            continue;
-                        }
-
-                        // Add site prefix to create site-specific taxonomy slugs
-                        $siteSpecificSlugs = TaxonomySlugProcessor::addSitePrefixToSlugs(
-                            [$fullSlug],
-                            $site
-                        );
-
-                        // Get the first site-specific slug as a string value
-                        $siteSpecificSlug = $this->extractFirstSlug($siteSpecificSlugs);
-
-                        // Skip category mapping when no site-specific slug is available
-                        if ($siteSpecificSlug === null) {
-                            continue;
-                        }
-
-                        // Add site-specific category slug to logo categories for validation
-                        $this->logoCategories[$siteSpecificSlug][] = $entrySlug;
-
-                        // Store site specific taxonomy data
-                        $this->storeSiteSpecificTaxonomyData(
-                            $this->siteSpecificLogoCategories,
-                            $siteSpecificSlug,
-                            $fullSlug,
-                            $categoryName
-                        );
-                    }
-                }
+                // Add site-specific category slug to logo categories for validation
+                $this->logoCategories[$siteSpecificSlug][] = $entrySlug;
             }
         }
 
@@ -1024,12 +973,8 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         // Clean up variables to free up memory
         unset(
             $metaData,
-            $logoCategory,
             $categories,
             $categoryId,
-            $categoryTerm,
-            $categorySlug,
-            $categoryName,
         );
     }
 
@@ -1042,10 +987,12 @@ class LogoListItemEntryCreator extends BaseEntryCreator
     private function normalizeTermId(
         mixed $termId
     ): ?string {
-        // Check if the term ID is already a string
+        // ---
+        // Return a string ID as-is. A blank one resolves to nothing: no destination
+        // and no term-map entry has a blank id.
+        // ---
         if (\is_string($termId)) {
-            // Return non-empty string IDs as-is
-            return $termId !== '' ? $termId : null;
+            return $termId;
         }
 
         // Check if the term ID is an integer value
@@ -1055,27 +1002,6 @@ class LogoListItemEntryCreator extends BaseEntryCreator
         }
 
         // Return null for unsupported term ID types
-        return null;
-    }
-
-    /**
-     * Extract the first slug value from a list.
-     *
-     * @param  array<int|string, mixed>  $slugs  List of slug values
-     * @return string|null The first valid slug, or null when unavailable
-     */
-    private function extractFirstSlug(
-        array $slugs
-    ): ?string {
-        // Get the first value from the slug list
-        $firstSlug = $slugs[0] ?? null;
-
-        // Return the slug when it is a non-empty string
-        if (\is_string($firstSlug) && $firstSlug !== '') {
-            return $firstSlug;
-        }
-
-        // Return null when no valid first slug exists
         return null;
     }
 

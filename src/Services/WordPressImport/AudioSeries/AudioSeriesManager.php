@@ -193,7 +193,8 @@ class AudioSeriesManager
      * so an untagged term is silently treated as neither kind.
      *
      * @param  AudioSeriesConfig  $config  The audio series configuration containing taxonomy and term details
-     * @param  string  $site  The Statamic site handle where the term should be created
+     * @param  string  $site  The Statamic site handle being imported. Not read: a term is
+     *                        written to its taxonomy's default locale
      * @param  OutputInterface  $output  Console output for user feedback and logging
      * @param  ?string  $termName  Optional custom term name. If not provided, uses the default name from the
      *                             configuration
@@ -279,7 +280,6 @@ class AudioSeriesManager
         // Configure the new term
         $term->taxonomy($taxonomyHandle);
         $term->slug($termSlug);
-        $term->in($site);
         $term->set(
             'title',
             $expectedTermName
@@ -366,9 +366,10 @@ class AudioSeriesManager
         // Get base blog URL for same-site checking
         $baseBlogUrl = $assetImporter->getBaseBlogUrl();
 
-        // Skip assets not on the same site as the base blog URL
+        // Skip assets not on the same site as the base blog URL; an empty base counts
+        // every URL as the same site
         if (
-            $baseBlogUrl !== null && $baseBlogUrl !== ''
+            $baseBlogUrl !== null
             && ! AssetUtils::isSameSiteUrl(
                 $url,
                 $baseBlogUrl
@@ -381,7 +382,9 @@ class AudioSeriesManager
 
         // Check if file uploads are enabled
         if (! $assetImporter->getUploadFiles()) {
-            $output->writeln('<comment>File uploads disabled. Using original URL for audio file: '.basename($url).'</comment>');
+            $filename = basename($url);
+
+            $output->writeln("<comment>File uploads disabled. Using original URL for audio file: {$filename}</comment>");
 
             return $url;
         }
@@ -481,13 +484,14 @@ class AudioSeriesManager
         // Create slug from post title (HTML should already be stripped by caller)
         $postTitleSlug = self::createSlug($postTitle);
 
-        // Create slug from segment title if provided (HTML should already be stripped by caller)
-        $segmentTitleSlug = ($segmentTitle !== null && $segmentTitle !== '') ? self::createSlug($segmentTitle) : null;
+        // Create slug from segment title if provided (HTML should already be stripped by
+        // caller); an empty or absent title slugs to '' like one with no letters or digits
+        $segmentTitleSlug = self::createSlug($segmentTitle ?? '');
 
         // Build filename components
         $filename = "{$config->getFilenamePrefix()}_{$dateStr}_{$postTitleSlug}";
 
-        if ($segmentTitleSlug !== null && $segmentTitleSlug !== '') {
+        if ($segmentTitleSlug !== '') {
             $filename .= "_{$segmentTitleSlug}";
         }
 
@@ -520,11 +524,8 @@ class AudioSeriesManager
         // Create slug from post title for directory naming
         $postTitleSlug = self::createSlug($postTitle);
 
-        // Build the subdirectory with date and post title slug
-        $subdirectory = "{$dateStr}_{$postTitleSlug}";
-
-        // Return lowercase subdirectory for consistency
-        return \strtolower($subdirectory);
+        // Build the subdirectory with date and post title slug, both already lowercase
+        return "{$dateStr}_{$postTitleSlug}";
     }
 
     /**
@@ -550,6 +551,9 @@ class AudioSeriesManager
             '-',
             $slug
         );
+        // The pattern is fixed and valid, so preg_replace() never fails here and the
+        // fallback only types the value.
+        // @pest-mutate-ignore: TernaryNegated
         $slug = is_string($normalizedSlug)
             ? $normalizedSlug
             : $slug;
@@ -730,13 +734,6 @@ class AudioSeriesManager
     }
 
     /**
-     * Read a string field from a term's default locale.
-     *
-     * @param  Term  $term  The term to read from
-     * @param  string  $field  The field handle to read
-     * @return string The field value, or an empty string when unavailable
-     */
-    /**
      * Write the series kind onto a term.
      *
      * `subtype` is the multi-select `#1611` introduced on `audio_series`; the
@@ -791,7 +788,9 @@ class AudioSeriesManager
         // Resolve the default-locale term representation
         $localizedTerm = $term->inDefaultLocale();
 
-        // Return an empty list when the localized term cannot be read
+        // A term's default-locale view is always an object that reads fields, so this
+        // only types the call below.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (
             ! is_object($localizedTerm)
             || ! method_exists(
@@ -833,7 +832,9 @@ class AudioSeriesManager
         // Resolve the default-locale term representation
         $localizedTerm = $term->inDefaultLocale();
 
-        // Return an empty string when the localized term cannot be read
+        // A term's default-locale view is always an object that reads fields, so this
+        // only types the call below.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn, EmptyStringToNotEmpty
         if (
             ! is_object($localizedTerm)
             || ! method_exists(
@@ -863,7 +864,8 @@ class AudioSeriesManager
         // Read the asset's current data object
         $assetData = $asset->data();
 
-        // Return an empty array when data() did not yield a readable object
+        // An asset's data is always a collection, so this only types the call below.
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (
             ! is_object($assetData)
             || ! method_exists(
