@@ -41,6 +41,9 @@ final class AttachmentReferenceCollector
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails AttachmentReferenceCollectorTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array NAMED_META_KEYS = [
         '_thumbnail_id',
         'page_cover_image',
@@ -59,6 +62,9 @@ final class AttachmentReferenceCollector
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails AttachmentReferenceCollectorTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array NAMED_META_PATTERNS = [
         '/^page_hero_hero_\d+_hero_image_(desktop|tablet|mobile)$/',
         '/^uamswp_modules_\d+_.*image.*$/',
@@ -72,6 +78,9 @@ final class AttachmentReferenceCollector
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails AttachmentReferenceCollectorTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array PRIVATE_META_READ_AS_TEXT = [
         '_redirect_rule_to',
     ];
@@ -85,6 +94,9 @@ final class AttachmentReferenceCollector
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails AttachmentReferenceCollectorTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array IMAGE_EXTENSIONS = [
         'avif', 'bmp', 'gif', 'heic', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
     ];
@@ -97,6 +109,9 @@ final class AttachmentReferenceCollector
      *
      * @var list<string>
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // these items; removing each one by hand fails AttachmentReferenceCollectorTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     private const array NON_POST_SEGMENTS = [
         'author', 'category', 'feed', 'page', 'tag', 'wp-admin', 'wp-content', 'wp-includes',
         'wp-json', 'wp-login.php',
@@ -183,6 +198,8 @@ final class AttachmentReferenceCollector
                 if (\is_scalar($value)) {
                     $value = (string) $value;
                 } elseif (\is_array($value)) {
+                    // A decoded payload always encodes, so the cast only narrows the type
+                    // @pest-mutate-ignore: RemoveStringCast
                     $value = (string) \json_encode($value);
                 } else {
                     continue;
@@ -199,6 +216,8 @@ final class AttachmentReferenceCollector
                 // Only fields the importer processes are read for them: ACF keeps its values
                 // under public keys, while a leading underscore is a plugin's own record, such
                 // as an SEO plugin's canonical URL and social image, which nothing imports.
+                // Meta keys are strings, so the strict flag, which phpstan-strict-rules requires, changes no result
+                // @pest-mutate-ignore: TrueToFalse
                 if (! \str_starts_with($key, '_') || \in_array($key, self::PRIVATE_META_READ_AS_TEXT, true)) {
                     $this->collectText($value, $item);
                 }
@@ -236,6 +255,8 @@ final class AttachmentReferenceCollector
      */
     public function paths(): array
     {
+        // A path keeps its dot, so no key turns into an int; the map only narrows the type
+        // @pest-mutate-ignore: UnwrapArrayMap
         $paths = \array_map(strval(...), \array_keys($this->paths));
         \sort($paths);
 
@@ -277,7 +298,10 @@ final class AttachmentReferenceCollector
         string $url
     ): string {
         $url = \strtolower(\trim($url));
+        // A replacement over a string answers with a string, so the casts only narrow the type
+        // @pest-mutate-ignore: RemoveStringCast
         $url = (string) \preg_replace('#^https?:#', '', $url);
+        // @pest-mutate-ignore: RemoveStringCast
         $url = (string) \preg_replace('/[?#].*$/', '', $url);
 
         return \rtrim($url, '/');
@@ -299,6 +323,8 @@ final class AttachmentReferenceCollector
     ): ?string {
         $path = \parse_url($url, \PHP_URL_PATH);
 
+        // An empty path has no file in it either, which the extension check below answers
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (! \is_string($path) || $path === '') {
             return null;
         }
@@ -347,7 +373,8 @@ final class AttachmentReferenceCollector
             foreach ($this->integersIn($text) as $id) {
                 $this->addId($id, null, $item);
             }
-        } elseif ($found > 0) {
+        } else {
+            // No match leaves the list empty, so the loop does nothing
             foreach ($blocks as $block) {
                 $this->collectBlockAttributes($block[1], $block[2], $item);
             }
@@ -361,6 +388,8 @@ final class AttachmentReferenceCollector
         $this->collectPattern('/\[caption\b[^\]]*\bid\s*=\s*["\']?attachment_(\d+)/i', $text, 'shortcode:caption', $item);
         $this->collectPattern('/[?&]attachment_id=(\d+)/i', $text, 'link:attachment_id', $item);
 
+        // A count of zero leaves the match list empty, so the guard only skips an empty loop
+        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
         if (\preg_match_all('/\[gallery\b[^\]]*\bids\s*=\s*["\']?([\d,\s]+)/i', $text, $galleries) > 0) {
             foreach ($galleries[1] as $list) {
                 foreach ($this->integersIn($list) as $id) {
@@ -371,6 +400,8 @@ final class AttachmentReferenceCollector
 
         // Every absolute or protocol-relative URL. Relative URLs are left alone, because the
         // importer does not treat them as same-site either.
+        // A count of zero leaves the match list empty, so the guard only skips an empty loop
+        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
         if (\preg_match_all('#(?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+#i', $text, $urls) > 0) {
             foreach ($urls[0] as $url) {
                 $this->collectUrl(\rtrim($url, '.;:!?'), $item);
@@ -443,6 +474,8 @@ final class AttachmentReferenceCollector
         string $shape,
         int $item
     ): void {
+        // A count of zero leaves the match list empty, so the guard only skips an empty loop
+        // @pest-mutate-ignore: GreaterToGreaterOrEqual, DecrementInteger
         if (\preg_match_all($pattern, $text, $matches) > 0) {
             foreach ($matches[1] as $id) {
                 $this->addId((int) $id, $shape, $item);
@@ -468,10 +501,14 @@ final class AttachmentReferenceCollector
         $path = self::uploadsRelativePath($url);
 
         if ($path !== null) {
+            // Only the key is read
+            // @pest-mutate-ignore: TrueToFalse
             $this->paths[$path] = true;
 
             $extension = \strtolower(\pathinfo($path, \PATHINFO_EXTENSION));
 
+            // Extensions are strings, so the strict flag, which phpstan-strict-rules requires, changes no result
+            // @pest-mutate-ignore: TrueToFalse
             if (\in_array($extension, self::IMAGE_EXTENSIONS, true)) {
                 $this->imageUrls[$url] ??= $item;
             }
@@ -497,13 +534,18 @@ final class AttachmentReferenceCollector
     private function isPermalinkCandidate(
         string $url
     ): bool {
+        // A base with no path reads as the empty string either way
+        // @pest-mutate-ignore: RemoveStringCast
         $base = (string) \parse_url($this->baseBlogUrl, \PHP_URL_PATH);
+        // A URL with no path reads as the empty string either way
+        // @pest-mutate-ignore: RemoveStringCast
         $path = (string) \parse_url($url, \PHP_URL_PATH);
 
         // The path below the site's base, so a subsite's own prefix is not read as a slug.
+        $prefix = \strtolower(\rtrim($base, '/'));
         $relative = \trim(
-            \str_starts_with(\strtolower($path), \strtolower(\rtrim($base, '/')))
-                ? \substr($path, \strlen(\rtrim($base, '/')))
+            \str_starts_with(\strtolower($path), $prefix)
+                ? \substr($path, \strlen($prefix))
                 : $path,
             '/'
         );
@@ -514,6 +556,8 @@ final class AttachmentReferenceCollector
 
         $segments = \explode('/', $relative);
 
+        // Path segments are strings, so the strict flag, which phpstan-strict-rules requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         if (\in_array(\strtolower($segments[0]), self::NON_POST_SEGMENTS, true)) {
             return false;
         }
@@ -530,6 +574,8 @@ final class AttachmentReferenceCollector
     private function isNamedMetaKey(
         string $key
     ): bool {
+        // Meta keys are strings, so the strict flag, which phpstan-strict-rules requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         if (\in_array($key, self::NAMED_META_KEYS, true)) {
             return true;
         }
@@ -554,6 +600,8 @@ final class AttachmentReferenceCollector
             return;
         }
 
+        // Only the key is read
+        // @pest-mutate-ignore: TrueToFalse
         $this->ids[$id] = true;
 
         if ($shape !== null && ! isset($this->namedIds[$id])) {
@@ -570,6 +618,8 @@ final class AttachmentReferenceCollector
     private function integersIn(
         string $value
     ): array {
+        // No match leaves the list empty, so the early return only skips mapping nothing
+        // @pest-mutate-ignore: DecrementInteger, RemoveEarlyReturn
         if (\preg_match_all('/(?<![A-Za-z0-9_.])\d{1,10}(?![A-Za-z0-9_])/', $value, $matches) === 0) {
             return [];
         }
@@ -588,8 +638,14 @@ final class AttachmentReferenceCollector
     ): string {
         $text = \str_replace('\\/', '/', $text);
 
+        // A replacement over a string answers with a string, so the cast only narrows the type
+        // @pest-mutate-ignore: RemoveStringCast
         return (string) \preg_replace_callback(
             '/\\\\u([0-9a-fA-F]{4})/',
+            // Four hex digits always decode to an int, so the cast only narrows the type, and
+            // hexdec() skips the backslash and the `u` of the whole match as it would any
+            // character that is not a hex digit
+            // @pest-mutate-ignore: RemoveIntegerCast, DecrementInteger
             static fn (array $match): string => \mb_chr((int) \hexdec($match[1]), 'UTF-8'),
             $text
         );
