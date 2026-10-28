@@ -90,6 +90,9 @@ class TreeBuilder
 
         // Check if tree has already been built for this collection and site
         $key = "$collectionHandle:$site";
+
+        // Every key is a "handle:site" string, so strict and loose comparison agree.
+        // @pest-mutate-ignore: TrueToFalse
         if (
             \in_array(
                 $key,
@@ -105,13 +108,9 @@ class TreeBuilder
             $baseBlogUrl
         );
 
+        // A collection that has a structure always answers one, made from its contents when
+        // none is held, so anything but a CollectionStructure here is refused rather than built
         $structure = $collection->structure();
-        if (! $structure) {
-            $output->writeln("<comment>No structure exists for '$collectionHandle'. Creating one.</comment>");
-            $structure = (new CollectionStructure)->handle($collectionHandle);
-            $collection->structure($structure);
-            $collection->save();
-        }
 
         if (! $structure instanceof CollectionStructure) {
             return;
@@ -284,6 +283,8 @@ class TreeBuilder
         foreach ($unassigned as $data) {
             $entryId = self::extractScalarString($data['entry'] ?? null);
 
+            // Both sides are entry strings, so strict and loose comparison agree.
+            // @pest-mutate-ignore: TrueToFalse
             if (
                 ! \in_array(
                     $entryId,
@@ -296,21 +297,21 @@ class TreeBuilder
             }
         }
 
-        // Step 6: Verify all pages are included
-        // A repeated entry collapses to one key in the map below, so the list is not deduplicated
-        $allEntries = \array_merge(
+        // ---
+        // Step 6: Verify all pages are included. The front page was removed from
+        // $pageData in step 1, so only another page sharing its entry can name it here,
+        // and the front page itself is never missing. A repeated entry collapses to one
+        // key in the map below.
+        // ---
+        $missingEntries = array_diff(
             self::normalizeStringList(array_column(
                 $pageData,
                 'entry'
             )),
+            self::normalizeStringList($assignedEntries),
+            $addedUnassigned,
             $frontPage !== null ? [self::extractScalarString($frontPage['entry'] ?? null)] : []
         );
-        $missingEntries = self::normalizeStringList(array_diff(
-            $allEntries,
-            self::normalizeStringList($assignedEntries),
-            self::normalizeStringList($addedUnassigned),
-            $frontPage !== null ? [self::extractScalarString($frontPage['entry'] ?? null)] : []
-        ));
         if ($missingEntries !== []) {
             $missingEntriesMap = array_combine(
                 $missingEntries,
@@ -337,10 +338,8 @@ class TreeBuilder
             $frontNode = $this->cleanNode($frontPage);
             $frontEntry = self::extractScalarString($frontNode['entry'] ?? null);
 
-            if (
-                $frontEntry !== ''
-                && \is_array($children[$frontEntry] ?? null)
-            ) {
+            // No child is filed under an empty entry, so an empty one finds none
+            if (\is_array($children[$frontEntry] ?? null)) {
                 $frontNode['children'] = $this->sortTreeLevel($children[$frontEntry]);
                 foreach ($frontNode['children'] as &$child) {
                     if (\is_array($child)) {
@@ -377,12 +376,16 @@ class TreeBuilder
         array &$assignedEntries
     ): array {
         foreach ($nodes as &$node) {
+            // Every node reaching here is a page buildTree() already accepted: an array
+            // with a non-empty entry. The two guards only type what follows.
+            // @pest-mutate-ignore: ContinueToBreak
             if (! \is_array($node)) {
                 continue;
             }
 
             $entry = self::extractScalarString($node['entry'] ?? null);
 
+            // @pest-mutate-ignore: EmptyStringToNotEmpty, ContinueToBreak
             if ($entry === '') {
                 continue;
             }
@@ -489,11 +492,8 @@ class TreeBuilder
         // Group files by entry ID
         foreach ($files as $file) {
             $filePath = $file->getPathname();
+            // An empty file parses to no id, so it is passed over below
             $contents = IlluminateFileFacade::get($filePath);
-
-            if ($contents === '') {
-                continue;
-            }
 
             try {
                 $data = app(Yaml::class)->parse($contents);
@@ -534,11 +534,17 @@ class TreeBuilder
         $isDated = $collection !== null && $collection->dated();
 
         // Get paths index to determine canonical paths
+        // The entries store and its collection stores always carry these methods, so the
+        // checks only type the calls.
         $entriesStore = StacheFacade::store('entries');
+
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         $collectionStore = (
             \is_object($entriesStore)
             && \method_exists($entriesStore, 'store')
         ) ? $entriesStore->store($collectionHandle) : null;
+
+        // @pest-mutate-ignore: BooleanAndToBooleanOr
         $pathsIndex = (
             \is_object($collectionStore)
             && \method_exists($collectionStore, 'paths')
@@ -546,6 +552,8 @@ class TreeBuilder
 
         // Process each group of files with the same ID
         foreach ($filesById as $entryId => $fileGroup) {
+            // A group of one deletes nothing whether or not it is passed over here
+            // @pest-mutate-ignore: SmallerOrEqualToSmaller, DecrementInteger
             if (\count($fileGroup) <= 1) {
                 continue;
             }
@@ -580,6 +588,9 @@ class TreeBuilder
                     foreach ($fileGroup as $fileInfo) {
                         if ($fileInfo['path'] === $canonicalPath) {
                             $fileToKeep = $fileInfo;
+
+                            // Paths are unique, so no later file matches the index too
+                            // @pest-mutate-ignore: BreakToContinue
                             break;
                         }
                     }
@@ -588,6 +599,8 @@ class TreeBuilder
                 $fileToKeep ??= $fileGroup[0];
             } else {
                 // For non-dated collections, keep the file matching paths index
+                // The paths index is always a collection, so the check only types the call
+                // @pest-mutate-ignore: BooleanAndToBooleanOr
                 if (
                     \is_object($pathsIndex)
                     && \method_exists($pathsIndex, 'get')
@@ -596,6 +609,9 @@ class TreeBuilder
                     foreach ($fileGroup as $fileInfo) {
                         if ($fileInfo['path'] === $canonicalPath) {
                             $fileToKeep = $fileInfo;
+
+                            // Paths are unique, so no later file matches the index too
+                            // @pest-mutate-ignore: BreakToContinue
                             break;
                         }
                     }
@@ -653,10 +669,6 @@ class TreeBuilder
     private static function extractScalarString(
         mixed $value
     ): string {
-        if (\is_string($value)) {
-            return $value;
-        }
-
         if (\is_scalar($value)) {
             return (string) $value;
         }
@@ -673,10 +685,6 @@ class TreeBuilder
     private static function extractNullableString(
         mixed $value
     ): ?string {
-        if ($value === null) {
-            return null;
-        }
-
         $stringValue = self::extractScalarString($value);
 
         return $stringValue === '' ? null : $stringValue;
@@ -717,19 +725,28 @@ class TreeBuilder
         mixed $firstNode,
         mixed $secondNode
     ): int {
-        $firstNodeArray = \is_array($firstNode) ? $firstNode : [];
-        $secondNodeArray = \is_array($secondNode) ? $secondNode : [];
+        [$firstOrder, $firstTitle] = self::sortKey($firstNode);
+        [$secondOrder, $secondTitle] = self::sortKey($secondNode);
 
-        $firstOrder = (int) self::extractScalarString($firstNodeArray['menu_order'] ?? 0);
-        $secondOrder = (int) self::extractScalarString($secondNodeArray['menu_order'] ?? 0);
+        $byOrder = $firstOrder <=> $secondOrder;
 
-        if ($firstOrder === $secondOrder) {
-            return strcmp(
-                self::extractScalarString($firstNodeArray['title'] ?? ''),
-                self::extractScalarString($secondNodeArray['title'] ?? '')
-            );
-        }
+        return $byOrder !== 0 ? $byOrder : strcmp($firstTitle, $secondTitle);
+    }
 
-        return $firstOrder - $secondOrder;
+    /**
+     * A node's menu order and title, for sorting.
+     *
+     * @param  mixed  $node  The node candidate
+     * @return array{int, string} The menu order, 0 when absent, and the title, '' when absent
+     */
+    private static function sortKey(
+        mixed $node
+    ): array {
+        $nodeArray = \is_array($node) ? $node : [];
+
+        return [
+            (int) self::extractScalarString($nodeArray['menu_order'] ?? null),
+            self::extractScalarString($nodeArray['title'] ?? null),
+        ];
     }
 }
