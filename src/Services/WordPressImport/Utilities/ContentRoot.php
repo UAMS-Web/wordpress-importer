@@ -12,7 +12,7 @@ use Statamic\Facades\Stache as StacheFacade;
  *
  * The host app reads the `content/` git submodule in production and a
  * disposable mirror of it under `APP_ENV=testing`, so no test can write into
- * the submodule (`UAMS-Web/uams-statamic#1995`). That re-rooting is applied to
+ * the submodule (`UAMS-Web/uams-statamic-archive#1995`). That re-rooting is applied to
  * every content-backed Stache store, and a `base_path('content/…')` in this
  * package does not follow it.
  *

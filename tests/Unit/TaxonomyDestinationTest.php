@@ -11,7 +11,7 @@ use UAMSWeb\WordPressImporter\Tests\Support\ExportsCorpus;
 /**
  * Tests the taxonomy disposition table and the term destination registry (issue wordpress-importer-archive#13).
  *
- * `UAMS-Web/uams-statamic#1863` converted `people_groups` and
+ * `UAMS-Web/uams-statamic-archive#1863` converted `people_groups` and
  * `logos_item_categories` into structured collections, joining `post_categories`.
  * The importer's mapping table still types all of them `taxonomy`, so the
  * disposition recorded here is what routes a term to a collection entry instead

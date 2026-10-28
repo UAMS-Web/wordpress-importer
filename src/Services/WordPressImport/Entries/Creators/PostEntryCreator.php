@@ -130,7 +130,7 @@ class PostEntryCreator extends BaseEntryCreator
     /**
      * Resolves a post's WordPress categories to `post_categories` entry references.
      *
-     * `UAMS-Web/uams-statamic#1433` migrated `post_categories` from a flat
+     * `UAMS-Web/uams-statamic-archive#1433` migrated `post_categories` from a flat
      * taxonomy to a structured collection and repointed the `posts` field from a
      * `terms` reference to an `entries` one, so the field now stores collection
      * **entry ids**. {@see StructuredTermImporter} creates those entries during
@@ -166,7 +166,7 @@ class PostEntryCreator extends BaseEntryCreator
      * Resolves a post's term nicenames to the collection entry ids they import as.
      *
      * The general form of {@see self::resolveCategoryEntryReferences()}, used for
-     * tags as well since `UAMS-Web/uams-statamic#2532` made `post_tags` a
+     * tags as well since `UAMS-Web/uams-statamic-archive#2532` made `post_tags` a
      * site-scoped collection (wordpress-importer-archive#1220). The same rules apply: an unresolved
      * nicename is omitted rather than written back as a slug, order is the
      * caller's, and duplicates collapse.
@@ -443,7 +443,7 @@ class PostEntryCreator extends BaseEntryCreator
             // ---
             // Resolve each category to the `post_categories` COLLECTION entry it
             // was imported as, rather than to a taxonomy term.
-            // `UAMS-Web/uams-statamic#1433` moved that destination from a flat
+            // `UAMS-Web/uams-statamic-archive#1433` moved that destination from a flat
             // taxonomy to a structured collection and repointed the blueprint
             // field to an `entries` picker, so a term slug written here resolves
             // to nothing (wordpress-importer-archive#422). The term pass runs before any entry is created
@@ -465,7 +465,7 @@ class PostEntryCreator extends BaseEntryCreator
             // ---
             // Resolve each tag to the `post_tags` COLLECTION entry the term pass
             // imported it as, exactly as categories are resolved above.
-            // `UAMS-Web/uams-statamic#2532` converted `post_tags` into a
+            // `UAMS-Web/uams-statamic-archive#2532` converted `post_tags` into a
             // site-scoped structured collection whose field is an `entries`
             // picker, so a site-prefixed term slug resolves to nothing there
             // (wordpress-importer-archive#1220). Only when tag import is enabled.
@@ -1041,7 +1041,7 @@ class PostEntryCreator extends BaseEntryCreator
      *
      * {@see BaseEntryCreator::getPostCategories()} exists so the flat-taxonomy
      * validators can be handed the category-to-entries map a creator built. A
-     * post's categories stopped being terms in `UAMS-Web/uams-statamic#1433` —
+     * post's categories stopped being terms in `UAMS-Web/uams-statamic-archive#1433` —
      * they are `post_categories` collection entries, created and trees-built by
      * {@see StructuredTermImporter} during the term pass — so there is no term
      * map to hand over and nothing left to validate (wordpress-importer-archive#422).
@@ -1060,7 +1060,7 @@ class PostEntryCreator extends BaseEntryCreator
      * Returns the post tags collected for taxonomy validation, which is none.
      *
      * The tag-to-entries map existed to feed a taxonomy-term validator. Tags
-     * became a site-scoped collection in `UAMS-Web/uams-statamic#2532`, and the
+     * became a site-scoped collection in `UAMS-Web/uams-statamic-archive#2532`, and the
      * term pass creates the entries a post references, so there is nothing left
      * to validate or create afterwards (wordpress-importer-archive#1220).
      *
@@ -1130,11 +1130,11 @@ class PostEntryCreator extends BaseEntryCreator
      * Validates the taxonomy terms used in post entries, of which there are none.
      *
      * Neither of a post's groupings is a taxonomy any more. **Categories** stopped
-     * being taxonomy terms in `UAMS-Web/uams-statamic#1433`: the validator that
+     * being taxonomy terms in `UAMS-Web/uams-statamic-archive#1433`: the validator that
      * used to run over them read an absent `content/taxonomies/post_categories`
      * directory, concluded every category was missing, and tried to create terms
      * in a taxonomy `Taxonomy::findByHandle()` returns null for (wordpress-importer-archive#422). **Tags**
-     * followed in `UAMS-Web/uams-statamic#2532` (#1220). The entries both fields
+     * followed in `UAMS-Web/uams-statamic-archive#2532` (#1220). The entries both fields
      * reference are created by {@see StructuredTermImporter} during the term pass,
      * before any post is written, so nothing is left to create afterwards.
      *

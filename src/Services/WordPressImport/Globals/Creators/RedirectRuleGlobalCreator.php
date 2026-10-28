@@ -36,14 +36,14 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 class RedirectRuleGlobalCreator extends BaseGlobalCreator
 {
     /**
-     * The collection a vanity domain's rules are written to (UAMS-Web/uams-statamic#2594, #1306).
+     * The collection a vanity domain's rules are written to (UAMS-Web/uams-statamic-archive#2594, #1306).
      */
     public const DOMAIN_COLLECTION = 'redirect_domains';
 
     /**
      * The vanity domains whose redirect rules go to the redirect domains collection.
      *
-     * The five domains `UAMS-Web/uams-statamic#2594` counted. The first three run Safe Redirect
+     * The five domains `UAMS-Web/uams-statamic-archive#2594` counted. The first three run Safe Redirect
      * Manager, whose rules are `redirect_rule` posts. `go.uams.edu` and `gouams.com` run the
      * Redirection and Pretty Links plugins, whose rules a `--source=api` run materializes as
      * `redirect_rule` items (wordpress-importer-archive#1307). Overridden by `wordpress-import.redirect_domains.hosts`.
@@ -661,7 +661,7 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
      * host app: the surrounding flow resolves targets through `LinkProcessor`, which
      * needs a booted container, while the row envelope itself is pure.
      *
-     * Every imported row is stamped `status: approved`. `UAMS-Web/uams-statamic#1357`
+     * Every imported row is stamped `status: approved`. `UAMS-Web/uams-statamic-archive#1357`
      * gates serving on `status === approved`, and a WordPress `redirect_rule` post is
      * an already-live, trusted redirect rather than a request awaiting review. The app
      * currently grandfathers a missing `status` as approved, so this keeps the mapping

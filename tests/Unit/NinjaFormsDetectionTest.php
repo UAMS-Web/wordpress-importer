@@ -9,7 +9,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForm
  * Detection of Ninja Forms embeds in WXR content (#10).
  *
  * Every fixture string below is taken verbatim from the export corpus audited in
- * `uams-statamic#2046`, not invented, because the two shapes that matter are exactly
+ * `uams-statamic-archive#2046`, not invented, because the two shapes that matter are exactly
  * the ones the corpus varies on:
  *
  * - the block is **self-closing** (`… /-->`) and names its attribute `formID`, capital

@@ -122,7 +122,7 @@ class FieldtypeMapping
      * - `custom_name_attribute` (30 fields) sets the raw HTML `name`; Statamic derives
      *   that from the handle, so honouring it would break form submission.
      * - `mask` is live on exactly one field — a credit-card expiry (`99/9999`) — which is
-     *   #631 territory and blocked on `uams-statamic#295`.
+     *   #631 territory and blocked on `uams-statamic#12`.
      * - `processing_label` (4 fields) labels the submit button mid-submit, and `submit`
      *   maps to `false` in the fieldtype map, so the field never reaches a blueprint.
      *

@@ -1451,7 +1451,7 @@ content. -->
      * distinction matters when a failure appears.**
      *
      * For `content/` this proves a STRUCTURAL guarantee.
-     * `UAMS-Web/uams-statamic#1995` re-roots every content-backed Stache store —
+     * `UAMS-Web/uams-statamic-archive#1995` re-roots every content-backed Stache store —
      * and the Eloquent asset-metadata dual-write — at a disposable mirror under
      * `APP_ENV=testing`, so no Statamic save can reach the live submodule at all.
      * That re-rooting is keyed on `App\Support\ContentRoot::path()` and does

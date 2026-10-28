@@ -606,7 +606,7 @@ class FormConfigurationManager
      *
      * Statamic has no payment infrastructure, so nothing here is *applied* — this records
      * what WordPress does today so it is not lost, for whoever configures payment later.
-     * The Statamic-side decision is `UAMS-Web/uams-statamic#821`; the implementation is
+     * The Statamic-side decision is `UAMS-Web/uams-statamic#48`; the implementation is
      * `wordpress-importer-archive#295`. Neither is needed to preserve the configuration, which is why this does not
      * wait on them.
      *
@@ -637,7 +637,7 @@ class FormConfigurationManager
 
         $carried = [
             'plugin' => 'Ninja Forms',
-            'status' => 'Recorded from the WordPress form. Not configured in Statamic — see UAMS-Web/uams-statamic#821.',
+            'status' => 'Recorded from the WordPress form. Not configured in Statamic — see UAMS-Web/uams-statamic#48.',
             'gateway' => \is_scalar($action['payment_gateways'] ?? null)
                 ? (string) $action['payment_gateways']
                 : null,

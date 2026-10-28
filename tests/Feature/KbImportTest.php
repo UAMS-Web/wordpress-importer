@@ -395,7 +395,7 @@ it('imports kbtag terms as knowledge_base_tags collection entries', function ():
     }
 
     // ---
-    // `UAMS-Web/uams-statamic#2534` made `knowledge_base_tags` a site-scoped
+    // `UAMS-Web/uams-statamic-archive#2534` made `knowledge_base_tags` a site-scoped
     // collection, so each tag is an entry on this site, carrying its plain slug
     // and name rather than the site prefix a flat term needed (wordpress-importer-archive#1220). The
     // registry records the entry each term id became, for the article writer.
@@ -1736,7 +1736,7 @@ function kbYamlFieldValidationProvider(): array
 
     // ---
     // Article entry with non-default featured image. The handle is load-bearing:
-    // `UAMS-Web/uams-statamic#1553` retired the single `featured_image` field from
+    // `UAMS-Web/uams-statamic-archive#1553` retired the single `featured_image` field from
     // the `knowledge_bases` blueprints, so an import that writes it produces an
     // orphaned key that never resolves to an asset (wordpress-importer-archive#433).
     // ---
@@ -3603,7 +3603,7 @@ function kbStringValue(
 // rather than guessed at. Re-run against current `main`, the index is stable
 // (2 hits on three consecutive searches in one run) and the imported entry is
 // present. Whatever caused the instability was fixed app-side; the closest
-// match is `uams-statamic#2039`, an isolated test's `Cache::flush()` starving
+// match is `uams-statamic-archive#2039`, an isolated test's `Cache::flush()` starving
 // the shared Stache index.
 //
 // **The "not found" half was a probe defect, and it is worth naming because it

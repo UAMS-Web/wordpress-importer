@@ -971,7 +971,7 @@ it('creates a page carrying ACF blocks using the landing_page blueprint', functi
 
 it('imports a page featured image onto the featured_image_16_9 handle', function (): void {
     // ---
-    // `UAMS-Web/uams-statamic#1553` dropped the single `featured_image` field from
+    // `UAMS-Web/uams-statamic-archive#1553` dropped the single `featured_image` field from
     // the `pages` blueprints in favor of the standard 3-handle cover-image set, so
     // a value written to the old handle is orphaned data — never augmented to an
     // asset, no `og:image`, no card thumbnail. Assert the handle, not just the

@@ -21,7 +21,7 @@ uses(WordPressImportTestCase::class);
 /**
  * Proves an imported page lands with a populated `excerpt` summary (`wordpress-importer-archive#429`).
  *
- * `UAMS-Web/uams-statamic#1378` made `excerpt` a **required** field on
+ * `UAMS-Web/uams-statamic-archive#1378` made `excerpt` a **required** field on
  * `pages/basic_page` and `pages/landing_page`, sourcing it from the WordPress
  * excerpt or, failing that, a SEO plugin's meta description. `PageEntryCreator`
  * wrote no `excerpt` at all, so every imported page landed violating that

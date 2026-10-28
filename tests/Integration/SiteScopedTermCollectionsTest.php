@@ -26,7 +26,7 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
  *
  * `wordpress-importer-archive#1215` decided that `post_tag`, `logo-list-label`, `kbtag` and
  * `mkb_faq_category` import as site-scoped structured collections rather than as
- * flat taxonomy terms, and `UAMS-Web/uams-statamic#2532`–`#2535` converted each
+ * flat taxonomy terms, and `UAMS-Web/uams-statamic-archive#2532`–`#2535` converted each
  * destination. A flat term is shared by every site, which is why the flat path
  * prefixed each slug and title with the site; a collection entry belongs to one
  * site and keeps its plain name.

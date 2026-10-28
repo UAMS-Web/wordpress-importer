@@ -641,7 +641,7 @@ class FieldtypeMapping
         //   - https://patientslearn.uams.edu/
         //
         // Resolves to the Statamic `username` fieldtype added in
-        // `UAMS-Web/uams-statamic#312` (`app/Fieldtypes/Username.php`). Before that
+        // `UAMS-Web/uams-statamic-archive#312` (`app/Fieldtypes/Username.php`). Before that
         // existed this mapped to null, and a null default falls back to the generic
         // `text` fieldtype — which silently dropped the username semantics the field
         // carries (`autocomplete="username"`, spellcheck / autocorrect / autocapitalize
@@ -671,7 +671,7 @@ class FieldtypeMapping
         //
         // Imported shape (wordpress-importer-archive#299)
         // --------------------------------------------------------------------------------
-        // Resolves to `App\Fieldtypes\Product` (`UAMS-Web/uams-statamic#300`), which
+        // Resolves to `App\Fieldtypes\Product` (`UAMS-Web/uams-statamic-archive#300`), which
         // offers a `single` selection type (base `price` + optional quantity) or
         // `multiple` (a chooser of `{ key, label, price }` option rows feeding the form
         // Total through a server-recomputed `line_total`).
@@ -742,7 +742,7 @@ class FieldtypeMapping
         //
         // Maps to the Statamic `option` fieldtype, which branches on its own
         // `input_type` config and therefore covers every Gravity Forms `inputType`
-        // without degrading to `text` (`UAMS-Web/uams-statamic#316`).
+        // without degrading to `text` (`UAMS-Web/uams-statamic-archive#316`).
         // --------------------------------------------------------------------------------
         'option' => ['default' => 'option'],
 

@@ -89,7 +89,7 @@ it('suppresses the submit field rather than leaving it unmapped', function (): v
 
 it('leaves the credit-card types unmapped, deferring them to #631', function (string $type): void {
     // Only Miracle Stars uses these, and their Statamic target depends on
-    // uams-statamic#295. An unmapped warning is the correct outcome until then — an
+    // uams-statamic#12. An unmapped warning is the correct outcome until then — an
     // invented mapping would silently produce the wrong blueprint for a payment form.
     expect(FieldtypeMapping::getStatamicFieldtype($type))->toBeNull();
 })->with([

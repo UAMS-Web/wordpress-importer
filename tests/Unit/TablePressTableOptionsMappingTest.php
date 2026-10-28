@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Tests the `_tablepress_table_options` → Statamic table-field mapping,
- * including the Premium "Tier 1" options added by `UAMS-Web/uams-statamic#243`.
+ * including the Premium "Tier 1" options added by `UAMS-Web/uams-statamic-archive#243`.
  *
  * Every payload below is a real one, lifted from the `_tablepress_table_options`
  * meta of the exports in `UAMS-Web/wordpress-importer-exports`. The four

@@ -6,7 +6,7 @@ declare(strict_types=1);
  * Tests Yoast-primary-first ordering of a post's `post_categories`.
  *
  * The Statamic newsroom uses a first-selected-category-wins convention for the
- * category shown on cards and breadcrumbs (`UAMS-Web/uams-statamic#1609`), but
+ * category shown on cards and breadcrumbs (`UAMS-Web/uams-statamic-archive#1609`), but
  * `PostEntryCreator` extracts categories in WXR document order — so the
  * "primary" was whatever WordPress happened to serialize first, not the
  * editor's choice (wordpress-importer-archive#441).

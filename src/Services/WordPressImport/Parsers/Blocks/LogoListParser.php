@@ -410,7 +410,7 @@ class LogoListParser
 
         // ---
         // Resolve each label to the `logos_item_labels` COLLECTION entry the term
-        // pass imported it as. `UAMS-Web/uams-statamic#2533` converted the labels
+        // pass imported it as. `UAMS-Web/uams-statamic-archive#2533` converted the labels
         // into a site-scoped collection and the block's filter field into an
         // `entries` picker, so a site-prefixed term slug resolves to nothing there
         // (wordpress-importer-archive#1220). Entry ids are never site-prefixed; a prefix would corrupt one.

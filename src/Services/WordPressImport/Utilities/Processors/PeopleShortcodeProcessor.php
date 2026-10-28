@@ -51,7 +51,7 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      * The `order_by` values the host app's People Showcase block offers.
      *
      * Read from `uamsweb_common_people_block_set.yaml` in `uams-statamic`. `date` left
-     * the list when people became undated (`UAMS-Web/uams-statamic#2552`).
+     * the list when people became undated (`UAMS-Web/uams-statamic-archive#2552`).
      *
      * @var list<string>
      */

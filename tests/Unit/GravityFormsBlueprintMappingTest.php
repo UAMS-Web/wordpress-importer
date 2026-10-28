@@ -29,7 +29,7 @@ it('resolves the Gravity Forms username field to the username fieldtype', functi
     // `GF_Field_Username` (the User Registration add-on's `username` type) mapped to a
     // null default, and a null default falls back to the generic `text` fieldtype — so
     // the field silently lost its username semantics on import (`autocomplete="username"`,
-    // spellcheck/autocorrect/autocapitalize off). `UAMS-Web/uams-statamic#312` shipped the
+    // spellcheck/autocorrect/autocapitalize off). `UAMS-Web/uams-statamic-archive#312` shipped the
     // Statamic `username` fieldtype, so it now resolves properly (wordpress-importer-archive#300).
     // ---
     expect(FieldtypeMapping::getStatamicFieldtype('username'))->toBe('username');
@@ -313,13 +313,13 @@ it('drops password-strength attributes without warning', function (): void {
 })->group('field-attributes', 'field-options-mapping');
 
 it('resolves the Gravity Forms option field to the option fieldtype', function (): void {
-    // `UAMS-Web/uams-statamic#316` shipped the Statamic `option` fieldtype, so the
+    // `UAMS-Web/uams-statamic-archive#316` shipped the Statamic `option` fieldtype, so the
     // Gravity Forms `option` field no longer degrades to a plain `text` field (wordpress-importer-archive#302).
     expect(FieldtypeMapping::getStatamicFieldtype('option'))->toEqual('option');
 })->group('fieldtypes');
 
 it('translates the Gravity Forms option field configuration', function (): void {
-    // The Statamic `option` fieldtype (uams-statamic#316) branches on its own
+    // The Statamic `option` fieldtype (uams-statamic-archive#316) branches on its own
     // `input_type` and stores priced choices keyed by `key`/`label`/`price`,
     // plus the handle of the parent Product field (wordpress-importer-archive#302).
     $productField = [

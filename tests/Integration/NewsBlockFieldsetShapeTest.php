@@ -15,7 +15,7 @@ uses(StatamicTestCase::class);
 
 /**
  * Tests that every writer of a `uamsweb_block_news` set matches the reshaped
- * fieldset (`UAMS-Web/uams-statamic#76`, this package's #417).
+ * fieldset (`UAMS-Web/uams-statamic-archive#76`, this package's #417).
  *
  * The three writers are `NewsParser::parse()` (ACF blocks),
  * `NewsParser::parseModule()` (the modules template) and

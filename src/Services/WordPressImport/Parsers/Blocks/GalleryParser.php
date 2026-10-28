@@ -915,7 +915,7 @@ class GalleryParser
      * Reports a gallery that cannot satisfy the block's required-field contract.
      *
      * `uamsweb_block_gallery` renders only when every required field has a value —
-     * `UAMS-Web/uams-statamic@df1ab6049` applied that guard to 17 blocks
+     * `UAMS-Web/uams-statamic-archive@df1ab6049` applied that guard to 17 blocks
      * deliberately. For gallery the contract is `block_heading`,
      * `block_description`, `background_color`, `columns`, 2-6 `images`, `crop`,
      * `modal` and `more_query`; a block that misses any of them outputs nothing.

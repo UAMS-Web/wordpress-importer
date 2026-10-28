@@ -16,7 +16,7 @@ uses(StatamicTestCase::class);
  *
  * The People Showcase block in `uams-statamic` offers `none`, `title`,
  * `sortpriority`, `sorttext` and `modified`. `date` left that list when people became
- * undated (`UAMS-Web/uams-statamic#2552`), and values such as `lastname` were never
+ * undated (`UAMS-Web/uams-statamic-archive#2552`), and values such as `lastname` were never
  * on it, yet the processor passed `orderby` through unchanged. An unsupported value
  * now imports as `none` and is logged. The host block's sort `switch` already sends
  * any value it does not list to `order`, the same sort as `none`, so the rendered

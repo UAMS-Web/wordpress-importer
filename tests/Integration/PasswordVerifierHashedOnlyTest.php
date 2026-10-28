@@ -13,7 +13,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  *
  * The class used to fall back to `$input === $stored` whenever `is_password_hashed`
  * was not set. That branch was not legacy residue: until
- * `UAMS-Web/uams-statamic#1862` shipped an `EntrySaving` hashing listener, the
+ * `UAMS-Web/uams-statamic-archive#1862` shipped an `EntrySaving` hashing listener, the
  * Control Panel wrote editor-typed passwords to YAML in plain text with the flag
  * unset, so the fallback was the only thing making those passwords work. With the
  * host app hashing on save, every writer now stores a hash and the fallback is
