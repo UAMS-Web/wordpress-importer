@@ -416,7 +416,7 @@ class TableProcessor implements BlockProcessorInterface
 
             // Take the first table figure as the block's figure
             if (
-                $figure === null
+                ! $figure instanceof DOMElement
                 && $current instanceof DOMElement
                 && $current->tagName === 'figure'
                 && \str_contains($current->getAttribute('class'), 'wp-block-table')
