@@ -613,10 +613,17 @@ class TextProcessor
 
         // Check if WpAutoP should be applied
         if ($applyWpAutoP) {
-            // Convert numeric HTML entities for proper WpAutoP processing
+            // Convert numeric HTML entities for proper WpAutoP processing, as
+            // UTF-8 rather than one byte, so a code point above 127 keeps its
+            // character (#154). One that names no character, and NUL, which
+            // HTML decodes to U+FFFD, are left for the decode below.
             $formattedContent = preg_replace_callback(
                 '/&#(\d+);/',
-                fn ($matches): string => \chr((int) $matches[1]),
+                static function (array $matches): string {
+                    $character = \mb_chr((int) $matches[1], 'UTF-8');
+
+                    return $character === false || $character === "\0" ? $matches[0] : $character;
+                },
                 $formattedContent
             );
 
