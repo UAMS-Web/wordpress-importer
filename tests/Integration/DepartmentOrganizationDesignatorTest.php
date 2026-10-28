@@ -20,7 +20,9 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/DepartmentOrganizationDesignatorTest.php
  */
 
+use Illuminate\Support\Facades\Event;
 use Statamic\Entries\Entry as ConcreteEntry;
+use Statamic\Events\GlobalVariablesSaved;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\GlobalSet;
@@ -209,3 +211,111 @@ it('does not flag an organization that has a schema subject', function (): void 
 
     expect($result->schemaSubjectMissing)->toBeFalse();
 });
+
+it('reports a missing global set, and writes nothing', function (): void {
+    makeOrganization('college-of-medicine');
+    $global = GlobalSet::findByHandle(DepartmentOrganizationDesignator::GLOBAL_HANDLE);
+    assert($global instanceof ConcreteGlobalSet);
+    $global->delete();
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    ))->designate('default');
+
+    expect($result->outcome)->toBe(DepartmentOrganizationOutcome::GlobalMissing)
+        ->and($result->organizationSlug)->toBe('college-of-medicine');
+});
+
+it('reports a site the global set has no localization for', function (): void {
+    Site::setSites([
+        'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
+        'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
+    ]);
+    makeOrganization('college-of-medicine');
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['other' => 'college-of-medicine'], [])
+    ))->designate('other');
+
+    expect($result->outcome)->toBe(DepartmentOrganizationOutcome::SiteUnavailable)
+        ->and($result->organizationSlug)->toBe('college-of-medicine');
+});
+
+it('saves the designation once, and not again on a re-import', function (): void {
+    makeOrganization('college-of-medicine');
+    $saves = 0;
+    Event::listen(GlobalVariablesSaved::class, function () use (&$saves): void {
+        $saves++;
+    });
+
+    $designator = new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    );
+    $designator->designate('default');
+    $designator->designate('default');
+
+    expect($saves)->toBe(1);
+});
+
+it('finds the organization by its slug in the organizations collection only', function (): void {
+    // The same slug in another collection, and another slug in this one, are not it
+    $pages = CollectionFacade::make('pages');
+    $pages->sites(['default']);
+    $pages->save();
+
+    $entry = EntryFacade::make();
+    assert($entry instanceof ConcreteEntry);
+    $entry->collection('pages');
+    $entry->slug('college-of-medicine');
+    $entry->data(['title' => 'Elsewhere']);
+    $entry->save();
+
+    makeOrganization('college-of-nursing');
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    ))->designate('default');
+
+    expect($result->outcome)->toBe(DepartmentOrganizationOutcome::DanglingReference);
+});
+
+it('recognizes a designation stored as a one-item list, and rewrites a list naming another', function (bool $same, DepartmentOrganizationOutcome $outcome): void {
+    $id = makeOrganization('college-of-medicine');
+    $settings = multisiteSettings();
+    $settings->set(DepartmentOrganizationDesignator::FIELD_HANDLE, [$same ? $id : 'another-id']);
+    $settings->save();
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    ))->designate('default');
+
+    expect($result->outcome)->toBe($outcome)
+        ->and(multisiteSettings()->get(DepartmentOrganizationDesignator::FIELD_HANDLE))->toBe($same ? [$id] : $id);
+})->with([
+    'the same id' => [true, DepartmentOrganizationOutcome::AlreadyDesignated],
+    'another id' => [false, DepartmentOrganizationOutcome::Designated],
+]);
+
+it('rewrites a designation stored as another id, or as something that is not an id', function (mixed $stored): void {
+    $id = makeOrganization('college-of-medicine');
+    $settings = multisiteSettings();
+    $settings->set(DepartmentOrganizationDesignator::FIELD_HANDLE, $stored);
+    $settings->save();
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    ))->designate('default');
+
+    expect($result->outcome)->toBe(DepartmentOrganizationOutcome::Designated)
+        ->and(multisiteSettings()->get(DepartmentOrganizationDesignator::FIELD_HANDLE))->toBe($id);
+})->with(['another id' => ['another-id'], 'a number' => [5]]);
+
+it('flags an organization whose schema subject is empty', function (mixed $subject): void {
+    makeOrganization('college-of-medicine', [DepartmentOrganizationDesignator::SCHEMA_SUBJECT_FIELD => $subject]);
+
+    $result = (new DepartmentOrganizationDesignator(
+        new DepartmentOrganizationMap(['default' => 'college-of-medicine'], [])
+    ))->designate('default');
+
+    expect($result->schemaSubjectMissing)->toBeTrue();
+})->with(['an empty string' => [''], 'an empty list' => [[]]]);

@@ -100,3 +100,31 @@ it('refuses a stream that has already been closed', function (): void {
     expect(static fn () => StdinKeyReader::read($stream))
         ->toThrow(MigrationApiException::class, 'no readable stream was available');
 });
+
+it('words each refusal in full', function (Closure $stream, string $message): void {
+    // The messages are built from literal pieces, so each one is asserted whole (#102). A
+    // closed stream is still a resource to phpstan, though not to is_resource().
+    /** @var resource $handle */
+    $handle = $stream();
+
+    expect(fn (): string => StdinKeyReader::read($handle))
+        ->toThrow(MigrationApiException::class, $message);
+})->with([
+    'a stream that cannot be read' => [
+        function () {
+            $stream = stdinKeyStream('k');
+            \fclose($stream);
+
+            return $stream;
+        },
+        'The migration API key was to be read from standard input, but no readable stream was available. Pipe the key in, or drop --key-from-stdin and let the import ask for it at the prompt.',
+    ],
+    'an empty stream' => [
+        fn () => stdinKeyStream(''),
+        'No migration API key arrived on standard input. --key-from-stdin expects the key on the first line; nothing was received before the stream ended.',
+    ],
+    'a blank first line' => [
+        fn () => stdinKeyStream("\nkey\n"),
+        'The first line of standard input was empty, so no migration API key was read. Generate one for this network from the plugin admin page and pipe it in as the first line.',
+    ],
+]);

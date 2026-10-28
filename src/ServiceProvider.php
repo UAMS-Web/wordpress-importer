@@ -36,6 +36,9 @@ class ServiceProvider extends AddonServiceProvider
      *
      * @var list<class-string<Command>>
      */
+    // PCOV records no line for a property default, so the mutation plugin never runs this
+    // item's mutant; removing it by hand fails ServiceProviderMiddlewareTest (#102)
+    // @pest-mutate-ignore: RemoveArrayItem
     protected $commands = [
         ImportWordPress::class,
     ];

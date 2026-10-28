@@ -39,6 +39,8 @@ final class MaterializationScope
      *
      * Read only while a scope is set, and `set()` always assigns it, so `clear()` leaves it.
      */
+    // Never read before set() assigns it, so its starting value is never seen
+    // @pest-mutate-ignore: FalseToTrue
     private static bool $redirectDomain = false;
 
     /**
@@ -122,6 +124,8 @@ final class MaterializationScope
             return;
         }
 
+        // Only the key is read, by isset(), which holds for false as for true
+        // @pest-mutate-ignore: TrueToFalse
         self::$reportedLinks[$url] = true;
 
         ImportWarningManager::addWarning(
@@ -131,11 +135,8 @@ final class MaterializationScope
                 'url' => $url,
                 'read_post_types' => self::$postTypes,
                 'consequence' => self::$redirectDomain
-                    ? 'the link was left unconverted; this site is a vanity redirect domain, whose '
-                        .'pages are never imported, so an unscoped run converts it only if its target '
-                        .'is an attachment page'
-                    : 'the link was left unconverted; if its target is of a type this run did not '
-                        .'read, an unscoped run converts it',
+                    ? 'the link was left unconverted; this site is a vanity redirect domain, whose pages are never imported, so an unscoped run converts it only if its target is an attachment page'
+                    : 'the link was left unconverted; if its target is of a type this run did not read, an unscoped run converts it',
             ]
         );
     }
@@ -155,6 +156,9 @@ final class MaterializationScope
         string $postType,
         string $postId
     ): void {
+        // Post types are strings, so in_array()'s strict flag, which phpstan-strict-rules
+        // requires, changes no result
+        // @pest-mutate-ignore: TrueToFalse
         if (self::$postTypes === null || \in_array($postType, self::$postTypes, true)) {
             return;
         }
@@ -167,8 +171,7 @@ final class MaterializationScope
                 'post_type' => $postType,
                 'post_id' => $postId,
                 'read_post_types' => self::$postTypes,
-                'consequence' => 'the reference was dropped because this run did not read '
-                    .'that type; an unscoped run resolves it',
+                'consequence' => 'the reference was dropped because this run did not read that type; an unscoped run resolves it',
             ]
         );
     }
