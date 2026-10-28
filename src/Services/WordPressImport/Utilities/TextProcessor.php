@@ -613,10 +613,15 @@ class TextProcessor
 
         // Check if WpAutoP should be applied
         if ($applyWpAutoP) {
-            // Convert numeric HTML entities for proper WpAutoP processing
+            // Convert numeric HTML entities for proper WpAutoP processing. Each
+            // is decoded as the content is decoded everywhere else, so a code
+            // point above 127 keeps its character rather than becoming one byte,
+            // and an entity html_entity_decode() leaves alone, such as NUL, a
+            // carriage return or a surrogate, reaches the steps after WpAutoP as
+            // it does without it (#154).
             $formattedContent = preg_replace_callback(
-                '/&#(\d+);/',
-                fn ($matches): string => \chr((int) $matches[1]),
+                '/&#\d+;/',
+                static fn (array $matches): string => self::decodeEntities($matches[0]),
                 $formattedContent
             );
 
