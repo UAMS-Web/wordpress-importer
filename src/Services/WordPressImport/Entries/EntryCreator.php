@@ -651,14 +651,9 @@ class EntryCreator
                 }
 
                 // ---
-                // Point the isolated parser at every export part so its item and
-                // attachment readers span the whole split export (cross-part refs).
-                // The table import reads only the items set below, so the parser
-                // needs no parse of its own.
+                // Give the isolated parser this table alone. The table import reads
+                // only these items, so the parser needs no file of its own.
                 // ---
-                $tableXmlParser->setFilePaths($xmlParser->getFilePaths());
-
-                // Override the parser's items to only include this specific table
                 $tableXmlParser->setItems([$table]);
 
                 // Create the table entry using the isolated parser instance
@@ -685,23 +680,16 @@ class EntryCreator
                     "{$site}_tablepress-{$exportId}"
                 );
 
-                // Define the path for any incorrectly named entry files
-                $incorrectPath = ContentRoot::collectionEntry(
-                    'tables',
-                    $site,
-                    "{$site}_tablepress-{$exportId}-{$postId}"
-                );
-
-                // Check if any incorrect slug file exists
-                if (LaravelFileFacade::exists($incorrectPath)) {
-                    // Delete any incorrect slug file
-                    LaravelFileFacade::delete($incorrectPath);
-                }
+                // ---
+                // A file at the old slug ({site}_tablepress-{exportId}-{postId}) needs no
+                // removal here: TablePressEntryCreator::saveEntry() removes it for every
+                // table it saves, and every table handed to it is saved.
+                // ---
 
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
-                for ($i = 0; $i < $retryCount; $i++) {
+                foreach (\range(1, $retryCount) as $attempt) {
                     // ---
                     // Check if entry file exists with retry mechanism. A file found
                     // stays found, and the loop waits only after a miss.

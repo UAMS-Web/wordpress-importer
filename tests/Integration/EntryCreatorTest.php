@@ -1512,3 +1512,23 @@ describe('tables, more closely', function (): void {
         expect($titles)->toBe(['First', 'Readable']);
     });
 });
+
+describe('the old slug', function (): void {
+    beforeEach(function (): void {
+        entryCreatorCollection('tables', ['table']);
+    });
+
+    it('leaves no file at the old slug after the import', function (): void {
+        $creator = entryCreatorRig()->creator;
+        $creator->setXmlParser(entryCreatorParser(entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => '9']])));
+        $creator->setAssetImporter(new AssetImporter);
+        entryCreatorTableIds(['9']);
+        $old = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-9-801');
+        File::ensureDirectoryExists(\dirname($old));
+        File::put($old, "---\ntitle: Old\n---\n");
+
+        $creator->importTables('default', new BufferedOutput, 'page');
+
+        expect(File::exists($old))->toBeFalse();
+    });
+});
