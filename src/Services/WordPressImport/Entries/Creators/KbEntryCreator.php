@@ -1331,43 +1331,6 @@ class KbEntryCreator extends BaseEntryCreator
             $termName
         );
 
-        // Check if topic entry already exists to prevent duplicates
-        $existingEntry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            false,
-            $site
-        );
-
-        // Check if a topic entry with this ID already exists to prevent duplicates
-        if ($existingEntry instanceof Entry) {
-            // Map the term ID to the existing entry ID for future reference
-            $existingEntryId = self::mixedToString(
-                $existingEntry->id(),
-                ''
-            );
-            if ($existingEntryId === '') {
-                return $entryId;
-            }
-
-            $this->topicIdMap[$termId] = $existingEntryId;
-
-            // Register the kbtopic slug mapping for link processing
-            KbLinkRegistry::registerKbtopicMappingBySlug(
-                $termSlug,
-                $existingEntryId
-            );
-
-            // Register the kbtopic term ID mapping for block processing
-            KbLinkRegistry::registerKbtopicMappingByTermId(
-                $termId,
-                $existingEntryId
-            );
-
-            // Return the existing entry ID to avoid duplicate creation
-            return $existingEntryId;
-        }
-
         // Create topic entry data with required fields
         $entryData = [
             'blueprint' => 'topic', // Specify the blueprint for topic entries
@@ -1496,7 +1459,6 @@ class KbEntryCreator extends BaseEntryCreator
             $termName,
             $description,
             $entrySlug,
-            $existingEntry,
             $entryData,
             $blueprint,
             $templateDefault,
@@ -1958,54 +1920,6 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Check if article entry already exists to prevent duplicates
-        // Look up an existing entry by its ID
-        $existingEntry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            false,
-            $site
-        );
-
-        // Check if an existing entry was found to avoid duplicate creation
-        if ($existingEntry instanceof Entry) {
-            $existingEntryId = self::mixedToString(
-                $existingEntry->id(),
-                ''
-            );
-            if ($existingEntryId === '') {
-                return;
-            }
-
-            // Use existing entry if found and store mapping for consistency
-            // Map the post ID to the existing entry ID for later reference
-            $this->articleIdMap[$postId] = $existingEntryId;
-
-            // Get related articles data for deferred processing even for existing entries
-            $this->getRelatedArticles(
-                $item,
-                $existingEntryId,
-                $entrySlug,
-                ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
-            );
-
-            // ---
-            // Refresh the engagement tallies for an existing entry too. The counts live
-            // in an app-owned sideband table, not on the entry, so skipping entry
-            // creation is no reason to skip them — and the export carries the
-            // historical TOTAL, so the upsert overwrites rather than accumulating.
-            // Without this the seeding would only ever run on an article's first
-            // import (wordpress-importer-archive#427).
-            // ---
-            ArticleEngagementSeeder::seed(
-                $item,
-                $existingEntryId
-            );
-
-            // Skip creation since entry already exists
-            return;
-        }
-
         // Fetch the default value for the title_options field from the article blueprint
         $titleOptionsDefault = FieldDefaultHelper::getDefaultValueForBlueprintField(
             "collections.{$collectionHandle}.article",
@@ -2160,14 +2074,6 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Get related articles data for deferred processing
-        $this->getRelatedArticles(
-            $item,
-            $entryId,
-            $entrySlug,
-            ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
-        );
-
         // Create entry data
         $entryData = [
             'title' => $title, // Set the entry title using the extracted or processed title value
@@ -2304,6 +2210,18 @@ class KbEntryCreator extends BaseEntryCreator
         $entryId = $savedEntry instanceof Entry && \is_string($savedEntry->id())
             ? $savedEntry->id()
             : $entryId;
+
+        // ---
+        // Record the related articles for the deferred pass under the id just
+        // adopted. The pass looks the entry up by this key, so recording it under
+        // the generated id lost the related articles of every re-imported article.
+        // ---
+        $this->getRelatedArticles(
+            $item,
+            $entryId,
+            $entrySlug,
+            ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
+        );
 
         // Use EntryFinder to get the correct entry with proper path handling
         // Force fresh query to ensure we get the updated entry after save
