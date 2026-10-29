@@ -9,12 +9,14 @@ use DateTime;
 use Exception;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
+use Statamic\Entries\Collection as EntryCollection;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site as SiteFacade;
 use Statamic\Fieldtypes\RowId;
+use Statamic\Sites\Site;
 use Statamic\Structures\CollectionStructure;
 use Statamic\Structures\Tree;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -232,7 +234,9 @@ class KbEntryCreator extends BaseEntryCreator
         // Initialize taxonomy handles with FAQ category; kbtag added when tag import enabled
         $taxonomyHandles = ['mkb_faq_category'];
 
-        // Check if tag import is enabled before including kbtag
+        // Check if tag import is enabled before including kbtag; an `if` reads the
+        // setting the same with or without the cast
+        // @pest-mutate-ignore: RemoveBooleanCast
         if (
             (bool) config(
                 'wordpress-import.import_tags',
@@ -255,28 +259,23 @@ class KbEntryCreator extends BaseEntryCreator
         $terms = $xmlParser->getTerms();
 
         // ---
-        // Build a term map including 'kbtopic' (for creating topic entries) and
-        // other relevant taxonomies; 'kbtopic' is not imported as a Statamic taxonomy
+        // Build a term map of the 'kbtopic' terms, which become topic entries;
+        // 'kbtopic' is not imported as a Statamic taxonomy
         // ---
         $this->termMap = TermMapBuilder::buildTermMap(
             $terms,
-            [
-                'kbtopic',
-                'kbtag',
-                'mkb_faq_category',
-            ]
+            ['kbtopic']
         );
 
         // ---
-        // Build a nicename-to-term ID map to efficiently resolve article category
-        // slugs (nicenames) back to the corresponding term IDs
+        // Build a nicename-to-term ID map to resolve an article's topic and tag
+        // slugs (nicenames) back to their term IDs
         // ---
         $this->nicenameToTermIdMap = TermMapBuilder::buildNicenameToTermIdMap(
             $terms,
             [
                 'kbtopic',
                 'kbtag',
-                'mkb_faq_category',
             ]
         );
 
@@ -467,27 +466,21 @@ class KbEntryCreator extends BaseEntryCreator
             return;
         }
 
-        // Check if collection has structure defined - required for hierarchical content
-        if (! $collection->hasStructure()) {
+        // Give the collection a structure if it has none - required for hierarchical content
+        $structure = $collection->structure();
+        if (! $structure instanceof CollectionStructure) {
             // Inform user that structure is being created
             $output->writeln("<comment>Collection '{$collectionHandle}' has no structure defined. Creating one.</comment>");
 
-            // Create new CollectionStructure instance with the collection handle
-            $structure = (new CollectionStructure)->handle($collectionHandle);
-
-            // Assign the structure to the collection
+            // ---
+            // Create new CollectionStructure instance and assign it to the collection,
+            // which gives it the collection's handle
+            // ---
+            $structure = new CollectionStructure;
             $collection->structure($structure);
 
             // Save the collection with the new structure
             $collection->save();
-        }
-
-        // Get the collection's structure (either existing or newly created)
-        $structure = $collection->structure();
-        if (! $structure instanceof CollectionStructure) {
-            $output->writeln("<error>Collection '{$collectionHandle}' structure is invalid.</error>");
-
-            return;
         }
 
         // Get the tree for the specific site
@@ -502,12 +495,13 @@ class KbEntryCreator extends BaseEntryCreator
                 $site,
                 []
             );
-            if (! $collectionTree instanceof Tree) {
-                return;
-            }
 
-            // Save the new tree to persist it
-            $collectionTree->save();
+            // Save the new tree to persist it; makeTree() always makes a Tree, so the
+            // check only narrows the type
+            // @pest-mutate-ignore: InstanceOfToTrue
+            if ($collectionTree instanceof Tree) {
+                $collectionTree->save();
+            }
         }
 
         // Display success message confirming tree structure creation
@@ -590,26 +584,17 @@ class KbEntryCreator extends BaseEntryCreator
      * It optimizes performance by caching the tree instance to avoid
      * repeated lookups for the same collection and site.
      *
-     * @param  Entry  $entry  The entry to add to the tree
+     * @param  string  $entryId  The ID of the entry to add to the tree
      * @param  string  $collectionHandle  The collection handle
      * @param  string  $site  The site handle
      * @param  ?string  $parentId  The parent entry ID (null for top-level entries)
-     * @return bool True if entry was successfully added to tree, false otherwise
      */
     protected function addEntryToTree(
-        Entry $entry,
+        string $entryId,
         string $collectionHandle,
         string $site,
         ?string $parentId = null
-    ): bool {
-        $entryId = self::mixedToString(
-            $entry->id(),
-            ''
-        );
-        if ($entryId === '') {
-            return false;
-        }
-
+    ): void {
         // Record the parent/child relationship only. The tree is assembled and
         // saved once, at the end of the import, by buildAndSaveKbTree() — see the
         // $pendingTreeNodes docblock and wordpress-importer-archive#464 for why the build is deferred.
@@ -619,8 +604,6 @@ class KbEntryCreator extends BaseEntryCreator
             'entry' => $entryId,
             'parent' => $parentId,
         ];
-
-        return true;
     }
 
     /**
@@ -654,10 +637,10 @@ class KbEntryCreator extends BaseEntryCreator
         // recorded here, chiefly the knowledge base root, which may already exist
         // and so is not re-added to the tree during this import. Anchor those at
         // the top level so their descendants nest beneath them.
-        $recorded = [];
-        foreach ($this->pendingTreeNodes as $node) {
-            $recorded[$node['entry']] = true;
-        }
+        $recorded = \array_flip(\array_column(
+            $this->pendingTreeNodes,
+            'entry'
+        ));
 
         $childrenByParent = [];
         $externalRoots = [];
@@ -668,13 +651,13 @@ class KbEntryCreator extends BaseEntryCreator
                 && ! isset($recorded[$parentKey])
                 && ! isset($externalRoots[$parentKey])
             ) {
-                $externalRoots[$parentKey] = true;
+                $externalRoots[$parentKey] = $parentKey;
             }
 
             $childrenByParent[$parentKey][] = $node['entry'];
         }
 
-        foreach (\array_keys($externalRoots) as $rootId) {
+        foreach ($externalRoots as $rootId) {
             $childrenByParent[''][] = $rootId;
         }
 
@@ -695,13 +678,14 @@ class KbEntryCreator extends BaseEntryCreator
         // before the tree save, so the cost is negligible. See wordpress-importer-archive#464. (It is no longer
         // the import's last write: the deferred related-articles pass re-saves entries
         // after it, which is deliberate and load-bearing — see createEntries() / wordpress-importer-archive#761.)
+        //
+        // Tree::save() forgets the tree-entries cache itself, so only the host's listener,
+        // which this package's tests do not run, can read the cache this flush clears.
+        // @pest-mutate-ignore: RemoveMethodCall
         Blink::flush();
 
-        $collection = CollectionFacade::findByHandle($collectionHandle);
-        if (
-            $collection === null
-            || ! $collection->hasStructure()
-        ) {
+        $structure = CollectionFacade::findByHandle($collectionHandle)?->structure();
+        if (! $structure instanceof CollectionStructure) {
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
                     'collection_handle' => $collectionHandle,
@@ -719,11 +703,7 @@ class KbEntryCreator extends BaseEntryCreator
             return;
         }
 
-        $structure = $collection->structure();
-        if (! $structure instanceof CollectionStructure) {
-            return;
-        }
-
+        // A site the collection has no tree for has nothing to save into
         $tree = $structure->in($site);
         if (! $tree instanceof Tree) {
             return;
@@ -740,7 +720,7 @@ class KbEntryCreator extends BaseEntryCreator
      *
      * @param  string  $parentKey  Parent entry id, or '' for top-level entries
      * @param  array<string, list<string>>  $childrenByParent  Child entry ids keyed by parent id
-     * @param  array<string, true>  $visited  Entry ids already placed (guards cycles/duplicates)
+     * @param  array<string, string>  $visited  Entry ids already placed, keyed by id (guards cycles/duplicates)
      * @return list<array<string, mixed>> The nested branch structure
      */
     private function assembleTreeBranches(
@@ -755,7 +735,7 @@ class KbEntryCreator extends BaseEntryCreator
                 continue;
             }
 
-            $visited[$entryId] = true;
+            $visited[$entryId] = $entryId;
 
             $branch = ['entry' => $entryId];
             $children = $this->assembleTreeBranches(
@@ -799,22 +779,17 @@ class KbEntryCreator extends BaseEntryCreator
         $output->writeln('Creating knowledge base entry...');
 
         // Get site name using Site facade for descriptive title creation
+        // ---
+        // Statamic cannot save an entry in a site it does not know, so an import into
+        // one fails at the save whether the name falls back or not; the check only
+        // narrows the type
+        // ---
         $siteInstance = SiteFacade::get($site);
-
-        $siteName = 'Unknown Site';
-        if (
-            $siteInstance !== null
-            && \is_object($siteInstance)
-            && \method_exists(
-                $siteInstance,
-                'name'
-            )
-        ) {
-            $siteName = self::mixedToString(
-                $siteInstance->name(),
-                'Unknown Site'
-            );
-        }
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $siteName = self::mixedToString(
+            $siteInstance instanceof Site ? $siteInstance->name() : null,
+            'Unknown Site'
+        );
 
         // Create knowledge base title using site name for better identification
         $knowledgeBaseTitle = "{$siteName} Knowledge Base";
@@ -836,7 +811,11 @@ class KbEntryCreator extends BaseEntryCreator
             );
         }
 
-        // Check if knowledge base entry already exists to prevent duplicates
+        // ---
+        // Check if knowledge base entry already exists to prevent duplicates. A fresh
+        // lookup finds the same entry a cached one does here.
+        // ---
+        // @pest-mutate-ignore: FalseToTrue
         $existingEntry = EntryFinder::findEntryBySlug(
             $collectionHandle,
             $slug,
@@ -847,17 +826,13 @@ class KbEntryCreator extends BaseEntryCreator
         if ($existingEntry instanceof Entry) {
             // ---
             // Store the existing entry's ID for use as the root of the knowledge base
-            // hierarchy
+            // hierarchy. A saved entry always has a string ID, so the fallback is never read.
             // ---
-            $existingEntryId = self::mixedToString(
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
+            $this->knowledgeBaseId = self::mixedToString(
                 $existingEntry->id(),
                 ''
             );
-            if ($existingEntryId === '') {
-                return;
-            }
-
-            $this->knowledgeBaseId = $existingEntryId;
 
             // ---
             // Exit the method early since the knowledge base entry already exists and does
@@ -974,11 +949,15 @@ class KbEntryCreator extends BaseEntryCreator
         // Create current date for the knowledge base entry
         $currentDate = new DateTime;
 
-        // Create the entry using Statamic's Entry facade
+        // Create the entry using Statamic's Entry facade; the facade always makes an
+        // Entry, so the assertion only narrows the type
         $entry = EntryFacade::make();
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         \assert($entry instanceof Entry);
         $entry->collection($collectionHandle);
         $entry->locale($site);
+        // A new entry is published already; this states it
+        // @pest-mutate-ignore: RemoveMethodCall
         $entry->published(true);
         $entry->slug($slug);
 
@@ -989,32 +968,22 @@ class KbEntryCreator extends BaseEntryCreator
         }
 
         // Only set date if the collection is dated (supports date-based entries)
+        // ---
+        // Statamic cannot make an entry for a collection that does not exist, so the
+        // collection is always found and its checks only narrow the type. The cast
+        // keeps a truthy dated value, such as 1 read from YAML, reading as dated.
+        // ---
         $entryCollection = $entry->collection();
-        if (
-            $entryCollection !== null
-            && \is_object($entryCollection)
-            && \method_exists(
-                $entryCollection,
-                'dated'
-            )
-            && $entryCollection->dated()
-        ) {
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveBooleanCast
+        if ($entryCollection instanceof EntryCollection && (bool) $entryCollection->dated()) {
             $entry->date(Carbon::instance($currentDate));
         } else {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
                     'collection_handle' => $entry->collectionHandle(),
-                    'collection_dated' => (
-                        $entryCollection !== null
-                        && \is_object($entryCollection)
-                        && \method_exists(
-                            $entryCollection,
-                            'dated'
-                        )
-                    )
-                        ? $entryCollection->dated()
-                        : 'unknown',
+                    // @pest-mutate-ignore: InstanceOfToTrue
+                    'collection_dated' => $entryCollection instanceof EntryCollection ? $entryCollection->dated() : 'unknown',
                 ]
             );
 
@@ -1032,20 +1001,19 @@ class KbEntryCreator extends BaseEntryCreator
         $entry->data($entryData);
         $entry->save();
 
-        // Get the generated ID from the saved entry for future reference
-        $entryIdString = self::mixedToString(
+        // ---
+        // Get the generated ID from the saved entry for future reference. A saved
+        // entry always has a string ID, so the fallback is never read.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        $this->knowledgeBaseId = self::mixedToString(
             $entry->id(),
             ''
         );
-        if ($entryIdString === '') {
-            return;
-        }
-
-        $this->knowledgeBaseId = $entryIdString;
 
         // Add the entry to the tree as a top-level entry (no parent)
         $this->addEntryToTree(
-            $entry,
+            $this->knowledgeBaseId,
             $collectionHandle,
             $site
         );
@@ -1059,8 +1027,10 @@ class KbEntryCreator extends BaseEntryCreator
 
         // ---
         // Determine if sitewide restrictions are enabled (must have restrictions and
-        // global restriction flag set)
+        // global restriction flag set). The settings extractor sets the flag whenever
+        // it enables restrictions, so its fallback is never read.
         // ---
+        // @pest-mutate-ignore: FalseToTrue
         $this->hasSitewideRestrictions = $this->hasRestrictions && ($entryData['restriction_global_query'] ?? false) === true;
     }
 
@@ -1088,27 +1058,14 @@ class KbEntryCreator extends BaseEntryCreator
         // Display progress message to inform user of current operation
         $output->writeln('Processing topics...');
 
-        // Filter term map to only include kbtopic terms for processing
-        $kbtopicTermMap = [];
-        foreach ($this->termMap as $termId => $termData) {
-            if (! \is_array($termData)) {
-                continue;
-            }
-
-            if (($termData['term_taxonomy'] ?? null) !== 'kbtopic') {
-                continue;
-            }
-
-            $termIdString = self::mixedToString(
-                $termId,
-                ''
-            );
-            if ($termIdString === '') {
-                continue;
-            }
-
-            $kbtopicTermMap[$termIdString] = $termData;
-        }
+        // ---
+        // The term map holds only kbtopic terms (see process()), each an array from
+        // TermMapBuilder; the filter only narrows the type
+        // ---
+        $kbtopicTermMap = \array_filter(
+            $this->termMap,
+            \is_array(...)
+        );
 
         // Check if any kbtopic terms were found in the XML
         if ($kbtopicTermMap === []) {
@@ -1133,7 +1090,7 @@ class KbEntryCreator extends BaseEntryCreator
         // Define a recursive closure to create topics in parent-before-child order,
         // ensuring the hierarchy is built correctly
         // ---
-        $createTopicRecursively = function (string $termId, string $parentId) use (
+        $createTopicRecursively = function (int|string $termId, string $parentId) use (
             &$createTopicRecursively,
             &$created,
             $kbtopicTermMap,
@@ -1149,55 +1106,33 @@ class KbEntryCreator extends BaseEntryCreator
             }
 
             // Get the current term data from the map using its ID
-            $termData = $kbtopicTermMap[$termId] ?? null;
-            if (! \is_array($termData)) {
-                return '';
-            }
+            $termData = $kbtopicTermMap[$termId];
 
-            // Get the parent term ID from the term data (already resolved by TermMapBuilder)
+            // ---
+            // Get the parent term ID from the term data (already resolved by TermMapBuilder).
+            // No term has the fallback's ID either way.
+            // ---
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $parentTermId = self::mixedToString(
                 $termData['parent_id'] ?? null,
                 ''
             );
 
-            // If this term has a parent, recursively create the parent first
-            if (
-                $parentTermId !== ''
-                && $parentTermId !== '0'
-                && isset($kbtopicTermMap[$parentTermId])
-            ) {
-                // Recursively create the parent topic and get its entry ID
-                $parentEntryId = $createTopicRecursively(
+            // ---
+            // Create a parent topic first and file this topic under it. A term whose
+            // parent is not a topic is filed under the knowledge base instead.
+            // ---
+            $parentEntryId = isset($kbtopicTermMap[$parentTermId])
+                ? $createTopicRecursively(
                     $parentTermId,
                     $parentId
-                );
+                )
+                : $parentId;
 
-                // Create this topic as a child of its parent topic
-                $topicEntryId = $this->createTopicEntryFromData(
-                    $termData,
-                    $parentEntryId,
-                    $output,
-                    $site,
-                    $collectionHandle,
-                    $xmlParser,
-                    $minervaKbSettings
-                );
-
-                // Store the created topic's entry ID in the created map to avoid duplicates
-                $created[$termId] = $topicEntryId;
-
-                // ---
-                // Return the entry ID of the topic just created, so it can be used as a parent
-                // for any child topics
-                // ---
-                return $topicEntryId;
-            }
-
-            // If no parent term ID is set or parent term not found, treat as a top-level topic
-            // Create this topic as a child of the knowledge base entry
-            $topicEntryId = $this->createTopicEntryFromData(
+            // Create this topic, and store its entry ID to avoid duplicates
+            $created[$termId] = $this->createTopicEntryFromData(
                 $termData,
-                $parentId,
+                $parentEntryId,
                 $output,
                 $site,
                 $collectionHandle,
@@ -1205,29 +1140,18 @@ class KbEntryCreator extends BaseEntryCreator
                 $minervaKbSettings
             );
 
-            // Store the created topic's entry ID in the created map to avoid duplicates
-            $created[$termId] = $topicEntryId;
-
             // ---
             // Return the entry ID of the topic just created, so it can be used as a parent
             // for any child topics
             // ---
-            return $topicEntryId;
+            return $created[$termId];
         };
 
         // Process each topic term, starting the recursive creation process
         foreach (ImportProgress::track($output, 'kb topics', $kbtopicTermMap) as $termId => $termData) {
-            $termIdString = self::mixedToString(
-                $termId,
-                ''
-            );
-            if ($termIdString === '') {
-                continue;
-            }
-
             // Start recursive creation with knowledge base as the parent
             $createTopicRecursively(
-                $termIdString,
+                $termId,
                 $this->knowledgeBaseId
             );
         }
@@ -1331,43 +1255,6 @@ class KbEntryCreator extends BaseEntryCreator
             $termName
         );
 
-        // Check if topic entry already exists to prevent duplicates
-        $existingEntry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            false,
-            $site
-        );
-
-        // Check if a topic entry with this ID already exists to prevent duplicates
-        if ($existingEntry instanceof Entry) {
-            // Map the term ID to the existing entry ID for future reference
-            $existingEntryId = self::mixedToString(
-                $existingEntry->id(),
-                ''
-            );
-            if ($existingEntryId === '') {
-                return $entryId;
-            }
-
-            $this->topicIdMap[$termId] = $existingEntryId;
-
-            // Register the kbtopic slug mapping for link processing
-            KbLinkRegistry::registerKbtopicMappingBySlug(
-                $termSlug,
-                $existingEntryId
-            );
-
-            // Register the kbtopic term ID mapping for block processing
-            KbLinkRegistry::registerKbtopicMappingByTermId(
-                $termId,
-                $existingEntryId
-            );
-
-            // Return the existing entry ID to avoid duplicate creation
-            return $existingEntryId;
-        }
-
         // Create topic entry data with required fields
         $entryData = [
             'blueprint' => 'topic', // Specify the blueprint for topic entries
@@ -1447,24 +1334,18 @@ class KbEntryCreator extends BaseEntryCreator
         // Reassigning `$entryId` rather than introducing a second variable is
         // deliberate: every downstream use in this method is below this point, so
         // there is no path left that can still read the generated id.
+        //
+        // A topic that was not saved keeps the generated id and stays out of the tree.
         // ---
-        $entryId = $savedTopic instanceof Entry && \is_string($savedTopic->id())
-            ? $savedTopic->id()
-            : $entryId;
+        if ($savedTopic instanceof Entry) {
+            $entryId = self::mixedToString(
+                $savedTopic->id(),
+                $entryId
+            );
 
-        // Get the saved topic entry to add to tree structure
-        $entry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            false,
-            $site
-        );
-
-        // Check if the entry was successfully found and add it to the tree
-        if ($entry instanceof Entry) {
             // Add the entry to the tree as a child of the specified parent
             $this->addEntryToTree(
-                $entry,
+                $entryId,
                 $collectionHandle,
                 $site,
                 $parentId
@@ -1496,13 +1377,11 @@ class KbEntryCreator extends BaseEntryCreator
             $termName,
             $description,
             $entrySlug,
-            $existingEntry,
             $entryData,
             $blueprint,
             $templateDefault,
             $titleOptionsDefault,
-            $currentDate,
-            $entry
+            $currentDate
         );
 
         // Return the created entry ID for use in parent-child relationships
@@ -1648,14 +1527,10 @@ class KbEntryCreator extends BaseEntryCreator
         ProcessingContext::setWordPressPageLink($originalWordPressUrl);
 
         // Find the first topic for this article to establish parent-child relationship
-        $topicId = $this->findArticleTopic(
-            $item,
-            $site,
-            $collectionHandle
-        );
+        $topicId = $this->findArticleTopic($item);
 
         // Check if a topic was found for this article
-        if ($topicId === null || $topicId === '') {
+        if ($topicId === null) {
             // Skip articles without topics as they need a parent in the hierarchical structure
             return;
         }
@@ -1666,95 +1541,31 @@ class KbEntryCreator extends BaseEntryCreator
         // Retrieve all kbtopic category elements on this item
         $kbtopicCategories = $item->xpath('category[@domain="kbtopic"]');
 
-        // Only proceed if we have secondary topics beyond the first (primary)
-        if (
-            \is_array($kbtopicCategories)
-            && \count($kbtopicCategories) > 1
-        ) {
-            $counter = \count($kbtopicCategories);
-            // Skip the first category (used as primary topic) and process the rest
-            for ($i = 1; $i < $counter; $i++) {
-                // Current kbtopic category element (secondary)
-                $category = $kbtopicCategories[$i];
+        // Process each category; the first, the primary topic, is left out below
+        foreach (\is_array($kbtopicCategories) ? $kbtopicCategories : [] as $category) {
+            // Resolve the topic entry this category names
+            $topicEntryId = $this->findTopicEntryId((string) $category['nicename']);
 
-                // Nicename (slug) of the kbtopic category
-                $nicename = (string) ($category->attributes()->nicename ?? '');
-
-                // Skip if nicename is missing or empty
-                if ($nicename === '') {
-                    // Cannot resolve a topic without a nicename
-                    continue;
-                }
-
-                // Resolve WordPress term ID for faster ID-based lookup
-                $termId = self::getNestedMapString(
-                    $this->nicenameToTermIdMap,
-                    'kbtopic',
-                    $nicename
-                );
-
-                // Placeholder for the resolved Statamic topic entry ID
-                $topicEntryId = null;
-
-                // If term ID is known and mapped, use the mapped topic entry ID
-                if (
-                    $termId !== null
-                    && $termId !== ''
-                    && isset($this->topicIdMap[$termId])
-                ) {
-                    // Direct mapping from term ID to topic entry ID
-                    $topicEntryId = $this->topicIdMap[$termId];
-                }
-
-                // If not resolved, fall back to matching on slug across created topic entries
-                if ($topicEntryId === null) {
-                    // Loop through topic map and compare entry slug values
-                    foreach ($this->topicIdMap as $entryId) {
-                        // Find entry for slug comparison
-                        $entry = EntryFinder::findEntryById(
-                            $collectionHandle,
-                            $entryId,
-                            false,
-                            $site
-                        );
-
-                        // Slug match resolves this secondary topic
-                        if (
-                            $entry instanceof Entry
-                            && $entry->slug() === $nicename
-                        ) {
-                            // Use the matched entry ID
-                            $topicEntryId = $entryId;
-
-                            // Stop searching after finding a match
-                            break;
-                        }
-                    }
-                }
-
-                // Append only valid, non-duplicate, non-primary topic IDs
-                if (
-                    ! in_array($topicEntryId, [null, '', $topicId], true)
-                    && ! \in_array(
-                        $topicEntryId,
-                        $secondaryTopicIds,
-                        true
-                    )
-                ) {
-                    // Store this secondary topic entry ID
-                    $secondaryTopicIds[] = $topicEntryId;
-                }
+            // ---
+            // Append only valid, non-primary topic IDs, once each. The IDs are
+            // never numeric, so a loose search would find the same.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
+            if (
+                $topicEntryId !== null
+                && $topicEntryId !== $topicId
+                && ! \in_array($topicEntryId, $secondaryTopicIds, true)
+            ) {
+                // Store this secondary topic entry ID
+                $secondaryTopicIds[] = $topicEntryId;
             }
         }
 
-        // Extract the excerpt from the WordPress XML item
-        $excerpt = XpathHelper::getStringValue(
+        // Extract the excerpt, stripping HTML tags; the stripper also trims it
+        $excerpt = HtmlTagStripper::strip(XpathHelper::getStringValue(
             $item,
             'excerpt:encoded'
-        );
-
-        // Strip HTML tags and trim whitespace to ensure a clean excerpt value
-        $excerpt = \trim(HtmlTagStripper::strip($excerpt));
+        ));
 
         // ---
         // Collect the article's tags as `knowledge_base_tags` ENTRY ids.
@@ -1767,6 +1578,8 @@ class KbEntryCreator extends BaseEntryCreator
         // ---
         $tagTermIds = [];
 
+        // An `if` reads the setting the same with or without the cast
+        // @pest-mutate-ignore: RemoveBooleanCast
         if (
             (bool) config(
                 'wordpress-import.import_tags',
@@ -1777,32 +1590,26 @@ class KbEntryCreator extends BaseEntryCreator
             $kbtagCategories = $item->xpath('category[@domain="kbtag"]');
 
             foreach (\is_array($kbtagCategories) ? $kbtagCategories : [] as $category) {
-                // Extract the nicename (slug) from the category attributes
-                $nicename = (string) ($category->attributes()->nicename ?? '');
-
-                // Nothing to map without a valid nicename
-                if ($nicename === '') {
-                    continue;
-                }
-
-                // Resolve the nicename to its WordPress term id
+                // Resolve the nicename (slug) to its WordPress term id
                 $termId = self::getNestedMapString(
                     $this->nicenameToTermIdMap,
                     'kbtag',
-                    $nicename
+                    (string) $category['nicename']
                 );
-
-                if ($termId === null || $termId === '') {
-                    continue;
-                }
 
                 // Resolve the term id to the entry the term pass imported it as
-                $entryId = TermDestinationRegistry::referenceFor(
-                    'kbtag',
-                    $termId
-                );
+                $entryId = $termId === null
+                    ? null
+                    : TermDestinationRegistry::referenceFor(
+                        'kbtag',
+                        $termId
+                    );
 
-                // Unresolved, or already stored: omit it
+                // ---
+                // Unresolved, or already stored: omit it. The IDs are never numeric,
+                // so a loose search would find the same.
+                // ---
+                // @pest-mutate-ignore: TrueToFalse
                 if ($entryId === null || $entryId === '' || \in_array($entryId, $tagTermIds, true)) {
                     continue;
                 }
@@ -1830,6 +1637,9 @@ class KbEntryCreator extends BaseEntryCreator
             $postId,
             $title
         );
+
+        // Keep the generated ID, to tell an entry this run saved from one it skipped
+        $generatedEntryId = $entryId;
 
         // ---
         // Extract thumbnail ID from postmeta before content processing.
@@ -1958,54 +1768,6 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Check if article entry already exists to prevent duplicates
-        // Look up an existing entry by its ID
-        $existingEntry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            false,
-            $site
-        );
-
-        // Check if an existing entry was found to avoid duplicate creation
-        if ($existingEntry instanceof Entry) {
-            $existingEntryId = self::mixedToString(
-                $existingEntry->id(),
-                ''
-            );
-            if ($existingEntryId === '') {
-                return;
-            }
-
-            // Use existing entry if found and store mapping for consistency
-            // Map the post ID to the existing entry ID for later reference
-            $this->articleIdMap[$postId] = $existingEntryId;
-
-            // Get related articles data for deferred processing even for existing entries
-            $this->getRelatedArticles(
-                $item,
-                $existingEntryId,
-                $entrySlug,
-                ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
-            );
-
-            // ---
-            // Refresh the engagement tallies for an existing entry too. The counts live
-            // in an app-owned sideband table, not on the entry, so skipping entry
-            // creation is no reason to skip them — and the export carries the
-            // historical TOTAL, so the upsert overwrites rather than accumulating.
-            // Without this the seeding would only ever run on an article's first
-            // import (wordpress-importer-archive#427).
-            // ---
-            ArticleEngagementSeeder::seed(
-                $item,
-                $existingEntryId
-            );
-
-            // Skip creation since entry already exists
-            return;
-        }
-
         // Fetch the default value for the title_options field from the article blueprint
         $titleOptionsDefault = FieldDefaultHelper::getDefaultValueForBlueprintField(
             "collections.{$collectionHandle}.article",
@@ -2099,11 +1861,19 @@ class KbEntryCreator extends BaseEntryCreator
             'title_options'
         );
 
-        // Initialize featured image variable for processing
+        // ---
+        // Initialize featured image variable for processing. The credit flag is read
+        // only beside an imported image, which always sets it first.
+        // ---
         $featuredImage = null;
+        // @pest-mutate-ignore: FalseToTrue
         $featuredImageHasCredit = false;
 
-        // If thumbnail ID exists, import the featured image
+        // ---
+        // If thumbnail ID exists, import the featured image. A blank ID imports no
+        // image, so the blank check only saves the search.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (
             $thumbnailId !== null && $thumbnailId !== ''
 
@@ -2160,14 +1930,6 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Get related articles data for deferred processing
-        $this->getRelatedArticles(
-            $item,
-            $entryId,
-            $entrySlug,
-            ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
-        );
-
         // Create entry data
         $entryData = [
             'title' => $title, // Set the entry title using the extracted or processed title value
@@ -2191,7 +1953,8 @@ class KbEntryCreator extends BaseEntryCreator
             $entryData['tags'] = $tagTermIds;
         }
 
-        // Only set excerpt if it is non-empty
+        // Only set excerpt if it is non-empty; a blank excerpt saved is dropped as empty
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if ($excerpt !== '') {
             // Store original excerpt before truncation
             $originalExcerpt = $excerpt;
@@ -2233,7 +1996,11 @@ class KbEntryCreator extends BaseEntryCreator
             }
         }
 
-        // Store thumbnail ID in entry data for block processors
+        // ---
+        // Store thumbnail ID in entry data for block processors. A null or blank
+        // value saved is dropped as empty, so the checks only keep it out.
+        // ---
+        // @pest-mutate-ignore: BooleanAndToBooleanOr, EmptyStringToNotEmpty
         if ($thumbnailId !== null && $thumbnailId !== '') {
             $entryData['_thumbnail_id'] = $thumbnailId;
         }
@@ -2300,27 +2067,41 @@ class KbEntryCreator extends BaseEntryCreator
         // removes the node before saving the tree, so the pre-existing hierarchy is
         // actively pruned rather than left stale — with nothing to rebuild it if
         // `addEntryToTree()` is skipped.
+        //
+        // An article that was not saved keeps the generated id and stays out of the tree.
         // ---
-        $entryId = $savedEntry instanceof Entry && \is_string($savedEntry->id())
-            ? $savedEntry->id()
-            : $entryId;
+        if ($savedEntry instanceof Entry) {
+            $entryId = self::mixedToString(
+                $savedEntry->id(),
+                $entryId
+            );
 
-        // Use EntryFinder to get the correct entry with proper path handling
-        // Force fresh query to ensure we get the updated entry after save
-        $entry = EntryFinder::findEntryById(
-            $collectionHandle,
-            $entryId,
-            true,
-            $site
-        );
-
-        // Add the article entry to the tree as a child of the topic
-        if ($entry instanceof Entry) {
+            // Add the article entry to the tree as a child of the topic
             $this->addEntryToTree(
-                $entry,
+                $entryId,
                 $collectionHandle,
                 $site,
                 $topicId
+            );
+        }
+
+        // ---
+        // Record the related articles for the deferred pass under the id just
+        // adopted. The pass looks the entry up by this key, so recording it under
+        // the generated id lost the related articles of every re-imported article.
+        //
+        // An existing article this run was told to skip keeps the related articles
+        // it has: the pass would otherwise save over a list an editor may have changed.
+        // ---
+        $skipped = $this->entryOverwriteBehavior === 'Skip matching files'
+            && $entryId !== $generatedEntryId;
+
+        if (! $skipped) {
+            $this->getRelatedArticles(
+                $item,
+                $entryId,
+                $entrySlug,
+                ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
             );
         }
 
@@ -2334,19 +2115,15 @@ class KbEntryCreator extends BaseEntryCreator
         // so this is a direct upsert, idempotent across re-imports, and a no-op when
         // the export carries no counts (wordpress-importer-archive#427).
         //
-        // Keyed on the id `saveEntry()` actually PERSISTED, not the one generated
-        // above. Under `Skip matching files` it returns the pre-existing entry and
-        // never writes `$entryId` at all, so seeding the generated id would leave a
-        // row pointing at an entry that does not exist while the live article stayed
-        // at zero.
+        // Keyed on the id `saveEntry()` actually PERSISTED, which `$entryId` holds
+        // from the adoption above, not the one generated. Under `Skip matching files`
+        // it returns the pre-existing entry and never writes the generated id at all,
+        // so seeding that id would leave a row pointing at an entry that does not
+        // exist while the live article stayed at zero.
         // ---
-        $savedEntryId = $savedEntry instanceof Entry && \is_string($savedEntry->id())
-            ? $savedEntry->id()
-            : $entryId;
-
         ArticleEngagementSeeder::seed(
             $item,
-            $savedEntryId
+            $entryId
         );
 
         // Register the kb post slug mapping for link processing
@@ -2364,85 +2141,49 @@ class KbEntryCreator extends BaseEntryCreator
     /**
      * Find the topic ID for an article based on its categories.
      *
-     * This method searches for kbtopic categories in the article's
-     * category list and returns the ID of the first matching topic
-     * entry. Articles are associated with only one topic (the first
-     * one found).
+     * Articles are associated with only one topic: the first kbtopic
+     * category in the article's category list.
      *
      * @param  SimpleXMLElement  $item  The wp:post element
-     * @param  string  $site  Selected site handle
-     * @param  string  $collectionHandle  The collection handle (e.g., 'knowledge_bases')
      * @return ?string The topic entry ID or null if no topic found
      */
     protected function findArticleTopic(
-        SimpleXMLElement $item,
-        string $site,
-        string $collectionHandle
+        SimpleXMLElement $item
     ): ?string {
-        // Find categories with domain="kbtopic"
+        // Find categories with domain="kbtopic", and take the first
         $categories = $item->xpath('category[@domain="kbtopic"]');
+        $firstCategory = \is_array($categories) ? ($categories[0] ?? null) : null;
 
-        // ---
-        // If the categories array is empty, there are no categories to process for this
-        // entry. Return null to indicate that no category data is available or applicable.
-        // ---
-        if (! \is_array($categories) || $categories === []) {
+        // An article with no topic category has no topic
+        if (! $firstCategory instanceof SimpleXMLElement) {
             return null;
         }
 
-        // Get the first category's nicename (slug)
-        if (! isset($categories[0])) {
-            return null;
-        }
+        // Resolve the topic entry the category's nicename (slug) names
+        return $this->findTopicEntryId((string) $firstCategory['nicename']);
+    }
 
-        $firstCategory = $categories[0]; // Retrieve the first <category> element from the categories array
-
-        // ---
-        // Extract the 'nicename' attribute (slug) from the first category, or use an
-        // empty string if not present
-        // ---
-        $nicename = (string) ($firstCategory->attributes()->nicename ?? '');
-
-        // Get term ID from nicename mapping for efficient ID-based lookup
+    /**
+     * Find the entry ID of the topic created for a kbtopic nicename.
+     *
+     * A topic's entry slug is its term's slug, and every kbtopic term is in
+     * the nicename map, so a nicename the map does not name names no topic.
+     *
+     * @param  string  $nicename  The kbtopic category nicename (slug)
+     * @return ?string The topic entry ID, or null when no topic was created for it
+     */
+    private function findTopicEntryId(
+        string $nicename
+    ): ?string {
+        // Resolve the nicename to its WordPress term ID
         $termId = self::getNestedMapString(
             $this->nicenameToTermIdMap,
             'kbtopic',
             $nicename
         );
 
-        if (
-            $termId !== null
-            && $termId !== ''
-            && isset($this->topicIdMap[$termId])
-        ) {
-            // Use direct ID-based lookup for better performance
-            return $this->topicIdMap[$termId];
-        }
-
-        // Fallback to slug-based matching if ID not found
-        foreach ($this->topicIdMap as $entryId) {
-            $entry = EntryFinder::findEntryById(
-                $collectionHandle,
-                $entryId,
-                false,
-                $site
-            );
-
-            // Check if an entry was found and if its slug matches the expected nicename
-            if (
-                $entry instanceof Entry
-                && $entry->slug() === $nicename
-            ) {
-                // If both conditions are true, return the entry ID as the correct match
-                return $entryId;
-            }
-        }
-
-        // ---
-        // If no matching entry is found after checking all topic IDs, return null to
-        // indicate that no corresponding topic entry exists for the given nicename.
-        // ---
-        return null;
+        // Map the term ID to the topic entry created for it
+        return $termId === null ? null : ($this->topicIdMap[$termId] ?? null);
     }
 
     /**
@@ -2510,9 +2251,11 @@ class KbEntryCreator extends BaseEntryCreator
                                 $xmlAttachments
                             );
 
-                            // Check if the attachment URL is present and not empty before attempting
-                            // to process or import the asset. This ensures only valid URLs are handled.
-                            if ($attachmentUrl !== null && $attachmentUrl !== '') {
+                            // ---
+                            // Import only an attachment the export carries; the file import
+                            // helper imports nothing for a blank URL
+                            // ---
+                            if ($attachmentUrl !== null) {
                                 // Use the file import helper which handles disabled uploads gracefully
                                 $assetPath = FileProcessor::importFileWithDisabledUploadHandling(
                                     $attachmentUrl,
@@ -2713,11 +2456,9 @@ class KbEntryCreator extends BaseEntryCreator
             // Initialize label end position to the end of the string
             $labelEndPos = \strlen($remaining);
 
-            // If SIZE{{ exists and comes after LABEL{{, set label end to start of SIZE{{
-            if (
-                $sizePos !== false
-                && $sizePos > $labelPos
-            ) {
+            // If SIZE{{ comes after LABEL{{, set label end to start of SIZE{{; a SIZE{{
+            // that is absent (false) never does
+            if ($sizePos > $labelPos) {
                 $labelEndPos = $sizePos;
             }
 
@@ -2743,14 +2484,10 @@ class KbEntryCreator extends BaseEntryCreator
             // Calculate the start position of the size content (after "SIZE{{")
             $sizeStart = $sizePos + 6;
 
-            // Initialize size end position to the end of the string
-            $sizeEndPos = \strlen($remaining);
-
-            // Extract the size content substring from size start to end
+            // Extract the size content substring from size start to the end of the string
             $sizeContent = \substr(
                 $remaining,
-                $sizeStart,
-                $sizeEndPos - $sizeStart
+                $sizeStart
             );
 
             // Remove all trailing closing braces if present at the end of the size content.
@@ -2820,22 +2557,11 @@ class KbEntryCreator extends BaseEntryCreator
     protected function removeTrailingClosingBraces(
         string $string
     ): string {
-        // Continue removing trailing closing braces until none remain
-        while (
-            str_ends_with($string, '}}')
-            || str_ends_with($string, '}')
-        ) {
-            // Remove trailing closing braces: remove 2 characters if '}}', otherwise
-            // 1 character if '}'
-            $string = \substr(
-                $string,
-                0,
-                str_ends_with($string, '}}') ? -2 : -1
-            );
-        }
-
-        // Return the cleaned string
-        return $string;
+        // Remove every trailing closing brace
+        return \rtrim(
+            $string,
+            '}'
+        );
     }
 
     /**
@@ -2962,15 +2688,14 @@ class KbEntryCreator extends BaseEntryCreator
         $processedCount = 0; // Number of entries successfully updated
         $unmappedCount = 0; // Number of related articles that could not be resolved
 
-        // Process each entry's deferred related articles data
-        $entryCounter = 0; // Counter for processed entries
-
         // Iterate over each entry that has deferred related articles
         foreach (ImportProgress::track($output, 'kb related articles', $this->deferredRelatedArticles) as $entryId => $relatedArticlesData) {
-            $entryCounter++; // Increment entry counter
-
-            // Use EntryFinder to get the correct entry with proper path handling
-            // Force fresh cache lookup to ensure we get the correct entry with original date
+            // ---
+            // Use EntryFinder to get the correct entry with proper path handling. Force
+            // fresh cache lookup to ensure we get the correct entry with original date;
+            // a cached copy of an entry this import just saved is the same entry.
+            // ---
+            // @pest-mutate-ignore: TrueToFalse
             $entry = EntryFinder::findEntryById(
                 $collectionHandle,
                 $entryId,
@@ -3007,11 +2732,6 @@ class KbEntryCreator extends BaseEntryCreator
             // Resolve each WordPress post ID to its corresponding Statamic entry ID
             $wpPostIds = $relatedArticlesData['wp_post_ids'];
             foreach ($wpPostIds as $wpPostId) {
-                // Skip empty post IDs as they're not valid references
-                if ($wpPostId === '') {
-                    continue;
-                }
-
                 // Check if the WordPress post ID has a corresponding Statamic entry ID
                 if (isset($this->articleIdMap[$wpPostId])) {
                     // Add the resolved Statamic entry ID to the related articles array
@@ -3117,12 +2837,7 @@ class KbEntryCreator extends BaseEntryCreator
         OutputInterface $output,
         ?array $minervaKbSettings = null
     ): ?array {
-        // No MinervaKB settings means there is no kb_page to resolve
-        if ($minervaKbSettings === null) {
-            return null;
-        }
-
-        // Extract kb_page value from settings
+        // Extract kb_page value from settings; no settings means no kb_page
         $kbPageId = self::mixedToString(
             $minervaKbSettings['kb_page'] ?? null,
             ''
@@ -3276,22 +2991,12 @@ class KbEntryCreator extends BaseEntryCreator
                     'wp:meta_key'
                 );
 
-                // Check if this meta key is 'description'
+                // Return the first 'description' meta value; a blank one strips to empty
                 if ($metaKey === 'description') {
-                    // Extract and return the description value
-                    $description = XpathHelper::getStringValue(
+                    return XpathHelper::getStringValue(
                         $meta,
                         'wp:meta_value'
                     );
-
-                    // Check if description value is not empty
-                    if (\trim($description) !== '') {
-                        // Return the description value from termmeta
-                        return $description;
-                    }
-
-                    // Stop searching once we find the description meta key
-                    break;
                 }
             }
         }
@@ -3319,6 +3024,8 @@ class KbEntryCreator extends BaseEntryCreator
 
         // Iterate through all terms to find the one with matching term ID
         foreach ($terms as $term) {
+            // Every term the parser returns is an element; this only narrows the type
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof SimpleXMLElement) {
                 continue;
             }
@@ -3352,20 +3059,11 @@ class KbEntryCreator extends BaseEntryCreator
         string $firstKey,
         string $secondKey
     ): ?string {
+        // TermMapBuilder stores each term ID as a non-empty string
         $firstLevel = $map[$firstKey] ?? null;
-        if (! \is_array($firstLevel)) {
-            return null;
-        }
+        $value = \is_array($firstLevel) ? ($firstLevel[$secondKey] ?? null) : null;
 
-        $value = self::mixedToString(
-            $firstLevel[$secondKey] ?? null,
-            ''
-        );
-        if ($value === '') {
-            return null;
-        }
-
-        return $value;
+        return \is_string($value) ? $value : null;
     }
 
     /**

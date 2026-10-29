@@ -58,7 +58,6 @@ it('reports progress through the knowledge base topics', function (): void {
     $probe->seedTermMap([
         '31' => ['term_id' => '31', 'term_taxonomy' => 'kbtopic', 'parent_id' => '0'],
         '32' => ['term_id' => '32', 'term_taxonomy' => 'kbtopic', 'parent_id' => '0'],
-        '33' => ['term_id' => '33', 'term_taxonomy' => 'category', 'parent_id' => '0'],
     ]);
     $probe->runTopics(new XmlParser, $output);
 
