@@ -514,6 +514,26 @@ it('leaves out a page that shares its entry id with an ancestor, and builds the 
     ],
 ]);
 
+it('adds no orphan whose entry a root already holds', function (): void {
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('dup'),
+        '2' => treeShapePage('dup', parent: '99'),
+        '3' => treeShapePage('other', parent: '98'),
+    ]);
+
+    expect($tree)->toBe([['entry' => 'dup'], ['entry' => 'other']]);
+});
+
+it('matches an ancestor\'s entry exactly, so a numeric-looking id is not taken for another', function (): void {
+    // '01' and '1' are equal only under loose comparison
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('1'),
+        '2' => treeShapePage('01', parent: '1'),
+    ]);
+
+    expect($tree)->toBe([['entry' => '1', 'children' => [['entry' => '01']]]]);
+});
+
 it('reports every page a parent cycle leaves out of the tree', function (): void {
     $warnings = treeShapeWarnings();
 
