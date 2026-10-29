@@ -1291,14 +1291,12 @@ class ImportWordPress extends Command
         // ---
 
         // Filter content types to only include supported ones
-        $supportedContentTypes = \array_values(
-            \array_filter(
-                $allContentTypes,
-                fn (array $type): bool => \in_array(
-                    $type[0],
-                    $this->supportedContentTypes,
-                    true
-                )
+        $supportedContentTypes = \array_filter(
+            $allContentTypes,
+            fn (array $type): bool => \in_array(
+                $type[0],
+                $this->supportedContentTypes,
+                true
             )
         );
 
@@ -1322,14 +1320,12 @@ class ImportWordPress extends Command
         // rather than being imported as a content type of their own. Including it here
         // would advertise a handle `--content-type=` cannot honour, and would list it as
         // "not imported" forever — telling a caller to re-run with a flag that fails.
-        $availableContentTypes = \array_values(
-            \array_filter(
-                \array_map(
-                    fn (array $type): string => $type[0],
-                    $supportedContentTypes
-                ),
-                fn (string $handle): bool => $handle !== 'nav_menu_item'
-            )
+        $availableContentTypes = \array_filter(
+            \array_map(
+                fn (array $type): string => $type[0],
+                $supportedContentTypes
+            ),
+            fn (string $handle): bool => $handle !== 'nav_menu_item'
         );
 
         $requestedContentType = $this->option('content-type');
@@ -1385,9 +1381,6 @@ class ImportWordPress extends Command
             // Inform user that all content types are supported
             $this->comment('All content types in XML are supported.');
         }
-
-        // Clear any previous selected site
-        SiteResolver::clearSelectedSite();
 
         // ---
         // Select site
@@ -2441,11 +2434,9 @@ class ImportWordPress extends Command
         // rest. Naming them, and failing, is what stops 1-of-7 passing for a whole
         // import (wordpress-importer-archive#706). A caller that *did* name a type asked for exactly this, so it
         // succeeds.
-        $untouched = \array_values(
-            \array_diff(
-                $availableContentTypes,
-                $importedContentTypes
-            )
+        $untouched = \array_diff(
+            $availableContentTypes,
+            $importedContentTypes
         );
 
         if ($requestedContentType === null && $untouched !== []) {
