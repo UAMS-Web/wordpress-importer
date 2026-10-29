@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing;
 
 use Exception;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Stache as StacheFacade;
+use Statamic\Stache\Stores\Store;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
@@ -166,17 +169,24 @@ class DeferredProcessingCoordinator
             );
         }
 
+        // Hold the checked dependencies, which each step below is handed
+        $contentProcessor = $this->contentProcessor;
+        $formPluginCoordinator = $this->formPluginCoordinator;
+        $xmlParser = $this->xmlParser;
+        $assetImporter = $this->assetImporter;
+        $pageData = $this->pageData;
+
         // ---
         // Process form imports
         // ---
 
         // Trigger Statamic form creation for all referenced Gravity Forms and
         // Formidable Forms after Bard content is parsed
-        $this->formPluginCoordinator->processFormImports(
+        $formPluginCoordinator->processFormImports(
             $site,
             $output,
-            $this->assetImporter,
-            $this->pageData
+            $assetImporter,
+            $pageData
         );
 
         // ---
@@ -187,27 +197,34 @@ class DeferredProcessingCoordinator
         $this->processTableUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $contentProcessor,
+            $xmlParser,
+            $pageData
         );
 
         // 2. Process wp_block updates
         $this->processWpBlockUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $pageData
         );
 
         // 3. Process form updates
         $this->processFormUpdates(
             $site,
-            $output
+            $output,
+            $formPluginCoordinator
         );
 
         // 4. Process internal link updates
         $this->processInternalLinkUpdates(
             $site,
             $collectionHandle,
-            $output
+            $output,
+            $assetImporter,
+            $pageData
         );
     }
 
@@ -259,11 +276,17 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  ContentProcessor  $contentProcessor  The content processor that links the tables
+     * @param  XmlParser  $xmlParser  The XML parser holding the export's tables
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processTableUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        ContentProcessor $contentProcessor,
+        XmlParser $xmlParser,
+        array $pageData
     ): void {
         // ---
         // Collect entries that need table updates
@@ -277,19 +300,6 @@ class DeferredProcessingCoordinator
             // No table updates needed, return early
             return;
         }
-
-        // Require dependencies and page data before processing table updates
-        if (
-            ! $this->contentProcessor instanceof ContentProcessor
-            || ! $this->xmlParser instanceof XmlParser
-            || ! is_array($this->pageData)
-        ) {
-            return;
-        }
-
-        $contentProcessor = $this->contentProcessor;
-        $xmlParser = $this->xmlParser;
-        $pageData = $this->pageData;
 
         // Inform user that table updates are starting
         $output->writeln('Processing table updates...');
@@ -315,7 +325,7 @@ class DeferredProcessingCoordinator
 
             // Get table IDs for this post ID
             $pageTableIds = TablePressShortcodeProcessor::getTableIdsForPage(
-                self::entryIdAsString($postId) ?? (string) $postId
+                (string) $postId
             );
 
             // Check if this entry has table IDs to link
@@ -426,11 +436,13 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processWpBlockUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        array $pageData
     ): void {
         // ---
         // Collect entries that need wp_block updates
@@ -451,18 +463,13 @@ class DeferredProcessingCoordinator
         // Get wp_block mappings to get post IDs
         $wpBlockMappings = WpBlockRegistry::getAllMappings();
 
-        // Get wp_block post IDs from mappings
+        // Get wp_block post IDs from mappings. updateBardSetsInArray() reads the
+        // registry rather than this list, so keys and values behave alike.
+        // @pest-mutate-ignore: UnwrapArrayKeys
         $wpBlockPostIds = \array_keys($wpBlockMappings);
 
         // Build map of entry IDs that need wp_block updates
         $entriesToProcess = [];
-
-        // Require page data before collecting wp_block updates
-        if (! is_array($this->pageData)) {
-            return;
-        }
-
-        $pageData = $this->pageData;
 
         // Loop through pageData to find entries with wp_block references
         foreach ($pageData as $postId => $page) {
@@ -624,16 +631,13 @@ class DeferredProcessingCoordinator
      *
      * @param  string  $site  The site handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  FormPluginCoordinator  $formPluginCoordinator  The coordinator that updates the form handles
      */
     private function processFormUpdates(
         string $site,
-        OutputInterface $output
+        OutputInterface $output,
+        FormPluginCoordinator $formPluginCoordinator
     ): void {
-        // Require the form plugin coordinator before processing form updates
-        if (! $this->formPluginCoordinator instanceof FormPluginCoordinator) {
-            return;
-        }
-
         // ---
         // Get entries that need form handle updates (all entries in relevant
         // collections). This returns a map of entry IDs to entry data for
@@ -644,7 +648,7 @@ class DeferredProcessingCoordinator
         // replaces form placeholders with actual form handles. The individual
         // "Applied form update" messages are logged during the save loop below.
         // ---
-        $formUpdatesByEntryId = $this->formPluginCoordinator->updateAllFormHandlesInEntries(
+        $formUpdatesByEntryId = $formPluginCoordinator->updateAllFormHandlesInEntries(
             $site,
             $output
         );
@@ -678,16 +682,9 @@ class DeferredProcessingCoordinator
                 continue;
             }
 
-            $entryIdString = self::entryIdAsString($entryId)
-                ?? self::entryIdAsString($entry->id());
-
-            if ($entryIdString === null) {
-                continue;
-            }
-
             // Inform user that we're re-processing this entry
             $output->writeln(
-                "Re-processing entry ID '{$entryIdString}' in the '{$collectionHandle}' collection"
+                "Re-processing entry ID '{$entryId}' in the '{$collectionHandle}' collection"
             );
 
             // Inform user that cached entry object is being used
@@ -743,11 +740,15 @@ class DeferredProcessingCoordinator
      * @param  string  $site  The site handle
      * @param  string  $collectionHandle  The collection handle
      * @param  OutputInterface  $output  Console output interface
+     * @param  AssetImporter  $assetImporter  The asset importer for links to attachments
+     * @param  array<int|string, mixed>  $pageData  Page data mapping (WordPress post ID to Statamic entry data)
      */
     private function processInternalLinkUpdates(
         string $site,
         string $collectionHandle,
-        OutputInterface $output
+        OutputInterface $output,
+        AssetImporter $assetImporter,
+        array $pageData
     ): void {
         // Get deferred internal links (map of entry IDs to deferred link arrays)
         $deferredLinkUpdatesByEntryId = LinkProcessor::getDeferredInternalLinks();
@@ -757,14 +758,6 @@ class DeferredProcessingCoordinator
             // No internal link updates needed, return early
             return;
         }
-
-        // Require the asset importer before resolving deferred internal links
-        if (! $this->assetImporter instanceof AssetImporter) {
-            return;
-        }
-
-        $assetImporter = $this->assetImporter;
-        $pageData = is_array($this->pageData) ? $this->pageData : [];
 
         // Inform user that internal link updates are starting
         $output->writeln('Resolving deferred internal links for entries in current post type...');
@@ -779,9 +772,12 @@ class DeferredProcessingCoordinator
                 continue;
             }
 
+            // An array key is an int or a string, so the id is never missing; this
+            // only types it.
             $entryIdString = self::entryIdAsString($entryId);
 
             if ($entryIdString === null) {
+                // @pest-mutate-ignore: ContinueToBreak
                 continue;
             }
 
@@ -949,7 +945,9 @@ class DeferredProcessingCoordinator
                     foreach ($entryDeferredLinks as $index => $linkData) {
                         $linkUrl = $linkData['url'];
 
-                        // Check if this link URL was successfully processed
+                        // Check if this link URL was successfully processed. Both sides are
+                        // strings, so a loose comparison matches the same URLs.
+                        // @pest-mutate-ignore: TrueToFalse
                         if (
                             \in_array(
                                 $linkUrl,
@@ -1029,10 +1027,7 @@ class DeferredProcessingCoordinator
         $entry = null;
 
         // Check if cached entry object is available from page data
-        if (
-            $page !== null && $page !== []
-            && isset($page['entry_object'])
-        ) {
+        if (isset($page['entry_object'])) {
             // Use cached entry object when it is a valid Entry instance
             $cachedEntry = $page['entry_object'];
 
@@ -1046,14 +1041,9 @@ class DeferredProcessingCoordinator
 
         // Query the entry when no valid cached object is available
         if (! $entry instanceof Entry) {
-            // Set maximum number of retry attempts
-            $retryCount = 7;
-
-            // Set delay between retry attempts
-            $retryDelay = 500000; // 500ms
-
-            // Retry querying the entry until found or retry limit reached
-            for ($i = 0; $i < $retryCount; $i++) {
+            // Retry querying the entry until found, for at most seven attempts. A fixed
+            // range keeps the loop finite whatever its body does.
+            foreach (\range(1, 7) as $attempt) {
                 // Query entry by collection, site, and ID
                 $entry = EntryFinder::findEntryById(
                     $collectionHandle,
@@ -1064,7 +1054,9 @@ class DeferredProcessingCoordinator
 
                 // Check if entry was found
                 if ($entry instanceof Entry) {
-                    // Break out of retry loop since entry was found
+                    // Break out of retry loop since entry was found. A later attempt would
+                    // only find the same entry again, without a warning or a wait.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
                 }
 
@@ -1073,53 +1065,47 @@ class DeferredProcessingCoordinator
                     [
                         'site' => $site,
                         'collection' => $collectionHandle,
-                        'retry_count' => $i + 1,
+                        'retry_count' => $attempt,
                     ]
                 );
 
                 // Log warning for failed query attempt
                 Log::warning(
                     LogContextHelper::formatMessageWithEntry(
-                        "DeferredProcessingCoordinator::loadEntry: Entry '$entryId' not found in '$collectionHandle' collection on attempt ".($i + 1),
+                        "DeferredProcessingCoordinator::loadEntry: Entry '$entryId' not found in '$collectionHandle' collection on attempt {$attempt}",
                         $logData['page_url']
                     ),
                     $logData['context']
                 );
 
-                // Wait before next retry attempt
-                usleep($retryDelay);
+                // Wait 500ms before the next retry attempt
+                Sleep::usleep(500000);
             }
 
-            // Check if entry still not found and Stache store is available
-            $store = StacheFacade::store('entries');
-            if (
-                ! $entry instanceof Entry
-                && is_object($store)
-                && method_exists(
-                    $store,
-                    'clear'
-                )
-                && method_exists(
-                    $store,
-                    'warm'
-                )
-            ) {
-                // Clear Stache cache
-                $store->clear();
+            // Rebuild the Stache's entries store and look once more if still not found
+            if (! $entry instanceof Entry) {
+                // Statamic always registers the entries store, so the check only types it
+                $store = StacheFacade::store('entries');
 
-                // Warm Stache cache
-                $store->warm();
+                // @pest-mutate-ignore: InstanceOfToTrue
+                if ($store instanceof Store) {
+                    // Clear Stache cache
+                    $store->clear();
 
-                // Wait for cache to be ready
-                usleep(500000); // 500ms delay after re-warm
+                    // Warm Stache cache
+                    $store->warm();
 
-                // Query entry again after cache re-warm
-                $entry = EntryFinder::findEntryById(
-                    $collectionHandle,
-                    $entryId,
-                    true,
-                    $site
-                );
+                    // Wait for cache to be ready
+                    Sleep::usleep(500000); // 500ms delay after re-warm
+
+                    // Query entry again after cache re-warm
+                    $entry = EntryFinder::findEntryById(
+                        $collectionHandle,
+                        $entryId,
+                        true,
+                        $site
+                    );
+                }
             }
         }
 
@@ -1206,25 +1192,13 @@ class DeferredProcessingCoordinator
      */
     private static function entryDataToArray(Entry $entry): array
     {
-        // Read the entry's current data object
+        // Read the entry's current data. With no argument, data() always answers the
+        // entry's collection of values, so the check only types it.
         $entryData = $entry->data();
 
-        // Return an empty array when data() did not yield a readable object
-        if (
-            ! is_object($entryData)
-            || ! method_exists(
-                $entryData,
-                'toArray'
-            )
-        ) {
-            return [];
-        }
-
-        // Collect existing values into a plain array
-        $data = $entryData->toArray();
-
-        return is_array($data)
-            ? $data
+        // @pest-mutate-ignore: InstanceOfToTrue
+        return $entryData instanceof Collection
+            ? $entryData->toArray()
             : [];
     }
 }

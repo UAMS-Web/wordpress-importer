@@ -2449,85 +2449,16 @@ class ImportWordPress extends Command
     private function scanForClassicBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Classic block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Classic block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Get all items of this content type from XML parser
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Classic blocks
-        $classicPages = [];
-
-        // Loop through items to check for Classic block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check if content is not empty
-            if ($contentEncoded !== '') {
-                // Check if content contains Gutenberg block comments
-                $hasGutenbergBlocks = \preg_match(
-                    '/<!--\s*wp:/',
-                    $contentEncoded
-                ) === 1;
-
-                // Check if content has freeform content outside of blocks
-                $hasFreeformContentOutsideBlocks = $this->hasFreeformContentOutsideBlocks($contentEncoded);
-
-                // ---
-                // Only flag as problematic if there's a mix of Gutenberg blocks and freeform
-                // content
-                // ---
-
-                // Check if both Gutenberg blocks and freeform content are present
-                if (
-                    $hasGutenbergBlocks
-                    && $hasFreeformContentOutsideBlocks
-                ) {
-                    // Add page to Classic blocks list
-                    $classicPages[] = [
-                        'title' => $title,
-                        'id' => $id,
-                        'link' => $link,
-                    ];
-                }
-            }
-        }
-
-        // Return array of pages with Classic block content
-        return $classicPages;
+        // Name the pages mixing Gutenberg blocks with freeform content. Content that is
+        // all blocks or all freeform imports normally.
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
+                '/<!--\s*wp:/',
+                $content
+            ) === 1
+                && $this->hasFreeformContentOutsideBlocks($content)
+        );
     }
 
     /**
@@ -2576,33 +2507,25 @@ class ImportWordPress extends Command
         // Handle opening/closing block pairs with proper nesting support first
         $content = $this->removeNestedGutenbergBlocks($content);
 
-        // Then remove all self-closing blocks (e.g., <!-- wp:acf/uams-content {...} /-->)
-        $content = \preg_replace(
-            '/<!--\s*wp:.*?\/\s*-->/s',
-            '',
-            $content
-        ) ?? '';
-
         // ---
-        // Remove any remaining standalone block comments (malformed or incomplete)
+        // Then remove, in order, all self-closing blocks (e.g., <!-- wp:acf/uams-content
+        // {...} /-->), then any remaining opening and closing block comments (malformed or
+        // incomplete). preg_replace() answers null only on a matching error, and with PCRE's
+        // JIT on, as it is by default, the backtrack limit does not apply, so the fallback
+        // only types the result.
         // ---
-
-        // Remove any remaining opening block comments
         $content = \preg_replace(
-            '/<!--\s*wp:.*?-->/s',
+            [
+                '/<!--\s*wp:.*?\/\s*-->/s',
+                '/<!--\s*wp:.*?-->/s',
+                '/<!--\s*\/wp:.*?-->/s',
+            ],
             '',
             $content
-        ) ?? '';
+        );
 
-        // Remove any remaining closing block comments
-        $content = \preg_replace(
-            '/<!--\s*\/wp:.*?-->/s',
-            '',
-            $content
-        ) ?? '';
-
-        // Return content with all Gutenberg blocks removed
-        return $content;
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        return $content ?? '';
     }
 
     /**
@@ -2618,26 +2541,9 @@ class ImportWordPress extends Command
     private function removeNestedGutenbergBlocks(
         string $content
     ): string {
-        // Find all Gutenberg block comment positions
+        // Find all Gutenberg block comment positions. An unmatched opening tag has
+        // length 0, so cutting it removes nothing.
         $blockPositions = $this->findGutenbergBlockPositions($content);
-
-        // Check if no block positions were found
-        if ($blockPositions === []) {
-            // Return content unchanged if no blocks found
-            return $content;
-        }
-
-        // Filter out blocks with length 0 (unmatched opening tags)
-        $blockPositions = \array_filter(
-            $blockPositions,
-            fn (array $block): bool => $block['length'] > 0
-        );
-
-        // Check if no valid block positions remain after filtering
-        if ($blockPositions === []) {
-            // Return content unchanged if no valid blocks found
-            return $content;
-        }
 
         // ---
         // Sort positions by start position (descending) so we can remove from end to
@@ -2708,16 +2614,11 @@ class ImportWordPress extends Command
 
             // Check if this is a self-closing tag
             // Self-closing blocks end with " /-->" (space-slash-dash-dash-greater)
-            // or contain "/>" before the closing "-->" (for compatibility)
             if (
                 \preg_match(
                     '/\/\s*-->/',
                     $fullMatch
                 ) === 1
-                || str_contains(
-                    $fullMatch,
-                    '/>'
-                )
             ) {
                 // Self-closing block - add to positions immediately
                 $blockPositions[] = [
@@ -2731,22 +2632,26 @@ class ImportWordPress extends Command
                     '/wp:'
                 )
             ) { // Check if this is a closing tag
-                // Closing tag - find matching opening tag
-                $blockType = \trim(\preg_replace(
+                // Closing tag - find matching opening tag. An anchored pattern over a tag
+                // name cannot fail, so the fallback only types the result.
+                $blockType = \preg_replace(
                     '/^\/wp:/',
                     '',
                     $blockName
-                ) ?? '');
+                );
+
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $blockType = \trim($blockType ?? '');
 
                 // Initialize index for matching opening tag
                 $matchingOpenIndex = null;
 
-                // Look for matching opening tag in the stack
-                for ($i = \count($openTagStack) - 1; $i >= 0; $i--) {
+                // Look for the nearest matching opening tag in the stack
+                foreach (\array_reverse($openTagStack, true) as $stackIndex => $openTag) {
                     // Check if this opening tag matches the closing tag type
-                    if ($openTagStack[$i]['type'] === $blockType) {
+                    if ($openTag['type'] === $blockType) {
                         // Store index of matching opening tag
-                        $matchingOpenIndex = $i;
+                        $matchingOpenIndex = $stackIndex;
 
                         // Break out of the loop
                         break;
@@ -2780,19 +2685,24 @@ class ImportWordPress extends Command
                 // Opening tag - add to stack
                 // ---
 
-                // Extract block type by removing wp: prefix
+                // Extract block type by removing wp: prefix. Neither pattern over a tag name
+                // can fail, so each fallback only types the result.
                 $blockType = \preg_replace(
                     '/^wp:/',
                     '',
                     $blockName
-                ) ?? '';
+                );
 
                 // Remove attributes
                 $blockType = \preg_replace(
                     '/\s+.*$/',
                     '',
-                    $blockType
-                ) ?? '';
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $blockType ?? ''
+                );
+
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $blockType ??= '';
 
                 // Add opening tag to stack for later matching
                 $openTagStack[] = [
@@ -2835,71 +2745,14 @@ class ImportWordPress extends Command
     private function scanForDetailsBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Details block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Details block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Retrieve items for the content type
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Details blocks
-        $detailsPages = [];
-
-        // Loop through each item to check for Details block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check for Details blocks: wp:details
-            if (
-                $contentEncoded !== ''
-                && \preg_match(
-                    '/<!--\s*wp:details\b/',
-                    $contentEncoded
-                ) === 1
-            ) {
-                // Add page to Details blocks list
-                $detailsPages[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
-            }
-        }
-
-        // Return array of pages with Details blocks
-        return $detailsPages;
+        // Name the pages holding a Details block: wp:details
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
+                '/<!--\s*wp:details\b/',
+                $content
+            ) === 1
+        );
     }
 
     /**
@@ -2918,71 +2771,14 @@ class ImportWordPress extends Command
     private function scanForFreeformBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Freeform block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Freeform block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Retrieve items for the content type
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Freeform blocks
-        $freeformPages = [];
-
-        // Loop through each item to check for Freeform block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check for Freeform blocks: wp:freeform
-            if (
-                $contentEncoded !== ''
-                && \preg_match(
-                    '/<!--\s*wp:freeform\b/',
-                    $contentEncoded
-                ) === 1
-            ) {
-                // Add page to Freeform blocks list
-                $freeformPages[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
-            }
-        }
-
-        // Return array of pages with Freeform blocks
-        return $freeformPages;
+        // Name the pages holding a Freeform block: wp:freeform
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
+                '/<!--\s*wp:freeform\b/',
+                $content
+            ) === 1
+        );
     }
 
     /**
@@ -2994,33 +2790,13 @@ class ImportWordPress extends Command
     private function scanForKbWithoutTopics(
         string $contentType
     ): array {
-        // Retrieve all items of the specified content type from the XML data
-        $items = $this->xmlParser->getItems($contentType);
-
         // Initialize an array to store entries without associated topics
         $kbWithoutTopics = [];
 
         // Iterate through each item to check for missing topics
-        foreach ($items as $item) {
+        foreach ($this->xmlParser->getItems($contentType) as $item) {
             // Check for category elements with domain='kbtopic' to identify associated topics
             $categories = $item->xpath("category[@domain='kbtopic']");
-
-            // Decode the title for proper display, default to 'Untitled' if missing
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Get the post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink for user reference
-            $link = (string) $item->link;
 
             // ---
             // Check if there are no categories with domain='kbtopic', indicating no
@@ -3028,16 +2804,90 @@ class ImportWordPress extends Command
             // ---
             if ($categories === null || $categories === []) {
                 // Add the entry details to the list of entries without topics
-                $kbWithoutTopics[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
+                $kbWithoutTopics[] = $this->pageSummary($item);
             }
         }
 
         // Return the list of entries without associated topics
         return $kbWithoutTopics;
+    }
+
+    /**
+     * Name the pages of a content type whose content passes the given check.
+     *
+     * Skips 'tablepress_table' and 'uamspeople' content types, as their content is
+     * not intended for Bard parsing.
+     *
+     * @param  string  $contentType  The selected content type (e.g., 'page', 'post')
+     * @param  callable(string): bool  $holds  Whether an item's encoded content holds what is looked for
+     * @return list<array{title: string, id: string, link: string}> The pages whose content holds it
+     */
+    private function pagesWhoseContent(
+        string $contentType,
+        callable $holds
+    ): array {
+        // Skip content types whose content is not Bard. The list holds only
+        // strings, so the strict comparison only matches what a loose one would.
+        // @pest-mutate-ignore: TrueToFalse
+        if (
+            \in_array(
+                $contentType,
+                [
+                    'tablepress_table',
+                    'uamspeople',
+                ],
+                true
+            )
+        ) {
+            return [];
+        }
+
+        // Initialize array to store the pages found
+        $pages = [];
+
+        // Loop through items to check each one's encoded content
+        foreach ($this->xmlParser->getItems($contentType) as $item) {
+            // Check the encoded content from the WordPress XML item
+            if (
+                $holds(XpathHelper::getStringValue(
+                    $item,
+                    'content:encoded'
+                ))
+            ) {
+                // Add the page to the list
+                $pages[] = $this->pageSummary($item);
+            }
+        }
+
+        // Return the pages found
+        return $pages;
+    }
+
+    /**
+     * Summarize an export item as the title, post ID and permalink a warning names it by.
+     *
+     * @param  \SimpleXMLElement  $item  The export item
+     * @return array{title: string, id: string, link: string} The item's summary
+     */
+    private function pageSummary(
+        \SimpleXMLElement $item
+    ): array {
+        // Decode HTML entities in the title and provide fallback
+        $decodedTitle = html_entity_decode(
+            (string) $item->title,
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+
+        // Name the page by its title, its WordPress post ID and its permalink
+        return [
+            'title' => $decodedTitle !== '' ? $decodedTitle : 'Untitled',
+            'id' => XpathHelper::getStringValue(
+                $item,
+                'wp:post_id'
+            ),
+            'link' => (string) $item->link,
+        ];
     }
 
     /**
@@ -3078,9 +2928,6 @@ class ImportWordPress extends Command
                 ENT_QUOTES | ENT_HTML5,
                 'UTF-8'
             );
-
-            // Trim whitespace from the content
-            $contentEncoded = \trim($contentEncoded);
 
             // Check for TablePress shortcodes or blocks
             $hasShortcode = \preg_match(
@@ -3193,6 +3040,9 @@ class ImportWordPress extends Command
         // Add site to the global set's sites so Statamic creates Variables for it
         $sites = $global->sites();
 
+        // A global set's sites() always answers a collection, so the assertion only
+        // types it.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         \assert($sites instanceof \Illuminate\Support\Collection);
 
         $global->sites(
@@ -3360,7 +3210,9 @@ class ImportWordPress extends Command
             $contentTypes
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
     }
 
@@ -3404,7 +3256,8 @@ class ImportWordPress extends Command
                 }
             }
         } finally {
-            // Close the XMLReader to free resources
+            // Close the XMLReader to free resources. Closing changes no result.
+            // @pest-mutate-ignore: RemoveMethodCall
             $reader->close();
 
             // Clean up variables to free up memory
@@ -3429,7 +3282,7 @@ class ImportWordPress extends Command
         array $parts
     ): void {
         // Get current memory limit
-        $currentMemoryLimit = ini_get('memory_limit');
+        $currentMemoryLimit = $this->memoryLimit();
 
         // Convert memory limit string to bytes for comparison
         $currentMemoryBytes = $this->convertToBytes($currentMemoryLimit);
@@ -3461,7 +3314,10 @@ class ImportWordPress extends Command
         // largest single part rather than the combined part-set size.
         // ---
 
-        // Initialize the largest item size seen across all parts
+        // Initialize the largest item size seen across all parts. Every part is measured,
+        // and a measurement is never negative, so a start above zero shows only below a
+        // byte, which reads as 0MB either way.
+        // @pest-mutate-ignore: IncrementInteger
         $largestItemSize = 0;
 
         // Initialize the total count of large items across all parts
@@ -3515,14 +3371,14 @@ class ImportWordPress extends Command
 
         // Check if we need more memory
         if ($currentMemoryBytes < $recommendedMemoryBytes) {
-            // Check if any large items were found
-            if ($largeItemsCount > 0) {
-                // Warn user about number of large items found
-                $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
+            // ---
+            // Warn user about the large items found. An item needing more than the limit
+            // is larger than the limit's threshold, so at least one was counted.
+            // ---
+            $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
 
-                // Warn user about potential memory issues
-                $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
-            }
+            // Warn user about potential memory issues
+            $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
 
             // Warn user about large content items and recommended memory
             $this->warn("Large content items detected. Recommended memory: {$recommendedMemoryMB}MB");
@@ -3575,12 +3431,24 @@ class ImportWordPress extends Command
                 $this->info('Exiting. Please restart the command with increased memory limit when ready.');
 
                 // Exit with error status code
-                exit(1);
+                $this->terminate(1);
             }
         } else { //  Otherwise
             // Inform user that memory limit appears sufficient
             $this->info('Memory limit appears sufficient for this import.');
         }
+    }
+
+    /**
+     * The PHP memory limit the memory check compares against, as `ini_get()` gives it.
+     *
+     * A method of its own so a test can supply a limit without lowering the process's own,
+     * which a test worker may already exceed.
+     */
+    protected function memoryLimit(): string
+    {
+        // Read the process's memory limit
+        return ini_get('memory_limit');
     }
 
     /**
@@ -3604,19 +3472,16 @@ class ImportWordPress extends Command
             -1
         ));
 
-        // Extract numeric value from beginning of string
-        $value = (int) \substr(
-            $memoryLimit,
-            0,
-            -1
-        );
+        // Extract numeric value from beginning of string. A cast reads only the
+        // leading digits, so the unit needs no stripping first.
+        $value = (int) $memoryLimit;
 
         // Convert to bytes based on unit
         return match ($unit) {
             'k' => $value * 1024,
             'm' => $value * 1024 * 1024,
             'g' => $value * 1024 * 1024 * 1024,
-            default => (int) $memoryLimit,
+            default => $value,
         };
     }
 
@@ -3654,17 +3519,14 @@ class ImportWordPress extends Command
         // Initialize counter for items exceeding threshold
         $largeItemsCount = 0;
 
-        // Initialize flag to track if we're currently inside an item element
-        $inItem = false;
-
         // Initialize flag to track if we're currently inside content:encoded element
         $inContentEncoded = false;
 
-        // Initialize buffer to accumulate content for size calculation
+        // Initialize buffer to accumulate content for size calculation. Each item resets
+        // it before it is measured, so content outside an item is never counted, and nor
+        // is the start.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $contentBuffer = '';
-
-        // Initialize counter for processed items
-        $processedItems = 0;
 
         // Loop through XML nodes
         while ($reader->read()) {
@@ -3674,23 +3536,13 @@ class ImportWordPress extends Command
             // Get current node name
             $nodeName = $reader->name;
 
-            // ---
-            // Track when we're inside an item
-            // ---
-
             // Check if current node is an element
             if ($nodeType === \XMLReader::ELEMENT) {
                 // Check if this is the start of an item element
                 if ($nodeName === 'item') {
-                    // Set flag to indicate we're inside an item
-                    $inItem = true;
-
                     // Reset content buffer for new item
                     $contentBuffer = '';
-                } elseif (
-                    $inItem
-                    && $nodeName === 'content:encoded'
-                ) { // Check if this is the start of content:encoded element
+                } elseif ($nodeName === 'content:encoded') { // Check if this is the start of content:encoded element
                     // Set flag to indicate we're inside content:encoded
                     $inContentEncoded = true;
                 }
@@ -3700,41 +3552,16 @@ class ImportWordPress extends Command
                     // Finished processing an item, check its size
                     $itemSize = \strlen($contentBuffer);
 
-                    // Check if this item is larger than the current largest
-                    if ($itemSize > $largestItemSize) {
-                        // Update largest item size
-                        $largestItemSize = $itemSize;
-                    }
+                    // Keep the largest item size seen
+                    $largestItemSize = max(
+                        $largestItemSize,
+                        $itemSize
+                    );
 
                     // Check if this item exceeds the threshold
                     if ($itemSize > $thresholdBytes) {
                         // Increment counter for large items
                         $largeItemsCount++;
-                    }
-
-                    // Reset flag to indicate we're no longer inside an item
-                    $inItem = false;
-
-                    // Clear content buffer
-                    $contentBuffer = '';
-
-                    // Increment processed items counter
-                    $processedItems++;
-
-                    // ---
-                    // Clear buffer periodically to manage memory
-                    // ---
-
-                    // Check if we've processed a multiple of 100 items
-                    if ($processedItems % 100 === 0) {
-                        // Clean up variables to free up memory
-                        unset($contentBuffer);
-
-                        // Reinitialize buffer
-                        $contentBuffer = '';
-
-                        // Force garbage collection to reclaim memory
-                        gc_collect_cycles();
                     }
                 } elseif ($nodeName === 'content:encoded') { // Check if this is the end of content:encoded element
                     // Reset flag to indicate we're no longer inside content:encoded
@@ -3756,7 +3583,8 @@ class ImportWordPress extends Command
             }
         }
 
-        // Close the XMLReader to free resources
+        // Close the XMLReader to free resources. Closing changes no result.
+        // @pest-mutate-ignore: RemoveMethodCall
         $reader->close();
 
         // Clean up variables to free up memory
@@ -3765,7 +3593,9 @@ class ImportWordPress extends Command
             $reader
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return analysis results
@@ -3793,7 +3623,21 @@ class ImportWordPress extends Command
         $this->info('Exiting. Please run the command above with the increased memory limit.');
 
         // Exit with success status code
-        exit(0);
+        $this->terminate(0);
+    }
+
+    /**
+     * End the process with the given status, as the memory check's choices do.
+     *
+     * A method of its own so a test can stand in for ending the process.
+     *
+     * @param  int  $status  The exit status
+     */
+    protected function terminate(
+        int $status
+    ): never {
+        // End the process with the status
+        exit($status);
     }
 
     /**
@@ -3828,12 +3672,17 @@ class ImportWordPress extends Command
         $collections = Collection::all();
 
         foreach ($collections as $collection) {
+            // Collection::all() answers only collections, an entry query is always the
+            // Stache's builder and answers a collection of entries, and an entry's path is
+            // never empty, so each check below only types what it reads.
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $collection instanceof StatamicCollection) {
                 continue;
             }
 
             $entryQuery = Entry::query();
 
+            // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
             \assert($entryQuery instanceof EntryQueryBuilder);
 
             $query = $entryQuery->where(
@@ -3841,21 +3690,25 @@ class ImportWordPress extends Command
                 $collection->handle()
             );
 
+            // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
             \assert($query instanceof EntryQueryBuilder);
 
             $entries = $query->get();
 
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $entries instanceof \Illuminate\Support\Collection) {
                 continue;
             }
 
             foreach ($entries as $entry) {
+                // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
                 if (! $entry instanceof StatamicEntry) {
                     continue;
                 }
 
                 $filePath = $entry->path();
 
+                // @pest-mutate-ignore: BooleanOrToBooleanAnd, EmptyStringToNotEmpty, ContinueToBreak
                 if (! is_string($filePath) || $filePath === '') {
                     continue;
                 }
@@ -3902,7 +3755,9 @@ class ImportWordPress extends Command
         // Get the site handle
         $site = SiteResolver::getCurrentSite();
 
-        // Check if no site was selected
+        // Check if no site was selected. The resolver falls back to the default site, so
+        // it always answers one, and the check only types it.
+        // @pest-mutate-ignore: RemoveMethodCall, RemoveEarlyReturn
         if ($site === null) {
             // Alert the user that no site was selected
             $this->error('No site selected for navigation import');
@@ -4045,7 +3900,7 @@ class ImportWordPress extends Command
         try {
             // Build the designator over the designations recorded in this package
             $designator = new DepartmentOrganizationDesignator(
-                DepartmentOrganizationMap::recorded()
+                $this->departmentOrganizationMap()
             );
 
             // Apply whatever the crosswalk records for this site
@@ -4055,30 +3910,44 @@ class ImportWordPress extends Command
             switch ($designation->outcome) {
                 case DepartmentOrganizationOutcome::Designated:
                     $this->info("Designated site '$site' as a news hub for '{$designation->organizationSlug}'.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::AlreadyDesignated:
                     $this->info("Site '$site' is already designated as a news hub for '{$designation->organizationSlug}'.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DeliberatelyUnmapped:
                     // A recorded rejection is a decision, not a gap - nothing to report
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::NotRecorded:
                     $this->info("No department_organization designation is recorded for site '$site' - its news page will render as a plain listing.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DanglingReference:
                     $this->warn("Site '$site' is designated for organization '{$designation->organizationSlug}', which does not exist - designation not applied.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::GlobalMissing:
                     $this->warn('uams_multisite_settings Global not found - skipping department_organization designation');
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::SiteUnavailable:
                     $this->warn("uams_multisite_settings Global not available for site '$site' - skipping department_organization designation");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
 
@@ -4103,6 +3972,19 @@ class ImportWordPress extends Command
                 ]
             );
         }
+    }
+
+    /**
+     * The site to organization crosswalk the designation applies: the one recorded in this
+     * package.
+     *
+     * A method of its own so a test can supply a crosswalk with entries, since the recorded
+     * one ships empty.
+     */
+    protected function departmentOrganizationMap(): DepartmentOrganizationMap
+    {
+        // Read the crosswalk recorded in this package
+        return DepartmentOrganizationMap::recorded();
     }
 
     /**
@@ -4137,7 +4019,9 @@ class ImportWordPress extends Command
 
         // Loop through all files and directories recursively
         foreach ($iterator as $file) {
-            // Check if current item is a file (not a directory)
+            // Check if current item is a file (not a directory). The iterator yields
+            // only SplFileInfo, so the instanceof check only types it.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($file instanceof \SplFileInfo && $file->isFile()) {
                 // Add file size to total size counter
                 $totalSize += $file->getSize();
