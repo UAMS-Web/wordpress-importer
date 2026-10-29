@@ -962,12 +962,8 @@ abstract class BaseEntryCreator
         string $entryId,
         string $entrySlug
     ): ?Entry {
-        // ---
-        // Check if an entry with the same ID exists. Statamic keeps entry IDs unique
-        // across collections, so the collection criterion changes nothing it can find.
-        // ---
+        // Check if an entry with the same ID exists in this collection and site
         $existingEntryQuery = $this->newEntryQuery();
-        // @pest-mutate-ignore: RemoveMethodCall
         $existingEntryQuery->where(
             'collection',
             $collectionHandle
@@ -1105,8 +1101,7 @@ abstract class BaseEntryCreator
     private static function mixedToStringValue(
         mixed $value
     ): string {
-        // A saved entry's id and slug are strings; the fallback only narrows the type
-        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        // An entry with no slug answers null, which reads as an empty slug
         return \is_string($value) ? $value : '';
     }
 

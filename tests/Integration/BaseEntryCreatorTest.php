@@ -973,6 +973,48 @@ describe('the entry half, more closely', function (): void {
         'an id of two parts, beside a slug of numbers' => ['q-x-AAAAAAAAAAAAAAAA', '12', 'x-7', null],
         'an existing id of two parts' => ['x-AAAAAAAAAAAAAAAA', 'q', 'q-x-BBBBBBBBBBBBBBBB', null],
     ]);
+
+    it('finds an entry by its id only in its collection', function (): void {
+        baseEntryCollection();
+        $others = CollectionFacade::make('others');
+        $others->sites(['default', 'other']);
+        $others->save();
+        $entry = EntryFacade::make();
+
+        if (! $entry instanceof Entry) {
+            throw new RuntimeException('Could not make an entry.');
+        }
+
+        $entry->collection('others');
+        $entry->locale('default');
+        $entry->slug('exact');
+        $entry->id('exact');
+        $entry->save();
+
+        $found = baseEntryProbe()->call('findExistingEntry', 'things', 'default', 'exact', 'exact');
+
+        expect($found)->toBeNull();
+    });
+
+    it('reads an earlier entry with no slug as having an empty one', function (): void {
+        baseEntryCollection();
+        $entry = EntryFacade::make();
+
+        if (! $entry instanceof Entry) {
+            throw new RuntimeException('Could not make an entry.');
+        }
+
+        $entry->collection('things');
+        $entry->locale('default');
+        $entry->id('other-7-AAAAAAAAAAAAAAAA');
+        $entry->data(['title' => 'No slug']);
+        $entry->save();
+
+        $found = baseEntryProbe()->call('findExistingEntry', 'things', 'default', '-7-BBBBBBBBBBBBBBBB', 'ignored');
+
+        expect($entry->slug())->toBeNull()
+            ->and($found instanceof Entry ? $found->id() : null)->toBe('other-7-AAAAAAAAAAAAAAAA');
+    });
 });
 
 describe('the unmapped report, more closely', function (): void {
