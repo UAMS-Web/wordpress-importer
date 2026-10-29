@@ -205,11 +205,13 @@ class ReusableBlockCoordinator
         // Set maximum iterations to prevent infinite loops
         $maxIterations = 100;
 
-        // Initialize iteration counter
-        $iteration = 0;
+        // Whether every pass found new wp_blocks, so the limit rather than an empty pass
+        // ended the loop
+        $exhausted = true;
 
-        // Loop until max iterations reached or no new wp_blocks found
-        while ($iteration < $maxIterations) {
+        // Loop until max iterations reached or no new wp_blocks found. Each pass is
+        // counted as it starts, so no early exit can skip the count.
+        foreach (\range(1, $maxIterations) as $pass) {
             // ---
             // Get wp_block post IDs that were encountered during content processing
             // (includes newly discovered ones from previous iteration)
@@ -229,7 +231,12 @@ class ReusableBlockCoordinator
 
             // Check if no new wp_block post IDs to process
             if ($newWpBlockPostIds === []) {
-                // Break loop if no new wp_blocks found
+                // Record that an empty pass, not the limit, ended the loop
+                $exhausted = false;
+
+                // Break loop if no new wp_blocks found. Continuing instead would spend the
+                // remaining passes on the same empty result and end the loop the same way.
+                // @pest-mutate-ignore: BreakToContinue
                 break;
             }
 
@@ -249,19 +256,24 @@ class ReusableBlockCoordinator
                 // processed yet. Post ids are strings, so the strict flags, which
                 // phpstan-strict-rules requires, change no result.
                 // ---
+
+                // Whether the post ID is in the target list
                 // @pest-mutate-ignore: TrueToFalse
-                if (
-                    \in_array(
-                        $postId,
-                        $newWpBlockPostIds,
-                        true
-                    )
-                    && ! \in_array(
-                        $postId,
-                        $importedPostIds,
-                        true
-                    )
-                ) {
+                $isTarget = \in_array(
+                    $postId,
+                    $newWpBlockPostIds,
+                    true
+                );
+
+                // Whether the post ID has already been processed
+                // @pest-mutate-ignore: TrueToFalse
+                $isProcessed = \in_array(
+                    $postId,
+                    $importedPostIds,
+                    true
+                );
+
+                if ($isTarget && ! $isProcessed) {
                     // Add this wp_block to our processing queue
                     $wpBlocksToProcess[] = $wpBlock;
 
@@ -325,9 +337,6 @@ class ReusableBlockCoordinator
                 unset($wpBlockXmlParser);
             }
 
-            // Increment iteration counter
-            $iteration++;
-
             // Clean up iteration variables
             unset(
                 $wpBlocksToProcess,
@@ -337,7 +346,7 @@ class ReusableBlockCoordinator
         }
 
         // Check if max iterations reached (safety check)
-        if ($iteration >= $maxIterations) {
+        if ($exhausted) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
