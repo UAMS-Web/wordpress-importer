@@ -52,6 +52,19 @@ final class IwpmCommand extends ImportWordPress
     public static ?string $memoryLimit = null;
 
     /**
+     * Whether Laravel Prompts reports itself supported, or null to read the platform.
+     */
+    public static ?bool $prompts = null;
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function isPromptsSupported(): bool
+    {
+        return self::$prompts ?? parent::isPromptsSupported();
+    }
+
+    /**
      * {@inheritDoc}
      */
     protected function memoryLimit(): string
@@ -70,6 +83,7 @@ final class IwpmCommand extends ImportWordPress
 
 beforeEach(function (): void {
     IwpmCommand::$memoryLimit = null;
+    IwpmCommand::$prompts = null;
     $this->root = sys_get_temp_dir().'/iwpm-'.bin2hex(random_bytes(6));
     mkdir($this->root);
 });
@@ -424,6 +438,32 @@ it('tells how to rerun with more memory when told to restart, or left to the def
     'told to restart' => ["0\n", true],
     'Enter, taking the default' => ["\n", true],
     'left to the default' => ['', false],
+]);
+
+/**
+ * Where Laravel Prompts is supported and the run can ask, the choice is a `select()`, which
+ * under test falls back to the console components' choice: options listed with their index
+ * after a dotted leader. Elsewhere (Windows, or no `stty`) it is the command's own `choice()`,
+ * a numbered Symfony list. Both take Restart for an answer of `0`, and for Enter (#277).
+ *
+ * @param  bool  $prompts  Whether Laravel Prompts reports itself supported
+ * @param  string  $pattern  What the rendered question must match
+ * @param  string  $answers  What is typed at the question
+ */
+it('asks through Laravel Prompts only where it is supported, taking Restart either way', function (bool $prompts, string $pattern, string $answers): void {
+    iwpmLimit(IWPM_LIMIT);
+    IwpmCommand::$prompts = $prompts;
+
+    [$output, $status] = iwpmCheck([iwpmPart($this, iwpmItem(IWPM_ITEM))], $answers);
+
+    expect($output)->toMatch($pattern)
+        ->and($output)->toContain("Run this command with increased memory:\n")
+        ->and($status)->toBe(0);
+})->with([
+    'supported, answered 0' => [true, '/^  Restart with increased memory \.+ 0 *$/m', "0\n"],
+    'supported, Enter' => [true, '/^  Restart with increased memory \.+ 0 *$/m', "\n"],
+    'not supported, answered 0' => [false, '/^  \[0\] Restart with increased memory$/m', "0\n"],
+    'not supported, Enter' => [false, '/^  \[0\] Restart with increased memory$/m', "\n"],
 ]);
 
 /**
