@@ -1072,19 +1072,18 @@ it('leaves an enabled destination collection alone', function (): void {
 });
 
 /**
- * Today's behavior: a content type whose destination collection does not exist is skipped
- * with a warning but not counted with the types skipped at a gate, so a run that imported
- * nothing for it still succeeds (#291).
+ * A content type whose destination collection does not exist imports nothing, so it is named
+ * with the types skipped at a gate and the run fails (#291).
  */
-it('skips a content type whose destination collection does not exist', function (): void {
+it('skips a content type whose destination collection does not exist, and fails the run', function (): void {
     [$command, $buffer] = iwriCommand(['--content-type' => 'page']);
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
 
-    expect($status)->toBe(0)
+    expect($status)->toBe(1)
         ->and(IwriLog::of('entries.create'))->toBe([])
         ->and($output)->toContain("The 'pages' collection does not exist in Statamic.\nPlease create and configure the 'pages' collection before importing 'page' content.\n")
-        ->and($output)->not->toContain('Nothing was imported');
+        ->and($output)->toEndWith("Nothing was imported for the following content types, because a destination was missing:\n  - page (needs the 'pages' collection)\nCreate the missing destinations and re-run; the import is incomplete.\n");
 });
 
 it('imports redirect rules into the redirects global set, asking how to treat matching sets', function (): void {
@@ -1112,16 +1111,17 @@ it('enables the redirects global set for the site', function (): void {
 });
 
 /**
- * Today's behavior, as for a missing collection: the run still succeeds (#291).
+ * As for a missing collection, a missing global set is named and the run fails (#291).
  */
-it('skips redirect rules when the redirects global set does not exist', function (): void {
+it('skips redirect rules when the redirects global set does not exist, and fails the run', function (): void {
     [$command, $buffer] = iwriCommand(['--content-type' => 'redirect_rule']);
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['redirect_rule'])]);
 
-    expect($status)->toBe(0)
+    expect($status)->toBe(1)
         ->and(IwriLog::of('globals.create'))->toBe([])
-        ->and($output)->toContain("The 'redirects' global set does not exist in Statamic.\nPlease create and configure the 'redirects' global set before importing 'redirect_rule' content.\n");
+        ->and($output)->toContain("The 'redirects' global set does not exist in Statamic.\nPlease create and configure the 'redirects' global set before importing 'redirect_rule' content.\n")
+        ->and($output)->toEndWith("Nothing was imported for the following content types, because a destination was missing:\n  - redirect_rule (needs the 'redirects' global set)\nCreate the missing destinations and re-run; the import is incomplete.\n");
 });
 
 it('enables the taxonomies a page\'s blocks need, skipping the pages when one is missing', function (string $block, string $handle, array $asked): void {

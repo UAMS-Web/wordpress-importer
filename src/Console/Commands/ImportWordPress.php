@@ -1775,6 +1775,9 @@ class ImportWordPress extends Command
                         // Inform user that collection needs to be created
                         $this->info("Please create and configure the '$defaultHandle' collection before importing '$contentType' content.");
 
+                        // Record the abandonment so the exit code reflects it (#291)
+                        $skippedAtGate[] = "$contentType (needs the '$defaultHandle' collection)";
+
                         // Skip to next iteration of loop
                         continue;
                     }
@@ -1824,6 +1827,9 @@ class ImportWordPress extends Command
 
                         // Inform user that global set needs to be created
                         $this->info("Please create and configure the '$defaultHandle' global set before importing '$contentType' content.");
+
+                        // Record the abandonment so the exit code reflects it (#291)
+                        $skippedAtGate[] = "$contentType (needs the '$defaultHandle' global set)";
 
                         // Skip to next iteration of loop
                         continue;
