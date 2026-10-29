@@ -1297,6 +1297,12 @@ describe('articles', function (): void {
             ->and(kbEntry('multi')->get('secondary_topic'))->toBe([kbEntry('billing')->id(), kbEntry('shipping')->id()]);
     });
 
+    it('lists the second topic of two as secondary', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing'), kbEntryTopic('6', 'refunds'), kbEntryTopic('7', 'shipping')], [kbEntryArticle('901', ['refunds', 'billing', 'shipping'], ['slug' => 'pair'])]));
+
+        expect(kbEntry('pair')->get('secondary_topic'))->toBe([kbEntryId('billing'), kbEntryId('shipping')]);
+    });
+
     it('sets no secondary topics for an article with one topic', function (): void {
         kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'single'])]));
 
@@ -1325,7 +1331,7 @@ describe('articles', function (): void {
         $export = kbEntryExport(
             [kbEntryTopic('5', 'billing'), ['id' => '30', 'taxonomy' => 'kbtag', 'slug' => 'fast'], ['id' => '31', 'taxonomy' => 'kbtag', 'slug' => 'slow'], ['id' => '32', 'taxonomy' => 'kbtag', 'slug' => 'blank']],
             [kbEntryArticle('901', ['billing'], ['slug' => 'tagged', 'categories' => [
-                ['domain' => 'kbtag', 'nicename' => 'fast'], ['domain' => 'kbtag', 'nicename' => 'fast'], ['domain' => 'kbtag', 'nicename' => 'slow'],
+                ['domain' => 'kbtag', 'nicename' => 'unknown'], ['domain' => 'kbtag', 'nicename' => 'fast'], ['domain' => 'kbtag', 'nicename' => 'fast'], ['domain' => 'kbtag', 'nicename' => 'slow'],
                 ['domain' => 'kbtag', 'nicename' => ''], ['domain' => 'kbtag', 'nicename' => 'unknown'], ['domain' => 'kbtag', 'nicename' => 'blank'], ['domain' => 'kbtag', 'nicename' => 'fast-too'],
             ]])]
         );
@@ -1457,6 +1463,7 @@ describe('what an article carries', function (): void {
         'guests' => ['["guest"]', ['restriction_query' => false]],
         'a blank role' => ['[""]', ['restriction_query' => false]],
         'a null role' => ['[null]', ['restriction_query' => false]],
+        'roles as an object' => ['{"0":"subscriber"}', ['restriction_query' => true, 'restriction_category' => ['user_roles'], 'import_wordpress_notes' => ['restriction_user_roles: "subscriber"']]],
     ]);
 
     it('takes the blueprint default restriction when the roles say nothing', function (string $roles): void {
@@ -1983,7 +1990,8 @@ describe('articles, more closely', function (): void {
     it('converts no content that is only space', function (): void {
         kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'spaced', 'content' => "  \n "])]));
 
-        expect(kbEntry('spaced')->get('content'))->toBeNull();
+        expect(kbEntry('spaced')->get('content'))->toBeNull()
+            ->and(ProcessingContext::getStatamicEntryId())->toBeNull();
     });
 
     it('sets nothing up for the content converter when there is no content', function (): void {
@@ -1991,6 +1999,14 @@ describe('articles, more closely', function (): void {
 
         expect(ProcessingContext::getStatamicEntryId())->toBeNull()
             ->and(ProcessingContext::getEntryData())->toBeNull();
+    });
+
+    it('converts content as a whole body, keeping what its block comments say', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'aligned', 'content' => '<!-- wp:image {"align":"left","id":5} --><figure><img src="x.jpg"/></figure><!-- /wp:image -->'])]));
+        $content = kbEntry('aligned')->get('content');
+        $set = \is_array($content) && \is_array($content[0] ?? null) && \is_array($content[0]['attrs'] ?? null) ? $content[0]['attrs'] : [];
+
+        expect($set['values'] ?? null)->toBe(['type' => 'image', 'image' => 'x.jpg', 'align' => 'alignleft']);
     });
 
     it('converts content without adding paragraphs, as a whole body', function (): void {

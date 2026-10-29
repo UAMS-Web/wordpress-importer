@@ -472,11 +472,11 @@ class KbEntryCreator extends BaseEntryCreator
             // Inform user that structure is being created
             $output->writeln("<comment>Collection '{$collectionHandle}' has no structure defined. Creating one.</comment>");
 
-            // Create new CollectionStructure instance with the collection handle
+            // ---
+            // Create new CollectionStructure instance and assign it to the collection,
+            // which gives it the collection's handle
+            // ---
             $structure = new CollectionStructure;
-            $structure->handle($collectionHandle);
-
-            // Assign the structure to the collection
             $collection->structure($structure);
 
             // Save the collection with the new structure
@@ -1106,7 +1106,11 @@ class KbEntryCreator extends BaseEntryCreator
             // Get the current term data from the map using its ID
             $termData = $kbtopicTermMap[$termId];
 
-            // Get the parent term ID from the term data (already resolved by TermMapBuilder)
+            // ---
+            // Get the parent term ID from the term data (already resolved by TermMapBuilder).
+            // No term has the fallback's ID either way.
+            // ---
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $parentTermId = self::mixedToString(
                 $termData['parent_id'] ?? null,
                 ''
@@ -1535,8 +1539,8 @@ class KbEntryCreator extends BaseEntryCreator
         // Retrieve all kbtopic category elements on this item
         $kbtopicCategories = $item->xpath('category[@domain="kbtopic"]');
 
-        // Skip the first category (used as primary topic) and process the rest
-        foreach (\is_array($kbtopicCategories) ? \array_slice($kbtopicCategories, 1) : [] as $category) {
+        // Process each category; the first, the primary topic, is left out below
+        foreach (\is_array($kbtopicCategories) ? $kbtopicCategories : [] as $category) {
             // Resolve the topic entry this category names
             $topicEntryId = $this->findTopicEntryId((string) $category['nicename']);
 
@@ -1860,7 +1864,11 @@ class KbEntryCreator extends BaseEntryCreator
         // @pest-mutate-ignore: FalseToTrue
         $featuredImageHasCredit = false;
 
-        // If thumbnail ID exists, import the featured image
+        // ---
+        // If thumbnail ID exists, import the featured image. A blank ID imports no
+        // image, so the blank check only saves the search.
+        // ---
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (
             $thumbnailId !== null && $thumbnailId !== ''
 
@@ -2435,11 +2443,9 @@ class KbEntryCreator extends BaseEntryCreator
             // Initialize label end position to the end of the string
             $labelEndPos = \strlen($remaining);
 
-            // If SIZE{{ exists and comes after LABEL{{, set label end to start of SIZE{{
-            if (
-                $sizePos !== false
-                && $sizePos > $labelPos
-            ) {
+            // If SIZE{{ comes after LABEL{{, set label end to start of SIZE{{; a SIZE{{
+            // that is absent (false) never does
+            if ($sizePos > $labelPos) {
                 $labelEndPos = $sizePos;
             }
 
@@ -3005,6 +3011,8 @@ class KbEntryCreator extends BaseEntryCreator
 
         // Iterate through all terms to find the one with matching term ID
         foreach ($terms as $term) {
+            // Every term the parser returns is an element; this only narrows the type
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $term instanceof SimpleXMLElement) {
                 continue;
             }
