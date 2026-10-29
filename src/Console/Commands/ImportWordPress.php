@@ -2449,82 +2449,16 @@ class ImportWordPress extends Command
     private function scanForClassicBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Classic block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Classic block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Get all items of this content type from XML parser
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Classic blocks
-        $classicPages = [];
-
-        // Loop through items to check for Classic block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check if content contains Gutenberg block comments
-            $hasGutenbergBlocks = \preg_match(
+        // Name the pages mixing Gutenberg blocks with freeform content. Content that is
+        // all blocks or all freeform imports normally.
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
                 '/<!--\s*wp:/',
-                $contentEncoded
-            ) === 1;
-
-            // Check if content has freeform content outside of blocks
-            $hasFreeformContentOutsideBlocks = $this->hasFreeformContentOutsideBlocks($contentEncoded);
-
-            // ---
-            // Only flag as problematic if there's a mix of Gutenberg blocks and freeform
-            // content
-            // ---
-
-            // Check if both Gutenberg blocks and freeform content are present
-            if (
-                $hasGutenbergBlocks
-                && $hasFreeformContentOutsideBlocks
-            ) {
-                // Add page to Classic blocks list
-                $classicPages[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
-            }
-        }
-
-        // Return array of pages with Classic block content
-        return $classicPages;
+                $content
+            ) === 1
+                && $this->hasFreeformContentOutsideBlocks($content)
+        );
     }
 
     /**
@@ -2573,33 +2507,25 @@ class ImportWordPress extends Command
         // Handle opening/closing block pairs with proper nesting support first
         $content = $this->removeNestedGutenbergBlocks($content);
 
-        // Then remove all self-closing blocks (e.g., <!-- wp:acf/uams-content {...} /-->)
-        $content = \preg_replace(
-            '/<!--\s*wp:.*?\/\s*-->/s',
-            '',
-            $content
-        ) ?? '';
-
         // ---
-        // Remove any remaining standalone block comments (malformed or incomplete)
+        // Then remove, in order, all self-closing blocks (e.g., <!-- wp:acf/uams-content
+        // {...} /-->), then any remaining opening and closing block comments (malformed or
+        // incomplete). preg_replace() answers null only on a matching error, and with PCRE's
+        // JIT on, as it is by default, the backtrack limit does not apply, so the fallback
+        // only types the result.
         // ---
-
-        // Remove any remaining opening block comments
         $content = \preg_replace(
-            '/<!--\s*wp:.*?-->/s',
+            [
+                '/<!--\s*wp:.*?\/\s*-->/s',
+                '/<!--\s*wp:.*?-->/s',
+                '/<!--\s*\/wp:.*?-->/s',
+            ],
             '',
             $content
-        ) ?? '';
+        );
 
-        // Remove any remaining closing block comments
-        $content = \preg_replace(
-            '/<!--\s*\/wp:.*?-->/s',
-            '',
-            $content
-        ) ?? '';
-
-        // Return content with all Gutenberg blocks removed
-        return $content;
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
+        return $content ?? '';
     }
 
     /**
@@ -2706,22 +2632,26 @@ class ImportWordPress extends Command
                     '/wp:'
                 )
             ) { // Check if this is a closing tag
-                // Closing tag - find matching opening tag
-                $blockType = \trim(\preg_replace(
+                // Closing tag - find matching opening tag. An anchored pattern over a tag
+                // name cannot fail, so the fallback only types the result.
+                $blockType = \preg_replace(
                     '/^\/wp:/',
                     '',
                     $blockName
-                ) ?? '');
+                );
+
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $blockType = \trim($blockType ?? '');
 
                 // Initialize index for matching opening tag
                 $matchingOpenIndex = null;
 
-                // Look for matching opening tag in the stack
-                for ($i = \count($openTagStack) - 1; $i >= 0; $i--) {
+                // Look for the nearest matching opening tag in the stack
+                foreach (\array_reverse($openTagStack, true) as $stackIndex => $openTag) {
                     // Check if this opening tag matches the closing tag type
-                    if ($openTagStack[$i]['type'] === $blockType) {
+                    if ($openTag['type'] === $blockType) {
                         // Store index of matching opening tag
-                        $matchingOpenIndex = $i;
+                        $matchingOpenIndex = $stackIndex;
 
                         // Break out of the loop
                         break;
@@ -2755,19 +2685,24 @@ class ImportWordPress extends Command
                 // Opening tag - add to stack
                 // ---
 
-                // Extract block type by removing wp: prefix
+                // Extract block type by removing wp: prefix. Neither pattern over a tag name
+                // can fail, so each fallback only types the result.
                 $blockType = \preg_replace(
                     '/^wp:/',
                     '',
                     $blockName
-                ) ?? '';
+                );
 
                 // Remove attributes
                 $blockType = \preg_replace(
                     '/\s+.*$/',
                     '',
-                    $blockType
-                ) ?? '';
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
+                    $blockType ?? ''
+                );
+
+                // @pest-mutate-ignore: EmptyStringToNotEmpty
+                $blockType ??= '';
 
                 // Add opening tag to stack for later matching
                 $openTagStack[] = [
@@ -2810,70 +2745,14 @@ class ImportWordPress extends Command
     private function scanForDetailsBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Details block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Details block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Retrieve items for the content type
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Details blocks
-        $detailsPages = [];
-
-        // Loop through each item to check for Details block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check for Details blocks: wp:details
-            if (
-                \preg_match(
-                    '/<!--\s*wp:details\b/',
-                    $contentEncoded
-                ) === 1
-            ) {
-                // Add page to Details blocks list
-                $detailsPages[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
-            }
-        }
-
-        // Return array of pages with Details blocks
-        return $detailsPages;
+        // Name the pages holding a Details block: wp:details
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
+                '/<!--\s*wp:details\b/',
+                $content
+            ) === 1
+        );
     }
 
     /**
@@ -2892,70 +2771,14 @@ class ImportWordPress extends Command
     private function scanForFreeformBlocks(
         string $contentType
     ): array {
-        // Check if content type should be skipped for Freeform block scanning
-        if (
-            \in_array(
-                $contentType,
-                [
-                    'tablepress_table',
-                    'uamspeople',
-                ],
-                true
-            )
-        ) {
-            // Skip Freeform block scanning for tablepress_table and uamspeople
-            return [];
-        }
-
-        // Retrieve items for the content type
-        $items = $this->xmlParser->getItems($contentType);
-
-        // Initialize array to store pages with Freeform blocks
-        $freeformPages = [];
-
-        // Loop through each item to check for Freeform block content
-        foreach ($items as $item) {
-            // Extract the encoded content from the WordPress XML item
-            $contentEncoded = XpathHelper::getStringValue(
-                $item,
-                'content:encoded'
-            );
-
-            // Decode HTML entities in the title and provide fallback
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Extract the WordPress post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink URL for reference
-            $link = (string) $item->link;
-
-            // Check for Freeform blocks: wp:freeform
-            if (
-                \preg_match(
-                    '/<!--\s*wp:freeform\b/',
-                    $contentEncoded
-                ) === 1
-            ) {
-                // Add page to Freeform blocks list
-                $freeformPages[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
-            }
-        }
-
-        // Return array of pages with Freeform blocks
-        return $freeformPages;
+        // Name the pages holding a Freeform block: wp:freeform
+        return $this->pagesWhoseContent(
+            $contentType,
+            fn (string $content): bool => \preg_match(
+                '/<!--\s*wp:freeform\b/',
+                $content
+            ) === 1
+        );
     }
 
     /**
@@ -2967,33 +2790,13 @@ class ImportWordPress extends Command
     private function scanForKbWithoutTopics(
         string $contentType
     ): array {
-        // Retrieve all items of the specified content type from the XML data
-        $items = $this->xmlParser->getItems($contentType);
-
         // Initialize an array to store entries without associated topics
         $kbWithoutTopics = [];
 
         // Iterate through each item to check for missing topics
-        foreach ($items as $item) {
+        foreach ($this->xmlParser->getItems($contentType) as $item) {
             // Check for category elements with domain='kbtopic' to identify associated topics
             $categories = $item->xpath("category[@domain='kbtopic']");
-
-            // Decode the title for proper display, default to 'Untitled' if missing
-            $decodedTitle = html_entity_decode(
-                (string) $item->title,
-                ENT_QUOTES | ENT_HTML5,
-                'UTF-8'
-            );
-            $title = $decodedTitle !== '' ? $decodedTitle : 'Untitled';
-
-            // Get the post ID for identification
-            $id = XpathHelper::getStringValue(
-                $item,
-                'wp:post_id'
-            );
-
-            // Get the permalink for user reference
-            $link = (string) $item->link;
 
             // ---
             // Check if there are no categories with domain='kbtopic', indicating no
@@ -3001,16 +2804,90 @@ class ImportWordPress extends Command
             // ---
             if ($categories === null || $categories === []) {
                 // Add the entry details to the list of entries without topics
-                $kbWithoutTopics[] = [
-                    'title' => $title,
-                    'id' => $id,
-                    'link' => $link,
-                ];
+                $kbWithoutTopics[] = $this->pageSummary($item);
             }
         }
 
         // Return the list of entries without associated topics
         return $kbWithoutTopics;
+    }
+
+    /**
+     * Name the pages of a content type whose content passes the given check.
+     *
+     * Skips 'tablepress_table' and 'uamspeople' content types, as their content is
+     * not intended for Bard parsing.
+     *
+     * @param  string  $contentType  The selected content type (e.g., 'page', 'post')
+     * @param  callable(string): bool  $holds  Whether an item's encoded content holds what is looked for
+     * @return list<array{title: string, id: string, link: string}> The pages whose content holds it
+     */
+    private function pagesWhoseContent(
+        string $contentType,
+        callable $holds
+    ): array {
+        // Skip content types whose content is not Bard. The list holds only
+        // strings, so the strict comparison only matches what a loose one would.
+        // @pest-mutate-ignore: TrueToFalse
+        if (
+            \in_array(
+                $contentType,
+                [
+                    'tablepress_table',
+                    'uamspeople',
+                ],
+                true
+            )
+        ) {
+            return [];
+        }
+
+        // Initialize array to store the pages found
+        $pages = [];
+
+        // Loop through items to check each one's encoded content
+        foreach ($this->xmlParser->getItems($contentType) as $item) {
+            // Check the encoded content from the WordPress XML item
+            if (
+                $holds(XpathHelper::getStringValue(
+                    $item,
+                    'content:encoded'
+                ))
+            ) {
+                // Add the page to the list
+                $pages[] = $this->pageSummary($item);
+            }
+        }
+
+        // Return the pages found
+        return $pages;
+    }
+
+    /**
+     * Summarize an export item as the title, post ID and permalink a warning names it by.
+     *
+     * @param  \SimpleXMLElement  $item  The export item
+     * @return array{title: string, id: string, link: string} The item's summary
+     */
+    private function pageSummary(
+        \SimpleXMLElement $item
+    ): array {
+        // Decode HTML entities in the title and provide fallback
+        $decodedTitle = html_entity_decode(
+            (string) $item->title,
+            ENT_QUOTES | ENT_HTML5,
+            'UTF-8'
+        );
+
+        // Name the page by its title, its WordPress post ID and its permalink
+        return [
+            'title' => $decodedTitle !== '' ? $decodedTitle : 'Untitled',
+            'id' => XpathHelper::getStringValue(
+                $item,
+                'wp:post_id'
+            ),
+            'link' => (string) $item->link,
+        ];
     }
 
     /**
