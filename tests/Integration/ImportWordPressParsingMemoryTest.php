@@ -47,6 +47,19 @@ final class IwpmTerminated extends RuntimeException
 final class IwpmCommand extends ImportWordPress
 {
     /**
+     * The memory limit the check reads, or null to read the process's own.
+     */
+    public static ?string $memoryLimit = null;
+
+    /**
+     * {@inheritDoc}
+     */
+    protected function memoryLimit(): string
+    {
+        return self::$memoryLimit ?? parent::memoryLimit();
+    }
+
+    /**
      * {@inheritDoc}
      */
     protected function terminate(int $status): never
@@ -56,13 +69,13 @@ final class IwpmCommand extends ImportWordPress
 }
 
 beforeEach(function (): void {
-    $this->memoryLimit = ini_get('memory_limit');
+    IwpmCommand::$memoryLimit = null;
     $this->root = sys_get_temp_dir().'/iwpm-'.bin2hex(random_bytes(6));
     mkdir($this->root);
 });
 
 afterEach(function (): void {
-    ini_set('memory_limit', $this->memoryLimit);
+    IwpmCommand::$memoryLimit = null;
 
     $paths = glob($this->root.'/*.xml');
 
@@ -190,11 +203,11 @@ function iwpmCheck(array $parts, string $answers = '', bool $interactive = true)
 }
 
 /**
- * Set the memory limit for the check, failing the test when it cannot be set.
+ * Set the memory limit the check reads, leaving the process's own alone.
  */
 function iwpmLimit(string $limit): void
 {
-    expect(ini_set('memory_limit', $limit))->not->toBeFalse();
+    IwpmCommand::$memoryLimit = $limit;
 }
 
 /**
@@ -310,6 +323,12 @@ it('measures items against a 50KB threshold by default', function (): void {
     [$command] = iwpmCommand();
 
     expect(iwpmCall($command, 'analyzeContentItemSizes', $path))->toBe(['largestItemSize' => 50 * 1024 + 1, 'largeItemsCount' => 1]);
+});
+
+it('reads the process\'s own memory limit', function (): void {
+    $command = (new ReflectionClass(ImportWordPress::class))->newInstanceWithoutConstructor();
+
+    expect((new ReflectionMethod(ImportWordPress::class, 'memoryLimit'))->invoke($command))->toBe(ini_get('memory_limit'));
 });
 
 it('says the memory limit is enough for an export of no parts', function (): void {
