@@ -528,17 +528,23 @@ class ImportWordPress extends Command
         // Read the raw option value from the console input
         $policy = $this->option('unsupported-content');
 
-        // Treat a missing value as the default policy
+        // Treat a missing value as the default policy. The option defaults to `abort` and
+        // requires a value, so the console never leaves it missing.
         if ($policy === null) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return 'abort';
         }
 
-        // Reject non-string values defensively
+        // Reject non-string values defensively. The console answers a string for an option
+        // that takes a value, so this only types it.
         if (! is_string($policy)) {
+            // @pest-mutate-ignore: RemoveEarlyReturn
             return null;
         }
 
-        // Accept only the supported policy values
+        // Accept only the supported policy values. Every value compared is a string, so
+        // a loose comparison accepts the same ones.
+        // @pest-mutate-ignore: TrueToFalse
         return \in_array($policy, ['abort', 'skip', 'import'], true)
             ? $policy
             : null;
@@ -1142,10 +1148,13 @@ class ImportWordPress extends Command
      * migration API supplies parts materialized from it. Everything downstream reads real
      * files, which is why no importer subsystem had to change (wordpress-importer-archive#587).
      *
+     * Protected so a test can stand in for the import itself while it covers what
+     * leads to it.
+     *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
      * @return int Exit code (0 for success, 1 for failure)
      */
-    private function runImportForParts(
+    protected function runImportForParts(
         array $parts
     ): int {
         // Resolve the non-interactive policy for unsupported-content gates
