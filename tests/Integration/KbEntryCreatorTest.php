@@ -19,6 +19,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
+use Statamic\Events\CollectionSaved;
+use Statamic\Events\CollectionTreeSaved;
 use Statamic\Events\EntrySaving;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -53,6 +55,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\FakeAssetImporter;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
@@ -73,6 +76,11 @@ final class KbEntryTestCreator extends KbEntryCreator
      * What runs in place of the term import, or null to run it.
      */
     public ?Closure $termImport = null;
+
+    /**
+     * Whether saving an entry saves nothing and returns null.
+     */
+    public bool $saveFails = false;
 
     /**
      * Build the creator with a mock `EntryCreator` and the real settings extractor.
@@ -122,6 +130,36 @@ final class KbEntryTestCreator extends KbEntryCreator
         }
 
         parent::importTaxonomyTermsAtBeginning($xmlParser, $wordpressTaxonomyHandles, $site, $output);
+    }
+
+    /**
+     * Save an entry, unless saving is set to fail.
+     *
+     * @param  string  $collectionHandle  The collection
+     * @param  string  $site  The site
+     * @param  string  $entrySlug  The slug
+     * @param  array<int|string, mixed>  $data  The data
+     * @param  OutputInterface  $output  The output
+     * @param  ?DateTime  $entryDate  The date
+     * @param  ?bool  $published  Whether published
+     * @param  ?string  $postDateStr  The post date
+     * @return ?Entry The entry saved, or null
+     */
+    protected function saveEntry(
+        string $collectionHandle,
+        string $site,
+        string $entrySlug,
+        array $data,
+        OutputInterface $output,
+        ?DateTime $entryDate = null,
+        ?bool $published = null,
+        ?string $postDateStr = null
+    ): ?Entry {
+        if ($this->saveFails) {
+            return null;
+        }
+
+        return parent::saveEntry($collectionHandle, $site, $entrySlug, $data, $output, $entryDate, $published, $postDateStr);
     }
 
     /**
@@ -190,6 +228,7 @@ afterEach(function (): void {
     ProcessingContext::clearWordPressPageLink();
     ProcessingContext::clearStatamicEntryId();
     ProcessingContext::clearCollectionHandle();
+    ProcessingContext::clearEntryData();
     ProcessingContext::setMinervaKbSettings(null);
 
     foreach (['knowledge_base', 'topic', 'article'] as $handle) {
@@ -275,7 +314,9 @@ function kbEntryList(array $map, string $key): array
 /**
  * The `wp:postmeta` or `wp:termmeta` elements for a map.
  *
- * @param  array<int|string, mixed>  $meta  Values by key
+ * A value may instead be a key and value pair, so a key can repeat.
+ *
+ * @param  array<int|string, mixed>  $meta  Values by key, or key and value pairs
  * @param  string  $element  The element name
  * @return string The elements
  */
@@ -284,6 +325,11 @@ function kbEntryMeta(array $meta, string $element = 'wp:postmeta'): string
     $xml = '';
 
     foreach ($meta as $key => $value) {
+        if (\is_array($value)) {
+            $key = \is_string($value[0] ?? null) ? $value[0] : '';
+            $value = $value[1] ?? '';
+        }
+
         $text = \is_string($value) ? $value : '';
         $xml .= "<{$element}><wp:meta_key>{$key}</wp:meta_key><wp:meta_value><![CDATA[{$text}]]></wp:meta_value></{$element}>";
     }
@@ -399,20 +445,23 @@ function kbEntryParser(string $export): XmlParser
  * @param  string  $export  The export path
  * @param  ?array<int|string, mixed>  $settings  The MinervaKB settings
  * @param  ?KbEntryTestCreator  $creator  The creator, or null for a new one
+ * @param  ?AssetImporter  $assetImporter  The asset importer, or null for a real one
+ * @param  ?SiteManager  $siteManager  The site manager, or null for one that ignores every call
+ * @param  ?CollectionStructureManager  $structureManager  The structure manager, or null for one that ignores every call
  * @return array{output: string, creator: KbEntryTestCreator} The console and the creator
  */
-function kbEntryRun(string $export, ?array $settings = null, ?KbEntryTestCreator $creator = null): array
+function kbEntryRun(string $export, ?array $settings = null, ?KbEntryTestCreator $creator = null, ?AssetImporter $assetImporter = null, ?SiteManager $siteManager = null, ?CollectionStructureManager $structureManager = null): array
 {
     $creator ??= new KbEntryTestCreator;
     $output = new BufferedOutput;
-    $siteManager = Mockery::mock(SiteManager::class)->shouldIgnoreMissing();
-    $structureManager = Mockery::mock(CollectionStructureManager::class)->shouldIgnoreMissing();
+    $siteManager ??= Mockery::mock(SiteManager::class)->shouldIgnoreMissing();
+    $structureManager ??= Mockery::mock(CollectionStructureManager::class)->shouldIgnoreMissing();
 
     if (! $siteManager instanceof SiteManager || ! $structureManager instanceof CollectionStructureManager) {
         throw new RuntimeException('Could not build the run collaborators.');
     }
 
-    $creator->process(kbEntryParser($export), new AssetImporter, $output, 'https://example.test', 'default', $siteManager, $structureManager, $settings);
+    $creator->process(kbEntryParser($export), $assetImporter ?? new AssetImporter, $output, 'https://example.test', 'default', $siteManager, $structureManager, $settings);
 
     return ['output' => $output->fetch(), 'creator' => $creator];
 }
@@ -1015,7 +1064,7 @@ describe('topics', function (): void {
         'meta that stops at the first description' => [['meta' => ['description' => ' ']], ''],
         'none' => [[], ''],
         '160 characters' => [['description' => \str_repeat('a', 160)], \str_repeat('a', 160)],
-        '161 characters' => [['description' => \str_repeat('é', 161)], \str_repeat('é', 157).'...'],
+        '161 characters' => [['description' => 'X'.\str_repeat('é', 160)], 'X'.\str_repeat('é', 156).'...'],
     ]);
 
     it('keeps a re-imported topic under its first id, registering it again', function (): void {
@@ -1254,17 +1303,23 @@ describe('articles', function (): void {
         expect(kbEntryData(kbEntry('single')))->not->toHaveKey('secondary_topic');
     });
 
-    it('finds a topic by its slug when the term map does not name it', function (): void {
+    it('files an article only under topics the term map names', function (array $map, ?string $parent, array $secondary): void {
         $creator = new KbEntryTestCreator;
         kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing'), kbEntryTopic('6', 'refunds'), kbEntryTopic('7', 'shipping')]), creator: $creator);
-        $creator->write('nicenameToTermIdMap', ['kbtopic' => ['shipping' => '7']]);
-        $item = \simplexml_load_string('<item xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><title>T</title><link>https://example.test/kb/901/</link><content:encoded>B</content:encoded><wp:post_id>901</wp:post_id><wp:post_name>by-slug</wp:post_name><wp:post_type>kb</wp:post_type><category domain="kbtopic" nicename="refunds">R</category><category domain="kbtopic" nicename="shipping">S</category><category domain="kbtopic" nicename="billing">B</category><category domain="kbtopic" nicename="gone">G</category></item>');
+        $creator->write('nicenameToTermIdMap', $map);
+        $item = kbEntryElement('<item xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/"><title>T</title><link>https://example.test/kb/901/</link><content:encoded>B</content:encoded><wp:post_id>901</wp:post_id><wp:post_name>mapped</wp:post_name><wp:post_type>kb</wp:post_type><category domain="kbtopic" nicename="refunds">R</category><category domain="kbtopic" nicename="shipping">S</category><category domain="kbtopic" nicename="billing">B</category><category domain="kbtopic">None</category></item>');
 
         $creator->call('createArticleEntry', $item, new BufferedOutput, 'default', kbEntryParser(kbEntryExport()), new AssetImporter, 'knowledge_bases');
+        $article = \in_array('mapped', kbEntrySlugs(), true) ? kbEntryData(kbEntry('mapped')) : null;
 
-        expect(kbEntry('by-slug')->get('parent'))->toBe(kbEntry('refunds')->id())
-            ->and(kbEntry('by-slug')->get('secondary_topic'))->toBe([kbEntry('shipping')->id(), kbEntry('billing')->id()]);
-    });
+        expect($article === null ? null : ($article['parent'] ?? null))->toBe($parent === null ? null : kbEntryId($parent))
+            ->and($article === null ? [] : ($article['secondary_topic'] ?? []))->toBe(\array_map(static fn (mixed $slug): string => kbEntryId(\is_string($slug) ? $slug : ''), $secondary));
+    })->with([
+        'the primary unnamed' => [['kbtopic' => ['shipping' => '7', 'billing' => '5']], null, []],
+        'a secondary unnamed' => [['kbtopic' => ['refunds' => '6', 'billing' => '5']], 'refunds', ['billing']],
+        'a term with no topic' => [['kbtopic' => ['refunds' => '6', 'shipping' => '99']], 'refunds', []],
+        'no topic map at all' => [['kbtag' => []], null, []],
+    ]);
 
     it('lists the tags the term pass imported, once each, and no others', function (): void {
         $export = kbEntryExport(
@@ -1587,8 +1642,8 @@ describe('the smaller lookups', function (): void {
     })->with([
         'short' => ['Short', 'Short'],
         '160' => [\str_repeat('c', 160), \str_repeat('c', 160)],
-        '161' => [\str_repeat('c', 161), \str_repeat('c', 157).'...'],
-        'multibyte' => [\str_repeat('ü', 200), \str_repeat('ü', 157).'...'],
+        '161' => ['X'.\str_repeat('c', 160), 'X'.\str_repeat('c', 156).'...'],
+        'multibyte' => ['Y'.\str_repeat('ü', 199), 'Y'.\str_repeat('ü', 156).'...'],
     ]);
 
     it('has no entries, taxonomies or people of its own to report', function (): void {
@@ -1609,5 +1664,477 @@ describe('the smaller lookups', function (): void {
             ->and($creator->getPostTags())->toBe([])
             ->and($creator->getPeopleGroups())->toBe([])
             ->and($output->fetch())->toBe('');
+    });
+});
+
+/**
+ * A site manager that records each collection it is asked to enable.
+ */
+final class KbEntryTestSiteManager extends SiteManager
+{
+    /**
+     * The site, collection and whether output was given, for each call.
+     *
+     * @var list<array{0: string, 1: string, 2: bool}>
+     */
+    public array $calls = [];
+
+    /**
+     * Build the manager.
+     */
+    public function __construct() {}
+
+    /**
+     * Record the call.
+     *
+     * @param  string  $site  The site handle
+     * @param  string  $collectionHandle  The collection handle
+     * @param  ?OutputInterface  $output  Console output
+     * @return bool Always true
+     */
+    public function enableCollectionForSite(
+        string $site,
+        string $collectionHandle,
+        ?OutputInterface $output = null
+    ): bool {
+        $this->calls[] = [$site, $collectionHandle, $output instanceof OutputInterface];
+
+        return true;
+    }
+}
+
+/**
+ * A structure manager that records each structure it is asked to initialize.
+ */
+final class KbEntryTestStructureManager extends CollectionStructureManager
+{
+    /**
+     * The collection and site of each call.
+     *
+     * @var list<array{0: string, 1: string}>
+     */
+    public array $calls = [];
+
+    /**
+     * Record the call.
+     *
+     * @param  string  $collectionHandle  The collection handle
+     * @param  string  $site  The site handle
+     * @param  OutputInterface  $output  Console output
+     */
+    public function initializeStructureForSite(
+        string $collectionHandle,
+        string $site,
+        OutputInterface $output
+    ): void {
+        $this->calls[] = [$collectionHandle, $site];
+    }
+}
+
+/**
+ * A class whose unserializing would be recorded, to show the import never builds one.
+ */
+final class KbEntryWakeupProbe
+{
+    /**
+     * How many times an instance was unserialized.
+     */
+    public static int $woken = 0;
+
+    /**
+     * Record the unserializing.
+     */
+    public function __wakeup(): void
+    {
+        self::$woken++;
+    }
+}
+
+/**
+ * Count the events of a class dispatched from now on.
+ *
+ * @param  class-string  $event  The event class
+ * @return ArrayObject<int, object> The events, filled as they are dispatched
+ */
+function kbEntryEvents(string $event): ArrayObject
+{
+    /** @var ArrayObject<int, object> $events */
+    $events = new ArrayObject;
+    Event::listen($event, static function (object $dispatched) use ($events): void {
+        $events->append($dispatched);
+    });
+
+    return $events;
+}
+
+describe('a run, more closely', function (): void {
+    it('starts with no root and no restrictions', function (): void {
+        $creator = new KbEntryTestCreator;
+
+        expect($creator->read('knowledgeBaseId'))->toBe('')
+            ->and($creator->read('hasRestrictions'))->toBeFalse()
+            ->and($creator->read('hasSitewideRestrictions'))->toBeFalse();
+    });
+
+    it('notes no restrictions when it reuses a root', function (): void {
+        kbEntryMake('kb');
+
+        $run = kbEntryRun(kbEntryExport(), ['restrict_on' => true, 'restrict_article_role' => ['subscriber']]);
+
+        expect($run['output'])->not->toContain('Note:')
+            ->and($run['creator']->read('knowledgeBaseId'))->toBe('kb');
+    });
+
+    it('starts each run with an empty tree', function (): void {
+        $creator = new KbEntryTestCreator;
+        $creator->write('pendingTreeNodes', [['entry' => 'stale', 'parent' => null]]);
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')]), creator: $creator);
+
+        expect(\array_column(\is_array($nodes = $creator->read('pendingTreeNodes')) ? $nodes : [], 'entry'))->toBe([kbEntryId('kb'), kbEntryId('billing')]);
+    });
+
+    it('imports tags when the setting is missing', function (): void {
+        $settings = config('wordpress-import');
+        $settings = \is_array($settings) ? $settings : [];
+        unset($settings['import_tags']);
+        config(['wordpress-import' => $settings]);
+        $creator = new KbEntryTestCreator;
+        $creator->termImport = static function (): void {
+            TermDestinationRegistry::registerCollectionEntry('kbtag', '30', 'knowledge_base_tags', 'tag-fast');
+        };
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing'), ['id' => '30', 'taxonomy' => 'kbtag', 'slug' => 'fast']], [kbEntryArticle('901', ['billing'], ['slug' => 'tagged', 'categories' => [['domain' => 'kbtag', 'nicename' => 'fast']]])]), creator: $creator);
+
+        expect($creator->termImports)->toBe([['mkb_faq_category', 'kbtag']])
+            ->and(kbEntry('tagged')->get('tags'))->toBe(['tag-fast']);
+    });
+
+    it('lists no tags when the tag map is missing', function (): void {
+        $creator = new KbEntryTestCreator;
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')]), creator: $creator);
+        $creator->write('nicenameToTermIdMap', ['kbtopic' => ['billing' => '5']]);
+        TermDestinationRegistry::registerCollectionEntry('kbtag', '30', 'knowledge_base_tags', 'tag-fast');
+        $item = kbEntryElement('<item xmlns:wp="http://wordpress.org/export/1.2/"><title>T</title><wp:post_id>901</wp:post_id><wp:post_name>untagged</wp:post_name><category domain="kbtopic" nicename="billing">B</category><category domain="kbtag" nicename="fast">F</category></item>');
+
+        $creator->call('createArticleEntry', $item, new BufferedOutput, 'default', kbEntryParser(kbEntryExport()), new AssetImporter, 'knowledge_bases');
+
+        expect(kbEntryData(kbEntry('untagged')))->not->toHaveKey('tags');
+    });
+
+    it('enables the collection and its structure for the site', function (): void {
+        $siteManager = new KbEntryTestSiteManager;
+        $structureManager = new KbEntryTestStructureManager;
+
+        kbEntryRun(kbEntryExport(), siteManager: $siteManager, structureManager: $structureManager);
+
+        expect($siteManager->calls)->toBe([['default', 'knowledge_bases', true]])
+            ->and($structureManager->calls)->toBe([['knowledge_bases', 'default']]);
+    });
+
+    it('creates the initial tree before the root', function (): void {
+        $run = kbEntryRun(kbEntryExport());
+
+        expect($run['output'])->toContain('Creating initial tree structure for knowledge_bases...'.PHP_EOL."Initial tree structure created for 'knowledge_bases' in site 'default'.".PHP_EOL.'Creating knowledge base entry...');
+    });
+});
+
+describe('the tree, more closely', function (): void {
+    it('saves the collection it gives a structure', function (): void {
+        kbEntryCollection(structured: false);
+        $saved = kbEntryEvents(CollectionSaved::class);
+
+        (new KbEntryTestCreator)->call('createInitialTreeStructure', new BufferedOutput, 'default', 'knowledge_bases');
+
+        expect($saved)->toHaveCount(1);
+    });
+
+    it('saves the tree it builds, once', function (): void {
+        kbEntryMake('a');
+        $saved = kbEntryEvents(CollectionTreeSaved::class);
+        $creator = new KbEntryTestCreator;
+        $creator->write('pendingTreeCollectionHandle', 'knowledge_bases');
+        $creator->write('pendingTreeSite', 'default');
+        $creator->write('pendingTreeNodes', [['entry' => 'a', 'parent' => null]]);
+
+        $creator->call('buildAndSaveKbTree', new BufferedOutput);
+
+        expect($saved)->toHaveCount(1);
+    });
+
+    it('builds nothing without both nodes and where to save them', function (array $state): void {
+        $warnings = kbEntryWarnings();
+        $creator = new KbEntryTestCreator;
+
+        foreach ($state as $property => $value) {
+            $creator->write($property, $value);
+        }
+
+        $output = new BufferedOutput;
+        $creator->call('buildAndSaveKbTree', $output);
+
+        expect($output->fetch())->toBe('')
+            ->and(kbEntryMessages($warnings))->toBe([]);
+    })->with([
+        'a place but no nodes' => [['pendingTreeCollectionHandle' => 'knowledge_bases', 'pendingTreeSite' => 'default']],
+        'nodes but no collection' => [['pendingTreeNodes' => [['entry' => 'a', 'parent' => null]], 'pendingTreeSite' => 'default']],
+        'nodes but no site' => [['pendingTreeNodes' => [['entry' => 'a', 'parent' => null]], 'pendingTreeCollectionHandle' => 'knowledge_bases']],
+    ]);
+
+    it('nests a recorded entry under its recorded parent, even when the parent comes later', function (): void {
+        foreach (['a', 'b', 'c', 'd', 'outside'] as $slug) {
+            kbEntryMake($slug);
+        }
+
+        $creator = new KbEntryTestCreator;
+        $creator->write('pendingTreeCollectionHandle', 'knowledge_bases');
+        $creator->write('pendingTreeSite', 'default');
+        $creator->write('pendingTreeNodes', [
+            ['entry' => 'b', 'parent' => 'a'],
+            ['entry' => 'b', 'parent' => 'a'],
+            ['entry' => 'c', 'parent' => 'a'],
+            ['entry' => 'a', 'parent' => 'outside'],
+            ['entry' => 'd', 'parent' => 'c'],
+        ]);
+
+        $creator->call('buildAndSaveKbTree', new BufferedOutput);
+
+        expect(kbEntryTree())->toBe([['outside' => [['a' => ['b', ['c' => ['d']]]]]]]);
+    });
+
+    it('saves nothing for a site with no tree', function (): void {
+        $warnings = kbEntryWarnings();
+        $creator = new KbEntryTestCreator;
+        $creator->write('pendingTreeCollectionHandle', 'knowledge_bases');
+        $creator->write('pendingTreeSite', 'other');
+        $creator->write('pendingTreeNodes', [['entry' => 'a', 'parent' => null]]);
+        $output = new BufferedOutput;
+
+        $creator->call('buildAndSaveKbTree', $output);
+
+        expect($output->fetch())->toBe('')
+            ->and(kbEntryMessages($warnings))->toBe([]);
+    });
+});
+
+describe('the root, more closely', function (): void {
+    it('creates the root in its own site', function (): void {
+        Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'], 'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/']]);
+        $collection = CollectionFacade::findByHandle('knowledge_bases');
+        $collection?->sites(['default', 'other']);
+        $collection?->save();
+        $creator = new KbEntryTestCreator;
+        $creator->call('createInitialTreeStructure', new BufferedOutput, 'other', 'knowledge_bases');
+
+        $creator->call('createKnowledgeBaseEntry', new BufferedOutput, 'other', 'knowledge_bases');
+
+        expect(kbEntry('kb')->locale())->toBe('other')
+            ->and(kbEntry('kb')->get('title'))->toBe('Other Knowledge Base');
+    });
+
+});
+
+describe('topics, more closely', function (): void {
+    it('passes over anything in the term map that is not a term', function (): void {
+        $creator = new KbEntryTestCreator;
+        $creator->write('termMap', ['5' => ['term_id' => '5', 'term_slug' => 'billing', 'term_name' => 'Billing', 'parent_id' => ''], '6' => 'not a term']);
+        $output = new BufferedOutput;
+
+        $creator->call('processTopics', kbEntryParser(kbEntryExport()), $output, 'default', 'knowledge_bases');
+
+        expect(kbEntrySlugs())->toBe(['billing'])
+            ->and($output->fetch())->toContain('Found 1 kbtopic terms.');
+    });
+
+    it('gives a topic no description when the export does not carry its term', function (?XmlParser $parser): void {
+        (new KbEntryTestCreator)->call('createTopicEntryFromData', ['term_id' => '5', 'term_slug' => 'billing'], 'kb', new BufferedOutput, 'default', 'knowledge_bases', $parser);
+
+        expect(kbEntryData(kbEntry('billing')))->toHaveKey('excerpt', '');
+    })->with([
+        'no parser' => [null],
+        'a parser without the term' => [fn (): XmlParser => kbEntryParser(kbEntryExport([kbEntryTopic('6', 'other')]))],
+    ]);
+
+    it('keeps the generated id, and leaves the tree alone, for a topic that does not save', function (): void {
+        $creator = new KbEntryTestCreator;
+        $creator->saveFails = true;
+
+        $id = $creator->call('createTopicEntryFromData', ['term_id' => '5', 'term_slug' => 'billing'], 'kb', new BufferedOutput, 'default', 'knowledge_bases');
+
+        expect($id)->toBeString()->toStartWith('billing-5-')
+            ->and($creator->read('topicIdMap'))->toBe(['5' => $id])
+            ->and($creator->read('pendingTreeNodes'))->toBe([]);
+    });
+});
+
+describe('articles, more closely', function (): void {
+    it('decodes the title once more than the stripper does', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'coded', 'title' => '&AMP;copy; 2025'])]));
+
+        expect(kbEntry('coded')->get('title'))->toBe('© 2025');
+    });
+
+    it('decodes the kb_page title once more than the stripper does', function (): void {
+        kbEntryRun(kbEntryExport([], [['type' => 'page', 'id' => '77', 'slug' => '', 'title' => '&AMP;copy; Help']]), ['kb_page' => '77']);
+
+        expect(kbEntrySlugs())->toBe(['help']);
+    });
+
+    it('converts no content that is only space', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'spaced', 'content' => "  \n "])]));
+
+        expect(kbEntry('spaced')->get('content'))->toBeNull();
+    });
+
+    it('sets nothing up for the content converter when there is no content', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'draft', 'content' => '', 'status' => 'draft', 'meta' => ['_thumbnail_id' => '41']])]));
+
+        expect(ProcessingContext::getStatamicEntryId())->toBeNull()
+            ->and(ProcessingContext::getEntryData())->toBeNull();
+    });
+
+    it('converts content without adding paragraphs, as a whole body', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'lines', 'content' => "One\n\nTwo"])]));
+
+        expect(kbEntry('lines')->get('content'))->toBe([['type' => 'text', 'text' => 'OneTwo', 'attrs' => []]]);
+    });
+
+    it('records the date of an article for the deferred pass, or none without one', function (): void {
+        $creator = new KbEntryTestCreator;
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'dated']), kbEntryArticle('902', ['billing'], ['slug' => 'undated', 'date' => null])]), creator: $creator);
+        $deferred = $creator->read('deferredRelatedArticles');
+        $deferred = \is_array($deferred) ? $deferred : [];
+        $date = static fn (string $slug): mixed => \is_array($deferred[kbEntryId($slug)] ?? null) && \array_key_exists('date', $deferred[kbEntryId($slug)]) ? $deferred[kbEntryId($slug)]['date'] : 'missing';
+
+        expect(($dated = $date('dated')) instanceof Carbon ? $dated->format('Y-m-d H:i:s') : $dated)->toBe('2025-04-01 09:00:00')
+            ->and($date('undated'))->toBeNull();
+    });
+
+    it('logs the parse error with a date it cannot read', function (): void {
+        $warnings = kbEntryWarnings();
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'dateless', 'date' => 'not a date'])]));
+        $context = kbEntryContext($warnings, 'Invalid date format');
+
+        expect(\is_array($context) ? \array_keys($context) : [])->toBe(['site', 'error', 'entry_url'])
+            ->and(\is_array($context) ? $context['error'] : null)->toBeString()->toContain('not a date');
+    });
+
+    it('keeps the generated id, and leaves the tree alone, for an article that does not save', function (): void {
+        $creator = new KbEntryTestCreator;
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')]), creator: $creator);
+        $nodes = $creator->read('pendingTreeNodes');
+        $creator->saveFails = true;
+        $item = kbEntryElement('<item xmlns:wp="http://wordpress.org/export/1.2/"><title>T</title><wp:post_id>901</wp:post_id><wp:post_name>unsaved</wp:post_name><category domain="kbtopic" nicename="billing">B</category></item>');
+
+        $creator->call('createArticleEntry', $item, new BufferedOutput, 'default', kbEntryParser(kbEntryExport()), new AssetImporter, 'knowledge_bases');
+        $map = $creator->read('articleIdMap');
+
+        expect(\is_array($map) ? ($map[901] ?? null) : null)->toBeString()->toStartWith('unsaved-901-')
+            ->and($creator->read('pendingTreeNodes'))->toBe($nodes);
+    });
+
+    it('takes the first of each repeated meta', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [
+            ['type' => 'attachment', 'id' => '40', 'url' => 'https://example.test/files/second.jpg'],
+            ['type' => 'attachment', 'id' => '41', 'url' => 'https://example.test/files/first.jpg'],
+            ['type' => 'attachment', 'id' => '41', 'url' => 'https://example.test/files/again.jpg'],
+            ['type' => 'attachment', 'id' => '50', 'url' => 'https://example.test/files/a.pdf'],
+            ['type' => 'attachment', 'id' => '51', 'url' => 'https://example.test/files/b.pdf'],
+            kbEntryArticle('901', ['billing'], ['slug' => 'repeated', 'meta' => [
+                ['_thumbnail_id', '41'], ['_thumbnail_id', '40'],
+                ['_mkb_restrict_role', '["guest"]'], ['_mkb_restrict_role', '["subscriber"]'],
+                ['_mkb_article_attachments', \serialize(['50'])], ['_mkb_article_attachments', \serialize(['51'])],
+                ['_mkb_related_articles', \serialize(['901'])], ['_mkb_related_articles', \serialize(['999'])],
+            ]]),
+        ]));
+        $data = kbEntryData(kbEntry('repeated'));
+        $attachments = \is_array($data['attachment'] ?? null) ? $data['attachment'] : [];
+
+        expect($data['featured_image_16_9'] ?? null)->toBe('https://example.test/files/first.jpg')
+            ->and($data['_thumbnail_id'] ?? null)->toBe('41')
+            ->and($data['restriction_query'] ?? null)->toBeFalse()
+            ->and(\array_map(static fn (mixed $row): mixed => \is_array($row) ? ($row['asset'] ?? null) : null, $attachments))->toBe(['https://example.test/files/a.pdf'])
+            ->and($data['related_articles'] ?? null)->toBe([kbEntryId('repeated')]);
+    });
+
+    it('stops at the first description meta of a term, blank or not', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing', ['meta' => [['description', ' '], ['description', 'Later']]])]));
+
+        expect(kbEntry('billing')->get('excerpt'))->toBe('');
+    });
+
+    it('sets no featured image for a blank thumbnail id, even beside an attachment with no id', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [['type' => 'attachment', 'id' => '', 'url' => 'https://example.test/files/noid.jpg'], kbEntryArticle('901', ['billing'], ['slug' => 'blank', 'meta' => ['_thumbnail_id' => '']])]));
+
+        expect(kbEntryData(kbEntry('blank')))->not->toHaveKey('featured_image_16_9');
+    });
+
+    it('builds no object from serialized attachments or related articles', function (string $key): void {
+        KbEntryWakeupProbe::$woken = 0;
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'probed', 'meta' => [$key => 'a:1:{i:0;O:18:"KbEntryWakeupProbe":0:{}}']])]));
+
+        expect(KbEntryWakeupProbe::$woken)->toBe(0);
+    })->with([
+        'attachments' => ['_mkb_article_attachments'],
+        'related articles' => ['_mkb_related_articles'],
+    ]);
+
+    it('lists no attachment the importer returns no file for', function (?string $imported): void {
+        config(['wordpress-import.upload_files' => true]);
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [['type' => 'attachment', 'id' => '50', 'url' => 'https://example.test/files/a.pdf'], kbEntryArticle('901', ['billing'], ['slug' => 'unfiled', 'meta' => ['_mkb_article_attachments' => \serialize(['50'])]])]), assetImporter: new FakeAssetImporter(importedFile: $imported));
+
+        expect(kbEntryData(kbEntry('unfiled')))->not->toHaveKey('attachment');
+    })->with([
+        'no file' => [null],
+        'a blank file' => [''],
+    ]);
+});
+
+describe('related articles, more closely', function (): void {
+    it('names an untitled entry as blank in what it logs', function (): void {
+        $warnings = kbEntryWarnings();
+        $creator = new KbEntryTestCreator;
+        $entry = EntryFacade::make();
+
+        if (! $entry instanceof Entry) {
+            throw new RuntimeException('Could not make an entry.');
+        }
+
+        $entry->collection('knowledge_bases');
+        $entry->locale('default');
+        $entry->slug('untitled');
+        $entry->id('untitled');
+        $entry->save();
+        $creator->write('articleIdMap', [7 => 'untitled']);
+        $creator->write('deferredRelatedArticles', ['untitled' => ['wp_post_ids' => ['7', '8'], 'slug' => null, 'date' => null]]);
+        Event::listen(EntrySaving::class, static fn (): bool => false);
+
+        $creator->call('processDeferredRelatedArticles', new BufferedOutput, 'default', 'knowledge_bases');
+
+        expect(kbEntryMessages($warnings))->toContain("ERROR KbEntryCreator::processDeferredRelatedArticles: Failed to update entry '' (ID: untitled) with related articles for site default.")
+            ->toContain("KbEntryCreator::processDeferredRelatedArticles: Entry '' (ID: untitled) has unmapped related articles: 8 for site default.")
+            ->and(kbEntryContext($warnings, "Entry '' (ID: untitled)"))->toMatchArray(['entry_title' => '']);
+    });
+});
+
+describe('the knowledge base home page, more closely', function (): void {
+    it('logs nothing about a kb_page it finds', function (): void {
+        $warnings = kbEntryWarnings();
+
+        kbEntryRun(kbEntryExport([], [['type' => 'page', 'id' => '77', 'slug' => 'help']]), ['kb_page' => '77']);
+
+        expect(\array_filter(kbEntryMessages($warnings), static fn (string $message): bool => \str_contains($message, 'findPageInXml')))->toBe([]);
+    });
+
+    it('finds no page, and logs nothing, in a parser with a blank path', function (): void {
+        $warnings = kbEntryWarnings();
+        $parser = new XmlParser;
+        $parser->setFilePath('');
+
+        expect((new KbEntryTestCreator)->call('findPageInXml', $parser, '77'))->toBeNull()
+            ->and(kbEntryMessages($warnings))->toBe([]);
     });
 });
