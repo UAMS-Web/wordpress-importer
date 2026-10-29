@@ -28,6 +28,7 @@ use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
 use Statamic\Facades\Stache;
 use Statamic\Fields\Blueprint;
+use Statamic\Stache\Stores\Store;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -419,6 +420,155 @@ final class EntryCreatorTestMapper extends MetadataMapper
 }
 
 /**
+ * A creator that records what the coordinator asks of it.
+ */
+final class EntryCreatorTestStubCreator extends BaseEntryCreator
+{
+    /**
+     * The calls, in order, with what each was given.
+     *
+     * @var list<array{0: string, 1: mixed}>
+     */
+    public array $calls = [];
+
+    /**
+     * Build the stub.
+     *
+     * @param  array<int|string, mixed>  $returns  What createEntries() returns
+     * @param  bool  $showPeople  What hasShowPeople() returns
+     */
+    public function __construct(
+        private readonly array $returns = [],
+        private readonly bool $showPeople = false
+    ) {}
+
+    /**
+     * Record the behavior.
+     *
+     * @param  string  $behavior  The behavior
+     */
+    public function setEntryOverwriteBehavior(string $behavior): void
+    {
+        $this->calls[] = ['entries', $behavior];
+    }
+
+    /**
+     * Record the behavior.
+     *
+     * @param  string  $behavior  The behavior
+     */
+    public function setTaxonomyOverwriteBehavior(string $behavior): void
+    {
+        $this->calls[] = ['terms', $behavior];
+    }
+
+    /**
+     * Record the call and return the page data.
+     *
+     * @param  string  $site  The site
+     * @param  string  $collectionHandle  The collection
+     * @param  XmlParser  $xmlParser  The parser
+     * @param  AssetImporter  $assetImporter  The importer
+     * @param  OutputInterface  $output  Console output
+     * @param  MetadataMapper  $metadataMapper  The mapper
+     * @param  ContentProcessor  $contentProcessor  The converter
+     * @param  ?array<int|string, mixed>  $minervaKbSettings  The MinervaKB settings
+     * @return array<int|string, mixed> The page data
+     */
+    public function createEntries(string $site, string $collectionHandle, XmlParser $xmlParser, AssetImporter $assetImporter, OutputInterface $output, MetadataMapper $metadataMapper, ContentProcessor $contentProcessor, ?array $minervaKbSettings = null): array
+    {
+        $this->calls[] = ['create', [$site, $collectionHandle, $xmlParser, $assetImporter, $metadataMapper, $contentProcessor, $minervaKbSettings]];
+
+        return $this->returns;
+    }
+
+    /**
+     * Whether show-people was seen.
+     *
+     * @return bool As built
+     */
+    public function hasShowPeople(): bool
+    {
+        return $this->showPeople;
+    }
+
+    /**
+     * Some post categories.
+     *
+     * @return array<int|string, mixed> The categories
+     */
+    public function getPostCategories(): array
+    {
+        return ['news' => ['n']];
+    }
+
+    /**
+     * Some post tags.
+     *
+     * @return array<int|string, mixed> The tags
+     */
+    public function getPostTags(): array
+    {
+        return ['fast' => ['f']];
+    }
+
+    /**
+     * Some people groups.
+     *
+     * @return array<int|string, mixed> The groups
+     */
+    public function getPeopleGroups(): array
+    {
+        return ['faculty' => ['g']];
+    }
+
+    /**
+     * Record the flush.
+     *
+     * @param  string  $site  The site
+     * @param  OutputInterface  $output  Console output
+     */
+    public function flushDeferredTaxonomyTerms(string $site, OutputInterface $output): void
+    {
+        $this->calls[] = ['flush', $site];
+    }
+
+    /**
+     * Record the validation.
+     *
+     * @param  string  $collectionHandle  The collection
+     * @param  string  $site  The site
+     * @param  OutputInterface  $output  Console output
+     */
+    public function validateTaxonomies(string $collectionHandle, string $site, OutputInterface $output): void
+    {
+        $this->calls[] = ['validate', "{$collectionHandle}:{$site}"];
+    }
+}
+
+/**
+ * An EntryCreator that hands out a stub creator when one is set.
+ */
+final class EntryCreatorTestRouter extends EntryCreator
+{
+    /**
+     * The creator to hand out, or null for the real one.
+     */
+    public ?BaseEntryCreator $stub = null;
+
+    /**
+     * The stub, or the real creator for the type.
+     *
+     * @param  string  $contentType  The content type
+     * @return BaseEntryCreator The creator
+     */
+    protected function getCreator(string $contentType): BaseEntryCreator
+    {
+        return $this->stub ?? parent::getCreator($contentType);
+    }
+}
+
+/**
  * The creator and the stand-ins around it.
  */
 final class EntryCreatorTestRig
@@ -426,7 +576,7 @@ final class EntryCreatorTestRig
     /**
      * Build the rig.
      *
-     * @param  EntryCreator  $creator  The creator
+     * @param  EntryCreatorTestRouter  $creator  The creator
      * @param  EntryCreatorTestSiteManager  $sites  The site manager
      * @param  EntryCreatorTestStructureManager  $structures  The structure manager
      * @param  EntryCreatorTestTreeBuilder  $trees  The tree builder
@@ -434,7 +584,7 @@ final class EntryCreatorTestRig
      * @param  EntryCreatorTestConverter  $converter  The converter
      */
     public function __construct(
-        public readonly EntryCreator $creator,
+        public readonly EntryCreatorTestRouter $creator,
         public readonly EntryCreatorTestSiteManager $sites,
         public readonly EntryCreatorTestStructureManager $structures,
         public readonly EntryCreatorTestTreeBuilder $trees,
@@ -456,7 +606,7 @@ function entryCreatorRig(): EntryCreatorTestRig
     $mapper = new EntryCreatorTestMapper;
     $converter = EntryCreatorTestConverter::make();
 
-    return new EntryCreatorTestRig(new EntryCreator($mapper, $converter, $sites, $structures, $trees), $sites, $structures, $trees, $mapper, $converter);
+    return new EntryCreatorTestRig(new EntryCreatorTestRouter($mapper, $converter, $sites, $structures, $trees), $sites, $structures, $trees, $mapper, $converter);
 }
 
 /**
@@ -847,16 +997,17 @@ describe('an import', function (): void {
         expect($output->fetch())->toContain("Skipped entry 'about' as it already exists.");
     });
 
-    it('enables people for a page with a show-people shortcode, and not for one without', function (string $content, array $calls): void {
+    it('enables people for a page with a show-people shortcode, and not for one without', function (string $content, array $calls, array $structures): void {
         entryCreatorCollection('pages', ['basic_page', 'landing_page']);
         $rig = entryCreatorRig();
 
         $rig->creator->createEntries('default', 'page', 'pages', entryCreatorParser(entryCreatorExport([['id' => '701', 'content' => $content]])), new AssetImporter, new BufferedOutput);
 
-        expect($rig->sites->calls)->toBe($calls);
+        expect($rig->sites->calls)->toBe($calls)
+            ->and($rig->structures->calls)->toBe($structures);
     })->with([
-        'a shortcode' => ['<p>[show-people group="x"]</p>', [['collection', 'default', 'pages', true], ['collection', 'default', 'people', true], ['taxonomy', 'default', 'people_groups', true]]],
-        'none' => ['<p>Body.</p>', [['collection', 'default', 'pages', true]]],
+        'a shortcode' => ['<p>[show-people group="x"]</p>', [['collection', 'default', 'pages', true], ['collection', 'default', 'people', true], ['taxonomy', 'default', 'people_groups', true]], [['pages', 'default'], ['people', 'default']]],
+        'none' => ['<p>Body.</p>', [['collection', 'default', 'pages', true]], [['pages', 'default']]],
     ]);
 
     it('enables people for a show-people page only when the type is a page', function (): void {
@@ -954,6 +1105,7 @@ describe('what an import reports', function (): void {
                 ['id' => '1', 'slug' => 'one', 'link' => 'https://example.test/one/'],
                 ['id' => '1', 'slug' => 'again', 'link' => 'https://example.test/again/'],
                 ['id' => '2', 'slug' => null, 'link' => 'https://example.test/path/two/', 'original' => '<figure>'],
+                ['id' => '4', 'slug' => 'four', 'link' => 'https://example.test/elsewhere/', 'original' => '<figure>'],
             ],
             'shortcode:foo' => [
                 ['id' => '3', 'slug' => 'three', 'link' => 'https://example.test/three/', 'original' => '[foo bar="1"]'],
@@ -968,6 +1120,7 @@ describe('what an import reports', function (): void {
             .'- figure'.PHP_EOL
             ."    - {$name} entry 'one'".PHP_EOL
             ."    - {$name} entry 'two'".PHP_EOL
+            ."    - {$name} entry 'four'".PHP_EOL
             .'- shortcode:foo'.PHP_EOL
             ."    - {$name} entry 'three'".PHP_EOL
             .'        - [foo bar="1"]'.PHP_EOL
@@ -1123,7 +1276,7 @@ describe('tables', function (): void {
         $old = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-9-801');
         File::ensureDirectoryExists(\dirname($old));
         File::put($old, "---\ntitle: Old\n---\n");
-        entryCreatorExpects(File::partialMock(), 'exists')->with($expected)->andReturn(true);
+        entryCreatorExpects(File::partialMock(), 'exists')->andReturnUsing(static fn (string $path): bool => $path === $expected || \file_exists($path));
         $output = new BufferedOutput;
 
         $creator->importTables('default', $output, 'page');
@@ -1167,6 +1320,7 @@ describe('tables', function (): void {
             ])
             ->and(\is_array($warning) && \is_string($warning['entry_id'] ?? null) ? $warning['entry_id'] : '')->toStartWith('default_tablepress-9-801-');
         Sleep::assertSleptTimes(6);
+        Sleep::assertSlept(static fn (CarbonInterval $duration): bool => (int) $duration->totalMicroseconds === 300000, 6);
     });
 
     it('skips a table when the parser has no file', function (): void {
@@ -1204,3 +1358,157 @@ function kbItemFromExport(string $export): SimpleXMLElement
 
     return $item;
 }
+
+describe('what it asks of the creator', function (): void {
+    it('configures the creator, has it import, then flushes and validates its terms', function (): void {
+        $rig = entryCreatorRig();
+        $stub = new EntryCreatorTestStubCreator([7 => ['entry' => 'e']]);
+        $rig->creator->stub = $stub;
+        $rig->creator->setEntryOverwriteBehavior('Create an additional file');
+        $rig->creator->setTaxonomyOverwriteBehavior('Skip matching terms');
+        $parser = entryCreatorParser(entryCreatorExport());
+        $importer = new AssetImporter;
+
+        $rig->creator->createEntries('default', 'post', 'posts', $parser, $importer, new BufferedOutput, null, ['kb_page' => '5']);
+
+        expect(\array_column($stub->calls, 0))->toBe(['entries', 'terms', 'create', 'flush', 'validate'])
+            ->and($stub->calls[0][1])->toBe('Create an additional file')
+            ->and($stub->calls[1][1])->toBe('Skip matching terms')
+            ->and($stub->calls[2][1])->toBe(['default', 'posts', $parser, $importer, $rig->mapper, $rig->converter, ['kb_page' => '5']])
+            ->and($stub->calls[3][1])->toBe('default')
+            ->and($stub->calls[4][1])->toBe('posts:default')
+            ->and($rig->creator->getPageData())->toBe([7 => ['entry' => 'e']]);
+    });
+
+    it('reports what the creator for each type reports', function (): void {
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator(showPeople: true);
+
+        expect($rig->creator->hasShowPeople('page'))->toBeTrue()
+            ->and($rig->creator->getPeopleGroups())->toBe(['faculty' => ['g']])
+            ->and($rig->creator->getPostCategories())->toBe(['news' => ['n']])
+            ->and($rig->creator->getPostTags())->toBe(['fast' => ['f']]);
+    });
+
+    it('clears and warms the entries store after the import', function (): void {
+        entryCreatorCollection('posts', ['post']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+        $store = Mockery::mock(Store::class);
+        entryCreatorExpects($store, 'clear')->once();
+        entryCreatorExpects($store, 'warm')->once();
+        $stache = app(Statamic\Stache\Stache::class);
+        entryCreatorExpects(Stache::partialMock(), 'store')->andReturnUsing(static function (string $key) use ($stache, $store): mixed {
+            foreach (\debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) as $index => $frame) {
+                if ($frame['function'] === '__callStatic') {
+                    $caller = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)[$index + 1] ?? [];
+
+                    if (($caller['class'] ?? '') === EntryCreator::class && $caller['function'] === 'createEntries') {
+                        return $store;
+                    }
+
+                    break;
+                }
+            }
+
+            return $stache->store($key);
+        });
+
+        $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+    });
+
+    it('logs the site, and the collection, with each cache warning', function (bool $store, string $phrase, array $context): void {
+        $warnings = entryCreatorWarnings();
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+
+        if (! $store) {
+            $stache = app(Statamic\Stache\Stache::class);
+            entryCreatorExpects(Stache::partialMock(), 'store')->andReturnUsing(static function (string $key) use ($stache): mixed {
+                foreach (\debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS) as $index => $frame) {
+                    if ($frame['function'] === '__callStatic') {
+                        $caller = \debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)[$index + 1] ?? [];
+
+                        if (($caller['class'] ?? '') === EntryCreator::class && $caller['function'] === 'createEntries') {
+                            return null;
+                        }
+
+                        break;
+                    }
+                }
+
+                return $stache->store($key);
+            });
+        }
+
+        $rig->creator->createEntries('default', 'post', 'missing', entryCreatorParser(entryCreatorExport()), new AssetImporter, new BufferedOutput);
+        $found = null;
+
+        foreach ($warnings as $warning) {
+            if (\is_string($warning[0]) && \str_contains($warning[0], $phrase)) {
+                $found = $warning[1];
+            }
+        }
+
+        expect($found)->toBe($context);
+    })->with([
+        'a missing collection' => [true, "Could not find 'missing' collection", ['site' => 'default', 'collection_handle' => 'missing']],
+        'no store' => [false, 'Could not access Stache store', ['site' => 'default']],
+    ]);
+
+    it('imports the tables the content references', function (): void {
+        entryCreatorCollection('tables', ['table']);
+        $rig = entryCreatorRig();
+        $rig->creator->stub = new EntryCreatorTestStubCreator;
+        entryCreatorTableIds(['9']);
+
+        $rig->creator->createEntries('default', 'post', 'posts', entryCreatorParser(entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => '9']])), new AssetImporter, new BufferedOutput);
+
+        expect(entryCreatorSlugs('tables'))->toBe(['default_tablepress-9']);
+    });
+});
+
+describe('tables, more closely', function (): void {
+    beforeEach(function (): void {
+        entryCreatorCollection('tables', ['table']);
+    });
+
+    it('hands the table creator its overwrite behavior', function (): void {
+        $creator = entryCreatorRig()->creator;
+        $creator->setXmlParser(entryCreatorParser(entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => '9']])));
+        $creator->setAssetImporter(new AssetImporter);
+        $creator->importTables('default', new BufferedOutput, 'tablepress_table');
+        $creator->setTableOverwriteBehavior('Skip matching files');
+        $output = new BufferedOutput;
+
+        $creator->importTables('default', $output, 'tablepress_table');
+
+        expect($output->fetch())->toContain("Skipped entry 'default_tablepress-9' as it already exists.");
+    });
+
+    it('matches an export id exactly, and keeps the first of two tables with the same date', function (): void {
+        $creator = entryCreatorRig()->creator;
+        $creator->setXmlParser(entryCreatorParser(entryCreatorExport([
+            ['type' => 'tablepress_table', 'id' => '801', 'export' => '09', 'title' => 'Padded'],
+            ['type' => 'tablepress_table', 'id' => '802', 'export' => '9', 'title' => 'First', 'date' => '2025-01-01 00:00:00'],
+            ['type' => 'tablepress_table', 'id' => '803', 'export' => '9', 'title' => 'Same date', 'date' => '2025-01-01 00:00:00'],
+            ['type' => 'tablepress_table', 'id' => '804', 'export' => '13', 'title' => 'Unreadable', 'date' => 'not a date'],
+            ['type' => 'tablepress_table', 'id' => '805', 'export' => '13', 'title' => 'Readable', 'date' => '2019-01-01 00:00:00'],
+        ])));
+        $creator->setAssetImporter(new AssetImporter);
+        entryCreatorTableIds(['9', '13']);
+
+        $creator->importTables('default', new BufferedOutput, 'page');
+        $titles = [];
+
+        foreach (EntryFacade::all() as $entry) {
+            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables') {
+                $titles[] = $entry->get('title');
+            }
+        }
+
+        \sort($titles);
+
+        expect($titles)->toBe(['First', 'Readable']);
+    });
+});
