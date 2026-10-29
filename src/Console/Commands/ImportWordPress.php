@@ -699,6 +699,8 @@ class ImportWordPress extends Command
             return $normalized;
         }
 
+        // `%s` formats a scalar as the cast does, so the cast only types it
+        // @pest-mutate-ignore: RemoveStringCast
         $this->error(\sprintf(
             "The --minerva-generation option must be one of: %s, got '%s'.",
             \implode(', ', \array_keys(MinervaKbSettingsLoader::DECLARABLE_GENERATIONS)),
@@ -720,15 +722,21 @@ class ImportWordPress extends Command
         $destination = $this->argument('file');
 
         if (! \is_string($destination) || $destination === '') {
+            // The extra entropy only makes a collision less likely; either name is unique.
+            // @pest-mutate-ignore: TrueToFalse
             $destination = \sys_get_temp_dir()
                 .\DIRECTORY_SEPARATOR
                 .\uniqid('wordpress-import-', true);
         }
 
-        if (! \is_dir($destination) && ! \mkdir($destination, 0o775, true) && ! \is_dir($destination)) {
-            $this->error("Could not create the directory '{$destination}' for materialized parts.");
+        // Create the directory unless it already exists
+        if (! \is_dir($destination) && ! \mkdir($destination, 0o775, true)) {
+            // A directory another process created between the two calls serves as well
+            if (! \is_dir($destination)) {
+                $this->error("Could not create the directory '{$destination}' for materialized parts.");
 
-            return null;
+                return null;
+            }
         }
 
         $site = $this->option('site');
@@ -748,6 +756,8 @@ class ImportWordPress extends Command
 
         if ($site !== null && $site !== '') {
             if (! \is_string($site) || \preg_match('/^[1-9][0-9]*$/', $site) !== 1) {
+                // `%s` formats a scalar as the cast does, so the cast only types it
+                // @pest-mutate-ignore: RemoveStringCast
                 $this->error(\sprintf(
                     "The --site option must be a positive whole number (the network blog id), got '%s'.",
                     \is_scalar($site) ? (string) $site : \get_debug_type($site)
@@ -827,7 +837,7 @@ class ImportWordPress extends Command
             // read that throws partway cannot leave a previous run's scope in force (wordpress-importer-archive#1179).
             MaterializationScope::clear();
 
-            $materializer = new WxrMaterializer(
+            $materializer = $this->makeMaterializer(
                 $client->withProgressReporter(function (string $message): void {
                     $this->line($message);
                 }),
@@ -1000,7 +1010,7 @@ class ImportWordPress extends Command
         $this->line("  Reading: {$baseUrl}");
 
         try {
-            $key = StdinKeyReader::read(\STDIN);
+            $key = StdinKeyReader::read($this->apiKeyStream());
 
             return MigrationApiClient::forRun($baseUrl, $key)
                 ->withRetryReporter(function (string $message): void {
@@ -1011,6 +1021,39 @@ class ImportWordPress extends Command
 
             return null;
         }
+    }
+
+    /**
+     * Build the materializer that writes the API's content out as WXR parts.
+     *
+     * A method of its own so a test can stand in for the reads it makes.
+     *
+     * @param  MigrationApiClient  $client  The client to read through
+     * @param  string  $destination  The directory to write the parts into
+     */
+    protected function makeMaterializer(
+        MigrationApiClient $client,
+        string $destination
+    ): WxrMaterializer {
+        // Build the materializer over the client and the directory
+        return new WxrMaterializer(
+            $client,
+            $destination
+        );
+    }
+
+    /**
+     * The stream the `--key-from-stdin` route reads the API key from: standard input.
+     *
+     * A method of its own so a test can supply a key without reading the process's own
+     * standard input.
+     *
+     * @return resource The stream to read the key from
+     */
+    protected function apiKeyStream()
+    {
+        // Read the key from standard input
+        return \STDIN;
     }
 
     /**
