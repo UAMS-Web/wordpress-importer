@@ -1038,7 +1038,7 @@ abstract class BaseEntryCreator
         // ---
         $matchingEntries = $matchingEntryQuery->get();
         // @pest-mutate-ignore: InstanceOfToTrue
-        $matchingEntry = ! $matchingEntries instanceof Collection ? null : $matchingEntries->first(
+        $matchingEntry = $matchingEntries instanceof Collection ? $matchingEntries->first(
             static function (mixed $entry) use ($wpPostId, $baseSlug): bool {
                 // A query for entries returns entries; this only narrows the type
                 // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn, FalseToTrue
@@ -1086,7 +1086,7 @@ abstract class BaseEntryCreator
                         || $entrySlugBase === $baseSlugClean
                     );
             }
-        );
+        ) : null;
 
         // ---
         // Return the found existing entry or null if none exists. A collection's
