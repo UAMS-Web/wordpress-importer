@@ -497,8 +497,8 @@ abstract class BaseEntryCreator
      */
     private function formatPublishAt(string $date, DateTimeZone $utc): ?string
     {
-        // An empty string would parse as now; whitespace alone fails to parse below
-        if ($date === '') {
+        // An empty string would parse as now, and so would one of NUL bytes, which trim() strips
+        if (\trim($date) === '') {
             return null;
         }
 
@@ -841,8 +841,8 @@ abstract class BaseEntryCreator
         // Check if the collection is dated based on configuration
         $entryCollection = $entry->collection();
         // ---
-        // The cast keeps a truthy dated value, such as 1 read from YAML, reading as
-        // dated. An entry set to a collection always has it, so the check only narrows.
+        // The && already yields a bool, so the cast only satisfies the type. An entry
+        // set to a collection always has it, so the check only narrows.
         // ---
         // @pest-mutate-ignore: RemoveBooleanCast, InstanceOfToTrue
         $isCollectionDated = $entryCollection instanceof EntryCollection && (bool) $entryCollection->dated();
@@ -3295,8 +3295,6 @@ abstract class BaseEntryCreator
         OutputInterface $output
     ): void {
         foreach ($unmappedTermCounts as $taxonomy => $discardedTermCount) {
-            // The key is unique to its site and taxonomy whichever way round it is joined
-            // @pest-mutate-ignore: ConcatSwitchSides
             $reportKey = $site.'::'.$taxonomy;
 
             // Every creator sees the same export; report each discard once.

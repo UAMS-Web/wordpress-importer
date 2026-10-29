@@ -989,3 +989,24 @@ describe('the unmapped report, more closely', function (): void {
         );
     });
 });
+
+describe('what the review asked about', function (): void {
+    it('keeps a taxonomy and site apart however their names run together, the other way round', function (): void {
+        $creator = baseEntryProbe();
+        $output = new BufferedOutput;
+
+        $creator->call('reportUnmappedTaxonomies', ['a' => 1], 'bc', $output);
+        $creator->call('reportUnmappedTaxonomies', ['ab' => 2], 'c', $output);
+
+        expect($output->fetch())->toBe(
+            "  - Skipping 'a': recorded as having no Statamic destination. 1 term(s) not imported.".PHP_EOL
+            ."  - Skipping 'ab': recorded as having no Statamic destination. 2 term(s) not imported.".PHP_EOL
+        );
+    });
+
+    it('reads a GMT date of NUL bytes as none', function (): void {
+        baseEntryWarnings();
+
+        expect(baseEntryProbe()->call('resolveScheduledPublishAt', "\x00", '2030-05-05 05:05:05'))->toBe('2030-05-05 05:05');
+    });
+});
