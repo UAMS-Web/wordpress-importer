@@ -1049,7 +1049,7 @@ it('aborts, skips or imports knowledge base articles without a topic as the poli
  * Today's behavior: the store is looked up by the collection handle rather than as a child of
  * `entries`, so it is never found (#292).
  */
-it('enables the destination collection for the site, and says the Stache store could not be cleared', function (): void {
+it('enables the destination collection for the site, with no Stache store clear (#292)', function (): void {
     iwriCollection('pages', ['other']);
     [$command, $buffer, $stands] = iwriCommand();
     $stands['siteManager']->enabled = false;
@@ -1058,7 +1058,8 @@ it('enables the destination collection for the site, and says the Stache store c
 
     expect($status)->toBe(0)
         ->and(IwriLog::of('sites.enable'))->toBe([['default', 'pages']])
-        ->and($output)->toContain("Enabled 'default' for collection 'pages'.\nCould not clear Stache cache for 'pages'; store not found.\n");
+        ->and($output)->toContain("Enabled 'default' for collection 'pages'.\n")
+        ->and($output)->not->toContain("Stache cache for 'pages'");
 });
 
 it('leaves an enabled destination collection alone', function (): void {
@@ -1272,8 +1273,8 @@ it('runs the final deferred pass for the site, and forgets the site afterwards',
 });
 
 /**
- * A Stache store keyed as a collection is, so the command's lookup of a collection's store
- * finds one. It records each clear.
+ * A Stache store keyed as a collection is, so a lookup of a collection's store by its handle
+ * would find one. It records each clear.
  */
 final class IwriPagesStore extends Store
 {
@@ -1471,7 +1472,11 @@ it('uploads assets when either upload setting is left out, as it defaults to on'
     'files left out, images off' => [['upload_images' => false]],
 ]);
 
-it('clears the Stache store of a collection it enables, when there is one', function (): void {
+/**
+ * Enabling a collection clears no store, even one keyed by the collection's handle: the only
+ * clear is the one before the navigation pass (#292).
+ */
+it('clears no Stache store when it enables a collection', function (): void {
     iwriCollection('pages', ['other']);
     IwriPagesStore::$cleared = 0;
     Stache::registerStore(new IwriPagesStore);
@@ -1480,8 +1485,9 @@ it('clears the Stache store of a collection it enables, when there is one', func
 
     [, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
 
-    expect($output)->toContain("Enabled 'default' for collection 'pages'.\nCleared Stache cache for 'pages' collection.\n")
-        ->and(IwriPagesStore::$cleared)->toBe(2);
+    expect($output)->toContain("Enabled 'default' for collection 'pages'.\n")
+        ->and($output)->not->toContain("Stache cache for 'pages'")
+        ->and(IwriPagesStore::$cleared)->toBe(1);
 });
 
 it('clears the Stache before the navigation pass', function (): void {

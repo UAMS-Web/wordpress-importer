@@ -20,8 +20,11 @@ use Statamic\Entries\Collection as StatamicCollection;
 use Statamic\Events\CollectionSaved;
 use Statamic\Events\TaxonomySaved;
 use Statamic\Facades\Collection as CollectionFacade;
+use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
+use Statamic\Facades\Stache;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
+use Statamic\Stache\Stores\CollectionEntriesStore;
 use Statamic\Taxonomies\Taxonomy as StatamicTaxonomy;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -139,6 +142,38 @@ it('enables a collection for a new site, saves it, keeps its others, and says so
             "Checking if the 'pages' Statamic collection is enabled for the 'other' site...\n"
             ."  - Enabled the 'pages' Statamic collection for the 'other' site.\n"
         );
+});
+
+/**
+ * The import command used to clear the collection's Stache store after enabling a site, but it
+ * looked the store up as `Stache::store('pages')`, which answers null: a collection's entries
+ * live in the `entries::pages` child store. The step was removed rather than fixed, because
+ * nothing needs it: enabling a site adds no entry, and an entry saved for the new site goes
+ * into the entries store's indexes on save. Here the indexes are built before the enable, so
+ * a stale index would hide the new site's entry (#292).
+ */
+it('finds an entry saved for a newly enabled site, with no Stache store cleared', function (): void {
+    expect(Stache::store('pages'))->toBeNull()
+        ->and(Stache::store('entries::pages'))->toBeInstanceOf(CollectionEntriesStore::class);
+
+    EntryFacade::make()->collection('pages')->locale('default')->slug('home')->save();
+    $slugsIn = fn (string $site): array => EntryFacade::query()
+        ->where('collection', 'pages')
+        ->where('site', $site)
+        ->get()
+        ->map(fn ($entry): mixed => $entry->slug())
+        ->values()
+        ->all();
+
+    // Built here, before the enable: the query reads the store's site and slug indexes
+    expect($slugsIn('default'))->toBe(['home'])
+        ->and($slugsIn('other'))->toBe([]);
+
+    (new SiteManager)->enableCollectionForSite('other', 'pages');
+    EntryFacade::make()->collection('pages')->locale('other')->slug('about')->save();
+
+    expect($slugsIn('other'))->toBe(['about'])
+        ->and($slugsIn('default'))->toBe(['home']);
 });
 
 it('leaves a collection already enabled for the site as it is, and says so', function (): void {
