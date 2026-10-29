@@ -3282,7 +3282,7 @@ class ImportWordPress extends Command
         array $parts
     ): void {
         // Get current memory limit
-        $currentMemoryLimit = ini_get('memory_limit');
+        $currentMemoryLimit = $this->memoryLimit();
 
         // Convert memory limit string to bytes for comparison
         $currentMemoryBytes = $this->convertToBytes($currentMemoryLimit);
@@ -3437,6 +3437,18 @@ class ImportWordPress extends Command
             // Inform user that memory limit appears sufficient
             $this->info('Memory limit appears sufficient for this import.');
         }
+    }
+
+    /**
+     * The PHP memory limit the memory check compares against, as `ini_get()` gives it.
+     *
+     * A method of its own so a test can supply a limit without lowering the process's own,
+     * which a test worker may already exceed.
+     */
+    protected function memoryLimit(): string
+    {
+        // Read the process's memory limit
+        return ini_get('memory_limit');
     }
 
     /**
