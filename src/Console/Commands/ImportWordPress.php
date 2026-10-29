@@ -3210,7 +3210,9 @@ class ImportWordPress extends Command
             $contentTypes
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
     }
 
@@ -3254,7 +3256,8 @@ class ImportWordPress extends Command
                 }
             }
         } finally {
-            // Close the XMLReader to free resources
+            // Close the XMLReader to free resources. Closing changes no result.
+            // @pest-mutate-ignore: RemoveMethodCall
             $reader->close();
 
             // Clean up variables to free up memory
@@ -3311,7 +3314,10 @@ class ImportWordPress extends Command
         // largest single part rather than the combined part-set size.
         // ---
 
-        // Initialize the largest item size seen across all parts
+        // Initialize the largest item size seen across all parts. Every part is measured,
+        // and a measurement is never negative, so a start above zero shows only below a
+        // byte, which reads as 0MB either way.
+        // @pest-mutate-ignore: IncrementInteger
         $largestItemSize = 0;
 
         // Initialize the total count of large items across all parts
@@ -3425,7 +3431,7 @@ class ImportWordPress extends Command
                 $this->info('Exiting. Please restart the command with increased memory limit when ready.');
 
                 // Exit with error status code
-                exit(1);
+                $this->terminate(1);
             }
         } else { //  Otherwise
             // Inform user that memory limit appears sufficient
@@ -3505,7 +3511,9 @@ class ImportWordPress extends Command
         $inContentEncoded = false;
 
         // Initialize buffer to accumulate content for size calculation. Each item resets
-        // it before it is measured, so content outside an item is never counted.
+        // it before it is measured, so content outside an item is never counted, and nor
+        // is the start.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $contentBuffer = '';
 
         // Loop through XML nodes
@@ -3532,11 +3540,11 @@ class ImportWordPress extends Command
                     // Finished processing an item, check its size
                     $itemSize = \strlen($contentBuffer);
 
-                    // Check if this item is larger than the current largest
-                    if ($itemSize > $largestItemSize) {
-                        // Update largest item size
-                        $largestItemSize = $itemSize;
-                    }
+                    // Keep the largest item size seen
+                    $largestItemSize = max(
+                        $largestItemSize,
+                        $itemSize
+                    );
 
                     // Check if this item exceeds the threshold
                     if ($itemSize > $thresholdBytes) {
@@ -3563,7 +3571,8 @@ class ImportWordPress extends Command
             }
         }
 
-        // Close the XMLReader to free resources
+        // Close the XMLReader to free resources. Closing changes no result.
+        // @pest-mutate-ignore: RemoveMethodCall
         $reader->close();
 
         // Clean up variables to free up memory
@@ -3572,7 +3581,9 @@ class ImportWordPress extends Command
             $reader
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return analysis results
@@ -3600,7 +3611,21 @@ class ImportWordPress extends Command
         $this->info('Exiting. Please run the command above with the increased memory limit.');
 
         // Exit with success status code
-        exit(0);
+        $this->terminate(0);
+    }
+
+    /**
+     * End the process with the given status, as the memory check's choices do.
+     *
+     * A method of its own so a test can stand in for ending the process.
+     *
+     * @param  int  $status  The exit status
+     */
+    protected function terminate(
+        int $status
+    ): never {
+        // End the process with the status
+        exit($status);
     }
 
     /**
