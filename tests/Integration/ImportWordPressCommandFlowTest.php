@@ -372,6 +372,13 @@ it('refuses a split export missing a part, naming each missing part', function (
         ->and(iwcfOutput($buffer))->toBe("Split export is missing part(s): .001.xml, .003.xml. Refusing to import a partial set \u{2014} restore the missing part(s) and retry.\n");
 });
 
+it('reads a bare --unsupported-content as the default policy', function (): void {
+    [$command] = iwcfCommand(['--unsupported-content' => null]);
+
+    expect($command->option('unsupported-content'))->toBeNull()
+        ->and(iwcfCall($command, 'resolveUnsupportedContentPolicy'))->toBe('abort');
+});
+
 it('reads the unsupported-content policy, refusing one it does not know', function (?string $policy, ?string $resolved): void {
     [$command] = iwcfCommand($policy === null ? [] : ['--unsupported-content' => $policy]);
 

@@ -528,10 +528,8 @@ class ImportWordPress extends Command
         // Read the raw option value from the console input
         $policy = $this->option('unsupported-content');
 
-        // Treat a missing value as the default policy. The option defaults to `abort` and
-        // requires a value, so the console never leaves it missing.
+        // Treat a missing value as the default policy, as a bare --unsupported-content gives
         if ($policy === null) {
-            // @pest-mutate-ignore: RemoveEarlyReturn
             return 'abort';
         }
 
