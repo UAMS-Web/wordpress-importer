@@ -30,10 +30,6 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * be asserted on its own, and runs `cleanupDuplicateEntryFiles()` against a stand-in entries
  * store whose directory and paths index the test controls.
  *
- * None of these cases places a page under an orphaned page or under a child of the front
- * page. That shape loses its descendants today, which UAMS-Web/wordpress-importer#251 tracks,
- * and pinning it here would only have to be undone.
- *
  * @command  php vendor/bin/pest tests/Integration/TreeBuilderTreeShapeTest.php
  */
 uses(StatamicTestCase::class);
@@ -410,6 +406,132 @@ it('logs an orphan with its post id, entry, parent and the size of the import', 
                 'entry_url' => 'https://x.test/orphan/',
             ],
         ]]);
+});
+
+/**
+ * A page whose parent is not in the import goes to the top level with its descendants nested
+ * under it, as a root page does (#251).
+ */
+it('keeps the descendants of an orphaned page under it', function (): void {
+    $warnings = treeShapeWarnings();
+
+    $tree = treeShapeBuilder()->treeFor([
+        '2' => treeShapePage('section', parent: '99', link: 'https://x.test/section/'),
+        '3' => treeShapePage('page', parent: '2'),
+        '4' => treeShapePage('subpage', parent: '3'),
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'section', 'children' => [
+            ['entry' => 'page', 'children' => [['entry' => 'subpage']]],
+        ]],
+    ])->and(\array_column($warnings->getArrayCopy(), 0))->toBe([
+        'TreeBuilder::buildTree: Parent not found for page; marking as unassigned (from entry: https://x.test/section/)',
+    ]);
+});
+
+/**
+ * The front page leaves the page data before the hierarchy is built, so its children are
+ * orphans: each stays at the top level, after the front page, with its own children (#251).
+ */
+it('keeps the children of a child of the front page', function (): void {
+    $warnings = treeShapeWarnings();
+
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('home', link: 'https://x.test/'),
+        '2' => treeShapePage('child', parent: '1', link: 'https://x.test/child/'),
+        '3' => treeShapePage('grand', parent: '2', link: 'https://x.test/child/grand/'),
+    ], 'https://x.test');
+
+    expect($tree)->toBe([
+        ['entry' => 'home'],
+        ['entry' => 'child', 'children' => [['entry' => 'grand']]],
+    ])->and(\array_column($warnings->getArrayCopy(), 0))->toBe([
+        'TreeBuilder::buildTree: Parent not found for page; marking as unassigned (from entry: https://x.test/child/)',
+    ]);
+});
+
+it('sorts the children of an orphaned page by menu order, and keeps orphans after the roots in import order', function (): void {
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('late-orphan', parent: '98'),
+        '2' => treeShapePage('zebra', parent: '1', order: 2),
+        '3' => treeShapePage('alpha', parent: '1', order: 1),
+        '4' => treeShapePage('root', order: 5),
+        '5' => treeShapePage('early-orphan', parent: '97'),
+    ]);
+
+    expect($tree)->toBe([
+        ['entry' => 'root'],
+        ['entry' => 'late-orphan', 'children' => [['entry' => 'alpha'], ['entry' => 'zebra']]],
+        ['entry' => 'early-orphan'],
+    ]);
+});
+
+/**
+ * Children are filed under their parent's entry id, so a page sharing its entry id with an
+ * ancestor would have that ancestor's children nested under it again, without end. It is
+ * left out and logged, and the rest of the tree is built (#301).
+ *
+ * @param  array<int|string, mixed>  $pageData  The pages
+ * @param  array<int|string, mixed>  $expected  The tree
+ * @param  list<string>  $ancestors  The path the repeated entry was found on
+ */
+it('leaves out a page that shares its entry id with an ancestor, and builds the rest', function (array $pageData, array $expected, array $ancestors): void {
+    $warnings = treeShapeWarnings();
+
+    $tree = treeShapeBuilder()->treeFor($pageData);
+
+    $repeats = \array_values(\array_filter(
+        $warnings->getArrayCopy(),
+        static fn (array $warning): bool => $warning[0] === 'TreeBuilder::buildTree: Page shares its entry with an ancestor; left out of the tree',
+    ));
+
+    expect($tree)->toBe($expected)
+        ->and($repeats)->toBe([[
+            'TreeBuilder::buildTree: Page shares its entry with an ancestor; left out of the tree',
+            ['entry' => 'e', 'ancestors' => $ancestors],
+        ]]);
+})->with([
+    'a child of a root' => [
+        ['1' => treeShapePage('e'), '2' => treeShapePage('e', parent: '1')],
+        [['entry' => 'e']],
+        ['e'],
+    ],
+    'a grandchild of a root, beside a sibling' => [
+        [
+            '1' => treeShapePage('e'),
+            '2' => treeShapePage('c', parent: '1'),
+            '3' => treeShapePage('e', parent: '2', order: 1),
+            '4' => treeShapePage('s', parent: '2', order: 2),
+        ],
+        [['entry' => 'e', 'children' => [['entry' => 'c', 'children' => [['entry' => 's']]]]]],
+        ['e', 'c'],
+    ],
+    'a child of an orphan' => [
+        ['1' => treeShapePage('e', parent: '99'), '2' => treeShapePage('e', parent: '1')],
+        [['entry' => 'e']],
+        ['e'],
+    ],
+]);
+
+it('adds no orphan whose entry a root already holds', function (): void {
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('dup'),
+        '2' => treeShapePage('dup', parent: '99'),
+        '3' => treeShapePage('other', parent: '98'),
+    ]);
+
+    expect($tree)->toBe([['entry' => 'dup'], ['entry' => 'other']]);
+});
+
+it('matches an ancestor\'s entry exactly, so a numeric-looking id is not taken for another', function (): void {
+    // '01' and '1' are equal only under loose comparison
+    $tree = treeShapeBuilder()->treeFor([
+        '1' => treeShapePage('1'),
+        '2' => treeShapePage('01', parent: '1'),
+    ]);
+
+    expect($tree)->toBe([['entry' => '1', 'children' => [['entry' => '01']]]]);
 });
 
 it('reports every page a parent cycle leaves out of the tree', function (): void {

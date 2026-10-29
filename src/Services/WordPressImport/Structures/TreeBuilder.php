@@ -278,8 +278,9 @@ class TreeBuilder
             $assignedEntries
         );
 
-        // Step 5: Add unassigned pages to top-level tree
+        // Step 5: Add unassigned pages to top-level tree, each with its descendants
         $addedUnassigned = [];
+        $orphans = [];
         foreach ($unassigned as $data) {
             $entryId = self::extractScalarString($data['entry'] ?? null);
 
@@ -292,10 +293,21 @@ class TreeBuilder
                     true
                 )
             ) {
-                $tree[] = $this->cleanNode($data);
+                $orphans[] = $data;
                 $addedUnassigned[] = $entryId;
             }
         }
+
+        // Attach the orphans' descendants as step 4 does the roots', keeping the orphans
+        // in import order after the sorted roots (#251)
+        $tree = [
+            ...$tree,
+            ...$this->assignChildrenRecursively(
+                $orphans,
+                $children,
+                $assignedEntries
+            ),
+        ];
 
         // ---
         // Step 6: Verify all pages are included. The front page was removed from
@@ -365,17 +377,25 @@ class TreeBuilder
      * include only 'entry' and 'children' keys. Tracks assigned entries to verify
      * inclusion in the final tree.
      *
+     * A node whose entry is already on its own ancestor path is left out and logged:
+     * children are filed by entry ID, so it would nest its ancestor's children under
+     * itself again, without end (#301).
+     *
      * @param  array<int|string, mixed>  $nodes  The array of nodes to process
      * @param  array<int|string, mixed>  $children  The array of children indexed by parent entry ID
      * @param  array<int|string, mixed>  &$assignedEntries  Reference to array tracking assigned entries
+     * @param  list<string>  $ancestors  The entry IDs of the nodes above these, root first
      * @return array<int|string, mixed> The processed nodes with children assigned
      */
     protected function assignChildrenRecursively(
         array $nodes,
         array $children,
-        array &$assignedEntries
+        array &$assignedEntries,
+        array $ancestors = []
     ): array {
-        foreach ($nodes as &$node) {
+        $repeated = [];
+
+        foreach ($nodes as $key => &$node) {
             // Every node reaching here is a page buildTree() already accepted: an array
             // with a non-empty entry. The two guards only type what follows.
             // @pest-mutate-ignore: ContinueToBreak
@@ -390,6 +410,31 @@ class TreeBuilder
                 continue;
             }
 
+            // Leave out a node that repeats an ancestor's entry, and say so
+            if (
+                \in_array(
+                    $entry,
+                    $ancestors,
+                    true
+                )
+            ) {
+                $repeated[] = $key;
+
+                // Log the repeated entry and the path it was found on
+                $logData = LogContextHelper::enhanceWithEntryContext(
+                    ['entry' => $entry, 'ancestors' => $ancestors]
+                );
+                Log::warning(
+                    LogContextHelper::formatMessageWithEntry(
+                        'TreeBuilder::buildTree: Page shares its entry with an ancestor; left out of the tree',
+                        $logData['page_url']
+                    ),
+                    $logData['context']
+                );
+
+                continue;
+            }
+
             $assignedEntries[] = $entry;
             if (
                 isset($children[$entry])
@@ -400,11 +445,28 @@ class TreeBuilder
                 $node['children'] = $this->assignChildrenRecursively(
                     $node['children'],
                     $children,
-                    $assignedEntries
+                    $assignedEntries,
+                    [...$ancestors, $entry]
                 );
+
+                // A node whose every child was left out is a leaf
+                if ($node['children'] === []) {
+                    unset($node['children']);
+                }
             }
 
             $node = $this->cleanNode($node);
+        }
+
+        unset($node);
+
+        // Drop the repeated nodes, keeping the level a list
+        if ($repeated !== []) {
+            foreach ($repeated as $key) {
+                unset($nodes[$key]);
+            }
+
+            $nodes = \array_values($nodes);
         }
 
         return $nodes;
