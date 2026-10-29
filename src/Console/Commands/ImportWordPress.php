@@ -3365,14 +3365,14 @@ class ImportWordPress extends Command
 
         // Check if we need more memory
         if ($currentMemoryBytes < $recommendedMemoryBytes) {
-            // Check if any large items were found
-            if ($largeItemsCount > 0) {
-                // Warn user about number of large items found
-                $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
+            // ---
+            // Warn user about the large items found. An item needing more than the limit
+            // is larger than the limit's threshold, so at least one was counted.
+            // ---
+            $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
 
-                // Warn user about potential memory issues
-                $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
-            }
+            // Warn user about potential memory issues
+            $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
 
             // Warn user about large content items and recommended memory
             $this->warn("Large content items detected. Recommended memory: {$recommendedMemoryMB}MB");
@@ -3501,17 +3501,12 @@ class ImportWordPress extends Command
         // Initialize counter for items exceeding threshold
         $largeItemsCount = 0;
 
-        // Initialize flag to track if we're currently inside an item element
-        $inItem = false;
-
         // Initialize flag to track if we're currently inside content:encoded element
         $inContentEncoded = false;
 
-        // Initialize buffer to accumulate content for size calculation
+        // Initialize buffer to accumulate content for size calculation. Each item resets
+        // it before it is measured, so content outside an item is never counted.
         $contentBuffer = '';
-
-        // Initialize counter for processed items
-        $processedItems = 0;
 
         // Loop through XML nodes
         while ($reader->read()) {
@@ -3521,23 +3516,13 @@ class ImportWordPress extends Command
             // Get current node name
             $nodeName = $reader->name;
 
-            // ---
-            // Track when we're inside an item
-            // ---
-
             // Check if current node is an element
             if ($nodeType === \XMLReader::ELEMENT) {
                 // Check if this is the start of an item element
                 if ($nodeName === 'item') {
-                    // Set flag to indicate we're inside an item
-                    $inItem = true;
-
                     // Reset content buffer for new item
                     $contentBuffer = '';
-                } elseif (
-                    $inItem
-                    && $nodeName === 'content:encoded'
-                ) { // Check if this is the start of content:encoded element
+                } elseif ($nodeName === 'content:encoded') { // Check if this is the start of content:encoded element
                     // Set flag to indicate we're inside content:encoded
                     $inContentEncoded = true;
                 }
@@ -3557,31 +3542,6 @@ class ImportWordPress extends Command
                     if ($itemSize > $thresholdBytes) {
                         // Increment counter for large items
                         $largeItemsCount++;
-                    }
-
-                    // Reset flag to indicate we're no longer inside an item
-                    $inItem = false;
-
-                    // Clear content buffer
-                    $contentBuffer = '';
-
-                    // Increment processed items counter
-                    $processedItems++;
-
-                    // ---
-                    // Clear buffer periodically to manage memory
-                    // ---
-
-                    // Check if we've processed a multiple of 100 items
-                    if ($processedItems % 100 === 0) {
-                        // Clean up variables to free up memory
-                        unset($contentBuffer);
-
-                        // Reinitialize buffer
-                        $contentBuffer = '';
-
-                        // Force garbage collection to reclaim memory
-                        gc_collect_cycles();
                     }
                 } elseif ($nodeName === 'content:encoded') { // Check if this is the end of content:encoded element
                     // Reset flag to indicate we're no longer inside content:encoded
