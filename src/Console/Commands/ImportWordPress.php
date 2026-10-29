@@ -3040,6 +3040,9 @@ class ImportWordPress extends Command
         // Add site to the global set's sites so Statamic creates Variables for it
         $sites = $global->sites();
 
+        // A global set's sites() always answers a collection, so the assertion only
+        // types it.
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
         \assert($sites instanceof \Illuminate\Support\Collection);
 
         $global->sites(
