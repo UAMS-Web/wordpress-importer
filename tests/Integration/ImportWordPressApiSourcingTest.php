@@ -7,6 +7,8 @@ use Illuminate\Console\OutputStyle;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
@@ -16,6 +18,8 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFo
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader as MinervaKbSettingsLoader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\ReusableBlocks\ReusableBlockCoordinator;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
@@ -699,4 +703,27 @@ it('reports each redirect plugin\'s rules, and what the collection cannot expres
         ."      a status other than 301 or 302                               1 rule(s)\n"
         ."Redirection on third.test: 1 rule(s) served, 1 written as redirect rules.\n"
     );
+});
+
+it('hands the entry creator its own form, reusable block, deferred processing and site collaborators', function (): void {
+    // Fresh collaborators, so none can match the entry creator's own by being the
+    // container's shared instance
+    $command = app()->make(ImportWordPress::class, [
+        'formPluginCoordinator' => app()->build(FormPluginCoordinator::class),
+        'reusableBlockCoordinator' => app()->build(ReusableBlockCoordinator::class),
+        'deferredProcessingCoordinator' => new DeferredProcessingCoordinator,
+        'siteManager' => new SiteManager,
+    ]);
+    $read = static fn (object $owner, string $property): mixed => (new ReflectionProperty($owner, $property))->getValue($owner);
+    $entryCreator = (new ReflectionProperty(ImportWordPress::class, 'entryCreator'))->getValue($command);
+
+    expect($entryCreator)->toBeObject();
+
+    if (! is_object($entryCreator)) {
+        return;
+    }
+
+    foreach (['formPluginCoordinator', 'reusableBlockCoordinator', 'deferredProcessingCoordinator', 'siteManager'] as $collaborator) {
+        expect($read($entryCreator, $collaborator))->toBe($read($command, $collaborator), $collaborator);
+    }
 });
