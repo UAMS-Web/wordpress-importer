@@ -791,14 +791,13 @@ it('measures the codebase before and after the import when asked to', function (
 });
 
 /**
- * Today's behavior, which #289 records as a defect: the memory check reads every part before
- * the parse step's failure handling, so under Laravel's error handler an unreadable part ends
- * the run with the reader's warning as an exception, and the parse step's message never runs.
- * libxml reports through PHP warnings only while its internal error buffering is off, as it is
- * in a fresh process like the command's, so the test sets that state rather than inheriting
- * whatever an earlier test left.
+ * An unreadable part ends the run with the parse step's message and status 1, whichever step
+ * reads it first (#289). The memory check reads the parts before the parse, so it is the one
+ * that meets the reader's warning. libxml reports through PHP warnings only while its internal
+ * error buffering is off, as it is in a fresh process like the command's, so the test sets
+ * that state rather than inheriting whatever an earlier test left.
  */
-it('ends the run with the reader\'s exception for an export it cannot read', function (string $kind, string $message): void {
+it('ends the run with the parse step\'s message for an export it cannot read', function (string $kind, string $reader, string $detail): void {
     $part = $this->root.'/broken.xml';
 
     if ($kind === 'malformed') {
@@ -809,18 +808,19 @@ it('ends the run with the reader\'s exception for an export it cannot read', fun
     $buffering = libxml_use_internal_errors(false);
 
     try {
-        expect(fn () => iwriRun($command, $buffer, [$part]))->toThrow(ErrorException::class, $message);
+        [$status, $output] = iwriRun($command, $buffer, [$part]);
     } finally {
         libxml_use_internal_errors($buffering);
     }
 
-    $output = str_replace(PHP_EOL, "\n", $buffer->fetch());
-
-    expect(IwriLog::names())->toBe([])
-        ->and($output)->toEndWith("Analyzing content item sizes...\n");
+    expect($status)->toBe(1)
+        ->and(IwriLog::names())->toBe([])
+        ->and($output)->toContain("Analyzing content item sizes...\nFailed to parse XML file: {$reader}")
+        ->and($output)->toContain($detail)
+        ->and($output)->not->toContain('Using streaming parser');
 })->with([
-    'missing' => ['missing', 'XMLReader::open(): Unable to open source data'],
-    'malformed' => ['malformed', 'Namespace prefix wp on post_type is not defined'],
+    'missing' => ['missing', 'XMLReader::open(): Unable to open source data', 'Unable to open source data'],
+    'malformed' => ['malformed', 'XMLReader::read(): ', 'Namespace prefix wp on post_type is not defined'],
 ]);
 
 it('stops when the export holds no supported content type', function (): void {
