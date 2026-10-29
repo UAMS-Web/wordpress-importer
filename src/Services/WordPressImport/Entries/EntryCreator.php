@@ -8,8 +8,10 @@ use DateTime;
 use Exception;
 use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Stache as StacheFacade;
+use Statamic\Stache\Stores\Store;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
@@ -53,6 +55,11 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
  */
 class EntryCreator
 {
+    /**
+     * The path to a table's TablePress export ID, within its item.
+     */
+    private const string EXPORT_ID_PATH = 'wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value';
+
     /**
      * Collected page data for tree building.
      *
@@ -357,18 +364,10 @@ class EntryCreator
     public function hasClassicBlock(
         string $postId
     ): ?array {
-        foreach ($this->classicBlockPages as $page) {
-            if (
-                is_array($page)
-                && isset($page['id'])
-                && is_string($page['id'])
-                && $page['id'] === $postId
-            ) {
-                return $page;
-            }
-        }
-
-        return null;
+        return self::findPage(
+            $this->classicBlockPages,
+            $postId
+        );
     }
 
     /**
@@ -380,18 +379,10 @@ class EntryCreator
     public function hasRowBlock(
         string $postId
     ): ?array {
-        foreach ($this->rowBlockPages as $page) {
-            if (
-                is_array($page)
-                && isset($page['id'])
-                && is_string($page['id'])
-                && $page['id'] === $postId
-            ) {
-                return $page;
-            }
-        }
-
-        return null;
+        return self::findPage(
+            $this->rowBlockPages,
+            $postId
+        );
     }
 
     /**
@@ -403,18 +394,10 @@ class EntryCreator
     public function hasDetailsBlock(
         string $postId
     ): ?array {
-        foreach ($this->detailsBlockPages as $page) {
-            if (
-                is_array($page)
-                && isset($page['id'])
-                && is_string($page['id'])
-                && $page['id'] === $postId
-            ) {
-                return $page;
-            }
-        }
-
-        return null;
+        return self::findPage(
+            $this->detailsBlockPages,
+            $postId
+        );
     }
 
     /**
@@ -426,13 +409,25 @@ class EntryCreator
     public function hasFreeformBlock(
         string $postId
     ): ?array {
-        foreach ($this->freeformBlockPages as $page) {
-            if (
-                is_array($page)
-                && isset($page['id'])
-                && is_string($page['id'])
-                && $page['id'] === $postId
-            ) {
+        return self::findPage(
+            $this->freeformBlockPages,
+            $postId
+        );
+    }
+
+    /**
+     * Find the page with a post ID in a list of block pages.
+     *
+     * @param  array<int|string, mixed>  $pages  Pages with 'title', 'id', and 'link'
+     * @param  string  $postId  The WordPress post ID
+     * @return array<int|string, mixed>|null The page, or null when none has the ID
+     */
+    private static function findPage(
+        array $pages,
+        string $postId
+    ): ?array {
+        foreach ($pages as $page) {
+            if (\is_array($page) && ($page['id'] ?? null) === $postId) {
                 return $page;
             }
         }
@@ -491,6 +486,11 @@ class EntryCreator
         $xmlParser = $this->xmlParser;
         $assetImporter = $this->assetImporter;
         $tables = $xmlParser->getItems('tablepress_table');
+        // ---
+        // Tables map their meta through a mapper of their own, so their keys stay out
+        // of the content type's unaddressed-key report. They convert no content, so
+        // they take this creator's converter, which they never call.
+        // ---
         $creator = new TablePressEntryCreator;
         $creator->setOverwriteBehavior($this->tableOverwriteBehavior);
 
@@ -511,7 +511,7 @@ class EntryCreator
                 $assetImporter,
                 $output,
                 new MetadataMapper,
-                new ContentProcessor
+                $this->contentProcessor
             );
 
             // Log completion
@@ -519,46 +519,29 @@ class EntryCreator
         } else {
             // Import tables referenced by shortcodes/blocks
             $tableIds = TablePressShortcodeProcessor::getTableIds(); // Preserve order for linking
-            $uniqueTableIds = array_unique($tableIds); // Deduplicate for import
 
             // Skip if no table IDs are found
             if ($tableIds === []) {
                 return;
             }
 
-            // Track imported export IDs to avoid duplicates
-            $importedExportIds = [];
-            $importedCount = 0;
-            $importedEntryIds = [];
-
             // Initialize array to store tables grouped by export ID
             $tablesByExportId = [];
 
             // Loop through all available tables to collect those that match our criteria
             foreach ($tables as $table) {
-                // Extract the WordPress post ID from the table item
-                $postId = XpathHelper::getStringValue(
+                // Read the table's export ID from its meta
+                $exportId = XpathHelper::getStringValue(
                     $table,
-                    'wp:post_id'
+                    self::EXPORT_ID_PATH
                 );
-
-                // Find the meta field containing the table export ID
-                $meta = $table->xpath('wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value');
-
-                // Extract the export ID value from the meta field
-                $exportId = (
-                    is_array($meta)
-                    && isset($meta[0])
-                ) ? (string) $meta[0] : '';
 
                 // Check if this table's export ID is in our target list
                 if (\in_array(
                     $exportId,
-                    $uniqueTableIds,
+                    $tableIds,
                     true
                 )) {
-                    $tablesByExportId[$exportId] ??= [];
-
                     // Add this table to the collection for this export ID
                     $tablesByExportId[$exportId][] = $table;
                 }
@@ -605,11 +588,9 @@ class EntryCreator
                     try {
                         $postDate = new DateTime($postDateStr);
 
-                        // Check if this is the most recent date found so far
-                        if (
-                            ! $mostRecentDate instanceof DateTime
-                            || $postDate > $mostRecentDate
-                        ) {
+                        // Check if this is the most recent date found so far; any date is
+                        // later than none
+                        if ($postDate > $mostRecentDate) {
                             // ---
                             // Update the most recent table and date
                             // ---
@@ -634,19 +615,12 @@ class EntryCreator
                 if ($mostRecentTable !== null) {
                     // Add the most recent table to processing queue
                     $tablesToProcess[] = $mostRecentTable;
-
-                    // Mark this export ID as processed to avoid duplicates
-                    $importedExportIds[] = $exportId;
-                } elseif ($matchingTables !== []) { // Check if any matching tables exist for fallback
+                } else {
                     // ---
-                    // If no table had a valid date, use the first one as fallback
+                    // If no table had a valid date, use the first one as fallback; an
+                    // export ID is grouped only once a table is added to it
                     // ---
-
-                    // Add first table as fallback when no valid dates found
                     $tablesToProcess[] = $matchingTables[0];
-
-                    // Mark this export ID as processed to avoid duplicates
-                    $importedExportIds[] = $exportId;
                 }
             }
 
@@ -658,28 +632,30 @@ class EntryCreator
                     'wp:post_id'
                 );
 
-                // Find the meta field containing the table export ID
-                $meta = $table->xpath('wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value');
-
-                // Extract the export ID value from the meta field
-                $exportId = (
-                    is_array($meta)
-                    && isset($meta[0])
-                ) ? (string) $meta[0] : '';
+                // Read the table's export ID from its meta
+                $exportId = XpathHelper::getStringValue(
+                    $table,
+                    self::EXPORT_ID_PATH
+                );
 
                 // Create a new XML parser instance for this specific table to avoid state conflicts
                 $tableXmlParser = new XmlParser;
 
-                // Parse the XML file with the new parser instance
-                $tableXmlFilePath = $xmlParser->getFilePath();
-                if ($tableXmlFilePath === null) {
+                // ---
+                // Skip a table the parser has no file for. Every table shares the
+                // parser's path, so a missing one skips them all either way.
+                // ---
+                // @pest-mutate-ignore: ContinueToBreak
+                if ($xmlParser->getFilePath() === null) {
                     continue;
                 }
 
-                $tableXmlParser->parse($tableXmlFilePath);
-
-                // Point the isolated parser at every export part so its item and
-                // attachment readers span the whole split export (cross-part refs)
+                // ---
+                // Point the isolated parser at every export part. The table's metadata
+                // mapping records the parser's path as the run's XML path, which the
+                // deferred link pass reads later; it needs no parse of its own, since
+                // the table import reads only the items set below.
+                // ---
                 $tableXmlParser->setFilePaths($xmlParser->getFilePaths());
 
                 // Override the parser's items to only include this specific table
@@ -693,26 +669,14 @@ class EntryCreator
                     $assetImporter,
                     $output,
                     new MetadataMapper,
-                    new ContentProcessor
+                    $this->contentProcessor
                 );
 
-                // Increment the count of successfully imported tables
-                $importedCount++;
-
-                // Generate entry ID using SlugGenerator to match TablePressEntryCreator format
-                $baseSlug = "{$site}_tablepress-{$exportId}";
-
-                // Initialize slug counts array for uniqueness tracking
-                $slugCounts = [];
-
-                // Generate unique slug and entry ID for this table
-                [$entrySlug, $entryId] = SlugGenerator::generateSlugAndId(
-                    $baseSlug,
+                // Generate an entry ID in the TablePressEntryCreator format, for the report
+                [, $entryId] = SlugGenerator::generateSlugAndId(
+                    "{$site}_tablepress-{$exportId}",
                     $postId
                 );
-
-                // Store the generated entry ID for later reference
-                $importedEntryIds[] = $entryId;
 
                 // Define the expected entry file path, on the tree this run writes to
                 $entryPath = ContentRoot::collectionEntry(
@@ -721,30 +685,36 @@ class EntryCreator
                     "{$site}_tablepress-{$exportId}"
                 );
 
-                // Define the path for any incorrectly named entry files
+                // ---
+                // Remove any file at the old slug ({site}_tablepress-{exportId}-{postId}).
+                // TablePressEntryCreator::saveEntry() removes it too, but reads the export
+                // ID back out of the entry ID and so misses one with a hyphen (#286).
+                // ---
                 $incorrectPath = ContentRoot::collectionEntry(
                     'tables',
                     $site,
                     "{$site}_tablepress-{$exportId}-{$postId}"
                 );
 
-                // Check if any incorrect slug file exists
                 if (LaravelFileFacade::exists($incorrectPath)) {
-                    // Delete any incorrect slug file
                     LaravelFileFacade::delete($incorrectPath);
                 }
 
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
-                for ($i = 0; $i < $retryCount; $i++) {
-                    // Check if entry file exists with retry mechanism
+                foreach (\range(1, $retryCount) as $attempt) {
+                    // ---
+                    // Check if entry file exists with retry mechanism. A file found
+                    // stays found, and the loop waits only after a miss.
+                    // ---
+                    // @pest-mutate-ignore: BreakToContinue
                     if (LaravelFileFacade::exists($entryPath)) {
                         $fileExists = true;
                         break;
                     }
 
-                    usleep($retryDelay);
+                    Sleep::usleep($retryDelay);
                 }
 
                 if ($fileExists) {
@@ -799,29 +769,12 @@ class EntryCreator
                 }
 
                 // Add delay to ensure filesystem writes are complete
-                usleep(300000); // 300ms delay
+                Sleep::usleep(300000); // 300ms delay
 
                 // Clean up variables to free up memory
                 unset($tableXmlParser);
             }
-
-            // Clean up variables to free up memory
-            unset(
-                $tablesToProcess,
-                $importedExportIds,
-                $importedEntryIds,
-                $tableIds,
-                $uniqueTableIds
-            );
         }
-
-        // Clean up variables to free up memory
-        unset(
-            $xmlParser,
-            $assetImporter,
-            $tables,
-            $creator
-        );
     }
 
     /**
@@ -911,17 +864,7 @@ class EntryCreator
 
         // Warm the Stache cache for the collection to ensure entries are indexed
         $store = StacheFacade::store('entries');
-        if (
-            is_object($store)
-            && method_exists(
-                $store,
-                'clear'
-            )
-            && method_exists(
-                $store,
-                'warm'
-            )
-        ) {
+        if ($store instanceof Store) {
             $store->clear();
             $store->warm();
             $collection = Collection::findByHandle($collectionHandle);
@@ -945,7 +888,7 @@ class EntryCreator
             }
 
             // Add delay to ensure filesystem writes and indexing are complete
-            usleep(1500000); // 1500ms delay
+            Sleep::usleep(1500000); // 1500ms delay
         } else {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
@@ -1111,11 +1054,9 @@ class EntryCreator
         // Report unaddressed XML keys
         if ($this->metadataMapper->getUnaddressedKeys() !== []) {
             $output->writeln('<comment>Unaddressed XML keys found:</comment>');
-            $unaddressedKeys = array_values(
-                array_filter(
-                    $this->metadataMapper->getUnaddressedKeys(),
-                    is_string(...)
-                )
+            $unaddressedKeys = array_filter(
+                $this->metadataMapper->getUnaddressedKeys(),
+                is_string(...)
             );
             foreach (array_unique($unaddressedKeys) as $key) {
                 $output->writeln("- $key");
@@ -1164,7 +1105,7 @@ class EntryCreator
      *
      * @throws Exception If the content type is unsupported
      */
-    private function getCreator(
+    protected function getCreator(
         string $contentType
     ): BaseEntryCreator {
         // Route content type to appropriate entry creator
