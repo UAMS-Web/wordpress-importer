@@ -3715,12 +3715,17 @@ class ImportWordPress extends Command
         $collections = Collection::all();
 
         foreach ($collections as $collection) {
+            // Collection::all() answers only collections, an entry query is always the
+            // Stache's builder and answers a collection of entries, and an entry's path is
+            // never empty, so each check below only types what it reads.
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $collection instanceof StatamicCollection) {
                 continue;
             }
 
             $entryQuery = Entry::query();
 
+            // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
             \assert($entryQuery instanceof EntryQueryBuilder);
 
             $query = $entryQuery->where(
@@ -3728,21 +3733,25 @@ class ImportWordPress extends Command
                 $collection->handle()
             );
 
+            // @pest-mutate-ignore: InstanceOfToTrue, RemoveFunctionCall
             \assert($query instanceof EntryQueryBuilder);
 
             $entries = $query->get();
 
+            // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
             if (! $entries instanceof \Illuminate\Support\Collection) {
                 continue;
             }
 
             foreach ($entries as $entry) {
+                // @pest-mutate-ignore: InstanceOfToTrue, ContinueToBreak
                 if (! $entry instanceof StatamicEntry) {
                     continue;
                 }
 
                 $filePath = $entry->path();
 
+                // @pest-mutate-ignore: BooleanOrToBooleanAnd, EmptyStringToNotEmpty, ContinueToBreak
                 if (! is_string($filePath) || $filePath === '') {
                     continue;
                 }
@@ -3789,7 +3798,9 @@ class ImportWordPress extends Command
         // Get the site handle
         $site = SiteResolver::getCurrentSite();
 
-        // Check if no site was selected
+        // Check if no site was selected. The resolver falls back to the default site, so
+        // it always answers one, and the check only types it.
+        // @pest-mutate-ignore: RemoveMethodCall, RemoveEarlyReturn
         if ($site === null) {
             // Alert the user that no site was selected
             $this->error('No site selected for navigation import');
@@ -3932,7 +3943,7 @@ class ImportWordPress extends Command
         try {
             // Build the designator over the designations recorded in this package
             $designator = new DepartmentOrganizationDesignator(
-                DepartmentOrganizationMap::recorded()
+                $this->departmentOrganizationMap()
             );
 
             // Apply whatever the crosswalk records for this site
@@ -3942,30 +3953,44 @@ class ImportWordPress extends Command
             switch ($designation->outcome) {
                 case DepartmentOrganizationOutcome::Designated:
                     $this->info("Designated site '$site' as a news hub for '{$designation->organizationSlug}'.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::AlreadyDesignated:
                     $this->info("Site '$site' is already designated as a news hub for '{$designation->organizationSlug}'.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DeliberatelyUnmapped:
                     // A recorded rejection is a decision, not a gap - nothing to report
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::NotRecorded:
                     $this->info("No department_organization designation is recorded for site '$site' - its news page will render as a plain listing.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DanglingReference:
                     $this->warn("Site '$site' is designated for organization '{$designation->organizationSlug}', which does not exist - designation not applied.");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::GlobalMissing:
                     $this->warn('uams_multisite_settings Global not found - skipping department_organization designation');
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::SiteUnavailable:
                     $this->warn("uams_multisite_settings Global not available for site '$site' - skipping department_organization designation");
+                    // A continue inside a switch acts as a break.
+                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
 
@@ -3990,6 +4015,19 @@ class ImportWordPress extends Command
                 ]
             );
         }
+    }
+
+    /**
+     * The site to organization crosswalk the designation applies: the one recorded in this
+     * package.
+     *
+     * A method of its own so a test can supply a crosswalk with entries, since the recorded
+     * one ships empty.
+     */
+    protected function departmentOrganizationMap(): DepartmentOrganizationMap
+    {
+        // Read the crosswalk recorded in this package
+        return DepartmentOrganizationMap::recorded();
     }
 
     /**
