@@ -2154,3 +2154,57 @@ describe('the knowledge base home page, more closely', function (): void {
             ->and(kbEntryMessages($warnings))->toBe([]);
     });
 });
+
+describe('what the review asked about', function (): void {
+    it('leaves the related articles of an article it skips as they are', function (): void {
+        $export = kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'one', 'meta' => ['_mkb_related_articles' => \serialize(['902'])]]), kbEntryArticle('902', ['billing'], ['slug' => 'two'])]);
+        kbEntryRun($export);
+        $one = kbEntry('one');
+        $one->set('related_articles', ['curated']);
+        $one->save();
+        $creator = new KbEntryTestCreator;
+        $creator->setEntryOverwriteBehavior('Skip matching files');
+
+        $run = kbEntryRun($export, creator: $creator);
+
+        expect(kbEntry('one')->get('related_articles'))->toBe(['curated'])
+            ->and($creator->read('deferredRelatedArticles'))->toBe([])
+            ->and($run['output'])->not->toContain('Processing deferred related articles...');
+    });
+
+    it('links the related articles of a new article under skip-matching', function (): void {
+        $creator = new KbEntryTestCreator;
+        $creator->setEntryOverwriteBehavior('Skip matching files');
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'one', 'meta' => ['_mkb_related_articles' => \serialize(['902'])]]), kbEntryArticle('902', ['billing'], ['slug' => 'two'])]), creator: $creator);
+
+        expect(kbEntry('one')->get('related_articles'))->toBe([kbEntryId('two')]);
+    });
+
+    it('creates a topic whose term id a later term of another taxonomy shares', function (): void {
+        kbEntryRun(kbEntryExport(
+            [kbEntryTopic('5', 'billing'), ['id' => '5', 'taxonomy' => 'kbtag', 'slug' => 'fast']],
+            [kbEntryArticle('901', ['billing'], ['slug' => 'shared'])]
+        ));
+
+        expect(kbEntrySlugs())->toBe(['billing', 'kb', 'shared'])
+            ->and(kbEntry('shared')->get('parent'))->toBe(kbEntryId('billing'));
+    });
+
+    it('dates the root in a collection whose dated setting is truthy', function (): void {
+        $collection = CollectionFacade::make('knowledge_bases');
+        $collection->sites(['default']);
+        $collection->dated(1);
+        $collection->structureContents(['root' => false]);
+        $collection->save();
+        $blueprint = BlueprintFacade::make('knowledge_base');
+        $blueprint->setNamespace('collections.knowledge_bases');
+        $blueprint->setContents(['fields' => [['handle' => 'title', 'field' => ['type' => 'text']], ['handle' => 'date', 'field' => ['type' => 'date']]]]);
+        $blueprint->save();
+        $warnings = kbEntryWarnings();
+
+        (new KbEntryTestCreator)->call('createKnowledgeBaseEntry', new BufferedOutput, 'default', 'knowledge_bases');
+
+        expect(kbEntryMessages($warnings))->toBe([]);
+    });
+});

@@ -780,8 +780,9 @@ class KbEntryCreator extends BaseEntryCreator
 
         // Get site name using Site facade for descriptive title creation
         // ---
-        // Statamic cannot save an entry in a site it does not know, so the site is
-        // always found and the check only narrows the type
+        // Statamic cannot save an entry in a site it does not know, so an import into
+        // one fails at the save whether the name falls back or not; the check only
+        // narrows the type
         // ---
         $siteInstance = SiteFacade::get($site);
         // @pest-mutate-ignore: InstanceOfToTrue
@@ -969,11 +970,12 @@ class KbEntryCreator extends BaseEntryCreator
         // Only set date if the collection is dated (supports date-based entries)
         // ---
         // Statamic cannot make an entry for a collection that does not exist, so the
-        // collection is always found and its checks only narrow the type
+        // collection is always found and its checks only narrow the type. The cast
+        // keeps a truthy dated value, such as 1 read from YAML, reading as dated.
         // ---
         $entryCollection = $entry->collection();
-        // @pest-mutate-ignore: InstanceOfToTrue
-        if ($entryCollection instanceof EntryCollection && $entryCollection->dated() === true) {
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveBooleanCast
+        if ($entryCollection instanceof EntryCollection && (bool) $entryCollection->dated()) {
             $entry->date(Carbon::instance($currentDate));
         } else {
             // Enhance log context with entry information
@@ -1636,6 +1638,9 @@ class KbEntryCreator extends BaseEntryCreator
             $title
         );
 
+        // Keep the generated ID, to tell an entry this run saved from one it skipped
+        $generatedEntryId = $entryId;
+
         // ---
         // Extract thumbnail ID from postmeta before content processing.
         // ---
@@ -2084,13 +2089,21 @@ class KbEntryCreator extends BaseEntryCreator
         // Record the related articles for the deferred pass under the id just
         // adopted. The pass looks the entry up by this key, so recording it under
         // the generated id lost the related articles of every re-imported article.
+        //
+        // An existing article this run was told to skip keeps the related articles
+        // it has: the pass would otherwise save over a list an editor may have changed.
         // ---
-        $this->getRelatedArticles(
-            $item,
-            $entryId,
-            $entrySlug,
-            ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
-        );
+        $skipped = $this->entryOverwriteBehavior === 'Skip matching files'
+            && $entryId !== $generatedEntryId;
+
+        if (! $skipped) {
+            $this->getRelatedArticles(
+                $item,
+                $entryId,
+                $entrySlug,
+                ($entryDate instanceof DateTime) ? Carbon::instance($entryDate) : null
+            );
+        }
 
         // Store the mapping from WordPress post ID to Statamic entry ID
         $this->articleIdMap[$postId] = $entryId;
