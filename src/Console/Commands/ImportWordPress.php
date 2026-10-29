@@ -2495,34 +2495,31 @@ class ImportWordPress extends Command
             // Get the permalink URL for reference
             $link = (string) $item->link;
 
-            // Check if content is not empty
-            if ($contentEncoded !== '') {
-                // Check if content contains Gutenberg block comments
-                $hasGutenbergBlocks = \preg_match(
-                    '/<!--\s*wp:/',
-                    $contentEncoded
-                ) === 1;
+            // Check if content contains Gutenberg block comments
+            $hasGutenbergBlocks = \preg_match(
+                '/<!--\s*wp:/',
+                $contentEncoded
+            ) === 1;
 
-                // Check if content has freeform content outside of blocks
-                $hasFreeformContentOutsideBlocks = $this->hasFreeformContentOutsideBlocks($contentEncoded);
+            // Check if content has freeform content outside of blocks
+            $hasFreeformContentOutsideBlocks = $this->hasFreeformContentOutsideBlocks($contentEncoded);
 
-                // ---
-                // Only flag as problematic if there's a mix of Gutenberg blocks and freeform
-                // content
-                // ---
+            // ---
+            // Only flag as problematic if there's a mix of Gutenberg blocks and freeform
+            // content
+            // ---
 
-                // Check if both Gutenberg blocks and freeform content are present
-                if (
-                    $hasGutenbergBlocks
-                    && $hasFreeformContentOutsideBlocks
-                ) {
-                    // Add page to Classic blocks list
-                    $classicPages[] = [
-                        'title' => $title,
-                        'id' => $id,
-                        'link' => $link,
-                    ];
-                }
+            // Check if both Gutenberg blocks and freeform content are present
+            if (
+                $hasGutenbergBlocks
+                && $hasFreeformContentOutsideBlocks
+            ) {
+                // Add page to Classic blocks list
+                $classicPages[] = [
+                    'title' => $title,
+                    'id' => $id,
+                    'link' => $link,
+                ];
             }
         }
 
@@ -2618,26 +2615,9 @@ class ImportWordPress extends Command
     private function removeNestedGutenbergBlocks(
         string $content
     ): string {
-        // Find all Gutenberg block comment positions
+        // Find all Gutenberg block comment positions. An unmatched opening tag has
+        // length 0, so cutting it removes nothing.
         $blockPositions = $this->findGutenbergBlockPositions($content);
-
-        // Check if no block positions were found
-        if ($blockPositions === []) {
-            // Return content unchanged if no blocks found
-            return $content;
-        }
-
-        // Filter out blocks with length 0 (unmatched opening tags)
-        $blockPositions = \array_filter(
-            $blockPositions,
-            fn (array $block): bool => $block['length'] > 0
-        );
-
-        // Check if no valid block positions remain after filtering
-        if ($blockPositions === []) {
-            // Return content unchanged if no valid blocks found
-            return $content;
-        }
 
         // ---
         // Sort positions by start position (descending) so we can remove from end to
@@ -2708,16 +2688,11 @@ class ImportWordPress extends Command
 
             // Check if this is a self-closing tag
             // Self-closing blocks end with " /-->" (space-slash-dash-dash-greater)
-            // or contain "/>" before the closing "-->" (for compatibility)
             if (
                 \preg_match(
                     '/\/\s*-->/',
                     $fullMatch
                 ) === 1
-                || str_contains(
-                    $fullMatch,
-                    '/>'
-                )
             ) {
                 // Self-closing block - add to positions immediately
                 $blockPositions[] = [
@@ -2883,8 +2858,7 @@ class ImportWordPress extends Command
 
             // Check for Details blocks: wp:details
             if (
-                $contentEncoded !== ''
-                && \preg_match(
+                \preg_match(
                     '/<!--\s*wp:details\b/',
                     $contentEncoded
                 ) === 1
@@ -2966,8 +2940,7 @@ class ImportWordPress extends Command
 
             // Check for Freeform blocks: wp:freeform
             if (
-                $contentEncoded !== ''
-                && \preg_match(
+                \preg_match(
                     '/<!--\s*wp:freeform\b/',
                     $contentEncoded
                 ) === 1
@@ -3078,9 +3051,6 @@ class ImportWordPress extends Command
                 ENT_QUOTES | ENT_HTML5,
                 'UTF-8'
             );
-
-            // Trim whitespace from the content
-            $contentEncoded = \trim($contentEncoded);
 
             // Check for TablePress shortcodes or blocks
             $hasShortcode = \preg_match(
