@@ -3468,9 +3468,10 @@ class ImportWordPress extends Command
             // ---
 
             // Define options for user to choose from
-            $options = ['
-                Restart with increased memory',
-                'Continue with current memory limit', 'Exit',
+            $options = [
+                'Restart with increased memory',
+                'Continue with current memory limit',
+                'Exit',
             ];
 
             // Prompt user to select how to proceed
