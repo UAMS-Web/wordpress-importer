@@ -3574,19 +3574,16 @@ class ImportWordPress extends Command
             -1
         ));
 
-        // Extract numeric value from beginning of string
-        $value = (int) \substr(
-            $memoryLimit,
-            0,
-            -1
-        );
+        // Extract numeric value from beginning of string. A cast reads only the
+        // leading digits, so the unit needs no stripping first.
+        $value = (int) $memoryLimit;
 
         // Convert to bytes based on unit
         return match ($unit) {
             'k' => $value * 1024,
             'm' => $value * 1024 * 1024,
             'g' => $value * 1024 * 1024 * 1024,
-            default => (int) $memoryLimit,
+            default => $value,
         };
     }
 
@@ -4107,7 +4104,9 @@ class ImportWordPress extends Command
 
         // Loop through all files and directories recursively
         foreach ($iterator as $file) {
-            // Check if current item is a file (not a directory)
+            // Check if current item is a file (not a directory). The iterator yields
+            // only SplFileInfo, so the instanceof check only types it.
+            // @pest-mutate-ignore: InstanceOfToTrue
             if ($file instanceof \SplFileInfo && $file->isFile()) {
                 // Add file size to total size counter
                 $totalSize += $file->getSize();
