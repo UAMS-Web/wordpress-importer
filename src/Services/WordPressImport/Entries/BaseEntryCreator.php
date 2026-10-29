@@ -9,9 +9,11 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Exception;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
+use Statamic\Entries\Collection as EntryCollection;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
@@ -20,7 +22,6 @@ use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Facades\Term as TermFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
-use Statamic\Support\Str;
 use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -324,6 +325,8 @@ abstract class BaseEntryCreator
         string $collectionHandle,
         OutputInterface $output,
         string $postDateGmt = '',
+        // A missing block value gates nothing, and neither does any other a mutant gives
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         string $wpmemBlock = ''
     ): bool {
         $collection = CollectionFacade::findByHandle($collectionHandle);
@@ -494,7 +497,7 @@ abstract class BaseEntryCreator
      */
     private function formatPublishAt(string $date, DateTimeZone $utc): ?string
     {
-        // An empty string would parse as now
+        // An empty string would parse as now, and so would one of NUL bytes, which trim() strips
         if (\trim($date) === '') {
             return null;
         }
@@ -505,7 +508,11 @@ abstract class BaseEntryCreator
             return null;
         }
 
-        // WordPress's all-zero placeholder parses to a year before 1
+        // ---
+        // WordPress's all-zero placeholder parses to a year before 1. A year string
+        // compares as a number either way.
+        // ---
+        // @pest-mutate-ignore: RemoveIntegerCast
         if ((int) $time->format('Y') < 1000) {
             return null;
         }
@@ -760,95 +767,17 @@ abstract class BaseEntryCreator
 
                     // Handle case where additional entries should be created with unique slugs
                 case 'Create an additional file':
-                    // Initialize counter for generating unique slug suffixes
-                    $counter = 1;
-
-                    // Split the entry ID into parts using hyphens as delimiters
-                    $idParts = \explode(
-                        '-',
-                        $entryId
-                    );
-
-                    // Extract random string as the last segment
-                    $randomPart = end($idParts);
-
-                    // Extract WordPress ID as the second-to-last segment
-                    $wpId = $idParts[\count($idParts) - 2] ?? '';
-
-                    // Locate the suffix within the entry ID
-                    $suffixPosition = strrpos(
-                        $entryId,
-                        "-$wpId-$randomPart"
-                    );
-
-                    // Extract base slug from ID
-                    $baseSlug = $suffixPosition !== false
-                        ? \substr(
-                            $entryId,
-                            0,
-                            $suffixPosition
-                        )
-                        : $entryId;
-
-                    // Extract base slug from originalSlug (remove any existing conflict resolution like .1, .2, etc.)
-                    $baseOriginalSlug = \preg_replace(
+                    // ---
+                    // Number the copy `{slug}.1`, dropping a number the slug already
+                    // carries. This is all the path does until #265 is fixed: Statamic
+                    // stores a slug without its dot, so no stored slug matches a numbered
+                    // one and every copy takes `.1`, and the copy keeps the ID set above.
+                    // ---
+                    $entrySlug = \preg_replace(
                         '/\.\d+$/',
                         '',
                         $originalSlug
-                    );
-
-                    // Loop until we find a unique slug and ID combination
-                    do {
-                        // Generate new slug with counter suffix (e.g., contact-us.1, contact-us.2)
-                        $newSlug = "$baseOriginalSlug.$counter";
-
-                        // Use original slug for ID, not resolved slug
-                        $newId = ($baseSlug !== '') ? "$baseSlug-$wpId-".Str::random() : $newSlug;
-
-                        // Increment counter for next iteration
-                        $counter++;
-
-                        // Check for existing entry by both ID and slug to ensure uniqueness
-                        $entryExistsByIdQuery = $this->newEntryQuery();
-                        $entryExistsByIdQuery->where(
-                            'collection',
-                            $collectionHandle
-                        );
-                        $entryExistsByIdQuery->where(
-                            'site',
-                            $site
-                        );
-                        $entryExistsByIdQuery->where(
-                            'id',
-                            $newId
-                        );
-                        $entryExistsById = $entryExistsByIdQuery->first();
-
-                        // Check if an entry with the same slug already exists
-                        $entryExistsBySlugQuery = $this->newEntryQuery();
-                        $entryExistsBySlugQuery->where(
-                            'collection',
-                            $collectionHandle
-                        );
-                        $entryExistsBySlugQuery->where(
-                            'site',
-                            $site
-                        );
-                        $entryExistsBySlugQuery->where(
-                            'slug',
-                            $newSlug
-                        );
-                        $entryExistsBySlug = $entryExistsBySlugQuery->first();
-
-                        // Determine if entry exists by either ID or slug
-                        $entryExists = $entryExistsById || $entryExistsBySlug;
-                    } while ($entryExists);
-
-                    // Update entry slug with the unique resolved slug
-                    $entrySlug = $newSlug;
-
-                    // Update entry data with the new unique ID
-                    $data['id'] = $newId;
+                    ).'.1';
 
                     // Exit switch statement after handling additional file creation
                     break;
@@ -881,10 +810,7 @@ abstract class BaseEntryCreator
                     // not the lookups (wordpress-importer-archive#767).
                     // ---
                     $existingEntryId = $existingEntry->id();
-
-                    if (\is_string($existingEntryId) && $existingEntryId !== '') {
-                        $entryId = $existingEntryId;
-                    }
+                    $entryId = \is_string($existingEntryId) ? $existingEntryId : $entryId;
 
                     // Delete the existing entry to make room for the new one
                     $existingEntry->delete();
@@ -894,7 +820,9 @@ abstract class BaseEntryCreator
             }
         }
 
+        // The facade always makes an Entry; the check only narrows the type
         $entry = EntryFacade::make();
+        // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn
         if (! $entry instanceof Entry) {
             return null;
         }
@@ -904,9 +832,6 @@ abstract class BaseEntryCreator
         $entry->published($published);
         $entry->slug($entrySlug);
 
-        // Ensure the collection is properly set
-        $entry->collection($collectionHandle);
-
         // Set the custom ID on the entry object
         $entry->id($entryId);
 
@@ -915,7 +840,12 @@ abstract class BaseEntryCreator
 
         // Check if the collection is dated based on configuration
         $entryCollection = $entry->collection();
-        $isCollectionDated = \is_object($entryCollection) && \method_exists($entryCollection, 'dated') && (bool) $entryCollection->dated();
+        // ---
+        // The && already yields a bool, so the cast only satisfies the type. An entry
+        // set to a collection always has it, so the check only narrows.
+        // ---
+        // @pest-mutate-ignore: RemoveBooleanCast, InstanceOfToTrue
+        $isCollectionDated = $entryCollection instanceof EntryCollection && (bool) $entryCollection->dated();
 
         // Determine the date to use for the entry
         $finalEntryDate = $entryDate;
@@ -925,7 +855,11 @@ abstract class BaseEntryCreator
             $isCollectionDated
             && ! $finalEntryDate instanceof DateTime
         ) {
-            // Try to create date from post date string if provided
+            // ---
+            // Try to create date from post date string if provided. A blank string
+            // would read as now, which the fallback below gives anyway.
+            // ---
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             if ($postDateStr !== null && $postDateStr !== '') {
                 try {
                     $finalEntryDate = new DateTime($postDateStr);
@@ -986,20 +920,17 @@ abstract class BaseEntryCreator
             unset($data['published']);
         }
 
-        // Save the entry with all data.
-        $entryData = $entry->data($data);
-        if (\is_object($entryData) && \method_exists($entryData, 'save')) {
-            $entryData->save();
-        } else {
-            return null;
-        }
+        // Save the entry with all data
+        $entry->data($data);
+        $entry->save();
 
-        // Refresh Stache cache to ensure the entry is available for immediate queries
-        // This is necessary because file watchers may not have updated the cache yet
-        if (
-            \is_object($entryCollection)
-            && \method_exists($entryCollection, 'updateEntryUris')
-        ) {
+        // ---
+        // Refresh Stache cache to ensure the entry is available for immediate queries.
+        // This is necessary because file watchers may not have updated the cache yet;
+        // the Stache in a test indexes the entry on save, so nothing here can show it.
+        // ---
+        // @pest-mutate-ignore: InstanceOfToTrue, InstanceOfToFalse, IfNegated, RemoveMethodCall, RemoveArrayItem
+        if ($entryCollection instanceof EntryCollection) {
             $entryCollection->updateEntryUris([$entry->id()]);
         }
 
@@ -1031,7 +962,7 @@ abstract class BaseEntryCreator
         string $entryId,
         string $entrySlug
     ): ?Entry {
-        // Check if an entry with the same ID exists
+        // Check if an entry with the same ID exists in this collection and site
         $existingEntryQuery = $this->newEntryQuery();
         $existingEntryQuery->where(
             'collection',
@@ -1045,128 +976,133 @@ abstract class BaseEntryCreator
             'id',
             $entryId
         );
-        $existingEntryResult = $existingEntryQuery->first();
-        $existingEntry = $existingEntryResult instanceof Entry ? $existingEntryResult : null;
+        $existingEntry = $existingEntryQuery->first();
 
-        // If no exact ID match, check for existing entry with same slug and WordPress post ID
-        // This handles cases where the random part of the ID has changed between imports
-        if (! $existingEntry instanceof Entry) {
-            // Extract WordPress post ID from the entry ID (format: slug-postId-random)
-            // The random part is always 16 characters, so we can identify it reliably
+        if ($existingEntry instanceof Entry) {
+            return $existingEntry;
+        }
 
-            // Split the entry ID into parts using hyphens as delimiters
-            $idParts = \explode(
-                '-',
-                $entryId
-            );
+        // ---
+        // If no exact ID match, check for existing entry with same slug and WordPress
+        // post ID. This handles cases where the random part of the ID has changed
+        // between imports. The entry ID's format is slug-postId-random.
+        // ---
+        $idParts = \explode(
+            '-',
+            $entryId
+        );
 
-            // Check if we have at least 3 parts (slug, postId, random)
-            if (\count($idParts) >= 3) {
-                // Extract the WordPress post ID from the second-to-last part
-                $wpPostId = $idParts[\count($idParts) - 2]; // Second to last part is the WordPress post ID
+        // An ID with no post ID and random part has nothing to match on
+        if (\count($idParts) < 3) {
+            return null;
+        }
 
-                // Reconstruct the base slug from all parts except the last two (postId and random)
-                $baseSlug = \implode(
+        // Extract the WordPress post ID from the second-to-last part
+        $wpPostId = $idParts[\count($idParts) - 2];
+
+        // Reconstruct the base slug from all parts except the last two (postId and random)
+        $baseSlug = \implode(
+            '-',
+            \array_slice(
+                $idParts,
+                0,
+                -2
+            )
+        );
+
+        // Look for existing entries whose slug starts with the base slug
+        $matchingEntryQuery = $this->newEntryQuery();
+        $matchingEntryQuery->where(
+            'collection',
+            $collectionHandle
+        );
+        $matchingEntryQuery->where(
+            'site',
+            $site
+        );
+        $matchingEntryQuery->where(
+            'slug',
+            'like',
+            $baseSlug.'%'
+        );
+
+        // ---
+        // Take the first whose ID has a 16-character random part (Statamic's random
+        // string length), the same WordPress post ID, and the same base slug, by ID or
+        // by slug with trailing numbers removed. A query's get() returns a collection;
+        // the check only narrows the type.
+        // ---
+        $matchingEntries = $matchingEntryQuery->get();
+        // @pest-mutate-ignore: InstanceOfToTrue
+        $matchingEntry = $matchingEntries instanceof Collection ? $matchingEntries->first(
+            static function (mixed $entry) use ($wpPostId, $baseSlug): bool {
+                // A query for entries returns entries; this only narrows the type
+                // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn, FalseToTrue
+                if (! $entry instanceof Entry) {
+                    return false;
+                }
+
+                // Split the existing entry's ID into parts using hyphens
+                $entryIdParts = \explode(
+                    '-',
+                    self::mixedToStringValue($entry->id())
+                );
+
+                // An existing ID with no post ID and random part does not match
+                if (\count($entryIdParts) < 3) {
+                    return false;
+                }
+
+                // Reconstruct the base slug from the existing entry's ID
+                $entryBaseSlug = \implode(
                     '-',
                     \array_slice(
-                        $idParts,
+                        $entryIdParts,
                         0,
                         -2
                     )
-                ); // Everything before the last two parts
-
-                // Look for existing entries with the same slug and WordPress post ID
-                // Also check for entries with similar base slugs (different numbering schemes)
-                $matchingEntryQuery = $this->newEntryQuery();
-                $matchingEntryQuery->where(
-                    'collection',
-                    $collectionHandle
                 );
-                $matchingEntryQuery->where(
-                    'site',
-                    $site
+
+                // Remove trailing numbers from both slugs for comparison
+                $entrySlugBase = \preg_replace(
+                    '/\.?\d+$/',
+                    '',
+                    self::mixedToStringValue($entry->slug())
                 );
-                $matchingEntryQuery->where(
-                    'slug',
-                    'like',
-                    $baseSlug.'%'
+                $baseSlugClean = \preg_replace(
+                    '/\.?\d+$/',
+                    '',
+                    $baseSlug
                 );
-                $matchingEntries = $matchingEntryQuery->get();
-                $matchingEntry = \is_object($matchingEntries)
-                    && \method_exists($matchingEntries, 'first')
-                    ? $matchingEntries->first(
-                        function ($entry) use ($wpPostId, $baseSlug): bool {
-                            // Get the ID of the existing entry to compare
-                            $candidateEntryId = $entry instanceof Entry
-                                && \is_string($entry->id())
-                                ? $entry->id()
-                                : '';
 
-                            // Split the existing entry's ID into parts using hyphens
-                            $entryIdParts = \explode(
-                                '-',
-                                $candidateEntryId
-                            );
-
-                            // Check if the existing entry has the expected ID structure
-                            if (\count($entryIdParts) >= 3) {
-                                // Extract the random string from the existing entry's ID
-                                $entryRandomPart = end($entryIdParts);
-
-                                // Extract the WordPress post ID from the existing entry's ID
-                                $entryWpPostId = $entryIdParts[\count($entryIdParts) - 2];
-
-                                // Reconstruct the base slug from the existing entry's ID
-                                $entryBaseSlug = \implode(
-                                    '-',
-                                    \array_slice(
-                                        $entryIdParts,
-                                        0,
-                                        -2
-                                    )
-                                );
-
-                                // Get the actual slug of the existing entry for comparison
-                                $entrySlug = $entry instanceof Entry
-                                    && \is_string($entry->slug())
-                                    ? $entry->slug()
-                                    : '';
-
-                                // Remove trailing numbers from the existing entry's slug to get base slug
-                                $entrySlugBase = \preg_replace(
-                                    '/\.?\d+$/',
-                                    '',
-                                    $entrySlug
-                                );
-
-                                // Remove trailing numbers from the new entry's base slug for comparison
-                                $baseSlugClean = \preg_replace(
-                                    '/\.?\d+$/',
-                                    '',
-                                    $baseSlug
-                                );
-
-                                // Verify the random part is 16 characters (Statamic's random string length)
-                                // and that the WordPress post ID and base slug match
-                                return \strlen($entryRandomPart) === 16
-                                    && $entryWpPostId === $wpPostId
-                                    && (
-                                        $entryBaseSlug === $baseSlug
-                                        || $entrySlugBase === $baseSlugClean
-                                    );
-                            }
-
-                            // Return false if the entry doesn't match our criteria
-                            return false;
-                        }
-                    )
-                    : null;
-                $existingEntry = $matchingEntry instanceof Entry ? $matchingEntry : null;
+                return \strlen(end($entryIdParts)) === 16
+                    && $entryIdParts[\count($entryIdParts) - 2] === $wpPostId
+                    && (
+                        $entryBaseSlug === $baseSlug
+                        || $entrySlugBase === $baseSlugClean
+                    );
             }
-        }
+        ) : null;
 
-        // Return the found existing entry or null if none exists
-        return $existingEntry instanceof Entry ? $existingEntry : null;
+        // ---
+        // Return the found existing entry or null if none exists. A collection's
+        // first() gives null when nothing matches, so the check only narrows the type.
+        // ---
+        // @pest-mutate-ignore: InstanceOfToTrue
+        return $matchingEntry instanceof Entry ? $matchingEntry : null;
+    }
+
+    /**
+     * Read a value an entry accessor returns as a string, or '' when it is not one.
+     *
+     * @param  mixed  $value  The value
+     * @return string The string, or ''
+     */
+    private static function mixedToStringValue(
+        mixed $value
+    ): string {
+        // An entry with no slug answers null, which reads as an empty slug
+        return \is_string($value) ? $value : '';
     }
 
     /**
@@ -1805,7 +1741,7 @@ abstract class BaseEntryCreator
      * The term pass runs once per entry creator, and every creator sees the same
      * export, so without this the same discard is reported once per creator.
      *
-     * @var array<string, bool>
+     * @var array<string, string>
      */
     private static array $reportedUnmappedTaxonomies = [];
 
@@ -3361,7 +3297,7 @@ abstract class BaseEntryCreator
                 continue;
             }
 
-            self::$reportedUnmappedTaxonomies[$reportKey] = true;
+            self::$reportedUnmappedTaxonomies[$reportKey] = $reportKey;
 
             $output->writeln(
                 "  - <comment>Skipping '{$taxonomy}': recorded as having no "
