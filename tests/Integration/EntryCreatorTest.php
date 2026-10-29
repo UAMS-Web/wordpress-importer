@@ -1532,3 +1532,35 @@ describe('the old slug', function (): void {
         expect(File::exists($old))->toBeFalse();
     });
 });
+
+describe('what the review asked about', function (): void {
+    beforeEach(function (): void {
+        entryCreatorCollection('tables', ['table']);
+    });
+
+    it('leaves the run pointed at the export after importing tables', function (): void {
+        $export = entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => '9']]);
+        $creator = entryCreatorRig()->creator;
+        $creator->setXmlParser(entryCreatorParser($export));
+        $creator->setAssetImporter(new AssetImporter);
+        entryCreatorTableIds(['9']);
+
+        $creator->importTables('default', new BufferedOutput, 'page');
+
+        expect(ProcessingContext::getXmlPath())->toBe($export);
+    });
+
+    it('removes the old-slug file of a table whose export id has a hyphen', function (): void {
+        $creator = entryCreatorRig()->creator;
+        $creator->setXmlParser(entryCreatorParser(entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => 'my-table']])));
+        $creator->setAssetImporter(new AssetImporter);
+        entryCreatorTableIds(['my-table']);
+        $old = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table-801');
+        File::ensureDirectoryExists(\dirname($old));
+        File::put($old, "---\ntitle: Old\n---\n");
+
+        $creator->importTables('default', new BufferedOutput, 'page');
+
+        expect(File::exists($old))->toBeFalse();
+    });
+});

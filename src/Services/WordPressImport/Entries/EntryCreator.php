@@ -651,9 +651,14 @@ class EntryCreator
                 }
 
                 // ---
-                // Give the isolated parser this table alone. The table import reads
-                // only these items, so the parser needs no file of its own.
+                // Point the isolated parser at every export part. The table's metadata
+                // mapping records the parser's path as the run's XML path, which the
+                // deferred link pass reads later; it needs no parse of its own, since
+                // the table import reads only the items set below.
                 // ---
+                $tableXmlParser->setFilePaths($xmlParser->getFilePaths());
+
+                // Override the parser's items to only include this specific table
                 $tableXmlParser->setItems([$table]);
 
                 // Create the table entry using the isolated parser instance
@@ -681,10 +686,19 @@ class EntryCreator
                 );
 
                 // ---
-                // A file at the old slug ({site}_tablepress-{exportId}-{postId}) needs no
-                // removal here: TablePressEntryCreator::saveEntry() removes it for every
-                // table it saves, and every table handed to it is saved.
+                // Remove any file at the old slug ({site}_tablepress-{exportId}-{postId}).
+                // TablePressEntryCreator::saveEntry() removes it too, but reads the export
+                // ID back out of the entry ID and so misses one with a hyphen (#286).
                 // ---
+                $incorrectPath = ContentRoot::collectionEntry(
+                    'tables',
+                    $site,
+                    "{$site}_tablepress-{$exportId}-{$postId}"
+                );
+
+                if (LaravelFileFacade::exists($incorrectPath)) {
+                    LaravelFileFacade::delete($incorrectPath);
+                }
 
                 $retryCount = 5;
                 $retryDelay = 300000; // 300ms
