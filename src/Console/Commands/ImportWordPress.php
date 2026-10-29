@@ -3210,7 +3210,9 @@ class ImportWordPress extends Command
             $contentTypes
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
     }
 
@@ -3254,7 +3256,8 @@ class ImportWordPress extends Command
                 }
             }
         } finally {
-            // Close the XMLReader to free resources
+            // Close the XMLReader to free resources. Closing changes no result.
+            // @pest-mutate-ignore: RemoveMethodCall
             $reader->close();
 
             // Clean up variables to free up memory
@@ -3311,7 +3314,10 @@ class ImportWordPress extends Command
         // largest single part rather than the combined part-set size.
         // ---
 
-        // Initialize the largest item size seen across all parts
+        // Initialize the largest item size seen across all parts. Every part is measured,
+        // and a measurement is never negative, so a start above zero shows only below a
+        // byte, which reads as 0MB either way.
+        // @pest-mutate-ignore: IncrementInteger
         $largestItemSize = 0;
 
         // Initialize the total count of large items across all parts
@@ -3365,14 +3371,14 @@ class ImportWordPress extends Command
 
         // Check if we need more memory
         if ($currentMemoryBytes < $recommendedMemoryBytes) {
-            // Check if any large items were found
-            if ($largeItemsCount > 0) {
-                // Warn user about number of large items found
-                $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
+            // ---
+            // Warn user about the large items found. An item needing more than the limit
+            // is larger than the limit's threshold, so at least one was counted.
+            // ---
+            $this->warn("Found {$largeItemsCount} content items larger than {$dynamicThresholdMB}MB.");
 
-                // Warn user about potential memory issues
-                $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
-            }
+            // Warn user about potential memory issues
+            $this->warn('These items may cause memory exhaustion during XML parsing and processing.');
 
             // Warn user about large content items and recommended memory
             $this->warn("Large content items detected. Recommended memory: {$recommendedMemoryMB}MB");
@@ -3425,7 +3431,7 @@ class ImportWordPress extends Command
                 $this->info('Exiting. Please restart the command with increased memory limit when ready.');
 
                 // Exit with error status code
-                exit(1);
+                $this->terminate(1);
             }
         } else { //  Otherwise
             // Inform user that memory limit appears sufficient
@@ -3501,17 +3507,14 @@ class ImportWordPress extends Command
         // Initialize counter for items exceeding threshold
         $largeItemsCount = 0;
 
-        // Initialize flag to track if we're currently inside an item element
-        $inItem = false;
-
         // Initialize flag to track if we're currently inside content:encoded element
         $inContentEncoded = false;
 
-        // Initialize buffer to accumulate content for size calculation
+        // Initialize buffer to accumulate content for size calculation. Each item resets
+        // it before it is measured, so content outside an item is never counted, and nor
+        // is the start.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $contentBuffer = '';
-
-        // Initialize counter for processed items
-        $processedItems = 0;
 
         // Loop through XML nodes
         while ($reader->read()) {
@@ -3521,23 +3524,13 @@ class ImportWordPress extends Command
             // Get current node name
             $nodeName = $reader->name;
 
-            // ---
-            // Track when we're inside an item
-            // ---
-
             // Check if current node is an element
             if ($nodeType === \XMLReader::ELEMENT) {
                 // Check if this is the start of an item element
                 if ($nodeName === 'item') {
-                    // Set flag to indicate we're inside an item
-                    $inItem = true;
-
                     // Reset content buffer for new item
                     $contentBuffer = '';
-                } elseif (
-                    $inItem
-                    && $nodeName === 'content:encoded'
-                ) { // Check if this is the start of content:encoded element
+                } elseif ($nodeName === 'content:encoded') { // Check if this is the start of content:encoded element
                     // Set flag to indicate we're inside content:encoded
                     $inContentEncoded = true;
                 }
@@ -3547,41 +3540,16 @@ class ImportWordPress extends Command
                     // Finished processing an item, check its size
                     $itemSize = \strlen($contentBuffer);
 
-                    // Check if this item is larger than the current largest
-                    if ($itemSize > $largestItemSize) {
-                        // Update largest item size
-                        $largestItemSize = $itemSize;
-                    }
+                    // Keep the largest item size seen
+                    $largestItemSize = max(
+                        $largestItemSize,
+                        $itemSize
+                    );
 
                     // Check if this item exceeds the threshold
                     if ($itemSize > $thresholdBytes) {
                         // Increment counter for large items
                         $largeItemsCount++;
-                    }
-
-                    // Reset flag to indicate we're no longer inside an item
-                    $inItem = false;
-
-                    // Clear content buffer
-                    $contentBuffer = '';
-
-                    // Increment processed items counter
-                    $processedItems++;
-
-                    // ---
-                    // Clear buffer periodically to manage memory
-                    // ---
-
-                    // Check if we've processed a multiple of 100 items
-                    if ($processedItems % 100 === 0) {
-                        // Clean up variables to free up memory
-                        unset($contentBuffer);
-
-                        // Reinitialize buffer
-                        $contentBuffer = '';
-
-                        // Force garbage collection to reclaim memory
-                        gc_collect_cycles();
                     }
                 } elseif ($nodeName === 'content:encoded') { // Check if this is the end of content:encoded element
                     // Reset flag to indicate we're no longer inside content:encoded
@@ -3603,7 +3571,8 @@ class ImportWordPress extends Command
             }
         }
 
-        // Close the XMLReader to free resources
+        // Close the XMLReader to free resources. Closing changes no result.
+        // @pest-mutate-ignore: RemoveMethodCall
         $reader->close();
 
         // Clean up variables to free up memory
@@ -3612,7 +3581,9 @@ class ImportWordPress extends Command
             $reader
         );
 
-        // Force garbage collection to reclaim memory from circular references
+        // Force garbage collection to reclaim memory from circular references. Collecting
+        // changes no result.
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
 
         // Return analysis results
@@ -3640,7 +3611,21 @@ class ImportWordPress extends Command
         $this->info('Exiting. Please run the command above with the increased memory limit.');
 
         // Exit with success status code
-        exit(0);
+        $this->terminate(0);
+    }
+
+    /**
+     * End the process with the given status, as the memory check's choices do.
+     *
+     * A method of its own so a test can stand in for ending the process.
+     *
+     * @param  int  $status  The exit status
+     */
+    protected function terminate(
+        int $status
+    ): never {
+        // End the process with the status
+        exit($status);
     }
 
     /**
