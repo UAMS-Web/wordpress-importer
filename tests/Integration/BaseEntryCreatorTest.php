@@ -974,3 +974,18 @@ describe('the entry half, more closely', function (): void {
         'an existing id of two parts' => ['x-AAAAAAAAAAAAAAAA', 'q', 'q-x-BBBBBBBBBBBBBBBB', null],
     ]);
 });
+
+describe('the unmapped report, more closely', function (): void {
+    it('keeps a site and taxonomy apart however their names run together', function (): void {
+        $creator = baseEntryProbe();
+        $output = new BufferedOutput;
+
+        $creator->call('reportUnmappedTaxonomies', ['bc' => 1], 'a', $output);
+        $creator->call('reportUnmappedTaxonomies', ['c' => 2], 'ab', $output);
+
+        expect($output->fetch())->toBe(
+            "  - Skipping 'bc': recorded as having no Statamic destination. 1 term(s) not imported.".PHP_EOL
+            ."  - Skipping 'c': recorded as having no Statamic destination. 2 term(s) not imported.".PHP_EOL
+        );
+    });
+});

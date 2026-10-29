@@ -497,8 +497,8 @@ abstract class BaseEntryCreator
      */
     private function formatPublishAt(string $date, DateTimeZone $utc): ?string
     {
-        // An empty string would parse as now
-        if (\trim($date) === '') {
+        // An empty string would parse as now; whitespace alone fails to parse below
+        if ($date === '') {
             return null;
         }
 
@@ -840,8 +840,11 @@ abstract class BaseEntryCreator
 
         // Check if the collection is dated based on configuration
         $entryCollection = $entry->collection();
-        // The cast keeps a truthy dated value, such as 1 read from YAML, reading as dated
-        // @pest-mutate-ignore: RemoveBooleanCast
+        // ---
+        // The cast keeps a truthy dated value, such as 1 read from YAML, reading as
+        // dated. An entry set to a collection always has it, so the check only narrows.
+        // ---
+        // @pest-mutate-ignore: RemoveBooleanCast, InstanceOfToTrue
         $isCollectionDated = $entryCollection instanceof EntryCollection && (bool) $entryCollection->dated();
 
         // Determine the date to use for the entry
@@ -926,7 +929,7 @@ abstract class BaseEntryCreator
         // This is necessary because file watchers may not have updated the cache yet;
         // the Stache in a test indexes the entry on save, so nothing here can show it.
         // ---
-        // @pest-mutate-ignore: InstanceOfToTrue, RemoveMethodCall, RemoveArrayItem
+        // @pest-mutate-ignore: InstanceOfToTrue, InstanceOfToFalse, IfNegated, RemoveMethodCall, RemoveArrayItem
         if ($entryCollection instanceof EntryCollection) {
             $entryCollection->updateEntryUris([$entry->id()]);
         }
@@ -1085,7 +1088,11 @@ abstract class BaseEntryCreator
             }
         );
 
-        // Return the found existing entry or null if none exists
+        // ---
+        // Return the found existing entry or null if none exists. A collection's
+        // first() gives null when nothing matches, so the check only narrows the type.
+        // ---
+        // @pest-mutate-ignore: InstanceOfToTrue
         return $matchingEntry instanceof Entry ? $matchingEntry : null;
     }
 
@@ -1098,6 +1105,8 @@ abstract class BaseEntryCreator
     private static function mixedToStringValue(
         mixed $value
     ): string {
+        // A saved entry's id and slug are strings; the fallback only narrows the type
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($value) ? $value : '';
     }
 
@@ -3286,6 +3295,8 @@ abstract class BaseEntryCreator
         OutputInterface $output
     ): void {
         foreach ($unmappedTermCounts as $taxonomy => $discardedTermCount) {
+            // The key is unique to its site and taxonomy whichever way round it is joined
+            // @pest-mutate-ignore: ConcatSwitchSides
             $reportKey = $site.'::'.$taxonomy;
 
             // Every creator sees the same export; report each discard once.
