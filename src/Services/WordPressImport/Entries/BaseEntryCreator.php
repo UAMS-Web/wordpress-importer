@@ -1238,18 +1238,6 @@ abstract class BaseEntryCreator
 
             // Check if term already exists (from the preloaded map, not a per-term query)
             $existingTerm = $existingTerms[$cacheKey] ?? null;
-            if ($existingTerm === null) {
-                foreach ($existingTerms as $preloadedTerm) {
-                    $preloadedTermId = self::extractObjectId($preloadedTerm);
-                    if ($preloadedTermId !== $cacheKey) {
-                        continue;
-                    }
-
-                    $existingTerm = $preloadedTerm;
-
-                    break;
-                }
-            }
 
             // The preload yields localized terms (Statamic 6's term query returns
             // LocalizedTerm); work on the term each one localizes (#188)
@@ -1412,8 +1400,10 @@ abstract class BaseEntryCreator
                 $existingTerm
             );
 
-            // Force garbage collection every 20 terms to prevent memory buildup
+            // Force garbage collection every 20 terms to prevent memory buildup.
+            // Collecting cycles frees memory and changes no result.
             if (((int) $index + 1) % 20 === 0) {
+                // @pest-mutate-ignore: RemoveFunctionCall
                 gc_collect_cycles();
             }
         }
@@ -1536,7 +1526,9 @@ abstract class BaseEntryCreator
 
             // Check if we've processed a multiple of 10 terms
             if (((int) $index + 1) % 10 === 0) {
-                // Force garbage collection to reclaim memory from circular references
+                // Force garbage collection to reclaim memory from circular references,
+                // which changes no result
+                // @pest-mutate-ignore: RemoveFunctionCall
                 gc_collect_cycles();
             }
         }
@@ -1614,8 +1606,10 @@ abstract class BaseEntryCreator
                 $termData
             );
 
-            // Force garbage collection every 10 terms to prevent memory buildup
+            // Force garbage collection every 10 terms to prevent memory buildup.
+            // Collecting cycles frees memory and changes no result.
             if (((int) $index + 1) % 10 === 0) {
+                // @pest-mutate-ignore: RemoveFunctionCall
                 gc_collect_cycles();
             }
         }
@@ -2215,7 +2209,10 @@ abstract class BaseEntryCreator
 
             // Loop through all terms in the current taxonomy group
             foreach ($taxonomyTerms as $term) {
+                // Every term was grouped through addTermToTaxonomyGroup(), which takes
+                // only elements, so the check below only narrows the type for phpstan
                 if (! $term instanceof SimpleXMLElement) {
+                    // @pest-mutate-ignore: ContinueToBreak
                     continue;
                 }
 
@@ -2517,9 +2514,11 @@ abstract class BaseEntryCreator
         // Mark this term as visited to prevent circular references
         $visited[] = $termSlug;
 
-        // Get the parent slug from the term data
+        // Get the parent slug from the term data. A missing parent reads as an
+        // empty one, and either ends at the base slug below.
         $parentSlug = isset($term['parent']) && \is_string($term['parent'])
             ? $term['parent']
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             : '';
 
         // Check if the term has a parent and the parent exists in the term map
@@ -2622,7 +2621,7 @@ abstract class BaseEntryCreator
      * @param  string  $termSlug  The term slug to create (may be hierarchical or simple)
      * @param  string  $site  The Statamic site handle
      * @param  OutputInterface  $output  Console output for logging
-     * @param  ?string  $termName  Optional term name. If not provided, generates from slug
+     * @param  string  $termName  Optional term name. If empty or not provided, generates from slug
      * @return bool True if term was created, false if it already existed
      */
     public static function createTaxonomyTerm(
@@ -2630,7 +2629,7 @@ abstract class BaseEntryCreator
         string $termSlug,
         string $site,
         OutputInterface $output,
-        ?string $termName = null
+        string $termName = ''
     ): bool {
         // Add site prefix to create site-specific taxonomy slug (handles hierarchy automatically)
         $siteSpecificSlug = TaxonomySlugProcessor::addSitePrefixToSlug(
@@ -2697,10 +2696,14 @@ abstract class BaseEntryCreator
             return false;
         }
 
-        // Check if term already exists
-        /** @var ?Term $existingTerm */
+        // Check if term already exists. The lookup answers a localized term, so
+        // work on the term it localizes, as the flat pass does (#188)
         $existingTerm = TermFacade::find($cacheKey);
-        if ($existingTerm !== null) {
+        if ($existingTerm instanceof LocalizedTerm) {
+            $existingTerm = $existingTerm->term();
+        }
+
+        if ($existingTerm instanceof Term) {
             // Get site name from cache
             $siteName = self::getCachedSiteName($site);
             $expectedTermName = $termName !== ''
@@ -2840,98 +2843,6 @@ abstract class BaseEntryCreator
     }
 
     /**
-     * Creates a taxonomy term from term map data with consolidated logic.
-     *
-     * This method provides a unified approach for creating taxonomy terms from
-     * term map data, eliminating duplication between slug-based and ID-based
-     * term creation methods. It validates the term exists in the map, extracts
-     * the appropriate data, and creates the term using the core creation logic.
-     *
-     * @param  string  $termKey  The term key (slug or ID) to look up in the term map
-     * @param  array<int|string, mixed>  $termMap  Map of term keys to term data
-     * @param  string  $statamicTaxonomyHandle  The Statamic taxonomy handle (e.g., 'people_groups', 'logos_item_categories')
-     * @param  string  $site  The Statamic site handle
-     * @param  OutputInterface  $output  Console output for logging
-     * @param  string  $nameField  The field name to use for term name extraction (default: 'term_name')
-     * @return bool True if term was created, false if it already existed or term data was missing
-     */
-    public static function createTaxonomyTermFromMap(
-        string $termKey,
-        array $termMap,
-        string $statamicTaxonomyHandle,
-        string $site,
-        OutputInterface $output,
-        string $nameField = 'term_name'
-    ): bool {
-        // Check if term data exists in the term map
-        if (! isset($termMap[$termKey])) {
-            // Enhance log context with entry information
-            $logData = LogContextHelper::enhanceWithEntryContext(
-                [
-                    'site' => $site,
-                    'taxonomy' => $statamicTaxonomyHandle,
-                    'term_key' => $termKey,
-                    'available_term_keys' => \array_keys($termMap),
-                ]
-            );
-
-            // Log a warning with detailed context about the missing term
-            Log::warning(
-                LogContextHelper::formatMessageWithEntry(
-                    "BaseEntryCreator::createTaxonomyTermFromMap: Term key '$termKey' not found in term map for taxonomy '$statamicTaxonomyHandle'",
-                    $logData['page_url']
-                ),
-                $logData['context']
-            );
-
-            // Display a warning message to the user
-            $output->writeln("<comment>Warning: Term key '$termKey' not found for taxonomy '$statamicTaxonomyHandle' - skipping term creation</comment>");
-
-            // Return false to indicate the operation failed
-            return false;
-        }
-
-        // Extract the full hierarchical slug from the term map
-        $termMapEntry = $termMap[$termKey] ?? null;
-        if (! \is_array($termMapEntry)) {
-            return false;
-        }
-
-        $fullSlug = isset($termMapEntry['full_slug']) && \is_string($termMapEntry['full_slug'])
-            ? $termMapEntry['full_slug']
-            : (
-                isset($termMapEntry['term_slug']) && \is_string($termMapEntry['term_slug'])
-                    ? $termMapEntry['term_slug']
-                    : $termKey
-            );
-
-        // Extract the term name from the term map, or generate one from the slug if not available
-        $termName = isset($termMapEntry[$nameField]) && \is_string($termMapEntry[$nameField])
-            ? $termMapEntry[$nameField]
-            : (
-                isset($termMapEntry['name']) && \is_string($termMapEntry['name'])
-                    ? $termMapEntry['name']
-                    : \ucwords(
-                        \str_replace(
-                            ['-', '_'],
-                            ' ',
-                            $fullSlug
-                        )
-                    )
-            );
-
-        // The full_slug from the term map is already the complete hierarchical path,
-        // so we use the unified method which handles hierarchy automatically
-        return self::createTaxonomyTerm(
-            $statamicTaxonomyHandle,
-            $fullSlug,
-            $site,
-            $output,
-            $termName
-        );
-    }
-
-    /**
      * On-demand taxonomy terms queued during content processing for a single
      * batched creation pass per taxonomy.
      *
@@ -2975,11 +2886,9 @@ abstract class BaseEntryCreator
     /**
      * Queue a taxonomy term resolved from a term map for batched creation.
      *
-     * Mirrors the slug/name extraction in {@see self::createTaxonomyTermFromMap()}
-     * so queued terms produce the identical slug and title, then enqueues via
-     * {@see self::queueTaxonomyTerm()}. Missing keys are skipped (callers guard
-     * membership before calling), matching the defensive behavior of the
-     * immediate path.
+     * Takes the full slug, then the term slug, then the key, and the named field,
+     * then the name, then nothing, and enqueues via {@see self::queueTaxonomyTerm()}.
+     * Missing keys are skipped, since callers guard membership before calling.
      *
      * @param  string  $termKey  The term key (slug or ID) to look up in the term map
      * @param  array<int|string, mixed>  $termMap  Map of term keys to term data
@@ -2995,13 +2904,12 @@ abstract class BaseEntryCreator
         string $nameField = 'term_name'
     ): void {
         // Skip silently when the key is absent; on-demand callers already verify
-        // membership and the immediate path only logged this as a defensive guard.
+        // membership
         if (! isset($termMap[$termKey])) {
             return;
         }
 
-        // Extract the full hierarchical slug from the term map (same precedence
-        // as createTaxonomyTermFromMap()).
+        // Extract the full hierarchical slug from the term map
         $termMapEntry = $termMap[$termKey] ?? null;
         if (! \is_array($termMapEntry)) {
             return;
@@ -3209,31 +3117,24 @@ abstract class BaseEntryCreator
             return null;
         }
 
+        // An id() this scope cannot call (a private or protected one) is no id
         if (
-            \is_callable(
+            ! \is_callable(
                 [
                     $candidate,
                     'id',
                 ]
             )
         ) {
-            $id = \call_user_func(
-                [
-                    $candidate,
-                    'id',
-                ]
-            );
-
-            return \is_string($id) && $id !== ''
-                ? $id
-                : null;
-        }
-
-        if (! \method_exists($candidate, 'id')) {
             return null;
         }
 
-        $id = $candidate->id();
+        $id = \call_user_func(
+            [
+                $candidate,
+                'id',
+            ]
+        );
 
         return \is_string($id) && $id !== ''
             ? $id
