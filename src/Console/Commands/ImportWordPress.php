@@ -1221,8 +1221,20 @@ class ImportWordPress extends Command
         // Clear taxonomy term caches for a fresh import session
         BaseEntryCreator::clearTaxonomyCaches();
 
-        // Check memory requirements across every part and prompt user if needed
-        $this->checkMemoryRequirements($parts);
+        // Check memory requirements across every part and prompt user if needed. The check
+        // is the first step to read the parts, so a part the reader cannot open or parse
+        // fails here, as the reader's warning raised as an `ErrorException`, and is reported
+        // the way the parse below reports it (#289). Only that exception is caught, so an
+        // aborted prompt still ends the run as it did.
+        try {
+            $this->checkMemoryRequirements($parts);
+        } catch (\ErrorException $errorException) {
+            // Show error for the part the reader could not read
+            $this->error("Failed to parse XML file: {$errorException->getMessage()}");
+
+            // Exit with error status code
+            return 1;
+        }
 
         // Parse the XML part(s)
         try {
