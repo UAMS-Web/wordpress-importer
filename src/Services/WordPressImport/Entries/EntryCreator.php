@@ -56,6 +56,11 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 class EntryCreator
 {
     /**
+     * The path to a table's TablePress export ID, within its item.
+     */
+    private const string EXPORT_ID_PATH = 'wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value';
+
+    /**
      * Collected page data for tree building.
      *
      * @var array<int|string, mixed>
@@ -514,7 +519,6 @@ class EntryCreator
         } else {
             // Import tables referenced by shortcodes/blocks
             $tableIds = TablePressShortcodeProcessor::getTableIds(); // Preserve order for linking
-            $uniqueTableIds = array_unique($tableIds); // Deduplicate for import
 
             // Skip if no table IDs are found
             if ($tableIds === []) {
@@ -526,19 +530,16 @@ class EntryCreator
 
             // Loop through all available tables to collect those that match our criteria
             foreach ($tables as $table) {
-                // Find the meta field containing the table export ID
-                $meta = $table->xpath('wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value');
-
-                // Extract the export ID value from the meta field
-                $exportId = (
-                    is_array($meta)
-                    && isset($meta[0])
-                ) ? (string) $meta[0] : '';
+                // Read the table's export ID from its meta
+                $exportId = XpathHelper::getStringValue(
+                    $table,
+                    self::EXPORT_ID_PATH
+                );
 
                 // Check if this table's export ID is in our target list
                 if (\in_array(
                     $exportId,
-                    $uniqueTableIds,
+                    $tableIds,
                     true
                 )) {
                     // Add this table to the collection for this export ID
@@ -587,11 +588,9 @@ class EntryCreator
                     try {
                         $postDate = new DateTime($postDateStr);
 
-                        // Check if this is the most recent date found so far
-                        if (
-                            ! $mostRecentDate instanceof DateTime
-                            || $postDate > $mostRecentDate
-                        ) {
+                        // Check if this is the most recent date found so far; any date is
+                        // later than none
+                        if ($postDate > $mostRecentDate) {
                             // ---
                             // Update the most recent table and date
                             // ---
@@ -633,28 +632,30 @@ class EntryCreator
                     'wp:post_id'
                 );
 
-                // Find the meta field containing the table export ID
-                $meta = $table->xpath('wp:postmeta[wp:meta_key="_tablepress_export_table_id"]/wp:meta_value');
-
-                // Extract the export ID value from the meta field
-                $exportId = (
-                    is_array($meta)
-                    && isset($meta[0])
-                ) ? (string) $meta[0] : '';
+                // Read the table's export ID from its meta
+                $exportId = XpathHelper::getStringValue(
+                    $table,
+                    self::EXPORT_ID_PATH
+                );
 
                 // Create a new XML parser instance for this specific table to avoid state conflicts
                 $tableXmlParser = new XmlParser;
 
-                // Parse the XML file with the new parser instance
-                $tableXmlFilePath = $xmlParser->getFilePath();
-                if ($tableXmlFilePath === null) {
+                // ---
+                // Skip a table the parser has no file for. Every table shares the
+                // parser's path, so a missing one skips them all either way.
+                // ---
+                // @pest-mutate-ignore: ContinueToBreak
+                if ($xmlParser->getFilePath() === null) {
                     continue;
                 }
 
-                $tableXmlParser->parse($tableXmlFilePath);
-
+                // ---
                 // Point the isolated parser at every export part so its item and
-                // attachment readers span the whole split export (cross-part refs)
+                // attachment readers span the whole split export (cross-part refs).
+                // The table import reads only the items set below, so the parser
+                // needs no parse of its own.
+                // ---
                 $tableXmlParser->setFilePaths($xmlParser->getFilePaths());
 
                 // Override the parser's items to only include this specific table
@@ -701,7 +702,11 @@ class EntryCreator
                 $retryDelay = 300000; // 300ms
                 $fileExists = false;
                 for ($i = 0; $i < $retryCount; $i++) {
-                    // Check if entry file exists with retry mechanism
+                    // ---
+                    // Check if entry file exists with retry mechanism. A file found
+                    // stays found, and the loop waits only after a miss.
+                    // ---
+                    // @pest-mutate-ignore: BreakToContinue
                     if (LaravelFileFacade::exists($entryPath)) {
                         $fileExists = true;
                         break;
@@ -1047,11 +1052,9 @@ class EntryCreator
         // Report unaddressed XML keys
         if ($this->metadataMapper->getUnaddressedKeys() !== []) {
             $output->writeln('<comment>Unaddressed XML keys found:</comment>');
-            $unaddressedKeys = array_values(
-                array_filter(
-                    $this->metadataMapper->getUnaddressedKeys(),
-                    is_string(...)
-                )
+            $unaddressedKeys = array_filter(
+                $this->metadataMapper->getUnaddressedKeys(),
+                is_string(...)
             );
             foreach (array_unique($unaddressedKeys) as $key) {
                 $output->writeln("- $key");
@@ -1100,7 +1103,7 @@ class EntryCreator
      *
      * @throws Exception If the content type is unsupported
      */
-    private function getCreator(
+    protected function getCreator(
         string $contentType
     ): BaseEntryCreator {
         // Route content type to appropriate entry creator
