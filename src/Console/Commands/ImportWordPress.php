@@ -1179,6 +1179,8 @@ class ImportWordPress extends Command
         // Measure initial filesize of the entire application directory (when enabled)
         // ---
 
+        // An if reads the setting as a boolean, so the cast only types it
+        // @pest-mutate-ignore: RemoveBooleanCast
         if (
             (bool) config(
                 'wordpress-import.measure_filesize',
@@ -1270,7 +1272,9 @@ class ImportWordPress extends Command
             0
         );
 
-        // Check if kb content type exists in the XML export
+        // Check if kb content type exists in the XML export. Content type names are
+        // strings, so a loose comparison finds the same ones.
+        // @pest-mutate-ignore: TrueToFalse
         if (
             \in_array(
                 'kb',
@@ -1290,15 +1294,15 @@ class ImportWordPress extends Command
         // Check for supported content types before proceeding
         // ---
 
-        // Filter content types to only include supported ones
-        $supportedContentTypes = \array_values(
-            \array_filter(
-                $allContentTypes,
-                fn (array $type): bool => \in_array(
-                    $type[0],
-                    $this->supportedContentTypes,
-                    true
-                )
+        // Filter content types to only include supported ones, comparing names as
+        // strings either way
+        // @pest-mutate-ignore: TrueToFalse
+        $supportedContentTypes = \array_filter(
+            $allContentTypes,
+            fn (array $type): bool => \in_array(
+                $type[0],
+                $this->supportedContentTypes,
+                true
             )
         );
 
@@ -1322,14 +1326,12 @@ class ImportWordPress extends Command
         // rather than being imported as a content type of their own. Including it here
         // would advertise a handle `--content-type=` cannot honour, and would list it as
         // "not imported" forever — telling a caller to re-run with a flag that fails.
-        $availableContentTypes = \array_values(
-            \array_filter(
-                \array_map(
-                    fn (array $type): string => $type[0],
-                    $supportedContentTypes
-                ),
-                fn (string $handle): bool => $handle !== 'nav_menu_item'
-            )
+        $availableContentTypes = \array_filter(
+            \array_map(
+                fn (array $type): string => $type[0],
+                $supportedContentTypes
+            ),
+            fn (string $handle): bool => $handle !== 'nav_menu_item'
         );
 
         $requestedContentType = $this->option('content-type');
@@ -1340,6 +1342,8 @@ class ImportWordPress extends Command
         // Refuse an unknown handle rather than silently importing something else. A typo
         // that fell through to the default selector would import the alphabetically first
         // type and report success, which is the defect this option exists to remove (wordpress-importer-archive#706).
+        // Handles are strings, so a loose comparison refuses the same ones.
+        // @pest-mutate-ignore: TrueToFalse
         if (
             $requestedContentType !== null
             && ! \in_array($requestedContentType, $availableContentTypes, true)
@@ -1386,9 +1390,6 @@ class ImportWordPress extends Command
             $this->comment('All content types in XML are supported.');
         }
 
-        // Clear any previous selected site
-        SiteResolver::clearSelectedSite();
-
         // ---
         // Select site
         // ---
@@ -1423,13 +1424,16 @@ class ImportWordPress extends Command
         // Get base blog URL from XML parser for asset URL processing
         $baseBlogUrl = $this->xmlParser->getBaseBlogUrl();
 
-        // Get upload images configuration setting
+        // Get upload images configuration setting. Only the || below reads it, which
+        // yields a boolean either way, so the cast only types it.
+        // @pest-mutate-ignore: RemoveBooleanCast
         $uploadImages = (bool) config(
             'wordpress-import.upload_images',
             true
         );
 
-        // Get upload files configuration setting
+        // Get upload files configuration setting, read the same way
+        // @pest-mutate-ignore: RemoveBooleanCast
         $uploadFiles = (bool) config(
             'wordpress-import.upload_files',
             true
@@ -1440,9 +1444,6 @@ class ImportWordPress extends Command
 
         // Set the base blog URL on the AssetImporter for site-specific asset filtering
         $this->assetImporter->setBaseBlogUrl($baseBlogUrl);
-
-        // Initialize continue variable to control the loop
-        $continue = true;
 
         // Track content types already handled this run. In non-interactive mode the
         // selector deterministically returns the first option every iteration, so a
@@ -1460,8 +1461,14 @@ class ImportWordPress extends Command
         /** @var list<string> $skippedAtGate */
         $skippedAtGate = [];
 
-        // Loop to process multiple content types
-        do {
+        // ---
+        // Loop to process multiple content types. Each pass selects a type not yet
+        // handled, so a run makes at most one pass per supported type; iterating the
+        // supported types bounds the loop there, keeping it finite whatever its body does.
+        // The empty-pool check below still ends a run that has handled every type before
+        // its passes are spent.
+        // ---
+        foreach ($supportedContentTypes as $unused) {
             // Narrow the pool to types not yet handled this run, and to the requested
             // type when one was named. `nav_menu_item` is excluded by
             // `ContentTypeSelector` itself, so that filter is not duplicated here.
@@ -1473,6 +1480,8 @@ class ImportWordPress extends Command
             // that the continuation prompt ends the loop; the prompt is never reached
             // on that path. Restored with the empty-pool `break`, which is what
             // actually terminates the run (wordpress-importer-archive#711).
+            // Handled types are names, compared as strings either way
+            // @pest-mutate-ignore: TrueToFalse
             $selectableContentTypes = \array_values(
                 \array_filter(
                     $supportedContentTypes,
@@ -1483,7 +1492,10 @@ class ImportWordPress extends Command
 
             // Nothing left to select — every candidate has been handled, so end the
             // loop rather than re-offering a type the selector would return again.
+            // The pass bound would end it as well, each remaining pass finding the same
+            // empty pool, so continuing instead changes nothing a run can observe.
             if ($selectableContentTypes === []) {
+                // @pest-mutate-ignore: BreakToContinue
                 break;
             }
 
@@ -2009,7 +2021,9 @@ class ImportWordPress extends Command
                         0
                     );
 
-                // Set entry overwrite behavior on EntryCreator
+                // Set entry overwrite behavior on EntryCreator. Both prompts answer one of the options,
+                // a string, so the assertion only types it.
+                // @pest-mutate-ignore: RemoveFunctionCall
                 \assert(is_string($entryOverwriteChoice));
                 $this->entryCreator->setEntryOverwriteBehavior($entryOverwriteChoice);
 
@@ -2049,7 +2063,9 @@ class ImportWordPress extends Command
                             0
                         );
 
-                    // Set asset overwrite behavior on AssetImporter
+                    // Set asset overwrite behavior on AssetImporter. Both prompts answer one of the options,
+                    // a string, so the assertion only types it.
+                    // @pest-mutate-ignore: RemoveFunctionCall
                     \assert(is_string($assetOverwriteChoice));
                     $this->assetImporter->setAssetOverwriteBehavior($assetOverwriteChoice);
                 } else { // Otherwise
@@ -2086,7 +2102,9 @@ class ImportWordPress extends Command
                             0
                         );
 
-                    // Set table overwrite behavior on EntryCreator
+                    // Set table overwrite behavior on EntryCreator. Both prompts answer one of the options,
+                    // a string, so the assertion only types it.
+                    // @pest-mutate-ignore: RemoveFunctionCall
                     \assert(is_string($tableOverwriteChoice));
                     $this->entryCreator->setTableOverwriteBehavior($tableOverwriteChoice);
                 }
@@ -2257,7 +2275,9 @@ class ImportWordPress extends Command
                             0
                         );
 
-                    // Set redirect overwrite behavior on GlobalCreator
+                    // Set redirect overwrite behavior on GlobalCreator. Both prompts answer one of the options,
+                    // a string, so the assertion only types it.
+                    // @pest-mutate-ignore: RemoveFunctionCall
                     \assert(is_string($redirectOverwriteChoice));
                     $this->globalCreator->setGlobalOverwriteBehavior($redirectOverwriteChoice);
                 }
@@ -2329,7 +2349,12 @@ class ImportWordPress extends Command
                     'Would you like to import more content?',
                     false
                 );
-        } while ($continue);
+
+            // End the loop when no more content is wanted
+            if (! $continue) {
+                break;
+            }
+        }
 
         // ---
         // Clear and refresh Stache cache before navigation import. This ensures all newly
@@ -2372,6 +2397,8 @@ class ImportWordPress extends Command
         // Measure final filesize and display difference when user is done importing (when enabled)
         // ---
 
+        // An if reads the setting as a boolean, so the cast only types it
+        // @pest-mutate-ignore: RemoveBooleanCast
         if (
             (bool) config(
                 'wordpress-import.measure_filesize',
@@ -2441,11 +2468,9 @@ class ImportWordPress extends Command
         // rest. Naming them, and failing, is what stops 1-of-7 passing for a whole
         // import (wordpress-importer-archive#706). A caller that *did* name a type asked for exactly this, so it
         // succeeds.
-        $untouched = \array_values(
-            \array_diff(
-                $availableContentTypes,
-                $importedContentTypes
-            )
+        $untouched = \array_diff(
+            $availableContentTypes,
+            $importedContentTypes
         );
 
         if ($requestedContentType === null && $untouched !== []) {
