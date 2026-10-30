@@ -636,6 +636,21 @@ it('saves each entry with its resolved links, and forgets the links it resolved'
         );
 });
 
+it('resolves the links of an entry whose ID is all digits, and of the entries after it', function (): void {
+    deferredEntry('pages', 'about', 'about-12-abc');
+    deferredEntry('pages', 'numbered', '123', ['content' => 'see http://93.184.216.34/site/about/']);
+    deferredEntry('pages', 'home', 'home-1-abc', ['content' => 'see http://93.184.216.34/site/about/']);
+
+    // PHP stores the all-digit ID as an integer key (#170)
+    LinkProcessor::setDeferredInternalLinks(['123' => [deferredLink()], 'home-1-abc' => [deferredLink()]]);
+
+    LinkProcessor::processDeferredInternalLinks('default', new BufferedOutput);
+
+    expect(deferredField('123', 'content'))->toBe('see statamic://entry::about-12-abc')
+        ->and(deferredField('home-1-abc', 'content'))->toBe('see statamic://entry::about-12-abc')
+        ->and(LinkProcessor::getDeferredInternalLinks())->toBe([]);
+});
+
 it('saves only the field a link rewrote', function (string $field): void {
     deferredEntry('pages', 'about', 'about-12-abc');
     $source = deferredEntry('pages', 'home', 'home-1-abc', [$field => $field === 'content' ? 'see http://93.184.216.34/site/about/' : [['id' => 's', 'url' => 'http://93.184.216.34/site/about/']]]);

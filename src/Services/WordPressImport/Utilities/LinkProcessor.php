@@ -67,9 +67,10 @@ class LinkProcessor
      *
      * This array stores internal links that could not be resolved during initial
      * processing because the target entries had not been imported yet. The links are
-     * processed after all entries are imported.
+     * processed after all entries are imported. PHP stores an all-digit entry ID as
+     * an integer key, so the keys are typed as either (#170).
      *
-     * @var array<string, array<int, DeferredLinkData>>
+     * @var array<int|string, array<int, DeferredLinkData>>
      */
     protected static $deferredInternalLinks = [];
 
@@ -1302,6 +1303,10 @@ class LinkProcessor
 
         // Process each entry's deferred internal links
         foreach (self::$deferredInternalLinks as $statamicSourceEntryId => $deferredLinks) {
+            // An all-digit entry ID comes back as an integer key, so read it as the
+            // string it was (#170)
+            $statamicSourceEntryId = (string) $statamicSourceEntryId;
+
             // Get the source collection handle from the first deferred link
             // (all deferred links for an entry should have the same source collection)
             $statamicSourceCollectionHandle = $deferredLinks[0]['source_collection_handle'] ?? 'pages';
@@ -2450,7 +2455,7 @@ class LinkProcessor
      * Returns the map of entry IDs to their deferred internal links.
      * Used for unified deferred processing.
      *
-     * @return array<string, array<int, DeferredLinkData>> Deferred links map
+     * @return array<int|string, array<int, DeferredLinkData>> Deferred links map
      */
     public static function getDeferredInternalLinks(): array
     {
@@ -2464,7 +2469,7 @@ class LinkProcessor
      * Used by DeferredProcessingCoordinator to remove processed links from
      * the deferred links array after processing them during post type imports.
      *
-     * @param  array<string, array<int, DeferredLinkData>>  $deferredLinks  Updated deferred links
+     * @param  array<int|string, array<int, DeferredLinkData>>  $deferredLinks  Updated deferred links
      */
     public static function setDeferredInternalLinks(
         array $deferredLinks
