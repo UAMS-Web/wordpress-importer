@@ -46,27 +46,36 @@ jobs:
             echo "::error::HEAD is not a merge commit, so the pull request's changes cannot be read."
             exit 1
           fi
-          files=$(git diff --name-only --diff-filter=AMR HEAD^1 HEAD -- $MUTATE_PATHS | { grep '\.php$' || true; })
-          if [ -z "$files" ]; then
+          # NUL-separated, so a name git would quote (non-ASCII, a tab) is read as it is
+          list=$(mktemp)
+          git diff -z --name-only --diff-filter=AMR HEAD^1 HEAD -- $MUTATE_PATHS > "$list"
+          files=()
+          while IFS= read -r -d '' f; do
+            case "$f" in *.php) ;; *) continue ;; esac
+            case "$f" in
+              *,* | *$'\n'*)
+                echo "::error::A changed path holds a comma or a newline, which --path cannot carry: $f"
+                exit 1
+                ;;
+            esac
+            files+=("$f")
+          done < "$list"
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "mode=none" >> "$GITHUB_OUTPUT"
             echo "No PHP file under $MUTATE_PATHS is added or changed by this pull request, so there is nothing to mutate."
             exit 0
           fi
-          if printf '%s\n' "$files" | grep -q ','; then
-            echo "::error::A changed path contains a comma, which --path cannot carry:"
-            printf '%s\n' "$files"
-            exit 1
-          fi
-          echo "Mutating $(printf '%s\n' "$files" | wc -l | tr -d ' ') changed file(s):"
-          printf '%s\n' "$files"
+          echo "Mutating ${#files[@]} changed file(s):"
+          printf '%s\n' "${files[@]}"
           echo "mode=changed" >> "$GITHUB_OUTPUT"
-          echo "paths=$(printf '%s\n' "$files" | paste -sd, -)" >> "$GITHUB_OUTPUT"
+          echo "paths=$(IFS=,; echo "${files[*]}")" >> "$GITHUB_OUTPUT"
 
       # `--min=100` makes Pest fail the step on any survivor. The run is kept in a log
       # because a run that mutated nothing is a setup failure that Pest's exit status
       # reports or not depending on its version and `ignore_min_score_on_zero_mutations`.
       # Bash runs this step with pipefail, so `tee` does not hide Pest's status. A later
-      # `--path` replaces the one `composer mutate` passes.
+      # `--path` replaces the one `composer mutate` passes. On changed files, zero mutants is
+      # left to the check step, so Pest is told not to fail it.
       - name: Run mutation testing
         if: steps.select.outputs.mode != 'none'
         env:
@@ -74,7 +83,7 @@ jobs:
           PATHS: ${{ steps.select.outputs.paths }}
         run: |
           if [ "$MODE" = "changed" ]; then
-            composer mutate -- --min=100 --path="$PATHS" 2>&1 | tee mutate.log
+            composer mutate -- --min=100 --ignore-min-score-on-zero-mutations --path="$PATHS" 2>&1 | tee mutate.log
           else
             composer mutate -- --min=100 2>&1 | tee mutate.log
           fi
@@ -82,7 +91,18 @@ jobs:
       # Reads the log, not the exit status: fails on zero mutants, and on any untested,
       # uncovered, pending or timed-out mutant. Runs even when the step above failed, so the
       # log's own account of the failure is printed; skipped only when nothing was selected.
+      # One exception: changed files that exist, mutated with PCOV loaded, that produce zero
+      # mutants hold no code a mutator changes (an interface, say), which is a pass. Zero
+      # mutants on a full run, or with no PCOV, still fails.
       - name: Check the mutation run
         if: always() && steps.select.outputs.mode != 'none'
-        run: php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
+        env:
+          MODE: ${{ steps.select.outputs.mode }}
+        run: |
+          if [ "$MODE" = "changed" ] && sed "s/$(printf '\033')\[[0-9;]*m//g" mutate.log | grep -Eq '(^|[^0-9])0 Mutations for 0 Files created' \
+            && php -r 'exit(extension_loaded("pcov") && ini_get("pcov.enabled") ? 0 : 1);'; then
+            echo "The changed files produced no mutants: they hold no code a mutator changes, so there is nothing to test."
+            exit 0
+          fi
+          php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
 
