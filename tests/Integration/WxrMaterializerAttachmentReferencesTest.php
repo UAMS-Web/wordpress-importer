@@ -671,6 +671,35 @@ it('resolves an image whose file name needs escaping in XML', function (): void 
         ->and(writtenAttachmentIds($this->workingDirectory))->toBe([900]);
 });
 
+/**
+ * An `<img>` written by WordPress carries `&` as `&amp;`, so the file is requested and the
+ * image matched as `R&D.jpg`, and the read stays by reference (#269).
+ */
+it('resolves an image whose file name is written with an HTML entity', function (string $written): void {
+    fakeReferenceSite(
+        [referencingPost(['content' => '<img src="https://example.test/wp-content/uploads/2020/09/R'.$written.'D.jpg">'])],
+        [referencedAttachment(900, '2020/09/R&D.jpg')]
+    );
+
+    materializeReferences($this->workingDirectory);
+
+    $files = [];
+
+    foreach (attachmentQueries() as $query) {
+        foreach ((array) ($query['file'] ?? []) as $file) {
+            $files[] = $file;
+        }
+    }
+
+    expect($files)->toBe(['2020/09/R&D.jpg'])
+        ->and(manifestAttachments($this->workingDirectory)['resolution'] ?? null)->toBe('by_reference')
+        ->and(manifestAttachments($this->workingDirectory)['unresolved_images'] ?? null)->toBe([])
+        ->and(writtenAttachmentIds($this->workingDirectory))->toBe([900]);
+})->with([
+    'named' => ['&amp;'],
+    'numeric' => ['&#038;'],
+]);
+
 it('passes over a served attachment with no file URL', function (): void {
     $noUrl = referencedAttachment(901, '2020/09/b.jpg');
     unset($noUrl['attachment']);

@@ -190,6 +190,41 @@ it('reads an upload URL out of JSON-escaped block attributes', function (): void
         ->and(\array_keys($collector->imageUrls()))->toBe(['https://example.test/dept/wp-content/uploads/2022/02/hero.jpg']);
 });
 
+/**
+ * In HTML an attribute value carries `&` as an entity, so a URL taken from markup is decoded
+ * to the URL the markup holds, which is what the API serves and the importer reads (#269).
+ */
+it('decodes the HTML entities in a URL taken from markup', function (string $written): void {
+    $collector = collectedFrom('<img src="https://example.test/dept/wp-content/uploads/2020/09/R'.$written.'D.jpg">');
+
+    expect($collector->paths())->toBe(['2020/09/R&D.jpg'])
+        ->and(\array_keys($collector->imageUrls()))->toBe(['https://example.test/dept/wp-content/uploads/2020/09/R&D.jpg']);
+})->with([
+    'named' => ['&amp;'],
+    'zero-padded decimal' => ['&#038;'],
+    'decimal' => ['&#38;'],
+    'raw' => ['&'],
+]);
+
+it('decodes an entity in a link, and leaves an unterminated one as written', function (): void {
+    // The query string is not part of a normalized link, so the entities are in the path
+    $collector = collectedFrom(
+        '<a href="https://example.test/dept/r&amp;d-team/">team</a>'
+        .'<a href="https://example.test/dept/r&copy-staff/">staff</a>'
+    );
+
+    expect(\array_keys($collector->links()))->toBe(['//example.test/dept/r&d-team', '//example.test/dept/r&copy-staff']);
+});
+
+it('reads a URL in block attribute JSON, which carries no HTML entities, as before', function (): void {
+    // core/image's JSON escapes an ampersand as \u0026, which is undone before the URL is read
+    $collector = collectedFrom(
+        '<!-- wp:acf/hero {"data":{"background":"https:\/\/example.test\/dept\/wp-content\/uploads\/2022\/02\/R\u0026D.jpg"}} /-->'
+    );
+
+    expect($collector->paths())->toBe(['2022/02/R&D.jpg']);
+});
+
 it('keeps image URLs for the resolution check, and not other uploads', function (): void {
     $collector = collectedFrom(
         '<img src="https://example.test/dept/wp-content/uploads/2020/01/e.JPG">'
