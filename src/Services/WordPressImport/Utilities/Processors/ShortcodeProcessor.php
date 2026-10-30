@@ -48,46 +48,73 @@ class ShortcodeProcessor
     /**
      * Where an attribute list may stand: at the start of an item, or at its end.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_ITEM = 1;
 
     /**
      * Inside an attribute name.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_NAME = 2;
 
     /**
      * In the space after an attribute name.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_AFTER_NAME = 4;
 
     /**
      * After an attribute's "=", in the space before its value.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_AFTER_EQUALS = 8;
 
     /**
      * Inside a double-quoted value.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_DOUBLE_QUOTED = 16;
 
     /**
      * Inside a single-quoted value.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_SINGLE_QUOTED = 32;
 
     /**
      * Inside an unquoted value.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_UNQUOTED = 64;
 
     /**
      * In the space after a value.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_AFTER_VALUE = 128;
 
     /**
      * After the self-closing slash, which ends the list.
      */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
     private const int LIST_SLASH = 256;
 
     /**
@@ -786,7 +813,7 @@ class ShortcodeProcessor
         $length = \strlen($attributes);
 
         // Read each character against every state the text could be in so far
-        for ($i = 0; $i < $length && $states !== 0; $i++) {
+        for ($i = 0; $i < $length; $i++) {
             $states = self::stepAttributeList($states, $attributes[$i]);
         }
 
