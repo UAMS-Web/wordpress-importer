@@ -64,7 +64,7 @@ Do not run these in the primary host checkout. It is served, holds the main bran
 
    If the package slot is already held, that is **another package session**, not host work. Wait, or take an ephemeral worktree per the host's rule. Do not evict it, and do not fall back to a ticket slot.
 
-   For this importer the slot is `../uams-statamic-importer`, which exists for exactly this and nothing else (`UAMS-Web/uams-statamic#1998`):
+   For this importer the slot is `../uams-statamic-importer`, which exists for exactly this and nothing else (`UAMS-Web/uams-statamic-archive#1998`):
 
    ```
    cd /path/to/uams-statamic
@@ -111,7 +111,7 @@ Do not run these in the primary host checkout. It is served, holds the main bran
 
    - Observed with `vendor/` at `v0.7.0`: `PageBuilderBlockImportTest` reported `Field 'page_builder.0.max' should exist in production output` for the `logo list block v16` dataset. `main` had already corrected that handle to `page_builder.0.logo_list_max` because `LogoListParser` writes it.
    - Observed on macOS validating `#635`: vendor at `v0.13.0`, branch based on `main` two PRs ahead, and `test:seed-stache` died on `NinjaFormsBlockProcessor`, added by an already-merged PR.
-   - **The `Exports` fixture submodule is the one thing to think about before `--delete`.** It lives at `src/Services/WordPressImport/Tests/Exports`, and GitHub source archives do not carry submodule contents, so a dist-installed `vendor/` has it empty. If your branch worktree has it uninitialized too, the sync is a no-op there. If you initialized it (1.8 GB), `rsync` will copy it: correct for the fixture-backed suites that read it, and slow. Decide by whether the file you are about to run needs fixtures; do not add an `--exclude` reflexively, because that is how a fixture-backed suite ends up skipping vacuously.
+   - **The exports corpus is not in the package tree.** It lives in `UAMS-Web/wordpress-importer-exports` and is read from a local clone named by `WORDPRESS_IMPORTER_EXPORTS`, so the sync has nothing to copy for it and `--delete` has nothing to remove. A fixture-backed suite needs that variable set in the host app's environment; without it the suite skips, and a skip is not a pass. Do not add an `--exclude` reflexively, because that is how a fixture-backed suite ends up skipping vacuously. A `vendor/` installed at a release from before #1426 still carries the old submodule path, empty in a dist install.
    - PSR-4 classes (both `src/` and `tests/`) resolve without a `composer dump-autoload`, since the app already maps the `UAMSWeb\WordPressImporter\` and `UAMSWeb\WordPressImporter\Tests\` prefixes. A brand-new file under an existing prefix autoloads fine; only a **new top-level namespace** would need a dump.
    - **Alternative: reinstall as source, then checkout** (brings the whole branch, including new files):
 
@@ -125,7 +125,7 @@ Do not run these in the primary host checkout. It is served, holds the main bran
 
 4. **Prepare whatever the host's own CI prepares before its suites.** A session following this skill is exactly the path that skips it, and skipping it does not fail cleanly: see *Interpreting results*. The preparation is state the host owns (a content mirror, a cache snapshot, a database), so the host's CI configuration is the specification, and **a run consumes that state**, so a value that changes between runs of unchanged code is often residue rather than a flake.
 
-   **Seed the Stache. This is a gate, not a warm-up.** The host test environment reads content through a **disposable `content/` mirror** rather than the submodule directly (`UAMS-Web/uams-statamic#1916` / `#1995`), and the mirror plus its Stache snapshot are built by their own command:
+   **Seed the Stache. This is a gate, not a warm-up.** The host test environment reads content through a **disposable `content/` mirror** rather than the submodule directly (`UAMS-Web/uams-statamic-archive#1916` / `#1995`), and the mirror plus its Stache snapshot are built by their own command:
 
    ```
    APP_ENV=testing php artisan test:seed-stache
@@ -133,7 +133,7 @@ Do not run these in the primary host checkout. It is served, holds the main bran
 
    The `APP_ENV=testing` prefix is required, not decorative: a bare invocation refuses with `test:seed-stache is a test-harness command; run it with APP_ENV=testing.` and exits **1**, so it cannot silently no-op inside a `&&` chain.
 
-   The host's CI and `scripts/local-ci.mjs` both run this before their suites, so a normal host-app band never notices it exists. **It is a gate on a *cold* slot, and silently unnecessary on a warm one, which is what makes it nasty.** The artifacts live in the slot's git-ignored `storage/framework/` (`content-mirror`, `content-mirror.stamp`, `stache-seed`, `stache-seed.root`), so they survive a `release` and are inherited by the next session. Verified: one session hit the failure on a freshly provisioned slot, and a later session ran both suites to green **without** seeding, because the earlier run had already built the mirror. Run it unconditionally; it is cheap when the mirror already exists.
+   The host's CI and its local CI runner both run this before their suites, so a normal host-app band never notices it exists. **It is a gate on a *cold* slot, and silently unnecessary on a warm one, which is what makes it nasty.** The artifacts live in the slot's git-ignored `storage/framework/` (`content-mirror`, `content-mirror.stamp`, `stache-seed`, `stache-seed.root`), so they survive a `release` and are inherited by the next session. Verified: one session hit the failure on a freshly provisioned slot, and a later session ran both suites to green **without** seeding, because the earlier run had already built the mirror. Run it unconditionally; it is cheap when the mirror already exists.
 
    **The seed is state, and a run consumes it.** Imports accumulate in the disposable mirror, so a test that **creates entries or terms** can see the residue of every previous run against that seed. The symptom is a value that changes between runs of unchanged code, usually a counter suffix Statamic appends to de-duplicate a slug or title. Observed on `PostImportTest > it handles site-specific taxonomy and category mapping`, same host checkout, same importer, same content baseline:
 
@@ -144,7 +144,7 @@ Do not run these in the primary host checkout. It is served, holds the main bran
    | an earlier session, different accumulation | fails: `'News'` vs `'News (31)'` |
    | **immediately after re-seeding**, one full run | **passes**: 43/43 |
 
-   Re-seeding was the only variable that cleared it. Two sessions disagreed about whether that test failed, on identical code and content, purely because neither was tracking run count (`UAMS-Web/uams-statamic#2025`'s session reported `News (31)` as non-reproducing and reasoned about content state across checkouts instead). #613 is the worked example.
+   Re-seeding was the only variable that cleared it. Two sessions disagreed about whether that test failed, on identical code and content, purely because neither was tracking run count (`UAMS-Web/uams-statamic-archive#2025`'s session reported `News (31)` as non-reproducing and reasoned about content state across checkouts instead). #613 is the worked example.
 
    **So: re-seed before a full-file run of a file you have already run this session.** Not before every run: most of the band does not accumulate visibly, and burning a seed each time adds minutes to an already 3 to 12 minute cycle. Treat any result obtained *without* re-seeding as suspect if the test creates entries or terms; `--filter` on a single test is the cheap way to tell an accumulation artifact from a real failure, because it starts from far less residue.
 
@@ -163,9 +163,9 @@ Do not run these in the primary host checkout. It is served, holds the main bran
 - **The vendored package persists between runs, and it is invisible to `git status`.** `vendor/<vendor>/<package>` is git-ignored, so the files you copied in step 3 survive a `release` and are inherited by whoever claims the slot next, while the tree reports perfectly clean. **A clean tree does not mean the vendored package is back at its pinned release**, and neither does a `composer install`. This is why step 3's verification is not optional, and why teardown ends with `composer reinstall`.
 - **A run can still reach the host's `content/` submodule.** The host re-roots its Stache stores at a disposable mirror under the testing environment, so a Statamic save should not write into the submodule, but anything that builds a raw `base_path('content/...')` path bypasses that. `worktree-slots release` uses `--ignore-submodules=all`, so a dirty `content/` will **not** block the release. Check before releasing, and restore with `git -C content checkout -- <path>` (plus `git -C content clean -fd` for anything untracked; `checkout` cannot remove it).
 
-For this importer, `UAMS-Web/uams-statamic#1995` (merged 2026-08-13) re-roots every content-backed Stache store, and the Eloquent asset-metadata dual-write, at the disposable mirror under `APP_ENV=testing`, which the host `phpunit.xml` sets. What survives is what #1995 does not key on: it routes `App\Support\ContentRoot::path()`, and **this package still has three** raw `base_path('content/...')` uses, one of which deletes files, tracked in #622. Those are now the only route from this band into the submodule, and #570's guard is what fails a test that takes it.
+For this importer, `UAMS-Web/uams-statamic-archive#1995` (merged 2026-08-13) re-roots every content-backed Stache store, and the Eloquent asset-metadata dual-write, at the disposable mirror under `APP_ENV=testing`, which the host `phpunit.xml` sets. What survives is what #1995 does not key on: it routes `App\Support\ContentRoot::path()`, and **this package still has three** raw `base_path('content/...')` uses, one of which deletes files, tracked in #622. Those are now the only route from this band into the submodule, and #570's guard is what fails a test that takes it.
 
-The old evidence still stands, and predates the fix. Observed once on macOS before #1995: `git -C content status --porcelain` reported ` D trees/collections/default/pages.yaml`, a **deleted tracked file**, and the same file `UAMS-Web/uams-statamic#1873` records losing twice.
+The old evidence still stands, and predates the fix. Observed once on macOS before #1995: `git -C content status --porcelain` reported ` D trees/collections/default/pages.yaml`, a **deleted tracked file**, and the same file `UAMS-Web/uams-statamic-archive#1873` records losing twice.
 
 ## Run
 
@@ -269,7 +269,7 @@ A run is "green for your change" when every failure **reproduces on clean `origi
 
 **The tell is what the error names.** A failure about the *behavior under test* (a wrong handle, a missing field, an assertion on imported data) is **usually** the kind revert-and-compare attributes correctly, but treat the shape as a heuristic that shifts the odds, not a proof. A failure naming a null **collection, store or tree** is about the environment the test reads through, and both arms read the same one. When you see that shape, re-prepare per setup step 4 and re-run **before** comparing; a matching pair proves nothing until the harness is known good.
 
-Observed on #509 (macOS, 2026-08-25): five failures across `UamsPeopleImportTest`, `PostImportTest` and `KbImportTest` matched `origin/main` to the assertion count, were filed as pre-existing, and were **entirely** a stale test-env mirror in the slot doing the comparing. Re-run after clearing `content-mirror{,.stamp}` and `stache-seed{,.root}` and re-seeding, `UamsPeopleImportTest` went from 2 failed / 28 passed (187 assertions) to **30 passed (198)** on the same commit. The mirror-staleness half is `UAMS-Web/uams-statamic#2092`; the discipline is here. #522 is a counter-example to the shape heuristic: both its failures were about behavior under test (`-'landing_page' +'basic_page'` and an empty content array), and both were environmental, reproducing on `origin/main` because each arm shared the fault.
+Observed on #509 (macOS, 2026-08-25): five failures across `UamsPeopleImportTest`, `PostImportTest` and `KbImportTest` matched `origin/main` to the assertion count, were filed as pre-existing, and were **entirely** a stale test-env mirror in the slot doing the comparing. Re-run after clearing `content-mirror{,.stamp}` and `stache-seed{,.root}` and re-seeding, `UamsPeopleImportTest` went from 2 failed / 28 passed (187 assertions) to **30 passed (198)** on the same commit. The mirror-staleness half is `UAMS-Web/uams-statamic-archive#2092`; the discipline is here. #522 is a counter-example to the shape heuristic: both its failures were about behavior under test (`-'landing_page' +'basic_page'` and an empty content array), and both were environmental, reproducing on `origin/main` because each arm shared the fault.
 
 **Three `PostImportTest` news-release cases need a working Browsershot, so their failure can be the machine rather than your change (#1218).** Since #860 the importer does not download the news-release PDF. The host regenerates it on save, through `GenerateNewsReleasePdf` and `NewsReleasePdfGenerator`, which render with Browsershot: Node plus Puppeteer's bundled Chrome. The listener catches any exception and only logs a warning, which the test environment does not surface. So a slot that cannot launch Chrome imports the entry with `news_release_pdf` null and fails exactly these three, with nothing naming the cause:
 
@@ -310,9 +310,9 @@ A slot still holding `importer/<N>` blocks the next importer session from claimi
 - The [`worktrees`](../rule-worktrees/SKILL.md) rule: the slot lifecycle this composes with (claim, refresh, release).
 - The [`host-only-behavior-needs-a-host-run`](../rule-host-only-behavior-needs-a-host-run/SKILL.md) rule: when a run is obligatory.
 
-- `UAMS-Web/uams-statamic#1998`: why the importer slot exists rather than borrowing `-a`/`-b`. The host's own `worktrees` rule (`.claude/rules/worktrees.md` in `uams-statamic`) has the importer slot's section.
-- `UAMS-Web/uams-statamic#1916` / `#1995`: the disposable `content/` mirror the Stache seed builds.
-- `UAMS-Web/uams-statamic#1873`: `content/trees/collections/default/pages.yaml`, the file lost twice to an interrupted run.
+- `UAMS-Web/uams-statamic-archive#1998`: why the importer slot exists rather than borrowing `-a`/`-b`. The host's own `worktrees` rule (`.claude/rules/worktrees.md` in `uams-statamic`) has the importer slot's section.
+- `UAMS-Web/uams-statamic-archive#1916` / `#1995`: the disposable `content/` mirror the Stache seed builds.
+- `UAMS-Web/uams-statamic-archive#1873`: `content/trees/collections/default/pages.yaml`, the file lost twice to an interrupted run.
 - #516: why the vendored tree is synced whole rather than by diff.
 - #573: why this skill no longer routes triage through an umbrella ticket.
 - #619: the Stache seed as consumed state, not one-time setup.

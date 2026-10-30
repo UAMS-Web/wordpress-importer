@@ -144,7 +144,10 @@ function evaluateSlowestClass(array $totals, float $shareCeiling, float $backsto
     $summed = array_sum($totals);
     $share = 100.0 * $seconds / $summed;
 
-    $shareOk = $share <= $shareCeiling;
+    // Compared without dividing: `100 * x / x` can round above 100 (x = 0.007), which would
+    // fail a one-class suite at --share-ceiling=100. Multiplied out, a class that is the
+    // whole suite compares identical products.
+    $shareOk = 100.0 * $seconds <= $shareCeiling * $summed;
     $backstopOk = $seconds <= $backstop;
 
     return [

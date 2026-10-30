@@ -31,10 +31,10 @@ node .claude/skills/local-ci/local-ci.mjs > ci.log 2>&1
 
 Nothing follows the redirection, so no later element becomes the reported status, and `$?` is never consulted. That block writes `ci.log` by design; it is an invocation rather than a demonstration. The [`local-ci`](../skills/local-ci/SKILL.md) skill has the runner's options.
 
-This repository's gate is its own runner, which validates a named branch in its CI tree; invoke it the same way:
+This repository starts the shared runner through a wrapper that places its slot, and the runner validates a named branch there; invoke it the same way:
 
 ```bash
-node scripts/local-ci.mjs --branch BRANCH > ci.log 2>&1
+node scripts/ci-local.mjs --branch BRANCH > ci.log 2>&1
 ```
 
 ## Three ways the number stops being the command's
