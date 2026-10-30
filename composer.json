@@ -84,6 +84,10 @@
             "@php scripts/setup-git-hooks.php"
         ],
         "test": "pest --testsuite=Unit,Integration",
+        "mutate": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php vendor/bin/pest --mutate --path=src"
+        ],
         "stan": "phpstan analyse --memory-limit=-1",
         "ci": [
             "@stan",

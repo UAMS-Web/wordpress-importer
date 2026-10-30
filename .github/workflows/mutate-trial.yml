@@ -1,0 +1,88 @@
+name: Mutate trial
+
+# Throwaway workflow for UAMS-Web/uams-claude-skills#406: the shared ci.yml template's
+# `mutate` job, copied verbatim apart from its `needs:` line, run on this branch's pull
+# request to measure it. Not for merging.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mutate:
+    name: Mutation score (changed files, with PCOV)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # Depth 2: on a pull request the checkout is GitHub's merge commit, and its first parent
+      # is the base branch it was merged onto.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - uses: ./.github/actions/setup
+        with:
+          coverage: pcov
+
+      # On a pull request, mutate only the PHP files under MUTATE_PATHS that the pull request
+      # adds, changes or renames. They are read from the merge commit against its first parent,
+      # so a later change on the base branch is not counted. A pull request that changes none
+      # passes with the reason printed. A push mutates everything `composer mutate` covers.
+      # Set MUTATE_PATHS to the paths that script passes to `--path` (a Statamic add-on's is
+      # `src`), space-separated.
+      - name: Select the files to mutate
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          MUTATE_PATHS: src
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "Not a pull request: mutating everything composer mutate covers."
+            exit 0
+          fi
+          if ! git rev-parse --verify --quiet HEAD^2 > /dev/null; then
+            echo "::error::HEAD is not a merge commit, so the pull request's changes cannot be read."
+            exit 1
+          fi
+          files=$(git diff --name-only --diff-filter=AMR HEAD^1 HEAD -- $MUTATE_PATHS | { grep '\.php$' || true; })
+          if [ -z "$files" ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "No PHP file under $MUTATE_PATHS is added or changed by this pull request, so there is nothing to mutate."
+            exit 0
+          fi
+          if printf '%s\n' "$files" | grep -q ','; then
+            echo "::error::A changed path contains a comma, which --path cannot carry:"
+            printf '%s\n' "$files"
+            exit 1
+          fi
+          echo "Mutating $(printf '%s\n' "$files" | wc -l | tr -d ' ') changed file(s):"
+          printf '%s\n' "$files"
+          echo "mode=changed" >> "$GITHUB_OUTPUT"
+          echo "paths=$(printf '%s\n' "$files" | paste -sd, -)" >> "$GITHUB_OUTPUT"
+
+      # `--min=100` makes Pest fail the step on any survivor. The run is kept in a log
+      # because a run that mutated nothing is a setup failure that Pest's exit status
+      # reports or not depending on its version and `ignore_min_score_on_zero_mutations`.
+      # Bash runs this step with pipefail, so `tee` does not hide Pest's status. A later
+      # `--path` replaces the one `composer mutate` passes.
+      - name: Run mutation testing
+        if: steps.select.outputs.mode != 'none'
+        env:
+          MODE: ${{ steps.select.outputs.mode }}
+          PATHS: ${{ steps.select.outputs.paths }}
+        run: |
+          if [ "$MODE" = "changed" ]; then
+            composer mutate -- --min=100 --path="$PATHS" 2>&1 | tee mutate.log
+          else
+            composer mutate -- --min=100 2>&1 | tee mutate.log
+          fi
+
+      # Reads the log, not the exit status: fails on zero mutants, and on any untested,
+      # uncovered, pending or timed-out mutant. Runs even when the step above failed, so the
+      # log's own account of the failure is printed; skipped only when nothing was selected.
+      - name: Check the mutation run
+        if: always() && steps.select.outputs.mode != 'none'
+        run: php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
+
