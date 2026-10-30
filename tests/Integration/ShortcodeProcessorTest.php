@@ -554,12 +554,100 @@ describe('processShortcodesInContent', function (): void {
             ->toBe('<p></p>');
     });
 
-    it('leaves unknown shortcodes in place and does not track them', function (): void {
+    /**
+     * An unknown shortcode in content stays in the text, and is reported under
+     * unaddressed_shortcodes with the page it is on, as process() reports one (#120).
+     */
+    it('leaves an unknown shortcode in place and reports it with its site, page and text', function (): void {
+        ProcessingContext::setWordPressPageLink('https://example.com/about/');
         $processor = shortcodeProcessor();
 
-        expect($processor->processShortcodesInContent('<p>Text [mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], ['tablepress/table']))
-            ->toBe('<p>Text [mystery a=1]</p>')
+        $result = $processor->processShortcodesInContent('<p>Text [mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'about');
+
+        expect($result)->toBe('<p>Text [mystery a=1]</p>')
+            ->and(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'))->toBe([[
+                'shortcode_name' => 'mystery',
+                'original' => '[mystery a=1]',
+                'site' => 'site-a',
+                'page_slug' => 'about',
+                'page_id' => '',
+                'page_link' => 'https://example.com/about/',
+            ]])
+            ->and($processor->getUnaddressedNodes())->toBe([
+                'shortcode:mystery' => [['id' => '', 'slug' => 'about', 'link' => 'https://example.com/about/', 'original' => '[mystery a=1]']],
+            ]);
+    });
+
+    /**
+     * The shapes a plugin's shortcode takes in the exports corpus.
+     *
+     * @param  string  $shortcode  The shortcode as written
+     * @param  string  $name  Its name
+     */
+    it('reports a shortcode with attributes, a closing tag, or a separator in its name', function (string $shortcode, string $name): void {
+        shortcodeProcessor()->processShortcodesInContent('<p>A '.$shortcode.' B</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'about');
+
+        expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'original', 'shortcode_name'))
+            ->toBe([$name => $shortcode]);
+    })->with([
+        'a double-quoted attribute, self-closing' => ['[pdf attachment="519" /]', 'pdf'],
+        'single-quoted attributes' => ["[iframe_loader type='iframe' width='100%']", 'iframe_loader'],
+        'an unquoted attribute' => ['[box alignment=centered]', 'box'],
+        'a closing tag' => ['[lead]Browse our ads[/lead]', 'lead'],
+        'a hyphen and nothing else' => ['[default-message]', 'default-message'],
+        'an underscore and nothing else' => ['[admin_email]', 'admin_email'],
+    ]);
+
+    /**
+     * Bracketed prose from the exports corpus, which the shortcode pattern also matches.
+     *
+     * @param  string  $prose  The bracketed text
+     */
+    it('does not report bracketed prose', function (string $prose): void {
+        $processor = shortcodeProcessor();
+
+        $result = $processor->processShortcodesInContent('<p>A '.$prose.' B</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'about');
+
+        expect($result)->toBe('<p>A '.$prose.' B</p>')
+            ->and(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'))->toBe([])
             ->and($processor->getUnaddressedNodes())->toBe([]);
+    })->with([
+        'a word' => ['[sic]'],
+        'a number' => ['[1]'],
+        'a letter' => ['[a]'],
+        'a capitalized note' => ['[Epub 2012 Apr 20]'],
+        'an acronym' => ['[PDF]'],
+        'words' => ['[citation needed]'],
+        'a phrase with markup' => ['[et al., including <strong>Zhan F</strong>]'],
+        'figures with equals signs' => ['[White = 2.11%, Black = 3.33%]'],
+        'a lowercase word before an equals sign' => ['[p < 0.05, r = 0.3]'],
+        'a quoted JSON string' => ['["create"]'],
+    ]);
+
+    it('does not report registered or dropped shortcodes', function (): void {
+        shortcodeProcessor()->processShortcodesInContent('<p>[probe a=1] and [subpage-list link=""]</p>', 'site-a', new AssetImporter, new BufferedOutput);
+
+        expect(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'))->toBe([]);
+    });
+
+    it('reports the current page, not one an earlier process() call named', function (): void {
+        $processor = shortcodeProcessor();
+        $processor->process(['name' => 'probe', 'original' => '[probe]', 'id' => 12, 'link' => 'https://example.com/old/'], 'site-a', new AssetImporter, new BufferedOutput);
+        ProcessingContext::setWordPressPageLink('https://example.com/new/');
+
+        $processor->processShortcodesInContent('<p>[mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'new');
+
+        expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'page_link', 'page_id'))
+            ->toBe(['' => 'https://example.com/new/']);
+    });
+
+    it('reports a shortcode once when the same content is processed twice', function (): void {
+        $processor = shortcodeProcessor();
+
+        $processor->processShortcodesInContent('<p>[mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'about');
+        $processor->processShortcodesInContent('<p>[mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput, [], [], [], 'about');
+
+        expect(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'))->toHaveCount(1);
     });
 });
 
