@@ -16,7 +16,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 /**
  * Processes WordPress [accordion] and [section] shortcodes.
  *
- * Parses [accordion] and [section title="..."] structures into arrays of section
+ * Parses [accordion] and [section] structures into arrays of section
  * data with titles and wpautop-processed content, which the audio post importer
  * reads transcripts from. In Bard content an accordion is flattened instead: each
  * section becomes its title as a heading followed by its content, because the
@@ -25,18 +25,22 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
 {
     /**
-     * Matches a [section title="..."] opening tag, capturing the title as `title`.
+     * Matches a [section] opening tag, capturing a quoted title as `title` and an
+     * unquoted one as `bare`.
      *
-     * The title runs to the matching quote that is followed by the end of the tag
-     * or by another attribute, so a quote of the other kind (a link's href in a
-     * single-quoted title) or a decoded &quot; inside it does not end it early.
-     * A title never runs across another [section] tag. The group is atomic: once
-     * the tag has matched, a later failure cannot stretch the title further.
+     * The title may come in any position among the attributes, or be missing. A
+     * quoted title runs to the matching quote that is followed by the end of the
+     * tag or by another attribute, so a quote of the other kind (a link's href in
+     * a single-quoted title) or a decoded &quot; inside it does not end it early.
+     * A title never runs across another [section] tag. An unquoted title is read
+     * as ShortcodeProcessor reads an unquoted attribute value. The group is
+     * atomic: once the tag has matched, a later failure cannot stretch the title
+     * further.
      */
-    private const string OPEN_TAG = '(?>\[section\s+title=(?<quote>["\'])(?<title>(?:(?!\[\/?section\b).)*?)\k<quote>(?:\s+[\w-]+=(?:"[^"]*"|\'[^\']*\'|[^\s\]"\']*))*\s*\])';
+    private const string OPEN_TAG = '(?>\[section(?:\s+(?:title=(?:(?<quote>["\'])(?<title>(?:(?!\[\/?section\b).)*?)\k<quote>|(?<bare>[^\s\]"\']+))|[\w-]+=(?:"[^"]*"|\'[^\']*\'|[^\s\]"\']*)))*\s*\])';
 
     /**
-     * Matches one [section title="..."]...[/section], capturing `title` and `body`.
+     * Matches one [section]...[/section], capturing `title`, `bare` and `body`.
      */
     private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
 
@@ -88,7 +92,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         // Process each matched section to extract title and content
         foreach ($matches as $match) {
             // Extract and strip HTML tags from the section title
-            $title = HtmlTagStripper::strip($match['title']);
+            $title = self::sectionTitle($match);
 
             // Extract and clean the section content from the second capture group.
             // TextProcessor::processForBard() trims its input too, so this trim
@@ -189,7 +193,9 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
      * Shortcodes inside the sections are processed, since the outer extraction
      * consumed them along with the accordion. The output closes any open
      * paragraph first and opens one at the end, and text between sections gets a
-     * paragraph of its own. When one
+     * paragraph of its own. A section with no title, or an unquoted one, is read
+     * as ShortcodeProcessor reads attributes, and a [section] tag that still does
+     * not convert is kept as text and reported (#167). When one
      * of this method's own patterns fails, the content is kept as it was and an
      * import warning names the page; an accordion the outer extraction fails to
      * match never reaches this method.
@@ -242,7 +248,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
                 self::SECTION_PATTERN,
                 static function (array $match): string {
                     // The stripper decodes entities and trims, so the title is plain text
-                    $title = HtmlTagStripper::strip($match['title']);
+                    $title = self::sectionTitle($match);
 
                     $heading = $title === ''
                         ? ''
@@ -289,6 +295,13 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
             // they cannot become blank-line paragraphs.
             // ---
             $flattened = (\str_starts_with($flattened, '</p>') ? $flattened : '</p><p>'.$flattened).'</p><p>';
+
+            // Report a [section] tag no section matched, which stays as text (#167)
+            self::reportUnconvertedSection(
+                $flattened,
+                $site,
+                $pageSlug
+            );
         }
 
         // Process the shortcodes inside the sections
@@ -301,6 +314,59 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
             $terms,
             [],
             $pageSlug
+        );
+    }
+
+    /**
+     * The plain-text title of a matched section, or an empty string when it has none.
+     *
+     * @param  array<int|string, string>  $match  A SECTION_PATTERN match
+     * @return string The title with its tags stripped and entities decoded
+     */
+    private static function sectionTitle(
+        array $match
+    ): string {
+        // A quoted title is captured as `title`, an unquoted one as `bare`. PCRE
+        // sets both whenever the pattern matches, since `body` follows them
+        $title = $match['title'] !== ''
+            ? $match['title']
+            : $match['bare'];
+
+        return HtmlTagStripper::strip($title);
+    }
+
+    /**
+     * Records a [section] tag left in flattened accordion content.
+     *
+     * A tag no section matched (an opening tag with no closing one, or one whose
+     * attributes are not well formed) stays in the imported text, so the report
+     * names the site, the page and the text from that tag on.
+     *
+     * @param  string  $flattened  The flattened accordion content
+     * @param  string  $site  The site handle for context
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     */
+    private static function reportUnconvertedSection(
+        string $flattened,
+        string $site,
+        ?string $pageSlug
+    ): void {
+        // Find the first [section] or [/section] tag left in the content
+        if (\preg_match('/\[\/?section\b/', $flattened, $tag, PREG_OFFSET_CAPTURE) !== 1) {
+            return;
+        }
+
+        ImportWarningManager::addWarning(
+            'content',
+            'unconverted_accordion_sections',
+            [
+                'site' => $site,
+                'page_slug' => $pageSlug ?? '',
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_strcut($flattened, $tag[0][1], 100),
+                'reason' => 'A [section] tag in this [accordion] was not converted, '
+                    .'so it was kept in the content as text.',
+            ]
         );
     }
 }
