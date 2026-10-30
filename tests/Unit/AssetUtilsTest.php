@@ -19,8 +19,15 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
 use UAMSWeb\WordPressImporter\Tests\LaravelHttpTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(LaravelHttpTestCase::class);
+
+// A `continue` mutated into one of the class's switches compiles to a
+// `break` with a warning; fail on it whichever test file loads the class first
+beforeEach(function (): void {
+    CompilesCleanly::assert(AssetUtils::class);
+});
 
 it('refuses a redirect from a public URL to an internal host', function (): void {
     // Public host HEAD redirects to the cloud-metadata endpoint

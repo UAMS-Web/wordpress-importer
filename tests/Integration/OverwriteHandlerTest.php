@@ -23,8 +23,15 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
+
+// A `continue` mutated into one of the class's switches compiles to a
+// `break` with a warning; fail on it whichever test file loads the class first
+beforeEach(function (): void {
+    CompilesCleanly::assert(OverwriteHandler::class);
+});
 
 /**
  * A downloader that records each call and returns a queued result.

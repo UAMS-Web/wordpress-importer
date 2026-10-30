@@ -20,6 +20,13 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\PullQuo
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Table;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
+// The parse rule is built once per process and cached, so coverage of the lines
+// that build it goes to whichever test built it first. Building it afresh for
+// each test here keeps these assertions on those lines
+beforeEach(function (): void {
+    (new ReflectionProperty(Set::class, 'cachedConfigs'))->setValue(null, null);
+});
+
 afterEach(function (): void {
     // Leave no nonce behind for a later test in this process
     SetMarkupNonce::reset();
