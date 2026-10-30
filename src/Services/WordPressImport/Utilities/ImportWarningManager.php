@@ -117,6 +117,24 @@ class ImportWarningManager
             }
         }
 
+        // For unaddressed_shortcodes, check for duplicates before adding
+        if ($category === 'content' && $type === 'unaddressed_shortcodes') {
+            // Content reaches more than one processing pass, so the same shortcode on
+            // the same page is reported once (#120)
+            foreach ($existingWarnings as $existingWarning) {
+                if (
+                    ($existingWarning['shortcode_name'] ?? '') === ($data['shortcode_name'] ?? '')
+                    && ($existingWarning['original'] ?? '') === ($data['original'] ?? '')
+                    && ($existingWarning['site'] ?? '') === ($data['site'] ?? '')
+                    && ($existingWarning['page_slug'] ?? null) === ($data['page_slug'] ?? null)
+                    && ($existingWarning['page_link'] ?? '') === ($data['page_link'] ?? '')
+                ) {
+                    // Duplicate found, don't add this warning
+                    return;
+                }
+            }
+        }
+
         // Add the warning data to the appropriate category and type
         self::$warnings[$category][$type][] = $data;
 
