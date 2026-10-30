@@ -44,9 +44,9 @@ uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 /**
  * What the probe `BaseEntryCreator` adds, so the probe can be built inside a test.
  *
- * A compile warning in the class (such as a `continue` mutated into a switch) is
- * caught by {@see CompilesCleanly} before each test, whichever test file loaded
- * the class first.
+ * A compile warning in the class (such as a `continue` mutated into a switch)
+ * fails the first test a process runs, through {@see CompilesCleanly}, whichever
+ * test file loaded the class first.
  */
 interface BaseEntryTestProbe
 {

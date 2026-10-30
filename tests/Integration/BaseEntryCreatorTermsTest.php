@@ -1214,6 +1214,7 @@ describe('the term pass at the start of an import', function (): void {
         'another set' => ['default', ['probe_tax'], 'default', ['zz_other'], true],
         'the same set for another site' => ['one', ['probe_tax'], 'two', ['probe_tax'], true],
         'a site and set that run together the same way' => ['ab', ['c'], 'a', ['bc'], true],
+        'a set and site that run together the same way' => ['c', ['ab'], 'bc', ['a'], true],
     ]);
 
     it('groups nothing for a handle that only loosely names a taxonomy', function (array $handles, array $terms): void {
@@ -1296,6 +1297,17 @@ describe('the term pass at the start of an import', function (): void {
         expect(termsSaved())->toBe(['probe_tax::default_kept' => 'Default — Kept'])
             // Keyed by WordPress term id: the term, then the category and the tag
             ->and(is_array($termMap) ? array_keys($termMap) : $termMap)->toBe([2, 4, 5]);
+    });
+
+    it('imports a term whose slug reads as a number', function (): void {
+        termsToggleSupported(false);
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('1', '2023', '2023'), termsTerm('2', '2024', '2024', 'probe_tax', '2023')]), ['probe_tax'], 'default', new BufferedOutput);
+
+        expect(termsSaved())->toBe([
+            'probe_tax::default_2023' => 'Default — 2023',
+            'probe_tax::default_2023_2024' => 'Default — 2024',
+        ]);
     });
 
     it('imports a term under its full hierarchical slug, and none without a slug', function (): void {

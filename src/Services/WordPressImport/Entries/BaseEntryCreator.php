@@ -1593,6 +1593,11 @@ abstract class BaseEntryCreator
             $term = TermFacade::make();
             $term->taxonomy($statamicTaxonomyHandle);
             $term->slug($termData['slug']);
+            // Term::in() answers a localization and changes the term in nothing, so
+            // no outcome depends on this call; the host-app suite pins it
+            // (TermCreationInNonDefaultSitesTest)
+            // @pest-mutate-ignore: RemoveMethodCall
+            $term->in($site);
             $term->set(
                 'title',
                 $termData['title']
@@ -2041,10 +2046,7 @@ abstract class BaseEntryCreator
             \is_string(...)
         );
 
-        // Generate a unique cache key combining site and sorted taxonomy handles. The
-        // key only has to tell one site and set apart from another, which either
-        // order of its parts does
-        // @pest-mutate-ignore: ConcatSwitchSides
+        // Generate a unique cache key combining site and sorted taxonomy handles
         $cacheKey = $site.'::'.\implode(
             ',',
             $sortedTaxonomies
@@ -2432,7 +2434,9 @@ abstract class BaseEntryCreator
     protected function buildHierarchicalTermMap(
         array $wordPressTaxonomyTermObjects
     ): array {
-        // Initialize empty term map for storing processed terms
+        // Initialize empty term map for storing processed terms. PHP stores an
+        // all-digit slug as an integer key, so the keys are typed as either
+        /** @var array<int|string, array{full_slug: string, parent: string}> $termMap */
         $termMap = [];
 
         // Loop through all terms to extract and process taxonomy data
@@ -2463,11 +2467,12 @@ abstract class BaseEntryCreator
             }
         }
 
-        // Loop through the term map to build full hierarchical slugs
+        // Loop through the term map to build full hierarchical slugs. An all-digit
+        // slug comes back as an integer key, so it is read as the string it was (#303)
         foreach ($termMap as $slug => &$data) {
             // Calculate the full hierarchical slug for each term
             $data['full_slug'] = $this->getFullTermSlug(
-                $slug,
+                (string) $slug,
                 $termMap
             );
         }
@@ -2834,6 +2839,11 @@ abstract class BaseEntryCreator
         $term = TermFacade::make();
         $term->taxonomy($statamicTaxonomyHandle);
         $term->slug($siteSpecificSlug);
+        // Term::in() answers a localization and changes the term in nothing, so no
+        // outcome depends on this call; the host-app suite pins it
+        // (TermCreationInNonDefaultSitesTest)
+        // @pest-mutate-ignore: RemoveMethodCall
+        $term->in($site);
         $term->set(
             'title',
             $title
@@ -3076,9 +3086,7 @@ abstract class BaseEntryCreator
 
         // Check if term ID exists before tracking it
         if ($termId !== '') {
-            // Mark this term ID as seen to prevent future duplicates. Only isset()
-            // reads it, which takes false as set as well
-            // @pest-mutate-ignore: TrueToFalse
+            // Mark this term ID as seen to prevent future duplicates
             $seenTermIds[$termId] = true;
         }
 
