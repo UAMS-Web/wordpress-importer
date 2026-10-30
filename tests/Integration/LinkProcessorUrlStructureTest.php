@@ -307,33 +307,34 @@ it('finds nothing for a URL that is only question marks after the site', functio
     expect(urlStructureFind('https://example.com/site/??', [urlStructureItem('5', 'about')]))->toBeNull();
 });
 
-it('reads a fragment straight after the site as the slug', function (): void {
-    // Characterization of #160: the leading slash is trimmed before the fragment
-    // is cut, and strtok() skips a leading #, so the fragment is taken for a slug
-    expect(urlStructureFind('https://example.com/site/#top', [urlStructureItem('5', 'top')]))
-        ->toBe(['post_id' => '5', 'post_name' => 'top', 'post_type' => 'page']);
+it('names no page for a fragment or a query straight after the site', function (string $url, string $slug): void {
+    // The query and fragment are cut before the leading slash is trimmed (#160)
+    expect(urlStructureFind($url, [urlStructureItem('5', $slug)]))->toBeNull();
+})->with([
+    'a fragment' => ['https://example.com/site/#top', 'top'],
+    'a query' => ['https://example.com/site/?x=1', 'x=1'],
+]);
+
+it('finds a page whose slug holds an ampersand', function (): void {
+    // The slug is compared as text, not as escaped markup (#160)
+    expect(urlStructureFind('https://example.com/site/a&b', [urlStructureItem('5', 'a&amp;b')]))
+        ->toBe(['post_id' => '5', 'post_name' => 'a&b', 'post_type' => 'page']);
 });
 
-it('finds nothing for a slug holding an ampersand', function (): void {
-    // Characterization of #160: the slug is entity-escaped inside the query, so
-    // the query compares against "a&amp;b" and never matches the stored "a&b"
-    expect(urlStructureFind('https://example.com/site/a&b', [urlStructureItem('5', 'a&amp;b')]))->toBeNull();
-});
-
-it('finds nothing, with a warning, for a slug holding an apostrophe', function (): void {
-    // Characterization of #160: the apostrophe ends the query's string literal
+it('finds a page whose slug holds an apostrophe, with no warning', function (): void {
+    // The slug goes into the query as a string literal (#160)
     $result = urlStructureFindWithWarnings("https://example.com/site/o'brien", [urlStructureItem('5', "o'brien")]);
 
-    expect($result['found'])->toBeNull()
-        ->and($result['warnings'])->not->toBe([]);
+    expect($result['found'])->toBe(['post_id' => '5', 'post_name' => "o'brien", 'post_type' => 'page'])
+        ->and($result['warnings'])->toBe([]);
 });
 
-it('finds nothing, with a warning, for a child whose parent ID holds an apostrophe', function (): void {
-    // Characterization of #160: the parent ID is not escaped inside the query
-    $result = urlStructureFindWithWarnings('https://example.com/site/parent/team', [urlStructureItem('3', 'parent'), urlStructureItem('8', 'team', "3'")]);
+it('finds a child whose parent ID holds an apostrophe, with no warning', function (): void {
+    // The parent ID goes into the query as a string literal (#160)
+    $result = urlStructureFindWithWarnings('https://example.com/site/parent/team', [urlStructureItem("3'", 'parent'), urlStructureItem('8', 'team', "3'")]);
 
-    expect($result['found'])->toBeNull()
-        ->and($result['warnings'])->not->toBe([]);
+    expect($result['found'])->toBe(['post_id' => '8', 'post_name' => 'team', 'post_type' => 'page'])
+        ->and($result['warnings'])->toBe([]);
 });
 
 it('skips a candidate that does not fit and goes on to the next', function (array $items): void {
