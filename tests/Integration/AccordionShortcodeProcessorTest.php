@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Tests for AccordionShortcodeProcessor, which turns `[accordion]` and
- * `[section title="..."]` shortcodes into accordion section data.
+ * `[section]` shortcodes into accordion section data.
  *
  * `parse()` reads the shortcode content from ProcessingContext and returns
  * `['type' => 'accordion', ...sections]`, each section holding a tag-stripped
@@ -182,7 +182,7 @@ it('ends a section at its own closing tag', function (): void {
     ]);
 });
 
-it('ignores sections without a title attribute and returns only the type with no sections', function (?string $content): void {
+it('returns only the type when the content holds no complete section', function (?string $content): void {
     if ($content !== null) {
         ProcessingContext::setShortcodeContent($content);
     }
@@ -193,12 +193,11 @@ it('ignores sections without a title attribute and returns only the type with no
 })->with([
     'no shortcode content in context' => [null],
     'no sections' => ['just text'],
-    'section without a title' => ['[section]body[/section]'],
     'section never closed' => ['[section title="A"]body'],
 ]);
 
-it('accepts an empty title', function (): void {
-    ProcessingContext::setShortcodeContent('[section title=""]body[/section]');
+it('parses a section with an empty or missing title as untitled (#167)', function (string $content): void {
+    ProcessingContext::setShortcodeContent($content);
 
     $result = (new AccordionShortcodeProcessor)->parse([], 'default', accordionAssetImporter(), new BufferedOutput);
 
@@ -206,7 +205,27 @@ it('accepts an empty title', function (): void {
         'type' => 'accordion',
         ['title' => '', 'content' => [accordionParagraph('body')]],
     ]);
-});
+})->with([
+    'empty title' => ['[section title=""]body[/section]'],
+    'no attributes' => ['[section]body[/section]'],
+    'other attributes only' => ['[section open="true"]body[/section]'],
+]);
+
+it('parses an unquoted title, and a title after another attribute (#167)', function (string $content, string $title): void {
+    ProcessingContext::setShortcodeContent($content);
+
+    $result = (new AccordionShortcodeProcessor)->parse([], 'default', accordionAssetImporter(), new BufferedOutput);
+
+    expect($result)->toBe([
+        'type' => 'accordion',
+        ['title' => $title, 'content' => [accordionParagraph('body')]],
+    ]);
+})->with([
+    'unquoted' => ['[section title=Transcript]body[/section]', 'Transcript'],
+    'unquoted, then another attribute' => ['[section title=Transcript open=1]body[/section]', 'Transcript'],
+    'after another attribute' => ['[section open="1" title="Late"]body[/section]', 'Late'],
+    'unquoted with markup stripped' => ['[section title=<b>Bold</b>]body[/section]', 'Bold'],
+]);
 
 it('finds the accordion in a segment, stores its trimmed content and parses it', function (): void {
     $result = (new AccordionShortcodeProcessor)->parseFromSegment(
@@ -537,5 +556,93 @@ describe('in Bard content', function (): void {
             'heading3: Q',
             'paragraph: Answer.',
         ]);
+    });
+});
+
+describe('a section without a usable title (#167)', function (): void {
+    it('flattens an untitled section to its body, with no heading', function (string $content): void {
+        expect(accordionFlattened($content))->toBe("</p><p>Body text</p>\n<p></p><p>")
+            ->and(ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections'))->toBe([]);
+    })->with([
+        'no attributes' => ['[section]Body text[/section]'],
+        'other attributes only' => ['[section open="true"]Body text[/section]'],
+    ]);
+
+    it('flattens an unquoted title to a heading', function (): void {
+        expect(accordionFlattened('[section title=Unquoted]Body[/section]'))->toBe("</p><h3>Unquoted</h3><p>Body</p>\n<p></p><p>");
+    });
+
+    it('imports untitled and unquoted sections into Bard with no shortcode text', function (): void {
+        $nodes = accordionSectionContent("[accordion]\n[section]Body text[/section]\n[section title=Unquoted]Body[/section]\n[/accordion]");
+
+        expect(accordionBardOutline($nodes))->toBe([
+            'paragraph: Body text',
+            'heading3: Unquoted',
+            'paragraph: Body',
+        ])->and(\json_encode($nodes))->not->toContain('[section')->not->toContain('[/section]');
+    });
+});
+
+describe('a [section] tag left unconverted (#167)', function (): void {
+    it('records a warning naming the site, the page and the text from the tag on', function (string $content, string $snippet): void {
+        ProcessingContext::setWordPressPageLink('https://example.test/page/');
+
+        accordionFlattened($content);
+
+        expect(ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections'))->toBe([[
+            'site' => 'default',
+            'page_slug' => 'slug',
+            'page_link' => 'https://example.test/page/',
+            'content_snippet' => $snippet,
+            'reason' => 'A [section] tag in this [accordion] was not converted, so it was kept in the content as text.',
+        ]]);
+    })->with([
+        'an opening tag never closed' => ['[section title="A"]body', '[section title="A"]body</p><p>'],
+        'a stray closing tag' => ['x [/section] y', '[/section]y</p><p>'],
+    ]);
+
+    it('records empty page fields when no page is known', function (): void {
+        ProcessingContext::clearWordPressPageLink();
+
+        (new AccordionShortcodeProcessor)->toTiptapHtml(
+            ['name' => 'accordion', 'attributes' => [], 'content' => '[section]body'],
+            'default',
+            accordionAssetImporter(),
+            new BufferedOutput
+        );
+
+        /** @var array<int, array<string, string>> $warnings */
+        $warnings = ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections');
+
+        expect($warnings)->toHaveCount(1)
+            ->and($warnings[0]['page_slug'] ?? null)->toBe('')
+            ->and($warnings[0]['page_link'] ?? null)->toBe('');
+    });
+
+    it('cuts the snippet to 100 bytes without splitting a character', function (): void {
+        // "é" is two bytes, so a cut at byte 100 would fall inside one
+        accordionFlattened('[section]'.str_repeat('é', 60));
+
+        /** @var array<int, array<string, string>> $warnings */
+        $warnings = ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections');
+        $snippet = $warnings[0]['content_snippet'] ?? null;
+
+        expect($snippet)->toBe('[section]'.str_repeat('é', 45))
+            ->and(mb_check_encoding(\is_string($snippet) ? $snippet : '', 'UTF-8'))->toBeTrue();
+    });
+
+    it('keeps the first 100 bytes of the text from the tag on', function (): void {
+        accordionFlattened('[section]'.str_repeat('a', 200));
+
+        /** @var array<int, array<string, string>> $warnings */
+        $warnings = ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections');
+
+        expect($warnings[0]['content_snippet'] ?? null)->toBe('[section]'.str_repeat('a', 91));
+    });
+
+    it('records nothing when every tag converts', function (): void {
+        accordionFlattened('[section title="A"]one[/section][section]two[/section]');
+
+        expect(ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections'))->toBe([]);
     });
 });
