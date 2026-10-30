@@ -86,7 +86,7 @@
         "test": "pest --testsuite=Unit,Integration",
         "mutate": [
             "Composer\\Config::disableProcessTimeout",
-            "@php vendor/bin/pest --mutate --parallel --path=src --testsuite=Unit,Integration"
+            "@php vendor/bin/pest --mutate --path=src --testsuite=Unit,Integration"
         ],
         "stan": "phpstan analyse --memory-limit=-1",
         "ci": [

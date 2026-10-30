@@ -14,7 +14,7 @@ jobs:
   mutate:
     name: Mutation score (changed files, with PCOV)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     # An explicit `bash` runs each step with `-eo pipefail`; the default, `bash -e`, does not,
     # and the run step's `| tee` would then report tee's status in place of Pest's.
     defaults:
