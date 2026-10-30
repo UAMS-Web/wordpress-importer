@@ -397,15 +397,26 @@ final class AttachmentReferenceCollector
             }
         }
 
-        // Every absolute or protocol-relative URL. Relative URLs are left alone, because the
-        // importer does not treat them as same-site either.
+        // Every absolute or protocol-relative URL, with the apostrophe entity that opens it
+        // when a shortcode's value is quoted with one. Relative URLs are left alone, because
+        // the importer does not treat them as same-site either.
         // No match leaves the list empty, so the loop does nothing
-        \preg_match_all('#(?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+#i', $text, $urls);
+        \preg_match_all('~(&\#0*39;|&\#x0*27;|&apos;)?((?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+)~i', $text, $urls, \PREG_SET_ORDER);
 
-        foreach ($urls[0] as $url) {
+        foreach ($urls as $match) {
             // An HTML attribute carries `&` as an entity, so decode the URL to the one the
             // markup holds before trimming, or `&amp;` would lose its `;` (#269)
-            $url = \html_entity_decode($url, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+            $url = \html_entity_decode($match[2], \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+
+            // A quote or an angle bracket cannot stand in a URL, so a decoded one is the
+            // entity-quoted value's closing quote, or a tag after it (#309)
+            $url = \substr($url, 0, \strcspn($url, '"<>'));
+
+            // An apostrophe can stand in a URL, as in a file name, so the URL ends at one
+            // only when an apostrophe entity opened it
+            if ($match[1] !== '') {
+                $url = \substr($url, 0, \strcspn($url, "'"));
+            }
 
             $this->collectUrl(\rtrim($url, '.;:!?'), $item);
         }

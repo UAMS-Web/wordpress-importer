@@ -215,6 +215,41 @@ it('decodes an apostrophe, which WordPress writes in an attribute as an entity',
     'named' => ['&apos;'],
 ]);
 
+/**
+ * A URL quoted with an entity, as a shortcode inside markup is, ends at the closing quote,
+ * and one followed by an entity-encoded tag ends before it (#309).
+ *
+ * @param  string  $content  The item's content
+ */
+it('ends a URL at an entity-encoded closing quote or tag', function (string $content): void {
+    $collector = collectedFrom($content);
+
+    expect($collector->paths())->toBe(['2020/09/a.jpg'])
+        ->and(\array_keys($collector->imageUrls()))->toBe(['https://example.test/dept/wp-content/uploads/2020/09/a.jpg']);
+})->with([
+    'double-quoted, named' => ['[gallery link=&quot;https://example.test/dept/wp-content/uploads/2020/09/a.jpg&quot;]'],
+    'double-quoted, numeric' => ['[gallery link=&#34;https://example.test/dept/wp-content/uploads/2020/09/a.jpg&#34;]'],
+    'single-quoted, numeric' => ['[gallery link=&#039;https://example.test/dept/wp-content/uploads/2020/09/a.jpg&#039;]'],
+    'single-quoted, named' => ['[gallery link=&apos;https://example.test/dept/wp-content/uploads/2020/09/a.jpg&apos;]'],
+    'a tag after it' => ['https://example.test/dept/wp-content/uploads/2020/09/a.jpg&lt;br&gt;'],
+    'a closing tag after it' => ['https://example.test/dept/wp-content/uploads/2020/09/a.jpg&lt;/p&gt;'],
+]);
+
+it('ends an entity-quoted link at its closing quote', function (): void {
+    $collector = collectedFrom('[button url=&quot;https://example.test/dept/team/&quot;]');
+
+    expect($collector->links())->toBe(['//example.test/dept/team' => 42]);
+});
+
+it('keeps an apostrophe in a file name when the URL is not quoted with one', function (string $content): void {
+    $collector = collectedFrom($content);
+
+    expect($collector->paths())->toBe(["2020/09/O'Neil.jpg"]);
+})->with([
+    'in an HTML attribute' => ['<img src="https://example.test/dept/wp-content/uploads/2020/09/O&#039;Neil.jpg">'],
+    'in an entity-double-quoted shortcode' => ['[gallery link=&quot;https://example.test/dept/wp-content/uploads/2020/09/O&#039;Neil.jpg&quot;]'],
+]);
+
 it('decodes an entity in a link, and leaves an unterminated one as written', function (): void {
     // The query string is not part of a normalized link, so the entities are in the path
     $collector = collectedFrom(
