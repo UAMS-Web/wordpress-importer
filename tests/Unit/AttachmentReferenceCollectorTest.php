@@ -206,6 +206,15 @@ it('decodes the HTML entities in a URL taken from markup', function (string $wri
     'raw' => ['&'],
 ]);
 
+it('decodes an apostrophe, which WordPress writes in an attribute as an entity', function (string $written): void {
+    $collector = collectedFrom('<img src="https://example.test/dept/wp-content/uploads/2020/09/O'.$written.'Neil.jpg">');
+
+    expect($collector->paths())->toBe(["2020/09/O'Neil.jpg"]);
+})->with([
+    'numeric' => ['&#039;'],
+    'named' => ['&apos;'],
+]);
+
 it('decodes an entity in a link, and leaves an unterminated one as written', function (): void {
     // The query string is not part of a normalized link, so the entities are in the path
     $collector = collectedFrom(
