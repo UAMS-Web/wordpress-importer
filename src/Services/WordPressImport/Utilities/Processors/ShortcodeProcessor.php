@@ -27,6 +27,23 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingConte
 class ShortcodeProcessor
 {
     /**
+     * Matches a shortcode with optional content.
+     *
+     * The name stops at whitespace, "]" and "/", none of which WordPress's
+     * add_shortcode() accepts in a name, so a shortcode written with no attributes
+     * ends at its own bracket instead of running on to the next one in the text.
+     */
+    private const string SHORTCODE_PATTERN = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+
+    /**
+     * Matches attribute text that is a list of WordPress shortcode attributes.
+     *
+     * Each item is a name with a quoted or unquoted value, or a bare name, and the
+     * list may end in the self-closing slash.
+     */
+    private const string ATTRIBUTE_LIST_PATTERN = '/^(?:[\w-]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'\]]+)\s*|[\w-]+\s*)*\/?$/';
+
+    /**
      * Registered shortcode handlers mapped to set types.
      *
      * @var array<string, array{set: string, class: string}>
@@ -118,13 +135,9 @@ class ShortcodeProcessor
     ): array {
         $shortcodes = [];
 
-        // Match shortcodes with optional content. The name stops at whitespace, "]"
-        // and "/", none of which WordPress's add_shortcode() accepts in a name, so a
-        // shortcode written with no attributes ends at its own bracket instead of
-        // running on to the next one in the text
-        $shortcodePattern = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+        // Match shortcodes with optional content
         preg_match_all(
-            $shortcodePattern,
+            self::SHORTCODE_PATTERN,
             $content,
             $matches,
             PREG_SET_ORDER
@@ -529,8 +542,8 @@ class ShortcodeProcessor
      * Processes shortcodes in content, converting supported ones to Tiptap HTML.
      *
      * Recognized-but-dropped shortcodes are stripped. Unregistered ones are left
-     * in place untouched; extract() does not return them, so they are not
-     * tracked as unaddressed here.
+     * in place, and each that has the shape of a shortcode rather than bracketed
+     * prose is reported as unaddressed (#120).
      *
      * @param  string  $content  HTML content containing shortcodes
      * @param  string  $site  Statamic site handle
@@ -552,6 +565,13 @@ class ShortcodeProcessor
         array $unaddressedBlocks = [],
         ?string $pageSlug = null
     ): string {
+        // Report the unknown shortcodes the content holds, which stay in its text
+        $this->reportUnknownShortcodes(
+            $content,
+            $site,
+            $pageSlug
+        );
+
         $shortcodes = $this->extractShortcodes(
             $content
         );
@@ -602,6 +622,96 @@ class ShortcodeProcessor
         }
 
         return $processedContent;
+    }
+
+    /**
+     * Reports each unknown shortcode in content as unaddressed.
+     *
+     * A shortcode that no handler takes and that is not dropped stays in the
+     * imported text. Only one with the shape of a shortcode is reported, since the
+     * pattern also matches bracketed prose. The report names the page the import
+     * is on, not one an earlier process() call named.
+     *
+     * @param  string  $content  HTML content containing shortcodes
+     * @param  string  $site  Statamic site handle
+     * @param  ?string  $pageSlug  Page slug for the report
+     */
+    private function reportUnknownShortcodes(
+        string $content,
+        string $site,
+        ?string $pageSlug
+    ): void {
+        // No match leaves the list empty, so the loop does nothing
+        preg_match_all(
+            self::SHORTCODE_PATTERN,
+            $content,
+            $matches,
+            PREG_SET_ORDER
+        );
+
+        foreach ($matches as $match) {
+            $name = $match[1];
+
+            // Leave registered and dropped shortcodes to extract(), and prose alone
+            if (
+                isset($this->handlers[$name])
+                || $this->isDroppedShortcode($name)
+                || ! self::looksLikeShortcode($name, $match[2], isset($match[3]))
+            ) {
+                continue;
+            }
+
+            // Name the page this content is on
+            $this->pageId = '';
+            $this->pageLink = ProcessingContext::getWordPressPageLink() ?? '';
+
+            $this->trackUnaddressedShortcode(
+                $name,
+                $site,
+                $match[0],
+                $pageSlug
+            );
+        }
+    }
+
+    /**
+     * Whether an unknown bracketed name is a shortcode rather than bracketed prose.
+     *
+     * Measured against the exports corpus: a shortcode's name is lowercase, and it
+     * carries a well-formed attribute with a value, a closing tag, or a name joined
+     * with "-" or "_". A bare lowercase word such as [search] cannot be told from
+     * prose such as [that], so it is not reported (#120).
+     *
+     * @param  string  $name  The bracketed name
+     * @param  string  $attributes  The text after the name
+     * @param  bool  $closed  Whether a closing tag follows
+     * @return bool True when it is a shortcode
+     */
+    private static function looksLikeShortcode(
+        string $name,
+        string $attributes,
+        bool $closed
+    ): bool {
+        // A shortcode's name is lowercase and starts with a letter
+        if (\preg_match('/^[a-z][a-z0-9_-]*$/', $name) !== 1) {
+            return false;
+        }
+
+        // A closing tag pairs it
+        if ($closed) {
+            return true;
+        }
+
+        $attributes = \trim($attributes);
+
+        // A bare name is a shortcode only when it is joined with "-" or "_"
+        if ($attributes === '') {
+            return \preg_match('/[_-]/', $name) === 1;
+        }
+
+        // Attribute text is a shortcode's when it is a list holding a value
+        return \str_contains($attributes, '=')
+            && \preg_match(self::ATTRIBUTE_LIST_PATTERN, $attributes) === 1;
     }
 
     /**
