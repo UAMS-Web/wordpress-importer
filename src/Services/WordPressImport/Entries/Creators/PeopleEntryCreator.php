@@ -888,10 +888,16 @@ class PeopleEntryCreator extends BaseEntryCreator
                 $entryId
             );
 
-            // Check if the parsed bio content is not empty
-            if (! $this->isEmptyContent($parsedBio)) {
+            // Check the converted bio itself, not the whole converter result, which is
+            // never empty; an empty bio leaves the field at its null default (#257)
+            $parsedBioContent = $parsedBio['content'] ?? [];
+            if (! \is_array($parsedBioContent)) {
+                $parsedBioContent = [];
+            }
+
+            if (! $this->isEmptyContent($parsedBioContent)) {
                 // Set the bio content in the data array
-                $data['bio'] = $parsedBio['content'];
+                $data['bio'] = $parsedBioContent;
             }
 
             // Map WordPress metadata to Statamic fields
@@ -949,6 +955,7 @@ class PeopleEntryCreator extends BaseEntryCreator
                 $originalWordPressUrl,
                 $parentId,
                 $parsedBio,
+                $parsedBioContent,
                 $parsedBioShort,
                 $peopleGroups,
                 $portraitPath,

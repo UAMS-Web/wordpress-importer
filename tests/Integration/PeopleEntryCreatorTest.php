@@ -652,6 +652,18 @@ describe('importing a person', function (): void {
             ->and($data)->not->toHaveKeys(['unknown', '_psunknown', '_thumbnail_id', 'import_wordpress_notes']);
     });
 
+    it('leaves the bio empty when it converts to no content', function (mixed $content): void {
+        peopleEntryRun(peopleEntryExport([['slug' => 'blank', 'content' => 'x']]), PeopleEntryTestConverter::returning(['content' => $content, 'page_builder' => []]));
+        $data = peopleEntryData(peopleEntry('blank'));
+
+        expect($data)->toHaveKey('bio')
+            ->and($data['bio'])->toBeNull();
+    })->with([
+        'no nodes' => [[]],
+        'no content at all' => [null],
+        'the empty-content placeholder' => [[['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Imported from WordPress XML. Content empty.']]]]],
+    ]);
+
     it('defaults every field a person blueprint expects', function (): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'bare', 'content' => '']]), PeopleEntryTestConverter::returning(['content' => [], 'page_builder' => []]));
         $data = peopleEntryData(peopleEntry('bare'));
@@ -661,8 +673,8 @@ describe('importing a person', function (): void {
             'job_title' => null,
             'people_groups' => [],
             'priority' => 0,
-            // #257: a bio that converts to nothing is stored as an empty list
-            'bio' => [],
+            // A bio that converts to nothing leaves the field empty (#257)
+            'bio' => null,
             'bio_short' => null,
             'email' => null,
             'telephone' => null,
