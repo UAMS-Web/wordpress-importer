@@ -596,6 +596,7 @@ describe('processShortcodesInContent', function (): void {
         'a closing tag' => ['[lead]Browse our ads[/lead]', 'lead'],
         'a hyphen and nothing else' => ['[default-message]', 'default-message'],
         'an underscore and nothing else' => ['[admin_email]', 'admin_email'],
+        'a space after the self-closing slash' => ['[pdf attachment="519" / ]', 'pdf'],
     ]);
 
     /**
@@ -622,6 +623,8 @@ describe('processShortcodesInContent', function (): void {
         'figures with equals signs' => ['[White = 2.11%, Black = 3.33%]'],
         'a lowercase word before an equals sign' => ['[p < 0.05, r = 0.3]'],
         'a quoted JSON string' => ['["create"]'],
+        'BBCode, closed' => ['[IMG]http://example.com/a.jpg[/IMG]'],
+        'a capitalized name with an attribute' => ['[GS Citations=2]'],
     ]);
 
     it('does not report registered or dropped shortcodes', function (): void {
@@ -639,6 +642,19 @@ describe('processShortcodesInContent', function (): void {
 
         expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'page_link', 'page_id'))
             ->toBe(['' => 'https://example.com/new/']);
+    });
+
+    it('reports each unknown shortcode after the names it passes over', function (): void {
+        shortcodeProcessor()->processShortcodesInContent('<p>[probe a=1] [sic] [mystery a=1] [subpage-list] [other_one]</p>', 'site-a', new AssetImporter, new BufferedOutput);
+
+        expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'shortcode_name'))
+            ->toBe(['mystery', 'other_one']);
+    });
+
+    it('names no page link when the import has none', function (): void {
+        shortcodeProcessor()->processShortcodesInContent('<p>[mystery a=1]</p>', 'site-a', new AssetImporter, new BufferedOutput);
+
+        expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'page_link'))->toBe(['']);
     });
 
     it('reports a shortcode once when the same content is processed twice', function (): void {
