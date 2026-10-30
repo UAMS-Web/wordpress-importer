@@ -11,6 +11,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
@@ -341,6 +342,21 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
 
         // Check if the image set was successfully created
         if ($set === null || $set === []) {
+            // Keep the text of a caption that holds no image, and report it (#164)
+            if (
+                $shortcodeContent !== null
+                && $shortcodeContent !== ''
+                && ! $this->containsImage($shortcodeContent)
+            ) {
+                $this->reportImagelessCaption(
+                    $shortcodeContent,
+                    $site,
+                    $pageSlug
+                );
+
+                return $shortcodeContent;
+            }
+
             // Return empty string if parsing failed
             return '';
         }
@@ -357,6 +373,50 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             $values,
             $setType,
             '' // Empty content to prevent duplicate caption text
+        );
+    }
+
+    /**
+     * Whether caption content holds an <img> element.
+     *
+     * @param  string  $content  The caption shortcode's content
+     * @return bool True when the content holds an image
+     */
+    private function containsImage(
+        string $content
+    ): bool {
+        return TextProcessor::loadHtml($content)
+            ->getElementsByTagName('img')
+            ->length > 0;
+    }
+
+    /**
+     * Records a caption that holds no image for the run summary.
+     *
+     * Its text stays in the imported content, so the report names the site, the
+     * page and the start of that text for an editor to check.
+     *
+     * @param  string  $content  The caption shortcode's content
+     * @param  string  $site  The Statamic site handle
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     */
+    private function reportImagelessCaption(
+        string $content,
+        string $site,
+        ?string $pageSlug
+    ): void {
+        ImportWarningManager::addWarning(
+            'content',
+            'imageless_captions',
+            [
+                'site' => $site,
+                'page_slug' => $pageSlug ?? '',
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_substr($content, 0, 100)
+                    .(\mb_strlen($content) > 100 ? '...' : ''),
+                'reason' => 'The [caption] holds no image, so its text was kept '
+                    .'in the content as written.',
+            ]
         );
     }
 

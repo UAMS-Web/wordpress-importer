@@ -757,8 +757,8 @@ it('process counts every remaining sibling when a caption block has no closing c
     expect(is_array($result) ? ($result['skipCount'] ?? null) : null)->toBe(3);
 });
 
-it('process returns empty html and a skip count for a lone caption that renders nothing', function (): void {
-    // A caption with no image renders as nothing (#164); the block is still skipped
+it('process returns the text and a skip count for a lone caption with no image', function (): void {
+    // A caption with no image keeps its text (#164); the block is still skipped
     // whole, as it was when the caption built a page builder block
     $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]No image here[/caption]</div><!-- /wp:shortcode -->';
 
@@ -766,7 +766,7 @@ it('process returns empty html and a skip count for a lone caption that renders 
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    expect($result)->toBe(['html' => '', 'skipCount' => 3]);
+    expect($result)->toBe(['html' => 'No image here', 'skipCount' => 3]);
 });
 
 it('process returns a plain string for a lone shortcode with no page builder block other than a caption', function (): void {
@@ -792,7 +792,7 @@ it('process keeps the rendered shortcodes and warns about one that renders nothi
             $warnings->append(['message' => $message, 'context' => $context]);
         }
     );
-    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />With image[/caption] [caption id="attachment_2"]No image[/caption]</div><!-- /wp:shortcode -->';
+    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />With image[/caption] [caption id="attachment_2"][/caption]</div><!-- /wp:shortcode -->';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
@@ -801,9 +801,9 @@ it('process keeps the rendered shortcodes and warns about one that renders nothi
     // The rendered caption is replaced; the empty one stays as its shortcode text
     expect($result)->toBeString()
         ->toContain('data-set-attr-caption="With image"')
-        ->toContain('[caption id="attachment_2"]No image[/caption]');
+        ->toContain('[caption id="attachment_2"][/caption]');
 
-    // The caption's own missing-image warning comes first; the block processor's follows
+    // The caption's own missing-content warning comes first; the block processor's follows
     $blockWarnings = \array_values(\array_filter(
         $warnings->getArrayCopy(),
         static fn (array $warning): bool => \str_contains($warning['message'], 'ShortcodeBlockProcessor::process')
@@ -815,7 +815,7 @@ it('process keeps the rendered shortcodes and warns about one that renders nothi
             'site' => 'default',
             'pageSlug' => 'test-page',
             'shortcode_name' => 'caption',
-            'shortcode_original' => '[caption id="attachment_2"]No image[/caption]',
+            'shortcode_original' => '[caption id="attachment_2"][/caption]',
         ]);
 });
 
