@@ -39,6 +39,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
@@ -283,6 +284,7 @@ function tablePressCollection(bool $dated = false, bool $withStatus = false): vo
 }
 
 beforeEach(function (): void {
+    CompilesCleanly::assert(TablePressEntryCreator::class);
     config(['statamic.search.indexes' => []]);
     Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/']]);
     tablePressCollection();

@@ -23,8 +23,15 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
+
+// A `continue` mutated into a switch in the class compiles to a `break` with a
+// warning; fail on it whichever test file loads the class first
+beforeEach(function (): void {
+    CompilesCleanly::assert(AssetUtils::class);
+});
 
 afterEach(function (): void {
     Mockery::close();

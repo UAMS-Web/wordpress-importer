@@ -61,6 +61,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Peop
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
@@ -783,6 +784,7 @@ function entryCreatorSlugs(string $handle): array
 }
 
 beforeEach(function (): void {
+    CompilesCleanly::assert(EntryCreator::class);
     config([
         'statamic.search.indexes' => [],
         'wordpress-import.upload_images' => false,
