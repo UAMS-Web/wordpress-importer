@@ -224,15 +224,15 @@ it('splits a URL into its base, query and fragment', function (string $url, arra
     'a question mark inside the fragment' => ['https://x.test/a/#f?q', ['base' => 'https://x.test/a/', 'fragment' => '#f?q', 'query' => null]],
 ]);
 
-it('does not match the exact link of an item whose link holds an ampersand', function (): void {
-    // Characterization of #160: the URL is entity-escaped inside the query, so
-    // the query compares against "&amp;" and never matches the stored "&"
+it('finds an item by the exact link it holds an ampersand in, without fetching the page', function (): void {
+    // The URL is compared as text, not as escaped markup (#160)
     Http::fake(['*' => Http::response('')]);
     $path = findByUrlExport(findByUrlDirectory($this).'/export.xml', findByUrlItem('5', 'about', 'http://93.184.216.34/site/about/?a=1&amp;b=2', 'publish'));
 
-    expect(findByUrlCall('findPostDataByUrl', 'http://93.184.216.34/site/about/?a=1&b=2', $path))->toBeNull();
+    expect(findByUrlCall('findPostDataByUrl', 'http://93.184.216.34/site/about/?a=1&b=2', $path))
+        ->toBe(['post_id' => '5', 'post_name' => 'about', 'post_type' => 'page']);
 
-    Http::assertSentCount(1);
+    Http::assertNothingSent();
 });
 
 it('finds an item by structure in an export that binds the WordPress namespace to another prefix', function (): void {

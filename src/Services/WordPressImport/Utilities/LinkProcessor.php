@@ -2608,16 +2608,10 @@ class LinkProcessor
         // Expand any single part path to the whole ordered split-export part-set
         $parts = SplitExportPartLocator::locate($xmlPath)->parts;
 
-        // Build a safe XPath string literal for the URL so a value containing a
-        // quote cannot break out of the query (the entity-escaping is preserved
-        // for prior behavior; the literal builder neutralizes any apostrophe)
-        $linkLiteral = XpathHelper::xpathStringLiteral(
-            htmlspecialchars(
-                $searchUrl,
-                ENT_XML1,
-                'UTF-8'
-            )
-        );
+        // Build an XPath string literal for the URL so a value containing a quote
+        // cannot break out of the query. XPath compares text, not markup, so the
+        // raw URL is what matches a stored link holding & (#160)
+        $linkLiteral = XpathHelper::xpathStringLiteral($searchUrl);
 
         // Hold the first URL-structure (non-published) match until every part has
         // been checked for a definitive exact-link match. An exact <link> match
@@ -2855,24 +2849,13 @@ class LinkProcessor
             \strlen($baseBlogUrl)
         );
 
-        // Remove leading slashes
-        $path = \ltrim(
+        // Cut the query and fragment, so a path that is only a query or a fragment
+        // is no path rather than a slug (#160). A leading slash leaves an empty
+        // first segment, which the filter below drops
+        $path = \substr(
             $path,
-            '/'
-        );
-
-        // Remove query parameters (strtok() gives false for an empty path or
-        // one of nothing but question marks, both of which are no path, and
-        // likewise for the fragment below)
-        $path = (string) strtok(
-            $path,
-            '?'
-        );
-
-        // Remove fragment identifiers
-        $path = (string) strtok(
-            $path,
-            '#'
+            0,
+            \strcspn($path, '?#')
         );
 
         // Split the path into segments
@@ -2930,19 +2913,16 @@ class LinkProcessor
         // Get the last segment value to use for post name matching
         $currentSegment = $pathSegments[$lastSegmentIndex];
 
-        // Find all posts with matching post_name for the last segment
-        $escapedPostName = htmlspecialchars(
-            $currentSegment,
-            ENT_XML1,
-            'UTF-8'
-        );
-
-        // Search XML for all items with matching post_name value
+        // Search XML for all items with matching post_name value, through a
+        // string literal so a slug holding & or an apostrophe matches (#160)
         $candidateItems = $xml->xpath(
-            "//item[wp:post_name[text()='{$escapedPostName}']]"
+            '//item[wp:post_name[text()='.XpathHelper::xpathStringLiteral($currentSegment).']]'
         );
 
-        // Check if any candidates were found
+        // Check if any candidates were found. xpath() answers false only for an
+        // invalid query, which the string literal rules out, and with no candidates
+        // every step below also ends in null, so this return only saves the work
+        // @pest-mutate-ignore: BooleanOrToBooleanAnd, RemoveEarlyReturn
         if (! \is_array($candidateItems) || $candidateItems === []) {
             // Return null if no posts found for the last segment
             return null;
@@ -3178,7 +3158,7 @@ class LinkProcessor
 
                 // Find the parent post item
                 $parentItems = $xml->xpath(
-                    "//item[wp:post_id[text()='{$parentPostId}']]"
+                    '//item[wp:post_id[text()='.XpathHelper::xpathStringLiteral($parentPostId).']]'
                 );
 
                 // Get the parent post item, skipping an item whose parent cannot be
