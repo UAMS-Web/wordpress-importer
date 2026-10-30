@@ -1049,7 +1049,7 @@ it('aborts, skips or imports knowledge base articles without a topic as the poli
  * Today's behavior: the store is looked up by the collection handle rather than as a child of
  * `entries`, so it is never found (#292).
  */
-it('enables the destination collection for the site, and says the Stache store could not be cleared', function (): void {
+it('enables the destination collection for the site, with no Stache store clear (#292)', function (): void {
     iwriCollection('pages', ['other']);
     [$command, $buffer, $stands] = iwriCommand();
     $stands['siteManager']->enabled = false;
@@ -1058,7 +1058,8 @@ it('enables the destination collection for the site, and says the Stache store c
 
     expect($status)->toBe(0)
         ->and(IwriLog::of('sites.enable'))->toBe([['default', 'pages']])
-        ->and($output)->toContain("Enabled 'default' for collection 'pages'.\nCould not clear Stache cache for 'pages'; store not found.\n");
+        ->and($output)->toContain("Enabled 'default' for collection 'pages'.\n")
+        ->and($output)->not->toContain("Stache cache for 'pages'");
 });
 
 it('leaves an enabled destination collection alone', function (): void {
@@ -1072,19 +1073,18 @@ it('leaves an enabled destination collection alone', function (): void {
 });
 
 /**
- * Today's behavior: a content type whose destination collection does not exist is skipped
- * with a warning but not counted with the types skipped at a gate, so a run that imported
- * nothing for it still succeeds (#291).
+ * A content type whose destination collection does not exist imports nothing, so it is named
+ * with the types skipped at a gate and the run fails (#291).
  */
-it('skips a content type whose destination collection does not exist', function (): void {
+it('skips a content type whose destination collection does not exist, and fails the run', function (): void {
     [$command, $buffer] = iwriCommand(['--content-type' => 'page']);
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
 
-    expect($status)->toBe(0)
+    expect($status)->toBe(1)
         ->and(IwriLog::of('entries.create'))->toBe([])
         ->and($output)->toContain("The 'pages' collection does not exist in Statamic.\nPlease create and configure the 'pages' collection before importing 'page' content.\n")
-        ->and($output)->not->toContain('Nothing was imported');
+        ->and($output)->toEndWith("Nothing was imported for the following content types, because a destination was missing:\n  - page (needs the 'pages' collection)\nCreate the missing destinations and re-run; the import is incomplete.\n");
 });
 
 it('imports redirect rules into the redirects global set, asking how to treat matching sets', function (): void {
@@ -1112,16 +1112,17 @@ it('enables the redirects global set for the site', function (): void {
 });
 
 /**
- * Today's behavior, as for a missing collection: the run still succeeds (#291).
+ * As for a missing collection, a missing global set is named and the run fails (#291).
  */
-it('skips redirect rules when the redirects global set does not exist', function (): void {
+it('skips redirect rules when the redirects global set does not exist, and fails the run', function (): void {
     [$command, $buffer] = iwriCommand(['--content-type' => 'redirect_rule']);
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, ['redirect_rule'])]);
 
-    expect($status)->toBe(0)
+    expect($status)->toBe(1)
         ->and(IwriLog::of('globals.create'))->toBe([])
-        ->and($output)->toContain("The 'redirects' global set does not exist in Statamic.\nPlease create and configure the 'redirects' global set before importing 'redirect_rule' content.\n");
+        ->and($output)->toContain("The 'redirects' global set does not exist in Statamic.\nPlease create and configure the 'redirects' global set before importing 'redirect_rule' content.\n")
+        ->and($output)->toEndWith("Nothing was imported for the following content types, because a destination was missing:\n  - redirect_rule (needs the 'redirects' global set)\nCreate the missing destinations and re-run; the import is incomplete.\n");
 });
 
 it('enables the taxonomies a page\'s blocks need, skipping the pages when one is missing', function (string $block, string $handle, array $asked): void {
@@ -1272,8 +1273,8 @@ it('runs the final deferred pass for the site, and forgets the site afterwards',
 });
 
 /**
- * A Stache store keyed as a collection is, so the command's lookup of a collection's store
- * finds one. It records each clear.
+ * A Stache store keyed as a collection is, so a lookup of a collection's store by its handle
+ * would find one. It records each clear.
  */
 final class IwriPagesStore extends Store
 {
@@ -1471,7 +1472,11 @@ it('uploads assets when either upload setting is left out, as it defaults to on'
     'files left out, images off' => [['upload_images' => false]],
 ]);
 
-it('clears the Stache store of a collection it enables, when there is one', function (): void {
+/**
+ * Enabling a collection clears no store, even one keyed by the collection's handle: the only
+ * clear is the one before the navigation pass (#292).
+ */
+it('clears no Stache store when it enables a collection', function (): void {
     iwriCollection('pages', ['other']);
     IwriPagesStore::$cleared = 0;
     Stache::registerStore(new IwriPagesStore);
@@ -1480,8 +1485,9 @@ it('clears the Stache store of a collection it enables, when there is one', func
 
     [, $output] = iwriRun($command, $buffer, [iwriPart($this, ['page'])]);
 
-    expect($output)->toContain("Enabled 'default' for collection 'pages'.\nCleared Stache cache for 'pages' collection.\n")
-        ->and(IwriPagesStore::$cleared)->toBe(2);
+    expect($output)->toContain("Enabled 'default' for collection 'pages'.\n")
+        ->and($output)->not->toContain("Stache cache for 'pages'")
+        ->and(IwriPagesStore::$cleared)->toBe(1);
 });
 
 it('clears the Stache before the navigation pass', function (): void {

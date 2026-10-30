@@ -19,7 +19,6 @@ use Statamic\Facades\Stache;
 use Statamic\Globals\GlobalSet as StatamicGlobalSet;
 use Statamic\Globals\Variables as StatamicVariables;
 use Statamic\Stache\Query\EntryQueryBuilder;
-use Statamic\Stache\Stores\Store as StacheStore;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
@@ -1775,6 +1774,9 @@ class ImportWordPress extends Command
                         // Inform user that collection needs to be created
                         $this->info("Please create and configure the '$defaultHandle' collection before importing '$contentType' content.");
 
+                        // Record the abandonment so the exit code reflects it (#291)
+                        $skippedAtGate[] = "$contentType (needs the '$defaultHandle' collection)";
+
                         // Skip to next iteration of loop
                         continue;
                     }
@@ -1794,24 +1796,6 @@ class ImportWordPress extends Command
 
                         // Confirm to user that collection was enabled
                         $this->info("Enabled '$site' for collection '$defaultHandle'.");
-
-                        // ---
-                        // Clear Stache cache after enabling the collection
-                        // ---
-
-                        // Check if Stache store exists for this collection
-                        $store = Stache::store($defaultHandle);
-
-                        if ($store instanceof StacheStore) {
-                            // Clear the Stache cache for this collection
-                            $store->clear();
-
-                            // Inform user that cache was cleared
-                            $this->info("<info>Cleared Stache cache for '$defaultHandle' collection.</info>");
-                        } else { // Otherwise
-                            // Warn user that cache could not be cleared
-                            $this->warn("Could not clear Stache cache for '$defaultHandle'; store not found.");
-                        }
                     }
                 } elseif ($defaultType === 'global') { // Check if default type is global
                     // Find global set by handle
@@ -1824,6 +1808,9 @@ class ImportWordPress extends Command
 
                         // Inform user that global set needs to be created
                         $this->info("Please create and configure the '$defaultHandle' global set before importing '$contentType' content.");
+
+                        // Record the abandonment so the exit code reflects it (#291)
+                        $skippedAtGate[] = "$contentType (needs the '$defaultHandle' global set)";
 
                         // Skip to next iteration of loop
                         continue;
@@ -3481,9 +3468,10 @@ class ImportWordPress extends Command
             // ---
 
             // Define options for user to choose from
-            $options = ['
-                Restart with increased memory',
-                'Continue with current memory limit', 'Exit',
+            $options = [
+                'Restart with increased memory',
+                'Continue with current memory limit',
+                'Exit',
             ];
 
             // Prompt user to select how to proceed
