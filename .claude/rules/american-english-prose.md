@@ -14,7 +14,7 @@ The convention is already enforced. [`cspell.json`](../../cspell.json) sets `"la
 
 ## Why this is a standing order
 
-**Because each addition is individually defensible and the aggregate is not.** A word is added because it is genuinely needed at one site, and thereafter the gate cannot enforce the convention for that word *anywhere*, including in prose nobody has written yet. The cost is paid by a later reader, not by the author. Repeated, it replaces the convention with its opposite: `wordpress-importer`'s dictionary had absorbed ten British spellings before the convention was written down, and `uams-statamic`'s review of four entries (#2318) found two that had been absorbed for reasons that looked like the carve-out and were not.
+**Because each addition is individually defensible and the aggregate is not.** A word is added because it is genuinely needed at one site, and thereafter the gate cannot enforce the convention for that word *anywhere*, including in prose nobody has written yet. The cost is paid by a later reader, not by the author. Repeated, it replaces the convention with its opposite: `wordpress-importer`'s dictionary had absorbed ten British spellings before the convention was written down, and `uams-statamic`'s review of four entries (UAMS-Web/uams-statamic-archive#2318) found two that had been absorbed for reasons that looked like the carve-out and were not.
 
 **And the entry carries no trace of its reasoning.** A long sorted word list makes every line look alike: a proper noun, a package name, a British spelling somebody allowed once, and a genuine misspelling are indistinguishable. Reviewing one means reconstructing why it was added.
 
@@ -49,13 +49,13 @@ A British spelling that stands in a first-party file is not automatically wrong,
 
 ### `analyse` and `analyser` are not spellings
 
-`analyse` is PHPStan's own subcommand, and it appears in this repository as the literal argument the gate runs. Verified at `3a02bcf`:
+`analyse` is PHPStan's own subcommand, and it appears in this repository as the literal argument the gate runs. Verified at `649b1a5`:
 
 ```
-composer.json:83          "stan": "phpstan analyse --memory-limit=-1"
-scripts/local-ci.mjs:748  phpstan: ['vendor/bin/phpstan', 'analyse', '--memory-limit=-1']
-scripts/local-ci.mjs:11   the parity comment naming the same command
-CLAUDE.md:27              the documented invocation
+composer.json:85          "stan": "phpstan analyse --memory-limit=-1"
+local-ci.json:25          "run": "vendor/bin/phpstan analyse --memory-limit=-1"
+.github/workflows/ci.yml:333  run: vendor/bin/phpstan analyse --no-progress --error-format=github --memory-limit=-1
+AGENTS.md:72              the documented invocation
 ```
 
 Removing those entries would make the `spell` job reject the command the `phpstan` job runs. Both stay, and both carry a `#` comment in `project-words.txt` saying why, or the next sweep deletes them for looking like the other eight.

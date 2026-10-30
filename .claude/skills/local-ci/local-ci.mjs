@@ -130,6 +130,12 @@
 //              `tooling absent`; a run whose selected jobs were all skipped this way
 //              is NOTHING RAN, and a run where some passed and some were skipped
 //              this way is `PASS (incomplete)`, never a bare PASS.
+//     installs true: this job installs the repository's dependencies
+//              (`composer install`). The run refuses before any job when a
+//              selected job runs a `vendor/bin` tool and `vendor/autoload.php`
+//              is absent; a selected `installs` job listed before the first
+//              such job stands that refusal down, so a fresh slot reaches the
+//              job that creates `vendor/`.
 //     mutation `{"minScore": 100}`: the job's output is part of its verdict. The
 //              command's output is read for Pest's `N Mutations for M Files
 //              created` line and its `Score: N%` line, and the job fails when
@@ -208,7 +214,10 @@
 //     differs from the config). It is resolved only when a selected job needs
 //     it, so a repository with no PHP job runs on a machine with no PHP. A
 //     version other than the config's warns; a missing PHP fails before any
-//     job runs. --dry-run lists the search order and notes when a Herd pin is
+//     job runs. Where `composer.json` pins `config.platform.php` to a patch
+//     version (`8.4.27`), a PHP older than it fails before any job runs,
+//     naming both versions; a pin of major and minor only, or no pin, checks
+//     nothing (UAMS-Web/uams-claude-skills#394). --dry-run lists the search order and notes when a Herd pin is
 //     absent so the plan is not read as a guarantee that pin will run. A job
 //     that names its own `php` resolves it separately (see `php` above).
 //
@@ -362,7 +371,7 @@ const asStringList = (value, what) => {
 // only guess about, so a typo in the config fails here with the key named
 // rather than as a job that never runs.
 const TOP_LEVEL_KEYS = ['base', 'php', 'chain', 'guard', 'jobs', 'prepare', 'statusContext', 'watch']
-const JOB_KEYS = ['name', 'run', 'always', 'each', 'paths', 'requires', 'mutation', 'parallel', 'database', 'php']
+const JOB_KEYS = ['name', 'run', 'always', 'each', 'paths', 'requires', 'mutation', 'parallel', 'database', 'php', 'installs']
 const GUARD_KEYS = ['deny']
 const MUTATION_KEYS = ['minScore']
 const PARALLEL_KEYS = ['serialGroup', 'memoryLimit']
@@ -453,6 +462,9 @@ export function parseConfig(raw) {
             throw new Error(`${where}.parallel cannot be combined with "each" or "mutation".`)
         }
         const database = parseDatabase(job.database, `${where}.database`)
+        if (job.installs !== undefined && typeof job.installs !== 'boolean') {
+            throw new Error(`${where}.installs must be true or false.`)
+        }
         const jobPhp = job.php === undefined ? null : job.php
         if (jobPhp !== null && (typeof jobPhp !== 'string' || !/^\d+\.\d+$/.test(jobPhp))) {
             throw new Error(`${where}.php must be a version like "8.2".`)
@@ -460,7 +472,7 @@ export function parseConfig(raw) {
         if (jobPhp !== null && !needsPhp(job.run)) {
             throw new Error(`${where}.php needs "run" to start with php or vendor/bin/; nothing else runs under PHP.`)
         }
-        return { name: job.name, run: job.run.trim(), paths, each, always: job.always === true, requires, mutation, parallel, database, php: jobPhp }
+        return { name: job.name, run: job.run.trim(), paths, each, always: job.always === true, requires, mutation, parallel, database, php: jobPhp, installs: job.installs === true }
     })
 
     const statusContext = config.statusContext === undefined ? 'local-ci' : config.statusContext
@@ -665,6 +677,29 @@ function normalizeRequirement(entry, where) {
         throw new Error(`${where} entry ${JSON.stringify(entry)} must be a path inside the repository (or "bin:<command>").`)
     }
     return path
+}
+
+// True when the run must stop before any job because a selected vendor/bin job
+// would start with no vendor/autoload.php. A selected job marked `installs`
+// that runs before the first vendor/bin job is the repository's own bootstrap,
+// so the check stands down and that job's result carries the message. `selected`
+// is in the order the jobs run.
+export function vendorMissingFor(selected, vendorPresent) {
+    if (vendorPresent) {
+        return false
+    }
+    for (const entry of selected) {
+        if (!entry.job) {
+            continue
+        }
+        if (entry.job.installs) {
+            return false
+        }
+        if (/^vendor[\\/]bin[\\/]/.test(entry.job.run)) {
+            return true
+        }
+    }
+    return false
 }
 
 // The `requires` entries that are not met, in the order written. `exists` and
@@ -1163,6 +1198,45 @@ function resolvePhp(config) {
     throw new Error(
         `PHP was not found. Install PHP${config.php ? ` ${config.php}` : ''} (Laravel Herd on macOS and Windows) or set LOCAL_CI_PHP to its absolute path.`,
     )
+}
+
+/**
+ * The development PHP the repository pins in `composer.json`'s `config.platform.php`, or null
+ * when there is no `composer.json` or it pins none. Throws on a `composer.json` that is not
+ * JSON, since the pin cannot then be read.
+ */
+export function platformPhp(composerText) {
+    if (composerText === null) return null
+    let composer
+    try {
+        composer = JSON.parse(composerText)
+    } catch (error) {
+        throw new Error(`composer.json is not valid JSON (${error.message}); the runner reads config.platform.php from it.`)
+    }
+    const pin = composer?.config?.platform?.php
+    return typeof pin === 'string' ? pin : null
+}
+
+const versionParts = (version) => (String(version).match(/^(\d+)\.(\d+)\.(\d+)/) ?? []).slice(1).map(Number)
+
+/**
+ * Why the run's PHP may not run, or null when it may (UAMS-Web/uams-claude-skills#394): a pin
+ * naming a patch version (`8.4.27`) refuses an older PHP, because `config.platform.php` only
+ * sets the PHP Composer resolves for and nothing else checks the PHP a machine runs. A pin of
+ * major and minor only (`8.4`), no pin, or a version this cannot read checks nothing.
+ */
+export function phpPinFinding(version, pin) {
+    if (pin === null || !/^\d+\.\d+\.\d+$/.test(pin)) return null
+    const have = versionParts(version)
+    if (have.length !== 3) return null
+    const want = versionParts(pin)
+    for (let i = 0; i < 3; i++) {
+        if (have[i] > want[i]) return null
+        if (have[i] < want[i]) {
+            return `PHP ${version} is older than ${pin}, the development PHP composer.json pins in config.platform.php. Upgrade PHP to ${pin} or later (Laravel Herd on macOS and Windows, or the system's package manager), or set LOCAL_CI_PHP to a PHP that is at least ${pin}.`
+        }
+    }
+    return null
 }
 
 function phpVersion(php) {
@@ -2385,9 +2459,10 @@ function main(argv) {
 
     // Fail before any job runs, naming the remedy, rather than letting every
     // vendor/bin job fail with the shell's "not found".
-    const wantsVendor = selection.selected.some((entry) => entry.job && /^vendor[\\/]bin[\\/]/.test(entry.job.run))
-    if (wantsVendor && !existsSync(join(repoRoot, 'vendor', 'autoload.php'))) {
-        throw new Error(`vendor/ is missing in ${repoRoot}; the selected jobs run vendor/bin tools. Run \`composer install\` first.`)
+    if (vendorMissingFor(selection.selected, existsSync(join(repoRoot, 'vendor', 'autoload.php')))) {
+        throw new Error(
+            `vendor/ is missing in ${repoRoot}; the selected jobs run vendor/bin tools and no job marked "installs" runs before them. Run \`composer install\` first, or mark the job that installs dependencies "installs": true and list it before the first vendor/bin job.`,
+        )
     }
 
     let php = null
@@ -2395,6 +2470,10 @@ function main(argv) {
         php = resolvePhp(config)
         const version = phpVersion(php.path)
         console.log(`PHP:        ${php.path} (${version}, from ${php.source})`)
+        // Only the run's PHP: a job with its own (the floor lint) is resolved and checked below.
+        const composerPath = join(repoRoot, 'composer.json')
+        const pinned = phpPinFinding(version, platformPhp(existsSync(composerPath) ? readFileSync(composerPath, 'utf8') : null))
+        if (pinned) throw new Error(pinned)
         if (config.php && !version.startsWith(`${config.php}.`)) {
             warn(`PHP is ${version}; ${CONFIG_FILE} names ${config.php}. Results may differ from a ${config.php} run.`)
         }
