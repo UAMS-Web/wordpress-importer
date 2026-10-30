@@ -39,9 +39,12 @@ class ShortcodeProcessor
      * Matches attribute text that is a list of WordPress shortcode attributes.
      *
      * Each item is a name with a quoted or unquoted value, or a bare name, and the
-     * list may end in the self-closing slash.
+     * list may end in the self-closing slash. Every quantifier is possessive and
+     * every item atomic, so a run of word characters has one way to match: PCRE
+     * never tries the ways to split it between a name and an unquoted value, which
+     * ran a long rejected string out of backtracking (#321).
      */
-    private const string ATTRIBUTE_LIST_PATTERN = '/^(?:[\w-]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'\]]+)\s*|[\w-]+\s*)*\/?$/';
+    private const string ATTRIBUTE_LIST_PATTERN = '/^(?>[\w-]++\s*+=\s*+(?>"[^"]*+"|\'[^\']*+\'|[^\s"\'\]]++)\s*+|[\w-]++\s*+)*+\/?$/';
 
     /**
      * Registered shortcode handlers mapped to set types.
@@ -682,15 +685,21 @@ class ShortcodeProcessor
      * with "-" or "_". A bare lowercase word such as [search] cannot be told from
      * prose such as [that], so it is not reported (#120).
      *
+     * A match that fails with a PCRE error says nothing about the attribute text, so
+     * the name is read as a shortcode, to be reported for review, and the failure is
+     * logged rather than read as prose (#321).
+     *
      * @param  string  $name  The bracketed name
      * @param  string  $attributes  The text after the name
      * @param  bool  $closed  Whether a closing tag follows
+     * @param  string  $listPattern  The attribute-list pattern
      * @return bool True when it is a shortcode
      */
     private static function looksLikeShortcode(
         string $name,
         string $attributes,
-        bool $closed
+        bool $closed,
+        string $listPattern = self::ATTRIBUTE_LIST_PATTERN
     ): bool {
         // A shortcode's name is lowercase and starts with a letter
         if (\preg_match('/^[a-z][a-z0-9_-]*$/', $name) !== 1) {
@@ -710,8 +719,23 @@ class ShortcodeProcessor
         }
 
         // Attribute text is a shortcode's when it is a list holding a value
-        return \str_contains($attributes, '=')
-            && \preg_match(self::ATTRIBUTE_LIST_PATTERN, $attributes) === 1;
+        if (! \str_contains($attributes, '=')) {
+            return false;
+        }
+
+        $matched = \preg_match($listPattern, $attributes);
+
+        // A failed match answers nothing, so say so and leave the name to be reviewed
+        if ($matched === false) {
+            Log::warning(
+                "ShortcodeProcessor::looksLikeShortcode: The attribute check for '{$name}' failed (".\preg_last_error_msg().'); reading it as a shortcode',
+                ['shortcode_name' => $name, 'attributes' => $attributes]
+            );
+
+            return true;
+        }
+
+        return $matched === 1;
     }
 
     /**
