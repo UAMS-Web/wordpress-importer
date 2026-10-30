@@ -657,36 +657,6 @@ describe('processShortcodesInContent', function (): void {
         expect(\array_column(ImportWarningManager::getWarnings('content', 'unaddressed_shortcodes'), 'page_link'))->toBe(['']);
     });
 
-    /**
-     * A match that fails with a PCRE error says nothing about the attribute text, so the
-     * name is read as a shortcode, to be reported for review, and the failure is logged
-     * rather than read as prose (#321). The pattern the rule shipped with in #320 fails
-     * this way on the issue's input at PHP's default backtrack limit.
-     */
-    it('reads the name as a shortcode and logs the failure when the attribute match fails', function (): void {
-        $warnings = shortcodeWarnings();
-        $backtracking = '/^(?:[\w-]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'\]]+)\s*|[\w-]+\s*)*\/?$/';
-
-        // PHP's default backtrack limit, with the JIT off, fails that pattern on this input
-        $limit = \ini_get('pcre.backtrack_limit');
-        $jit = \ini_get('pcre.jit');
-        \ini_set('pcre.backtrack_limit', '1000000');
-        \ini_set('pcre.jit', '0');
-
-        try {
-            $result = (new ReflectionMethod(ShortcodeProcessor::class, 'looksLikeShortcode'))
-                ->invoke(null, 'mystery', 'a=b '.str_repeat('x', 25).'!', false, $backtracking);
-        } finally {
-            \ini_set('pcre.backtrack_limit', (string) $limit);
-            \ini_set('pcre.jit', (string) $jit);
-        }
-
-        expect($result)->toBeTrue()
-            ->and(array_column($warnings->getArrayCopy(), 'message'))->toBe([
-                "ShortcodeProcessor::looksLikeShortcode: The attribute check for 'mystery' failed (Backtrack limit exhausted); reading it as a shortcode",
-            ]);
-    });
-
     it('reports a shortcode once when the same content is processed twice', function (): void {
         $processor = shortcodeProcessor();
 

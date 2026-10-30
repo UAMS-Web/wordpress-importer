@@ -36,15 +36,59 @@ class ShortcodeProcessor
     private const string SHORTCODE_PATTERN = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
 
     /**
-     * Matches attribute text that is a list of WordPress shortcode attributes.
-     *
-     * Each item is a name with a quoted or unquoted value, or a bare name, and the
-     * list may end in the self-closing slash. Every quantifier is possessive and
-     * every item atomic, so a run of word characters has one way to match: PCRE
-     * never tries the ways to split it between a name and an unquoted value, which
-     * ran a long rejected string out of backtracking (#321).
+     * The characters of an attribute name: PCRE's \w without the u flag, and "-".
      */
-    private const string ATTRIBUTE_LIST_PATTERN = '/^(?>[\w-]++\s*+=\s*+(?>"[^"]*+"|\'[^\']*+\'|[^\s"\'\]]++)\s*+|[\w-]++\s*+)*+\/?$/';
+    private const string ATTRIBUTE_NAME_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
+
+    /**
+     * The characters PCRE's \s matches without the u flag.
+     */
+    private const string ATTRIBUTE_SPACE_CHARACTERS = " \t\n\x0B\f\r";
+
+    /**
+     * Where an attribute list may stand: at the start of an item, or at its end.
+     */
+    private const int LIST_ITEM = 1;
+
+    /**
+     * Inside an attribute name.
+     */
+    private const int LIST_NAME = 2;
+
+    /**
+     * In the space after an attribute name.
+     */
+    private const int LIST_AFTER_NAME = 4;
+
+    /**
+     * After an attribute's "=", in the space before its value.
+     */
+    private const int LIST_AFTER_EQUALS = 8;
+
+    /**
+     * Inside a double-quoted value.
+     */
+    private const int LIST_DOUBLE_QUOTED = 16;
+
+    /**
+     * Inside a single-quoted value.
+     */
+    private const int LIST_SINGLE_QUOTED = 32;
+
+    /**
+     * Inside an unquoted value.
+     */
+    private const int LIST_UNQUOTED = 64;
+
+    /**
+     * In the space after a value.
+     */
+    private const int LIST_AFTER_VALUE = 128;
+
+    /**
+     * After the self-closing slash, which ends the list.
+     */
+    private const int LIST_SLASH = 256;
 
     /**
      * Registered shortcode handlers mapped to set types.
@@ -685,21 +729,15 @@ class ShortcodeProcessor
      * with "-" or "_". A bare lowercase word such as [search] cannot be told from
      * prose such as [that], so it is not reported (#120).
      *
-     * A match that fails with a PCRE error says nothing about the attribute text, so
-     * the name is read as a shortcode, to be reported for review, and the failure is
-     * logged rather than read as prose (#321).
-     *
      * @param  string  $name  The bracketed name
      * @param  string  $attributes  The text after the name
      * @param  bool  $closed  Whether a closing tag follows
-     * @param  string  $listPattern  The attribute-list pattern
      * @return bool True when it is a shortcode
      */
     private static function looksLikeShortcode(
         string $name,
         string $attributes,
-        bool $closed,
-        string $listPattern = self::ATTRIBUTE_LIST_PATTERN
+        bool $closed
     ): bool {
         // A shortcode's name is lowercase and starts with a letter
         if (\preg_match('/^[a-z][a-z0-9_-]*$/', $name) !== 1) {
@@ -719,23 +757,107 @@ class ShortcodeProcessor
         }
 
         // Attribute text is a shortcode's when it is a list holding a value
-        if (! \str_contains($attributes, '=')) {
-            return false;
+        return \str_contains($attributes, '=')
+            && self::isAttributeList($attributes);
+    }
+
+    /**
+     * Whether attribute text is a list of WordPress shortcode attributes.
+     *
+     * The list is items, each a name with a double-quoted, single-quoted or unquoted
+     * value, or a bare name, with space around them, and it may end in the
+     * self-closing slash. An unquoted value takes any character but space, a quote
+     * and "]", so where it ends and the next name begins is not fixed by the text:
+     * in `layout=layout='grid'` the value is `lay` and `out='grid'` the next item.
+     *
+     * A regular expression for this grammar tried every such split before rejecting
+     * a string, which ran PCRE out of backtracking on a long one (#321). This reads
+     * the text once instead, carrying every way it could still be read as a set of
+     * states, so it takes time in proportion to the text, cannot fail, and accepts
+     * exactly the strings that expression did.
+     *
+     * @param  string  $attributes  The attribute text
+     * @return bool True when it is such a list
+     */
+    private static function isAttributeList(
+        string $attributes
+    ): bool {
+        $states = self::LIST_ITEM;
+        $length = \strlen($attributes);
+
+        // Read each character against every state the text could be in so far
+        for ($i = 0; $i < $length && $states !== 0; $i++) {
+            $states = self::stepAttributeList($states, $attributes[$i]);
         }
 
-        $matched = \preg_match($listPattern, $attributes);
+        // The list may end between items or after its slash
+        return ($states & (self::LIST_ITEM | self::LIST_SLASH)) !== 0;
+    }
 
-        // A failed match answers nothing, so say so and leave the name to be reviewed
-        if ($matched === false) {
-            Log::warning(
-                "ShortcodeProcessor::looksLikeShortcode: The attribute check for '{$name}' failed (".\preg_last_error_msg().'); reading it as a shortcode',
-                ['shortcode_name' => $name, 'attributes' => $attributes]
-            );
+    /**
+     * The states an attribute list can be in after one more character.
+     *
+     * @param  int  $states  The states before the character, as LIST_* bits
+     * @param  string  $character  The character
+     * @return int The states after it, with each item that can end there ended
+     */
+    private static function stepAttributeList(
+        int $states,
+        string $character
+    ): int {
+        $name = \strspn($character, self::ATTRIBUTE_NAME_CHARACTERS) === 1;
+        $space = \strspn($character, self::ATTRIBUTE_SPACE_CHARACTERS) === 1;
+        $unquoted = ! $space && \strspn($character, '"\']') === 0;
+        $next = 0;
 
-            return true;
+        // An item starts with its name, and the list can end in a slash
+        if (($states & self::LIST_ITEM) !== 0) {
+            $next |= ($name ? self::LIST_NAME : 0) | ($character === '/' ? self::LIST_SLASH : 0);
         }
 
-        return $matched === 1;
+        // A name runs on, or is followed by space or "="
+        if (($states & self::LIST_NAME) !== 0) {
+            $next |= ($name ? self::LIST_NAME : 0) | ($space ? self::LIST_AFTER_NAME : 0) | ($character === '=' ? self::LIST_AFTER_EQUALS : 0);
+        }
+
+        // Space after a name runs on, or is followed by "="
+        if (($states & self::LIST_AFTER_NAME) !== 0) {
+            $next |= ($space ? self::LIST_AFTER_NAME : 0) | ($character === '=' ? self::LIST_AFTER_EQUALS : 0);
+        }
+
+        // After "=" comes space, or a quote or character that opens the value
+        if (($states & self::LIST_AFTER_EQUALS) !== 0) {
+            $next |= ($space ? self::LIST_AFTER_EQUALS : 0)
+                | ($character === '"' ? self::LIST_DOUBLE_QUOTED : 0)
+                | ($character === "'" ? self::LIST_SINGLE_QUOTED : 0)
+                | ($unquoted ? self::LIST_UNQUOTED | self::LIST_AFTER_VALUE : 0);
+        }
+
+        // A quoted value runs to its closing quote
+        if (($states & self::LIST_DOUBLE_QUOTED) !== 0) {
+            $next |= $character === '"' ? self::LIST_AFTER_VALUE : self::LIST_DOUBLE_QUOTED;
+        }
+
+        if (($states & self::LIST_SINGLE_QUOTED) !== 0) {
+            $next |= $character === "'" ? self::LIST_AFTER_VALUE : self::LIST_SINGLE_QUOTED;
+        }
+
+        // An unquoted value runs on, and can end after any of its characters
+        if (($states & self::LIST_UNQUOTED) !== 0 && $unquoted) {
+            $next |= self::LIST_UNQUOTED | self::LIST_AFTER_VALUE;
+        }
+
+        // Space after a value runs on
+        if (($states & self::LIST_AFTER_VALUE) !== 0 && $space) {
+            $next |= self::LIST_AFTER_VALUE;
+        }
+
+        // An item can end after its name, the space after it, or its value
+        if (($next & (self::LIST_NAME | self::LIST_AFTER_NAME | self::LIST_AFTER_VALUE)) !== 0) {
+            $next |= self::LIST_ITEM;
+        }
+
+        return $next;
     }
 
     /**
