@@ -811,10 +811,11 @@ class AcfBlockParser
      * Parses ACF blocks from HTML string content.
      *
      * Extracts and parses ACF block comments from HTML strings (e.g., from
-     * unwrapped wp:group blocks). Each block is parsed from its opening comment
-     * alone, so a paired block's inner content and closing comment stay in the
-     * remaining HTML (tracked in wordpress-importer#201). Returns an array of
-     * parsed ACF sets and the remaining non-ACF HTML content.
+     * unwrapped wp:group blocks). A paired block runs through its closing comment,
+     * so its content reaches its parser and leaves the HTML; a self-closing block,
+     * or a paired one with no closing comment, is parsed from its opening comment
+     * (wordpress-importer#201). Returns an array of parsed ACF sets and the
+     * remaining non-ACF HTML content.
      *
      * @param  string  $html  The HTML string containing ACF block comments
      * @param  string  $site  The Statamic site handle
@@ -864,9 +865,9 @@ class AcfBlockParser
      * Parses ACF blocks from HTML string content, for parseAcfBlocksFromHtml().
      *
      * parseAcfBlocksFromHtml() wraps this to restore libxml's internal-errors
-     * mode afterwards. Each block is parsed from its opening comment alone, so a
-     * paired block's inner content and closing comment stay in the remaining HTML
-     * (tracked in wordpress-importer#201).
+     * mode afterwards. A paired block is taken through the first later comment
+     * that closes its type, as countThroughClosingComment() does in a whole post,
+     * and a block it contains is not parsed again (wordpress-importer#201).
      *
      * @param  string  $html  The HTML string containing ACF block comments
      * @param  string  $site  The Statamic site handle
@@ -888,26 +889,49 @@ class AcfBlockParser
         array $items,
         ?string $pageSlug
     ): array {
-        // Find every opening comment of a supported block, self-closing or not
+        // Find every opening comment of a supported block, self-closing or not, with its type
         \preg_match_all(
-            '/<!--\s*wp:acf\/(?:'.\implode('|', \array_keys(self::BLOCK_TYPES)).')(?:\s+{.+?})?\s*\/?\s*-->/s',
+            '/<!--\s*wp:acf\/('.\implode('|', \array_keys(self::BLOCK_TYPES)).')(?:\s+{.+?})?\s*\/?\s*-->/s',
             $html,
             $matches,
-            PREG_OFFSET_CAPTURE
+            PREG_SET_ORDER | PREG_OFFSET_CAPTURE
         );
 
         $acfSets = [];
         $remainingHtml = '';
         $lastPosition = 0;
 
-        foreach ($matches[0] as [$comment, $position]) {
+        foreach ($matches as $match) {
+            [$comment, $position] = $match[0];
+            $type = $match[1][0];
+
+            // Leave an opening comment inside a paired block already taken to its parser
+            if ($position < $lastPosition) {
+                continue;
+            }
+
             // Keep the HTML between the previous block and this one
             $remainingHtml .= \substr($html, $lastPosition, $position - $lastPosition);
-            $lastPosition = $position + \strlen($comment);
+            $end = $position + \strlen($comment);
+
+            // ---
+            // A paired block runs through the first later comment that closes its type, as
+            // in a whole post, so its content reaches its parser and leaves the HTML. One
+            // with no closing comment is parsed from its opening comment alone (#201).
+            // ---
+            if (
+                \preg_match('/\/\s*-->$/', $comment) !== 1
+                && \preg_match('/<!--\s*\/wp:acf\/'.\preg_quote($type, '/').'\s*-->/', $html, $closing, PREG_OFFSET_CAPTURE, $end) === 1
+            ) {
+                $end = $closing[0][1] + \strlen($closing[0][0]);
+            }
+
+            $block = \substr($html, $position, $end - $position);
+            $lastPosition = $end;
 
             // Parse the block, keeping any set its parser returns
             $set = $this->parseBlockComment(
-                $comment,
+                $block,
                 $site,
                 $assetImporter,
                 $output,
@@ -930,12 +954,13 @@ class AcfBlockParser
     }
 
     /**
-     * Parses one ACF block comment taken from an HTML string.
+     * Parses one ACF block taken from an HTML string.
      *
-     * Loads the comment into a temporary DOM so it can be parsed like a node of a
-     * whole post.
+     * Loads the block into a temporary DOM so it can be parsed like a node of a
+     * whole post: a self-closing block is its opening comment, and a paired one
+     * runs through its closing comment, so its content is the DOM's later nodes.
      *
-     * @param  string  $comment  The block comment, with its comment markers
+     * @param  string  $comment  The block's markup, from its opening comment
      * @param  string  $site  The Statamic site handle
      * @param  AssetImporter  $assetImporter  Instance for importing assets
      * @param  OutputInterface  $output  Console output for logging
@@ -1003,7 +1028,7 @@ class AcfBlockParser
         $body = $document->getElementsByTagName('body')->item(0);
 
         // The markup above always gives the document a body whose first child is the
-        // matched comment, so this guard only narrows the types.
+        // block's opening comment, so this guard only narrows the types.
         // @pest-mutate-ignore: InstanceOfToTrue, RemoveNullSafeOperator
         if (! $body?->firstChild instanceof DOMNode) {
             return null;
