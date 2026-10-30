@@ -27,8 +27,8 @@ use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
 
-// A `continue` mutated into one of the class's switches compiles to a
-// `break` with a warning; fail on it whichever test file loads the class first
+// A `continue` mutated into a switch in the class compiles to a `break` with a
+// warning; fail on it whichever test file loads the class first
 beforeEach(function (): void {
     CompilesCleanly::assert(AssetUtils::class);
 });
