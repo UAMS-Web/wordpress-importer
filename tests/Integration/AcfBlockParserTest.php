@@ -1182,23 +1182,97 @@ describe('blocks in an HTML string', function (): void {
             ->and($calls->calls)->toBe([]);
     });
 
-    it('parses a paired block from its opening comment alone, leaving its content and closing comment in place', function (): void {
+    /**
+     * A paired block's content between its comments is its parser's inner content, as it
+     * is for the same block in a whole post, and neither the content nor the closing comment
+     * stays in the HTML (#201).
+     *
+     * @param  string  $type  The block type
+     * @param  string  $parser  The parser it reaches
+     * @param  list<string>  $arguments  The arguments that parser takes
+     */
+    it('hands a paired section or content block its inner content, and keeps only the HTML outside it', function (string $type, string $parser, array $arguments): void {
+        $block = '<!-- wp:acf/'.$type.' {"data":{"x":1}} --><p>inside</p><h2>Heading</h2><!-- /wp:acf/'.$type.' -->';
+        $calls = new AcfBlockCalls;
+        $context = new AcfBlockContext;
+
+        $result = acfBlocksFromHtml(acfBlockParser($calls), $context, '<p>a</p>'.$block.'<p>b</p>');
+
+        // The inner content the whole-post path hands the same block
+        $postCalls = new AcfBlockCalls;
+        acfBlockParse(acfBlockParser($postCalls), $context, $block);
+        $inner = acfBlockArray($postCalls->calls[0][1][1] ?? null);
+
+        expect($inner)->not->toBe([])
+            ->and($result)->toBe([
+                'acfSets' => [['set' => $parser]],
+                'remainingHtml' => '<p>a</p><p>b</p>',
+            ])
+            ->and($calls->calls)->toBe([[$parser, $context->arguments($arguments, ['data' => ['x' => 1]], innerContent: $inner)]]);
+    })->with([
+        'uams-section' => ['uams-section', 'section', ['attributes', 'inner', 'site', 'importer', 'output', 'attachments', 'terms', 'slug']],
+        'uams-content' => ['uams-content', 'content', ['attributes', 'inner', 'site', 'importer', 'output', 'attachments', 'terms']],
+    ]);
+
+    it('removes a paired block of another type with its content and closing comment', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlocksFromHtml(
+            acfBlockParser($calls),
+            new AcfBlockContext,
+            '<p>a</p><!-- wp:acf/cta {"data":{"x":1}} --><p>inside</p><!-- /wp:acf/cta --><p>b</p>'
+        );
+
+        expect($result)->toBe(['acfSets' => [['set' => 'cta']], 'remainingHtml' => '<p>a</p><p>b</p>'])
+            ->and($calls->names())->toBe(['cta']);
+    });
+
+    it('parses a paired block with no closing comment from its opening comment, and keeps the rest', function (): void {
         $calls = new AcfBlockCalls;
         $context = new AcfBlockContext;
 
         $result = acfBlocksFromHtml(
             acfBlockParser($calls),
             $context,
-            '<p>a</p><!-- wp:acf/uams-section {"data":{"x":1}} --><p>inside</p><!-- /wp:acf/uams-section --><p>b</p>'
+            '<p>a</p><!-- wp:acf/uams-section {"data":{"x":1}} --><p>inside</p><!-- /wp:acf/cta --><p>b</p>'
         );
 
         expect($result)->toBe([
             'acfSets' => [['set' => 'section']],
-            'remainingHtml' => '<p>a</p><p>inside</p><!-- /wp:acf/uams-section --><p>b</p>',
+            'remainingHtml' => '<p>a</p><p>inside</p><!-- /wp:acf/cta --><p>b</p>',
         ])->and($calls->calls)->toBe([[
             'section',
             $context->arguments(['attributes', 'inner', 'site', 'importer', 'output', 'attachments', 'terms', 'slug'], ['data' => ['x' => 1]]),
         ]]);
+    });
+
+    it('does not run a self-closing block through a later closing comment of its type', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlocksFromHtml(
+            acfBlockParser($calls),
+            new AcfBlockContext,
+            '<p>a</p><!-- wp:acf/cta {"data":{}} /--><p>b</p><!-- /wp:acf/cta --><p>c</p>'
+        );
+
+        expect($result)->toBe([
+            'acfSets' => [['set' => 'cta']],
+            'remainingHtml' => '<p>a</p><p>b</p><!-- /wp:acf/cta --><p>c</p>',
+        ]);
+    });
+
+    it('parses no block a paired block contains a second time, and parses the blocks after it', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlocksFromHtml(
+            acfBlockParser($calls),
+            new AcfBlockContext,
+            '<p>a</p><!-- wp:acf/uams-section {"data":{}} --><p>in</p><!-- wp:acf/call-out {"data":{}} /--><!-- /wp:acf/uams-section -->'
+                .'<p>b</p><!-- wp:acf/cta {"data":{}} --><p>c</p><!-- /wp:acf/cta --><!-- wp:acf/link-list {"data":{}} /--><p>d</p>'
+        );
+
+        expect($result['remainingHtml'] ?? null)->toBe('<p>a</p><p>b</p><p>d</p>')
+            ->and($calls->names())->toBe(['section', 'cta', 'linkList']);
     });
 
     it('restores the libxml error mode the caller had', function (bool $mode): void {
