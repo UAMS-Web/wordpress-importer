@@ -24,11 +24,10 @@ use Statamic\Facades\Site;
 use Statamic\Facades\Stache;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Facades\Term as TermFacade;
+use Statamic\Facades\YAML;
 use Statamic\Stache\Repositories\TermRepository;
 use Statamic\Stache\Stache as StacheInstance;
-use Statamic\Stache\Stores\AggregateStore;
 use Statamic\Stache\Stores\Store;
-use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Taxonomy;
 use Statamic\Taxonomies\Term;
 use Statamic\Taxonomies\TermCollection;
@@ -37,22 +36,22 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\StructuredTermImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\NewsArticleResolver;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
 
 /**
  * What the probe `BaseEntryCreator` adds, so the probe can be built inside a test.
- *
- * Building the probe as an anonymous class, the first time a test asks for one,
- * loads `BaseEntryCreator` under Laravel's error handler, which turns a compile
- * warning (such as a `continue` mutated into a switch) into an exception.
  */
 interface BaseEntryTermsTestProbe
 {
@@ -316,24 +315,14 @@ function termsSave(string $slug, string $title, string $blueprint = 'probe_tax')
  */
 function termsSaved(string $field = 'title'): array
 {
-    $terms = Stache::store('terms');
-    $store = $terms instanceof AggregateStore ? $terms->store('probe_tax') : null;
-
-    if (! $store instanceof Store) {
-        throw new RuntimeException('No probe_tax term store.');
-    }
-
-    $store->clear();
-    $store->warm();
-
+    // Read the term files, as a fresh process would. Clearing and warming the
+    // store in this one can read back only some of the terms saved since it warmed
     $values = [];
 
-    foreach (TermFacade::whereTaxonomy('probe_tax') as $term) {
-        $id = $term instanceof LocalizedTerm ? $term->id() : null;
+    $files = glob(termsDirectory('terms').'/probe_tax/*.yaml');
 
-        if (is_string($id)) {
-            $values[$id] = $term->get($field);
-        }
+    foreach ($files === false ? [] : $files as $file) {
+        $values['probe_tax::'.basename($file, '.yaml')] = YAML::parse((string) file_get_contents($file))[$field] ?? null;
     }
 
     ksort($values);
@@ -542,6 +531,145 @@ function termsStache(mixed $termStore): void
 }
 
 /**
+ * Make the structured importer record what it is handed instead of importing it.
+ *
+ * @return ArrayObject<int, mixed> Each handover's WordPress taxonomy, destination and term slugs, filled as they arrive
+ */
+function termsHanded(): ArrayObject
+{
+    /** @var ArrayObject<int, mixed> $handed */
+    $handed = new ArrayObject;
+
+    app()->instance(StructuredTermImporter::class, new class($handed) extends StructuredTermImporter
+    {
+        /**
+         * Keep a record of what is handed over.
+         *
+         * @param  ArrayObject<int, mixed>  $handed  The record
+         */
+        public function __construct(private readonly ArrayObject $handed) {}
+
+        /**
+         * Record the terms handed over.
+         *
+         * @param  array<int|string, mixed>  $terms  The terms
+         * @param  string  $wordpressTaxonomy  The WordPress taxonomy
+         * @param  string  $collectionHandle  The collection
+         * @param  string  $site  The site
+         * @param  OutputInterface  $output  Console output
+         * @return int No entries imported
+         */
+        public function import(array $terms, string $wordpressTaxonomy, string $collectionHandle, string $site, OutputInterface $output): int
+        {
+            $this->handed->append([$wordpressTaxonomy, $collectionHandle, termsSlugs($terms)]);
+
+            return 0;
+        }
+    });
+
+    return $handed;
+}
+
+/**
+ * Run a callback with every PHP warning and notice thrown as an exception, as
+ * Laravel's error handler throws them in an import.
+ *
+ * @param  callable(): mixed  $callback  The callback
+ * @return mixed What it returns
+ */
+function termsStrict(callable $callback): mixed
+{
+    set_error_handler(static function (int $level, string $message): never {
+        throw new ErrorException($message, 0, $level);
+    });
+
+    try {
+        return $callback();
+    } finally {
+        restore_error_handler();
+    }
+}
+
+/**
+ * The fields of each pseudo term.
+ *
+ * @param  mixed  $pseudoTerms  What a pseudo-term builder answered
+ * @return list<array<string, string>> Each term's child values, keyed by local name
+ */
+function termsFields(mixed $pseudoTerms): array
+{
+    $fields = [];
+
+    foreach (is_array($pseudoTerms) ? $pseudoTerms : [] as $pseudoTerm) {
+        $values = [];
+        $children = $pseudoTerm instanceof SimpleXMLElement ? $pseudoTerm->children('wp', true) : null;
+
+        foreach ($children ?? [] as $name => $child) {
+            $values[$name] = (string) $child;
+        }
+
+        $fields[] = $values;
+    }
+
+    return $fields;
+}
+
+/**
+ * A recorder standing in for the Stache's term store, answering one taxonomy store.
+ *
+ * @param  ArrayObject<int, string>  $called  The record of each clear and warm
+ * @return object The term store
+ */
+function termsRecordingStore(ArrayObject $called): object
+{
+    return new class($called)
+    {
+        /**
+         * Keep a record of the calls.
+         *
+         * @param  ArrayObject<int, string>  $called  The record
+         */
+        public function __construct(private readonly ArrayObject $called) {}
+
+        /**
+         * Answer a taxonomy store that records its clear and warm.
+         *
+         * @param  string  $handle  The taxonomy
+         * @return object The taxonomy store
+         */
+        public function store(string $handle): object
+        {
+            return new class($this->called, $handle)
+            {
+                /**
+                 * Keep the record and the taxonomy.
+                 *
+                 * @param  ArrayObject<int, string>  $called  The record
+                 * @param  string  $handle  The taxonomy
+                 */
+                public function __construct(private readonly ArrayObject $called, private readonly string $handle) {}
+
+                /**
+                 * Record a clear.
+                 */
+                public function clear(): void
+                {
+                    $this->called->append("clear {$this->handle}");
+                }
+
+                /**
+                 * Record a warm.
+                 */
+                public function warm(): void
+                {
+                    $this->called->append("warm {$this->handle}");
+                }
+            };
+        }
+    };
+}
+
+/**
  * A preloaded value with the given id, standing in for a term.
  *
  * @param  ?string  $id  The id
@@ -571,6 +699,7 @@ function termsImpostor(?string $id): object
 }
 
 beforeEach(function (): void {
+    CompilesCleanly::assert(BaseEntryCreator::class);
     config(['statamic.search.indexes' => []]);
     Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/']]);
     BaseEntryCreator::clearTaxonomyCaches();
@@ -671,7 +800,9 @@ describe('the flat term pass', function (): void {
 
         $probe->call('createTaxonomyTermsFromStoredData', [['original' => 'old', 'name' => 'Old'], ['original' => 'new', 'name' => 'New']], 'probe_tax', 'default', $output);
 
+        // The skipped term is left for a later direct call to correct
         expect(termsLines($output))->toContain("- Skipped taxonomy term 'default_old' as it already exists.")
+            ->and($probe->read('processedTermsCache'))->toBe(['probe_tax::default_old' => false, 'probe_tax::default_new' => true])
             ->and(termsSaved())->toBe([
                 'probe_tax::default_new' => 'Default — New',
                 'probe_tax::default_old' => 'Old title',
@@ -702,11 +833,49 @@ describe('the flat term pass', function (): void {
 
     it('lists a matching term that needs no change', function (): void {
         termsSave('default_same', 'Default — Same');
+        $probe = termsProbe();
         $output = new BufferedOutput;
 
-        termsProbe()->call('createTaxonomyTermsFromStoredData', [['original' => 'same', 'name' => 'Same']], 'probe_tax', 'default', $output);
+        $probe->call('createTaxonomyTermsFromStoredData', [['original' => 'same', 'name' => 'Same']], 'probe_tax', 'default', $output);
 
-        expect(termsLines($output))->toBe(['- Taxonomy terms that already exist in Statamic:', '- probe_tax::default_same']);
+        expect(termsLines($output))->toBe(['- Taxonomy terms that already exist in Statamic:', '- probe_tax::default_same'])
+            ->and($probe->read('processedTermsCache'))->toBe(['probe_tax::default_same' => false]);
+    });
+
+    it('numbers each additional term past the ones this run already queued', function (): void {
+        termsSave('default_dup', 'Old title');
+        $probe = termsProbe();
+        $probe->setTaxonomyOverwriteBehavior('Create an additional term');
+
+        $probe->call('createTaxonomyTermsFromStoredData', [['original' => 'dup', 'name' => 'First'], ['original' => 'dup', 'name' => 'Second']], 'probe_tax', 'default', new BufferedOutput);
+
+        // Statamic's slug setter drops the dot of the importer's ".1" and ".2" (#193)
+        expect(termsSaved())->toBe([
+            'probe_tax::default_dup' => 'Old title',
+            'probe_tax::default_dup1' => 'Default — First',
+            'probe_tax::default_dup2' => 'Default — Second',
+        ]);
+    });
+
+    it('reads a term whose position is not a number', function (): void {
+        termsProbe()->call('createTaxonomyTermsFromStoredData', ['first' => ['original' => 'keyed', 'name' => 'Keyed']], 'probe_tax', 'default', new BufferedOutput);
+
+        expect(termsSaved())->toBe(['probe_tax::default_keyed' => 'Default — Keyed']);
+    });
+
+    it('stores each term once, telling numeric slugs apart', function (): void {
+        $data = [];
+        $store = new ReflectionMethod(BaseEntryCreator::class, 'storeSiteSpecificTaxonomyData');
+        $probe = termsProbe();
+
+        foreach ([['10', '10', 'Ten'], ['10', '10', 'Ten'], ['1e1', '1e1', 'Ten']] as [$siteSpecific, $original, $name]) {
+            $store->invokeArgs($probe, [&$data, $siteSpecific, $original, $name]);
+        }
+
+        expect($data)->toBe([
+            ['site_specific' => '10', 'original' => '10', 'name' => 'Ten'],
+            ['site_specific' => '1e1', 'original' => '1e1', 'name' => 'Ten'],
+        ]);
     });
 
     it('passes over a preloaded value that is not a term, and one with no id', function (string $behavior): void {
@@ -739,10 +908,61 @@ describe('saving the queued term changes', function (): void {
         $term = termsSave('default_kept', 'Old title');
         $probe = termsProbe();
 
-        $probe->call('persistQueuedTermChanges', ['junk', ['term' => $term, 'slug' => 'default_kept', 'title' => 'New title', 'cacheKey' => 'probe_tax::default_kept']], [], 'probe_tax', 'default', new BufferedOutput);
+        $probe->call('persistQueuedTermChanges', ['junk', ['term' => 'not a term', 'slug' => 'default_kept', 'title' => 'Wrong title', 'cacheKey' => 'probe_tax::default_kept'], ['term' => $term, 'slug' => 'default_kept', 'title' => 'New title', 'cacheKey' => 'probe_tax::default_kept']], [], 'other_blueprint', 'default', new BufferedOutput);
 
         expect(termsSaved())->toBe(['probe_tax::default_kept' => 'New title'])
+            ->and(termsSaved('blueprint'))->toBe(['probe_tax::default_kept' => 'other_blueprint'])
             ->and($probe->read('processedTermsCache'))->toBe(['probe_tax::default_kept' => true]);
+    });
+
+    it('announces the creations only when there are no updates before them', function (bool $updates, array $announced): void {
+        $term = termsSave('default_kept', 'Old title');
+        $output = new BufferedOutput;
+        $toUpdate = $updates ? [['term' => $term, 'slug' => 'default_kept', 'title' => 'New title', 'cacheKey' => 'probe_tax::default_kept']] : [];
+
+        termsProbe()->call('persistQueuedTermChanges', $toUpdate, [['slug' => 'default_made', 'title' => 'Made', 'cacheKey' => 'probe_tax::default_made']], 'probe_tax', 'default', $output);
+
+        expect(array_values(array_filter(termsLines($output), static fn (string $line): bool => str_ends_with($line, 'taxonomy terms...'))))->toBe($announced);
+    })->with([
+        'creations alone' => [false, ['- Creating new taxonomy terms...']],
+        'updates first' => [true, ['- Updating existing taxonomy terms...']],
+    ]);
+
+    it('reports each update and creation it saves, and creates under the taxonomy blueprint', function (): void {
+        $term = termsSave('default_kept', 'Old title');
+        $output = new BufferedOutput;
+
+        termsProbe()->call('persistQueuedTermChanges', [['term' => $term, 'slug' => 'default_kept', 'title' => 'New title', 'cacheKey' => 'probe_tax::default_kept']], [['slug' => 'default_made', 'title' => 'Made', 'cacheKey' => 'probe_tax::default_made']], 'probe_tax', 'default', $output);
+
+        expect(termsLines($output))->toBe([
+            '- Updating existing taxonomy terms...',
+            '- Updated taxonomy term: probe_tax::default_kept with title: New title',
+            "- Created 'probe_tax::default_made'",
+        ])->and(termsSaved('blueprint'))->toBe(['probe_tax::default_kept' => 'probe_tax', 'probe_tax::default_made' => 'probe_tax']);
+    });
+
+    it('passes over a creation missing a field, or with one that is not a string', function (): void {
+        $creations = [
+            ['slug' => 'default_unnamed', 'cacheKey' => 'probe_tax::default_unnamed'],
+            ['slug' => 5, 'title' => 'Numbered', 'cacheKey' => 'probe_tax::default_numbered'],
+            ['slug' => 'default_titled', 'title' => 5, 'cacheKey' => 'probe_tax::default_titled'],
+            ['slug' => 'default_keyed', 'title' => 'Keyed', 'cacheKey' => 5],
+            ['slug' => 'default_made', 'title' => 'Made', 'cacheKey' => 'probe_tax::default_made'],
+        ];
+
+        termsProbe()->call('persistQueuedTermChanges', [], $creations, 'probe_tax', 'default', new BufferedOutput);
+
+        expect(termsSaved())->toBe(['probe_tax::default_made' => 'Made']);
+    });
+
+    it('logs and creates nothing for a taxonomy that does not exist', function (): void {
+        $logged = termsLog();
+        $output = new BufferedOutput;
+
+        termsProbe()->call('persistQueuedTermChanges', [], [['slug' => 'default_made', 'title' => 'Made', 'cacheKey' => 'no_such_tax::default_made']], 'no_such_tax', 'default', $output);
+
+        expect(termsLines($output))->toBe(['- Creating new taxonomy terms...'])
+            ->and($logged->getArrayCopy())->toBe([['error', "BaseEntryCreator::createTaxonomyTermsFromStoredData - Taxonomy 'no_such_tax' does not exist", []]]);
     });
 
     it('passes over a creation that is not one and saves the rest', function (): void {
@@ -782,9 +1002,52 @@ describe('pausing the index updates', function (): void {
 
         expect($logged->getArrayCopy())->toBe([['error', 'BaseEntryCreator: failed to re-enable Stache index updating after term import; the Stache may be stale until the next full warm.', []]]);
     });
+
+    it('pauses index updating while the work runs, and turns it back on', function (): void {
+        termsToggleSupported(true);
+        $during = new ArrayObject;
+
+        termsProbe()->call('withTermIndexUpdatesDisabled', 'probe_tax', static function () use ($during): void {
+            $during->append(Stache::shouldUpdateIndexes());
+        });
+
+        expect($during->getArrayCopy())->toBe([false])
+            ->and(Stache::shouldUpdateIndexes())->toBeTrue();
+    });
+
+    it('rebuilds the term store after the work', function (): void {
+        termsToggleSupported(true);
+        termsLog();
+        $called = new ArrayObject;
+        termsStache(termsRecordingStore($called));
+
+        termsProbe()->call('withTermIndexUpdatesDisabled', 'probe_tax', static function (): void {});
+
+        expect($called->getArrayCopy())->toBe(['clear probe_tax', 'warm probe_tax']);
+    });
 });
 
 describe('rebuilding the term store', function (): void {
+    it('clears and warms the taxonomy\'s term store', function (): void {
+        $logged = termsLog();
+        $called = new ArrayObject;
+        termsStache(termsRecordingStore($called));
+
+        termsProbe()->call('rebuildTermStoreFromDisk', 'probe_tax');
+
+        expect($called->getArrayCopy())->toBe(['clear probe_tax', 'warm probe_tax'])
+            ->and($logged->getArrayCopy())->toBe([]);
+    });
+
+    it('rebuilds nothing for a taxonomy that does not exist', function (): void {
+        $called = new ArrayObject;
+        termsStache(termsRecordingStore($called));
+
+        termsProbe()->call('rebuildTermStoreFromDisk', 'no_such_tax');
+
+        expect($called->getArrayCopy())->toBe([]);
+    });
+
     it('rebuilds nothing when the term store cannot name its stores', function (): void {
         $logged = termsLog();
         termsStache(new stdClass);
@@ -793,6 +1056,71 @@ describe('rebuilding the term store', function (): void {
 
         expect($logged->getArrayCopy())->toBe([]);
     });
+
+    it('rebuilds nothing when the taxonomy store cannot both clear and warm', function (string $has): void {
+        $logged = termsLog();
+        $called = new ArrayObject;
+        $store = $has === 'clear'
+            ? new class($called)
+            {
+                /**
+                 * Keep a record of the calls.
+                 *
+                 * @param  ArrayObject<int, string>  $called  The record
+                 */
+                public function __construct(private readonly ArrayObject $called) {}
+
+                /**
+                 * Record a clear.
+                 */
+                public function clear(): void
+                {
+                    $this->called->append('clear');
+                }
+            }
+        : new class($called)
+        {
+            /**
+             * Keep a record of the calls.
+             *
+             * @param  ArrayObject<int, string>  $called  The record
+             */
+            public function __construct(private readonly ArrayObject $called) {}
+
+            /**
+             * Record a warm.
+             */
+            public function warm(): void
+            {
+                $this->called->append('warm');
+            }
+        };
+        termsStache(new class($store)
+        {
+            /**
+             * Keep the taxonomy store to answer.
+             *
+             * @param  object  $store  The taxonomy store
+             */
+            public function __construct(private readonly object $store) {}
+
+            /**
+             * Answer the taxonomy store.
+             *
+             * @param  string  $handle  The taxonomy
+             * @return object The taxonomy store
+             */
+            public function store(string $handle): object
+            {
+                return $this->store;
+            }
+        });
+
+        termsProbe()->call('rebuildTermStoreFromDisk', 'probe_tax');
+
+        expect($called->getArrayCopy())->toBe([])
+            ->and($logged->getArrayCopy())->toBe([]);
+    })->with(['clear', 'warm']);
 
     it('logs a rebuild that fails', function (): void {
         $logged = termsLog();
@@ -817,15 +1145,19 @@ describe('rebuilding the term store', function (): void {
 
 describe('the pseudo terms', function (): void {
     it('converts each category and passes over anything else', function (): void {
-        $parser = new BaseEntryTermsTestParser(categories: ['junk', termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => ''], 'category')]);
+        $parser = new BaseEntryTermsTestParser(categories: ['junk', termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => 'world'], 'category')]);
 
-        expect(termsSlugs(termsProbe()->call('categoryPseudoTerms', $parser)))->toBe(['news']);
+        expect(termsFields(termsProbe()->call('categoryPseudoTerms', $parser)))->toBe([
+            ['term_id' => '4', 'term_taxonomy' => 'category', 'term_slug' => 'news', 'term_name' => 'News', 'term_parent' => 'world'],
+        ]);
     });
 
     it('converts each tag and passes over anything else', function (): void {
         $parser = new BaseEntryTermsTestParser(tags: ['junk', termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag')]);
 
-        expect(termsSlugs(termsProbe()->call('tagPseudoTerms', $parser)))->toBe(['blue']);
+        expect(termsFields(termsProbe()->call('tagPseudoTerms', $parser)))->toBe([
+            ['term_id' => '5', 'term_taxonomy' => 'post_tag', 'term_slug' => 'blue', 'term_name' => 'Blue'],
+        ]);
     });
 });
 
@@ -847,38 +1179,11 @@ describe('the term pass at the start of an import', function (): void {
     });
 
     it('passes over a category or tag that is not an element and groups the rest', function (string $taxonomy, array $categories, array $tags): void {
-        // The structured importer records what it was handed instead of importing it
-        $handed = new ArrayObject;
-        app()->instance(StructuredTermImporter::class, new class($handed) extends StructuredTermImporter
-        {
-            /**
-             * Keep a record of what is handed over.
-             *
-             * @param  ArrayObject<int, mixed>  $handed  The record
-             */
-            public function __construct(private readonly ArrayObject $handed) {}
-
-            /**
-             * Record the terms handed over.
-             *
-             * @param  array<int|string, mixed>  $terms  The terms
-             * @param  string  $wordpressTaxonomy  The WordPress taxonomy
-             * @param  string  $collectionHandle  The collection
-             * @param  string  $site  The site
-             * @param  OutputInterface  $output  Console output
-             * @return int No entries imported
-             */
-            public function import(array $terms, string $wordpressTaxonomy, string $collectionHandle, string $site, OutputInterface $output): int
-            {
-                $this->handed->append([$wordpressTaxonomy, termsSlugs($terms)]);
-
-                return 0;
-            }
-        });
+        $handed = termsHanded();
 
         termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([], $categories, $tags), [$taxonomy], 'default', new BufferedOutput);
 
-        expect($handed->getArrayCopy())->toBe([[$taxonomy, [$taxonomy === 'category' ? 'news' : 'blue']]]);
+        expect($handed->getArrayCopy())->toBe([$taxonomy === 'category' ? ['category', 'post_categories', ['news']] : ['post_tag', 'post_tags', ['blue']]]);
     })->with([
         'categories' => ['category', ['junk', termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => ''], 'category')], []],
         'tags' => ['post_tag', [], ['junk', termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag')]],
@@ -893,6 +1198,116 @@ describe('the term pass at the start of an import', function (): void {
         expect(termsLines($output))->not->toContain("- Processing '7' taxonomy terms...")
             ->and(termsSaved())->toBe(['probe_tax::default_kept' => 'Default — Kept']);
     });
+
+    it('imports a set of taxonomies once per site, whatever their order', function (string $firstSite, array $first, string $secondSite, array $second, bool $again): void {
+        $probe = termsProbe();
+        $parser = new BaseEntryTermsTestParser;
+        $output = new BufferedOutput;
+
+        $probe->call('importTaxonomyTermsAtBeginning', $parser, $first, $firstSite, new BufferedOutput);
+        $probe->call('importTaxonomyTermsAtBeginning', $parser, $second, $secondSite, $output);
+
+        expect(termsLines($output))->toBe($again ? ['Importing taxonomy terms at beginning of import process...', '- Taxonomy terms import completed.'] : []);
+    })->with([
+        'the same set in another order' => ['default', ['probe_tax', 'zz_other'], 'default', ['zz_other', 'probe_tax'], false],
+        'the same set with a handle that is not a string' => ['default', ['probe_tax'], 'default', ['probe_tax', 7], false],
+        'another set' => ['default', ['probe_tax'], 'default', ['zz_other'], true],
+        'the same set for another site' => ['one', ['probe_tax'], 'two', ['probe_tax'], true],
+        'a site and set that run together the same way' => ['ab', ['c'], 'a', ['bc'], true],
+    ]);
+
+    it('groups nothing for a handle that only loosely names a taxonomy', function (array $handles, array $terms): void {
+        $handed = termsHanded();
+        $output = new BufferedOutput;
+        $category = termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => ''], 'category');
+        $tag = termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag');
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser($terms, [$category], [$tag]), $handles, 'default', $output);
+
+        expect(termsLines($output))->toBe(['Importing taxonomy terms at beginning of import process...', '- Taxonomy terms import completed.'])
+            ->and($handed->getArrayCopy())->toBe([]);
+    })->with([
+        'a number written another way' => [['10'], [termsTerm('1', 'odd', 'Odd', '1e1')]],
+        'a value that is not a string' => [[true], []],
+    ]);
+
+    it('keeps the terms already grouped under category or post_tag when adding the pseudo terms', function (string $taxonomy, array $categories, array $tags, array $slugs): void {
+        $handed = termsHanded();
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('1', 'from-terms', 'From terms', $taxonomy)], $categories, $tags), [$taxonomy], 'default', new BufferedOutput);
+
+        expect($handed->getArrayCopy())->toBe([[$taxonomy, $taxonomy === 'category' ? 'post_categories' : 'post_tags', $slugs]]);
+    })->with([
+        'categories' => ['category', [termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => ''], 'category')], [], ['from-terms', 'news']],
+        'tags' => ['post_tag', [], [termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag')], ['from-terms', 'blue']],
+    ]);
+
+    it('says a taxonomy has no terms and goes on to the next', function (): void {
+        $handed = termsHanded();
+        $output = new BufferedOutput;
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([], [], [termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag')]), ['category', 'post_tag'], 'default', $output);
+
+        expect(termsLines($output))->toContain("- No 'category' taxonomy terms to process.")
+            ->and($handed->getArrayCopy())->toBe([['post_tag', 'post_tags', ['blue']]]);
+    });
+
+    it('reports an unmapped taxonomy and goes on to the next', function (): void {
+        termsToggleSupported(false);
+        $output = new BufferedOutput;
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('1', 'links', 'Links', 'link_category'), termsTerm('2', 'kept', 'Kept')]), ['link_category', 'probe_tax'], 'default', $output);
+
+        expect(termsLines($output))->toContain("- Skipping 'link_category': recorded as having no Statamic destination. 1 term(s) not imported.")
+            ->toContain("- Processing 'probe_tax' taxonomy terms...")
+            ->and(termsSaved())->toBe(['probe_tax::default_kept' => 'Default — Kept'])
+            ->and(TermDestinationRegistry::all())->toBe(['probe_tax::2' => ['shape' => 'taxonomy', 'handle' => 'probe_tax', 'reference' => 'default_kept']]);
+    });
+
+    it('counts the terms of an unmapped taxonomy nobody asked for', function (): void {
+        $output = new BufferedOutput;
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('1', 'one', 'One', 'link_category'), termsTerm('2', 'two', 'Two', 'link_category')]), ['probe_tax'], 'default', $output);
+
+        expect(termsLines($output))->toContain("- Skipping 'link_category': recorded as having no Statamic destination. 2 term(s) not imported.");
+    });
+
+    it('hands a structured taxonomy over and goes on to the next', function (): void {
+        termsToggleSupported(false);
+        $handed = termsHanded();
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('7', 'filed', 'Filed', 'category'), termsTerm('8', 'kept', 'Kept')]), ['category', 'probe_tax'], 'default', new BufferedOutput);
+
+        expect($handed->getArrayCopy())->toBe([['category', 'post_categories', ['filed']]])
+            ->and(termsSaved())->toBe(['probe_tax::default_kept' => 'Default — Kept']);
+    });
+
+    it('builds the term maps from the terms, categories and tags, after importing them', function (): void {
+        termsToggleSupported(false);
+        termsHanded();
+        $probe = termsProbe();
+        $category = termsElement(['term_id' => '4', 'category_nicename' => 'news', 'cat_name' => 'News', 'category_parent' => ''], 'category');
+        $tag = termsElement(['term_id' => '5', 'tag_slug' => 'blue', 'tag_name' => 'Blue'], 'tag');
+
+        $probe->call('initializeTerms', new BaseEntryTermsTestParser([termsTerm('2', 'kept', 'Kept')], [$category], [$tag]), ['probe_tax', 'category', 'post_tag'], 'default', new BufferedOutput);
+
+        $termMap = (new ReflectionProperty(BaseEntryCreator::class, 'termMap'))->getValue($probe);
+
+        expect(termsSaved())->toBe(['probe_tax::default_kept' => 'Default — Kept'])
+            // Keyed by WordPress term id: the term, then the category and the tag
+            ->and(is_array($termMap) ? array_keys($termMap) : $termMap)->toBe([2, 4, 5]);
+    });
+
+    it('imports a term under its full hierarchical slug, and none without a slug', function (): void {
+        termsToggleSupported(false);
+
+        termsProbe()->call('importTaxonomyTermsAtBeginning', new BaseEntryTermsTestParser([termsTerm('1', 'parent', 'Parent'), termsTerm('2', 'child', 'Child', 'probe_tax', 'parent'), termsTerm('3', '', 'Slugless')]), ['probe_tax'], 'default', new BufferedOutput);
+
+        expect(termsSaved())->toBe([
+            'probe_tax::default_parent' => 'Default — Parent',
+            'probe_tax::default_parent_child' => 'Default — Child',
+        ]);
+    });
 });
 
 describe('the flat term destinations', function (): void {
@@ -906,10 +1321,25 @@ describe('the flat term destinations', function (): void {
         ]);
     });
 
-    it('maps each term element and passes over anything else', function (): void {
-        $map = termsProbe()->call('buildHierarchicalTermMap', ['junk', termsTerm('3', 'child', parent: 'parent'), termsTerm('2', 'parent')]);
+    it('records a term under its own slug when the map holds no full slug for it', function (array $termMap): void {
+        termsStrict(static fn (): mixed => termsProbe()->call('registerFlatTermDestinations', [termsTerm('4', 'plain')], 'probe_tax', 'probe_tax', $termMap, 'default'));
 
-        expect($map)->toBeArray()->toHaveKeys(['child', 'parent']);
+        expect(TermDestinationRegistry::all())->toBe([
+            'probe_tax::4' => ['shape' => 'taxonomy', 'handle' => 'probe_tax', 'reference' => 'default_plain'],
+        ]);
+    })->with([
+        'no entry' => [[]],
+        'an entry with no full slug' => [['plain' => ['parent' => '']]],
+        'a full slug that is not a string' => [['plain' => ['full_slug' => 5]]],
+    ]);
+
+    it('maps each term element and passes over anything else', function (): void {
+        $map = termsProbe()->call('buildHierarchicalTermMap', ['junk', termsTerm('3', 'child', parent: 'parent'), termsTerm('2', 'parent'), termsTerm('4', '')]);
+
+        expect($map)->toBe([
+            'child' => ['full_slug' => 'parent_child', 'parent' => 'parent'],
+            'parent' => ['full_slug' => 'parent', 'parent' => ''],
+        ]);
     });
 });
 
@@ -925,6 +1355,21 @@ describe('the hierarchical slug', function (): void {
     it('stops at a slug it has already visited', function (): void {
         expect(termsProbe()->fullSlug('child', ['child' => ['parent' => 'parent'], 'parent' => ['parent' => '']], ['child']))->toBe(['child', ['child']]);
     });
+
+    it('answers an empty slug as itself even when the map has an entry for it', function (): void {
+        expect(termsProbe()->fullSlug('', ['' => ['parent' => 'parent'], 'parent' => ['parent' => '']]))->toBe(['', []]);
+    });
+
+    it('tells numeric slugs apart when tracking the slugs it visited', function (): void {
+        expect(termsProbe()->fullSlug('10', ['10' => ['parent' => '1e1'], '1e1' => ['parent' => '']]))->toBe(['1e1_10', ['10', '1e1']]);
+    });
+
+    it('ends at the slug itself for a term with no parent, or one the map does not hold', function (array $entry): void {
+        expect(termsStrict(static fn (): array => termsProbe()->fullSlug('child', ['child' => $entry])))->toBe(['child', ['child']]);
+    })->with([
+        'no parent' => [[]],
+        'a parent the map does not hold' => [['parent' => 'missing']],
+    ]);
 });
 
 describe('saving a term safely', function (): void {
@@ -975,8 +1420,35 @@ describe('creating a term directly', function (): void {
     });
 
     it('names a new term from its slug when no name is given', function (): void {
-        expect(BaseEntryCreator::createTaxonomyTerm('probe_tax', 'some-new_term', 'default', new BufferedOutput))->toBeTrue()
-            ->and(termsSaved())->toBe(['probe_tax::default_some-new_term' => 'Default — Some New Term']);
+        $probe = termsProbe();
+        $validatorCache = new ReflectionProperty(BaseTaxonomyValidator::class, 'existingTermsCache');
+        $validatorCache->setValue(null, ['stale' => []]);
+        $output = new BufferedOutput;
+
+        expect(BaseEntryCreator::createTaxonomyTerm('probe_tax', 'some-new_term', 'default', $output))->toBeTrue()
+            ->and(termsLines($output))->toBe(["- Created 'probe_tax::default_some-new_term'"])
+            ->and(termsSaved())->toBe(['probe_tax::default_some-new_term' => 'Default — Some New Term'])
+            ->and(termsSaved('blueprint'))->toBe(['probe_tax::default_some-new_term' => 'probe_tax'])
+            ->and($probe->read('processedTermsCache'))->toBe(['probe_tax::default_some-new_term' => true])
+            ->and($validatorCache->getValue())->toBe([]);
+    });
+
+    it('reports a term it cannot create for a structured destination, once', function (): void {
+        $probe = termsProbe();
+        $output = new BufferedOutput;
+
+        expect(BaseEntryCreator::createTaxonomyTerm('post_categories', 'news', 'default', $output, 'News'))->toBeFalse()
+            ->and(termsLines($output))->toBe(["Warning: cannot create 'default_news': 'post_categories' exists as neither a taxonomy nor a collection. Structured terms are created by the term pass, so this reference will not resolve."])
+            ->and($probe->read('processedTermsCache'))->toBe(['post_categories::default_news' => true]);
+    });
+
+    it('reports a term it cannot create for a taxonomy that does not exist, once', function (): void {
+        $probe = termsProbe();
+        $output = new BufferedOutput;
+
+        expect(BaseEntryCreator::createTaxonomyTerm('no_such_tax', 'news', 'default', $output, 'News'))->toBeFalse()
+            ->and(termsLines($output))->toBe(["Warning: Taxonomy 'no_such_tax' does not exist. Skipping term creation for 'default_news'."])
+            ->and($probe->read('processedTermsCache'))->toBe(['no_such_tax::default_news' => true]);
     });
 
     it('updates an existing term whose title or blueprint differs', function (string $title, string $blueprint): void {
@@ -1077,10 +1549,30 @@ describe('reading a term', function (): void {
         expect(termsProbe()->call('getTermStringValue', $term, 'title'))->toBe('');
     });
 
+    it('reads a field that is not a string as empty', function (): void {
+        $term = termsSave('default_counted', 'Counted');
+        $term->set('title', 5);
+
+        expect(termsProbe()->call('getTermStringValue', $term, 'title'))->toBe('');
+    });
+
     it('reads no id from a value that is not an object, or whose id cannot be called', function (mixed $candidate): void {
         expect(termsProbe()->call('extractObjectId', $candidate))->toBeNull();
     })->with([
         'a number' => [7],
+        'an empty id' => [termsImpostor('')],
+        'an id that is not a string' => [new class
+        {
+            /**
+             * An id that is a number.
+             *
+             * @return int The id
+             */
+            public function id(): int
+            {
+                return 5;
+            }
+        }],
         'a private id' => [new class
         {
             /**
@@ -1104,4 +1596,52 @@ describe('reading a term', function (): void {
             }
         }],
     ]);
+});
+
+describe('the term caches', function (): void {
+    it('names a site from its name, or from its handle when it has none', function (string $site, string $name): void {
+        Site::setSites([
+            'default' => ['name' => 'Main Campus', 'locale' => 'en_US', 'url' => '/'],
+            'blank_site' => ['name' => '', 'locale' => 'en_US', 'url' => '/blank/'],
+        ]);
+
+        expect(termsProbe()->call('getCachedSiteName', $site))->toBe($name);
+    })->with([
+        'a named site' => ['default', 'Main Campus'],
+        'a site with an empty name' => ['blank_site', 'Blank Site'],
+        'a site that does not exist' => ['new_site', 'New Site'],
+    ]);
+
+    it('groups each term once by id, and every term with no id', function (array $seenTermIds, array $seen): void {
+        $probe = termsProbe();
+        $group = new ReflectionMethod(BaseEntryCreator::class, 'addTermToTaxonomyGroup');
+        /** @var array<string, mixed> $termsByTaxonomy */
+        $termsByTaxonomy = [];
+
+        foreach ([termsTerm('', 'first'), termsTerm('', 'second'), termsTerm('5', 'third'), termsTerm('5', 'fourth')] as $term) {
+            $group->invokeArgs($probe, [&$termsByTaxonomy, &$seenTermIds, 'probe_tax', $term]);
+        }
+
+        expect(termsSlugs($termsByTaxonomy['probe_tax'] ?? []))->toBe(['first', 'second', 'third'])
+            ->and($seenTermIds)->toBe($seen);
+    })->with([
+        'no ids seen yet' => [[], ['5' => true]],
+        'an empty id already recorded' => [['' => true], ['' => true, '5' => true]],
+    ]);
+
+    it('clears the caches the term pass fills, here and in the resolvers it feeds', function (): void {
+        $caches = [
+            new ReflectionProperty(StructuredTermImporter::class, 'treeNodes'),
+            new ReflectionProperty(PostCategoryEntryResolver::class, 'cache'),
+            new ReflectionProperty(NewsArticleResolver::class, 'cache'),
+        ];
+
+        foreach ($caches as $cache) {
+            $cache->setValue(null, ['stale' => 'stale']);
+        }
+
+        BaseEntryCreator::clearTaxonomyCaches();
+
+        expect(array_map(static fn (ReflectionProperty $cache): mixed => $cache->getValue(), $caches))->toBe([[], [], []]);
+    });
 });

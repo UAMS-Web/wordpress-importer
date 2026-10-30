@@ -37,15 +37,16 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningMa
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
 /**
  * What the probe `BaseEntryCreator` adds, so the probe can be built inside a test.
  *
- * Building the probe as an anonymous class, the first time a test asks for one,
- * loads `BaseEntryCreator` under Laravel's error handler, which turns a compile
- * warning (such as a `continue` mutated into a switch) into an exception.
+ * A compile warning in the class (such as a `continue` mutated into a switch) is
+ * caught by {@see CompilesCleanly} before each test, whichever test file loaded
+ * the class first.
  */
 interface BaseEntryTestProbe
 {
@@ -225,6 +226,7 @@ function baseEntryProbe(): BaseEntryCreator&BaseEntryTestProbe
 }
 
 beforeEach(function (): void {
+    CompilesCleanly::assert(BaseEntryCreator::class);
     config(['statamic.search.indexes' => []]);
     Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'], 'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/']]);
     BaseEntryCreator::clearTaxonomyCaches();

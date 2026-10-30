@@ -1312,7 +1312,9 @@ abstract class BaseEntryCreator
                             'cacheKey' => $newCacheKey,
                         ];
 
-                        // Reserve the slug so later iterations treat it as taken
+                        // Reserve the slug so later iterations treat it as taken. Only
+                        // isset() reads it, which takes false as set as well
+                        // @pest-mutate-ignore: TrueToFalse
                         $reservedKeys[$newCacheKey] = true;
 
                         // Exit the switch statement after processing additional term creation
@@ -1390,7 +1392,9 @@ abstract class BaseEntryCreator
                     'cacheKey' => $cacheKey,
                 ];
 
-                // Reserve the slug so repeated input slugs are not queued twice
+                // Reserve the slug so repeated input slugs are not queued twice. Only
+                // isset() reads it, which takes false as set as well
+                // @pest-mutate-ignore: TrueToFalse
                 $reservedKeys[$cacheKey] = true;
             }
 
@@ -1401,7 +1405,9 @@ abstract class BaseEntryCreator
             );
 
             // Force garbage collection every 20 terms to prevent memory buildup.
-            // Collecting cycles frees memory and changes no result.
+            // Collecting cycles frees memory and changes no result, so neither
+            // does how often the condition lets it run
+            // @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus
             if (((int) $index + 1) % 20 === 0) {
                 // @pest-mutate-ignore: RemoveFunctionCall
                 gc_collect_cycles();
@@ -1445,7 +1451,8 @@ abstract class BaseEntryCreator
             $siteName
         );
 
-        // Force final garbage collection
+        // Force final garbage collection, which frees memory and changes no result
+        // @pest-mutate-ignore: RemoveFunctionCall
         gc_collect_cycles();
     }
 
@@ -1477,9 +1484,12 @@ abstract class BaseEntryCreator
 
         // Loop through each term that needs to be updated
         foreach (ImportProgress::track($output, "{$statamicTaxonomyHandle} terms updated", $termsToUpdate) as $index => $termData) {
+            if (! \is_array($termData)) {
+                continue;
+            }
+
             if (
-                ! \is_array($termData)
-                || ! isset($termData['term'], $termData['slug'], $termData['title'], $termData['cacheKey'])
+                ! isset($termData['term'], $termData['slug'], $termData['title'], $termData['cacheKey'])
                 || ! $termData['term'] instanceof Term
                 || ! \is_string($termData['slug'])
                 || ! \is_string($termData['title'])
@@ -1524,7 +1534,10 @@ abstract class BaseEntryCreator
             // Clean up variables to free up memory
             unset($termData);
 
-            // Check if we've processed a multiple of 10 terms
+            // Check if we've processed a multiple of 10 terms. The condition only paces
+            // the collection below, which changes no result; the index is a list
+            // position, so the cast changes nothing either
+            // @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus, RemoveIntegerCast
             if (((int) $index + 1) % 10 === 0) {
                 // Force garbage collection to reclaim memory from circular references,
                 // which changes no result
@@ -1563,9 +1576,12 @@ abstract class BaseEntryCreator
         }
 
         foreach (ImportProgress::track($output, "{$statamicTaxonomyHandle} terms created", $termsToCreate) as $index => $termData) {
+            if (! \is_array($termData)) {
+                continue;
+            }
+
             if (
-                ! \is_array($termData)
-                || ! isset($termData['slug'], $termData['title'], $termData['cacheKey'])
+                ! isset($termData['slug'], $termData['title'], $termData['cacheKey'])
                 || ! \is_string($termData['slug'])
                 || ! \is_string($termData['title'])
                 || ! \is_string($termData['cacheKey'])
@@ -1577,7 +1593,6 @@ abstract class BaseEntryCreator
             $term = TermFacade::make();
             $term->taxonomy($statamicTaxonomyHandle);
             $term->slug($termData['slug']);
-            $term->in($site);
             $term->set(
                 'title',
                 $termData['title']
@@ -1607,7 +1622,10 @@ abstract class BaseEntryCreator
             );
 
             // Force garbage collection every 10 terms to prevent memory buildup.
-            // Collecting cycles frees memory and changes no result.
+            // Collecting cycles frees memory and changes no result, so neither does
+            // how often the condition lets it run; the index is a list position, so
+            // the cast changes nothing either
+            // @pest-mutate-ignore: DecrementInteger, IncrementInteger, IdenticalToNotIdentical, IfNegated, ModulusToMultiplication, PlusToMinus, RemoveIntegerCast
             if (((int) $index + 1) % 10 === 0) {
                 // @pest-mutate-ignore: RemoveFunctionCall
                 gc_collect_cycles();
@@ -2018,14 +2036,15 @@ abstract class BaseEntryCreator
 
         // Sort the taxonomy handles alphabetically to ensure consistent cache keys
         sort($sortedTaxonomies);
-        $sortedTaxonomies = \array_values(
-            \array_filter(
-                $sortedTaxonomies,
-                \is_string(...)
-            )
+        $sortedTaxonomies = \array_filter(
+            $sortedTaxonomies,
+            \is_string(...)
         );
 
-        // Generate a unique cache key combining site and sorted taxonomy handles
+        // Generate a unique cache key combining site and sorted taxonomy handles. The
+        // key only has to tell one site and set apart from another, which either
+        // order of its parts does
+        // @pest-mutate-ignore: ConcatSwitchSides
         $cacheKey = $site.'::'.\implode(
             ',',
             $sortedTaxonomies
@@ -2037,7 +2056,9 @@ abstract class BaseEntryCreator
             return;
         }
 
-        // Mark this taxonomy import as processed
+        // Mark this taxonomy import as processed. Only isset() reads it, which takes
+        // false as set as well
+        // @pest-mutate-ignore: TrueToFalse
         self::$processedTaxonomyImports[$cacheKey] = true;
 
         // Display progress message to inform user of current operation
@@ -2211,6 +2232,7 @@ abstract class BaseEntryCreator
             foreach ($taxonomyTerms as $term) {
                 // Every term was grouped through addTermToTaxonomyGroup(), which takes
                 // only elements, so the check below only narrows the type for phpstan
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if (! $term instanceof SimpleXMLElement) {
                     // @pest-mutate-ignore: ContinueToBreak
                     continue;
@@ -2232,6 +2254,10 @@ abstract class BaseEntryCreator
                 if ($termSlug !== '') {
                     // Get the full hierarchical slug from termMap or use the original slug as fallback
                     $mappedTerm = $termMap[$termSlug] ?? null;
+
+                    // Every term with a slug is in the map, as an array with a string
+                    // full slug, so the checks below only narrow the type for phpstan
+                    // @pest-mutate-ignore: BooleanAndToBooleanOr
                     $fullSlug = \is_array($mappedTerm)
                         && isset($mappedTerm['full_slug'])
                         && \is_string($mappedTerm['full_slug'])
@@ -2375,11 +2401,10 @@ abstract class BaseEntryCreator
 
             // Prefer the hierarchical full slug when one was computed for it.
             $mappedTerm = $termMap[$termSlug] ?? null;
-            $fullSlug = \is_array($mappedTerm)
-                && isset($mappedTerm['full_slug'])
-                && \is_string($mappedTerm['full_slug'])
+            $mappedFullSlug = \is_array($mappedTerm) && isset($mappedTerm['full_slug'])
                 ? $mappedTerm['full_slug']
-                : $termSlug;
+                : null;
+            $fullSlug = \is_string($mappedFullSlug) ? $mappedFullSlug : $termSlug;
 
             // Record the destination against the site-prefixed slug that was written.
             TermDestinationRegistry::registerTaxonomyTerm(
@@ -2516,12 +2541,16 @@ abstract class BaseEntryCreator
 
         // Get the parent slug from the term data. A missing parent reads as an
         // empty one, and either ends at the base slug below.
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $parentSlug = isset($term['parent']) && \is_string($term['parent'])
             ? $term['parent']
-            // @pest-mutate-ignore: EmptyStringToNotEmpty
             : '';
 
-        // Check if the term has a parent and the parent exists in the term map
+        // Check if the term has a parent and the parent exists in the term map. The
+        // full slug of an empty parent is empty, which ends at the base slug, and that
+        // of any other parent never is, so neither empty-string comparison can change
+        // the slug
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         if (
             $parentSlug !== ''
             && isset($termMap[$parentSlug])
@@ -2805,7 +2834,6 @@ abstract class BaseEntryCreator
         $term = TermFacade::make();
         $term->taxonomy($statamicTaxonomyHandle);
         $term->slug($siteSpecificSlug);
-        $term->in($site);
         $term->set(
             'title',
             $title
@@ -2903,13 +2931,8 @@ abstract class BaseEntryCreator
         string $site,
         string $nameField = 'term_name'
     ): void {
-        // Skip silently when the key is absent; on-demand callers already verify
-        // membership
-        if (! isset($termMap[$termKey])) {
-            return;
-        }
-
-        // Extract the full hierarchical slug from the term map
+        // Extract the full hierarchical slug from the term map, skipping silently
+        // when the key is absent; on-demand callers already verify membership
         $termMapEntry = $termMap[$termKey] ?? null;
         if (! \is_array($termMapEntry)) {
             return;
@@ -2966,7 +2989,10 @@ abstract class BaseEntryCreator
                 continue;
             }
 
-            // Create the whole taxonomy's queued terms in a single batched pass.
+            // Create the whole taxonomy's queued terms in a single batched pass. The
+            // pass reads each position only to pace its memory collection, so it
+            // creates the same terms from the keyed queue as from a list
+            // @pest-mutate-ignore: UnwrapArrayValues
             $this->createTaxonomyTermsFromStoredData(
                 \array_values($queued),
                 $statamicTaxonomyHandle,
@@ -3050,7 +3076,9 @@ abstract class BaseEntryCreator
 
         // Check if term ID exists before tracking it
         if ($termId !== '') {
-            // Mark this term ID as seen to prevent future duplicates
+            // Mark this term ID as seen to prevent future duplicates. Only isset()
+            // reads it, which takes false as set as well
+            // @pest-mutate-ignore: TrueToFalse
             $seenTermIds[$termId] = true;
         }
 
@@ -3113,11 +3141,8 @@ abstract class BaseEntryCreator
      */
     private static function extractObjectId(mixed $candidate): ?string
     {
-        if (! \is_object($candidate)) {
-            return null;
-        }
-
-        // An id() this scope cannot call (a private or protected one) is no id
+        // A value that is not an object, or whose id() this scope cannot call (a
+        // private or protected one), has no id
         if (
             ! \is_callable(
                 [
