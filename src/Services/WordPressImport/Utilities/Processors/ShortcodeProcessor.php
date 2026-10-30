@@ -36,12 +36,86 @@ class ShortcodeProcessor
     private const string SHORTCODE_PATTERN = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
 
     /**
-     * Matches attribute text that is a list of WordPress shortcode attributes.
-     *
-     * Each item is a name with a quoted or unquoted value, or a bare name, and the
-     * list may end in the self-closing slash.
+     * The characters of an attribute name: PCRE's \w without the u flag, and "-".
      */
-    private const string ATTRIBUTE_LIST_PATTERN = '/^(?:[\w-]+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'\]]+)\s*|[\w-]+\s*)*\/?$/';
+    private const string ATTRIBUTE_NAME_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
+
+    /**
+     * The characters PCRE's \s matches without the u flag.
+     */
+    private const string ATTRIBUTE_SPACE_CHARACTERS = " \t\n\x0B\f\r";
+
+    /**
+     * Where an attribute list may stand: at the start of an item, or at its end.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_ITEM = 1;
+
+    /**
+     * Inside an attribute name.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_NAME = 2;
+
+    /**
+     * In the space after an attribute name.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_AFTER_NAME = 4;
+
+    /**
+     * After an attribute's "=", in the space before its value.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_AFTER_EQUALS = 8;
+
+    /**
+     * Inside a double-quoted value.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_DOUBLE_QUOTED = 16;
+
+    /**
+     * Inside a single-quoted value.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_SINGLE_QUOTED = 32;
+
+    /**
+     * Inside an unquoted value.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_UNQUOTED = 64;
+
+    /**
+     * In the space after a value.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_AFTER_VALUE = 128;
+
+    /**
+     * After the self-closing slash, which ends the list.
+     */
+    // PCOV records no line for a class constant, so the mutation plugin never runs a mutant of
+    // it; raising or lowering it by one by hand fails ShortcodeAttributeListTest (#321)
+    // @pest-mutate-ignore: IncrementInteger, DecrementInteger
+    private const int LIST_SLASH = 256;
 
     /**
      * Registered shortcode handlers mapped to set types.
@@ -711,7 +785,106 @@ class ShortcodeProcessor
 
         // Attribute text is a shortcode's when it is a list holding a value
         return \str_contains($attributes, '=')
-            && \preg_match(self::ATTRIBUTE_LIST_PATTERN, $attributes) === 1;
+            && self::isAttributeList($attributes);
+    }
+
+    /**
+     * Whether attribute text is a list of WordPress shortcode attributes.
+     *
+     * The list is items, each a name with a double-quoted, single-quoted or unquoted
+     * value, or a bare name, with space around them, and it may end in the
+     * self-closing slash. An unquoted value takes any character but space, a quote
+     * and "]", so where it ends and the next name begins is not fixed by the text:
+     * in `layout=layout='grid'` the value is `lay` and `out='grid'` the next item.
+     *
+     * A regular expression for this grammar tried every such split before rejecting
+     * a string, which ran PCRE out of backtracking on a long one (#321). This reads
+     * the text once instead, carrying every way it could still be read as a set of
+     * states, so it takes time in proportion to the text, cannot fail, and accepts
+     * exactly the strings that expression did.
+     *
+     * @param  string  $attributes  The attribute text
+     * @return bool True when it is such a list
+     */
+    private static function isAttributeList(
+        string $attributes
+    ): bool {
+        $states = self::LIST_ITEM;
+        $length = \strlen($attributes);
+
+        // Read each character against every state the text could be in so far
+        for ($i = 0; $i < $length; $i++) {
+            $states = self::stepAttributeList($states, $attributes[$i]);
+        }
+
+        // The list may end between items or after its slash
+        return ($states & (self::LIST_ITEM | self::LIST_SLASH)) !== 0;
+    }
+
+    /**
+     * The states an attribute list can be in after one more character.
+     *
+     * @param  int  $states  The states before the character, as LIST_* bits
+     * @param  string  $character  The character
+     * @return int The states after it, with each item that can end there ended
+     */
+    private static function stepAttributeList(
+        int $states,
+        string $character
+    ): int {
+        $name = \strspn($character, self::ATTRIBUTE_NAME_CHARACTERS) === 1;
+        $space = \strspn($character, self::ATTRIBUTE_SPACE_CHARACTERS) === 1;
+        $unquoted = ! $space && \strspn($character, '"\']') === 0;
+        $next = 0;
+
+        // An item starts with its name, and the list can end in a slash
+        if (($states & self::LIST_ITEM) !== 0) {
+            $next |= ($name ? self::LIST_NAME : 0) | ($character === '/' ? self::LIST_SLASH : 0);
+        }
+
+        // A name runs on, or is followed by space or "="
+        if (($states & self::LIST_NAME) !== 0) {
+            $next |= ($name ? self::LIST_NAME : 0) | ($space ? self::LIST_AFTER_NAME : 0) | ($character === '=' ? self::LIST_AFTER_EQUALS : 0);
+        }
+
+        // Space after a name runs on, or is followed by "="
+        if (($states & self::LIST_AFTER_NAME) !== 0) {
+            $next |= ($space ? self::LIST_AFTER_NAME : 0) | ($character === '=' ? self::LIST_AFTER_EQUALS : 0);
+        }
+
+        // After "=" comes space, or a quote or character that opens the value
+        if (($states & self::LIST_AFTER_EQUALS) !== 0) {
+            $next |= ($space ? self::LIST_AFTER_EQUALS : 0)
+                | ($character === '"' ? self::LIST_DOUBLE_QUOTED : 0)
+                | ($character === "'" ? self::LIST_SINGLE_QUOTED : 0)
+                | ($unquoted ? self::LIST_UNQUOTED | self::LIST_AFTER_VALUE : 0);
+        }
+
+        // A quoted value runs to its closing quote
+        if (($states & self::LIST_DOUBLE_QUOTED) !== 0) {
+            $next |= $character === '"' ? self::LIST_AFTER_VALUE : self::LIST_DOUBLE_QUOTED;
+        }
+
+        if (($states & self::LIST_SINGLE_QUOTED) !== 0) {
+            $next |= $character === "'" ? self::LIST_AFTER_VALUE : self::LIST_SINGLE_QUOTED;
+        }
+
+        // An unquoted value runs on, and can end after any of its characters
+        if (($states & self::LIST_UNQUOTED) !== 0 && $unquoted) {
+            $next |= self::LIST_UNQUOTED | self::LIST_AFTER_VALUE;
+        }
+
+        // Space after a value runs on
+        if (($states & self::LIST_AFTER_VALUE) !== 0 && $space) {
+            $next |= self::LIST_AFTER_VALUE;
+        }
+
+        // An item can end after its name, the space after it, or its value
+        if (($next & (self::LIST_NAME | self::LIST_AFTER_NAME | self::LIST_AFTER_VALUE)) !== 0) {
+            $next |= self::LIST_ITEM;
+        }
+
+        return $next;
     }
 
     /**
