@@ -403,6 +403,10 @@ final class AttachmentReferenceCollector
         \preg_match_all('#(?:https?:)?//[^\s"\'<>()\[\]{}\\\\,]+#i', $text, $urls);
 
         foreach ($urls[0] as $url) {
+            // An HTML attribute carries `&` as an entity, so decode the URL to the one the
+            // markup holds before trimming, or `&amp;` would lose its `;` (#269)
+            $url = \html_entity_decode($url, \ENT_QUOTES | \ENT_HTML5, 'UTF-8');
+
             $this->collectUrl(\rtrim($url, '.;:!?'), $item);
         }
     }
