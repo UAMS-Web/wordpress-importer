@@ -955,6 +955,7 @@ class PeopleEntryCreator extends BaseEntryCreator
                 $originalWordPressUrl,
                 $parentId,
                 $parsedBio,
+                $parsedBioContent,
                 $parsedBioShort,
                 $peopleGroups,
                 $portraitPath,
