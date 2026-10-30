@@ -1246,6 +1246,21 @@ describe('blocks in an HTML string', function (): void {
         ]]);
     });
 
+    it('does not run a self-closing block through a later closing comment of its type', function (): void {
+        $calls = new AcfBlockCalls;
+
+        $result = acfBlocksFromHtml(
+            acfBlockParser($calls),
+            new AcfBlockContext,
+            '<p>a</p><!-- wp:acf/cta {"data":{}} /--><p>b</p><!-- /wp:acf/cta --><p>c</p>'
+        );
+
+        expect($result)->toBe([
+            'acfSets' => [['set' => 'cta']],
+            'remainingHtml' => '<p>a</p><p>b</p><!-- /wp:acf/cta --><p>c</p>',
+        ]);
+    });
+
     it('parses no block a paired block contains a second time, and parses the blocks after it', function (): void {
         $calls = new AcfBlockCalls;
 
