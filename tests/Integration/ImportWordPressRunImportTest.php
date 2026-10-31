@@ -19,7 +19,6 @@ use Statamic\Stache\Stores\Store;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -49,6 +48,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Peop
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -654,7 +654,7 @@ function iwriBare(string $class): object
  * hands work to, the given arguments and options, and the buffer behind its output.
  *
  * @param  array<string, mixed>  $parameters  The arguments and options, as `ArrayInput` takes them
- * @return array{IwriCommand, BufferedOutput, array{sites: IwriSites, entries: IwriEntries, siteManager: IwriSiteManager}}
+ * @return array{IwriCommand, LfBufferedOutput, array{sites: IwriSites, entries: IwriEntries, siteManager: IwriSiteManager}}
  */
 function iwriCommand(array $parameters = []): array
 {
@@ -686,7 +686,7 @@ function iwriCommand(array $parameters = []): array
 
     $input = new ArrayInput($parameters, $command->getDefinition());
     $input->setInteractive(false);
-    $buffer = new BufferedOutput;
+    $buffer = new LfBufferedOutput;
     $command->setInput($input);
     $command->setOutput(new OutputStyle($input, $buffer));
 
@@ -700,7 +700,7 @@ function iwriCommand(array $parameters = []): array
  * @param  list<string>  $parts  The part paths
  * @return array{int, string}
  */
-function iwriRun(ImportWordPress $command, BufferedOutput $buffer, array $parts): array
+function iwriRun(ImportWordPress $command, LfBufferedOutput $buffer, array $parts): array
 {
     $status = (new ReflectionMethod(ImportWordPress::class, 'runImportForParts'))->invoke($command, $parts);
 
@@ -1338,7 +1338,7 @@ function iwriInteractive(ImportWordPress $command, array $parts, string $answers
 
     $input = new ArrayInput([]);
     $input->setStream($stream);
-    $buffer = new BufferedOutput;
+    $buffer = new LfBufferedOutput;
 
     $runner = new class($command, $parts) extends Command
     {
@@ -1572,9 +1572,17 @@ it('asks each overwrite question, and whether to import more, when it can', func
         ? "  Would you like to import more content? (yes/no) [no]\n\u{276F} \n"
         : " Would you like to import more content? (yes/no) [no]:\n > \n";
 
-    // Pages: entries, assets and tables all "Create", then import more. Redirects: sets
-    // "Create", then press Enter to stop at the default, no.
-    [$status, $output] = iwriInteractive($command, [iwriPart($this, [['type' => 'page', 'content' => '[table id=3 /]'], 'redirect_rule'])], "2\n2\n2\nyes\n2\n\n");
+    // The questions pad their options to the terminal, and a Windows console is wider than 80
+    $columns = \getenv('COLUMNS');
+    \putenv('COLUMNS=80');
+
+    try {
+        // Pages: entries, assets and tables all "Create", then import more. Redirects: sets
+        // "Create", then press Enter to stop at the default, no.
+        [$status, $output] = iwriInteractive($command, [iwriPart($this, [['type' => 'page', 'content' => '[table id=3 /]'], 'redirect_rule'])], "2\n2\n2\nyes\n2\n\n");
+    } finally {
+        \putenv($columns === false ? 'COLUMNS' : "COLUMNS={$columns}");
+    }
 
     expect($status)->toBe(0)
         ->and(IwriLog::of('entries.entryOverwrite'))->toBe([['Create an additional file']])

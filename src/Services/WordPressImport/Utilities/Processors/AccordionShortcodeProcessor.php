@@ -42,13 +42,24 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * Matches one [section]...[/section], capturing `title`, `bare` and `body`.
      */
-    private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]|\[(?!\/section\]))*?)\[\/section\]/s';
+    private const string SECTION_PATTERN = '/'.self::OPEN_TAG.'(?<body>(?:[^[]++|\[(?!\/section\]))*+)\[\/section\]/s';
 
     /**
-     * Matches one line break or whitespace character, the residue wpautop leaves
-     * around shortcode tags.
+     * Matches one line break, whitespace character or non-breaking space, the
+     * residue wpautop and the editor leave around shortcode tags. The non-breaking
+     * space is matched as an entity and as its UTF-8 bytes, since the patterns that
+     * use this read bytes.
      */
-    private const string BREAK_PATTERN = '(?:\s|<br\s*\/?>)';
+    private const string BREAK_PATTERN = '(?:\s|&nbsp;|\xC2\xA0|<br\s*\/?>)';
+
+    /**
+     * Matches one ul, ol or li tag, capturing `close` and `tag`. HTML comments and
+     * other tags are consumed and skipped, so a list tag in a comment or an
+     * attribute value is not read as one.
+     */
+    private const string LIST_TAG_PATTERN = '/<!--(?:-?>|(?:[^-]++|-(?!->))*+(?:-->|\z))(*SKIP)(*FAIL)'
+        .'|<(?!\/?(?:ul|ol|li)[\s\/>])\/?[a-z][^\s\/>]*(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>(*SKIP)(*FAIL)'
+        .'|<(?<close>\/?)(?<tag>ul|ol|li)(?=[\s\/>])(?:[^<>"\']++|"[^"]*"|\'[^\']*\')*+>/i';
 
     /**
      * Parse a WordPress [accordion] shortcode and return an array of sections.
@@ -193,7 +204,9 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
      * Shortcodes inside the sections are processed, since the outer extraction
      * consumed them along with the accordion. The output closes any open
      * paragraph first and opens one at the end, and text between sections gets a
-     * paragraph of its own. A section with no title, or an unquoted one, is read
+     * paragraph of its own. A section's list tags are balanced within it, since
+     * the section's own element scopes them in WordPress, so a list left open does
+     * not take in the sections after it. A section with no title, or an unquoted one, is read
      * as ShortcodeProcessor reads attributes, and a [section] tag that still does
      * not convert is kept as text and reported (#167). When one
      * of this method's own patterns fails, the content is kept as it was and an
@@ -246,7 +259,7 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
         $flattened = \is_string($trimmed)
             ? \preg_replace_callback(
                 self::SECTION_PATTERN,
-                static function (array $match): string {
+                static function (array $match) use ($site, $pageSlug): string {
                     // The stripper decodes entities and trims, so the title is plain text
                     $title = self::sectionTitle($match);
 
@@ -254,10 +267,13 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
                         ? ''
                         : '<h3>'.\htmlspecialchars($title).'</h3>';
 
+                    // Keep the body's lists inside the section
+                    $sectionBody = self::balanceLists($match['body'], $site, $pageSlug);
+
                     // A body wpautop already split is wrapped; plain text gets paragraphs
-                    $body = \preg_match('/<\/?p[\s>]/i', $match['body']) === 1
-                        ? '<p>'.$match['body'].'</p>'
-                        : (new WpAutoP)->process($match['body']);
+                    $body = \preg_match('/<\/?p[\s>]/i', $sectionBody) === 1
+                        ? '<p>'.$sectionBody.'</p>'
+                        : (new WpAutoP)->process($sectionBody);
 
                     // Close the paragraph around the section and open one after it
                     return '</p>'.$heading.$body.'<p>';
@@ -333,6 +349,87 @@ class AccordionShortcodeProcessor implements ShortcodeProcessorInterface
             : $match['bare'];
 
         return HtmlTagStripper::strip($title);
+    }
+
+    /**
+     * Closes the list tags a section body leaves open and drops the ones it closes
+     * without opening.
+     *
+     * An unclosed list would otherwise take in the headings of the sections after
+     * it, and a stray close would end a list around the accordion. Text inside an
+     * HTML comment or an attribute value is left alone, since it opens and closes
+     * nothing. The closing tags go at the end of the body, so a comment the body
+     * never ends takes them in. When the pattern fails the body is kept as it was
+     * and an import warning names the page.
+     *
+     * @param  string  $body  The section body
+     * @param  string  $site  The site handle, for the warning a failed pattern records
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     * @return string The body with its ul, ol and li tags balanced
+     */
+    private static function balanceLists(
+        string $body,
+        string $site,
+        ?string $pageSlug
+    ): string {
+        // The list tags open at this point in the body, innermost last
+        $open = [];
+
+        $balanced = \preg_replace_callback(
+            self::LIST_TAG_PATTERN,
+            static function (array $match) use (&$open): string {
+                $tag = \strtolower($match['tag']);
+
+                // An opening tag: a new item ends the item before it
+                if ($match['close'] === '') {
+                    $closing = $tag === 'li' && \end($open) === 'li' ? \array_pop($open) : null;
+                    $open[] = $tag;
+
+                    return ($closing === null ? '' : '</li>').$match[0];
+                }
+
+                // A close with nothing to close is dropped
+                if (! \in_array($tag, $open, true)) {
+                    return '';
+                }
+
+                // Close what is open inside the tag, then the tag
+                $closing = '';
+
+                while (($last = \array_pop($open)) !== $tag) {
+                    $closing .= '</'.$last.'>';
+                }
+
+                return $closing.$match[0];
+            },
+            $body
+        );
+
+        // A failed pattern keeps the body as it was, and says so
+        if ($balanced === null) {
+            ImportWarningManager::addWarning(
+                'content',
+                'unbalanced_accordion_sections',
+                [
+                    'site' => $site,
+                    'page_slug' => $pageSlug,
+                    'error' => \preg_last_error_msg(),
+                    'content_snippet' => \substr($body, 0, 100),
+                    'page_url' => LogContextHelper::enhanceWithEntryContext([])['page_url'],
+                ]
+            );
+
+            return $body;
+        }
+
+        // Close what is still open, innermost first
+        return $balanced.\implode(
+            '',
+            \array_map(
+                static fn (string $tag): string => '</'.$tag.'>',
+                \array_reverse($open)
+            )
+        );
     }
 
     /**

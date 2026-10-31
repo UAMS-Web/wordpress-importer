@@ -1782,7 +1782,8 @@ class TextProcessor
     }
 
     /**
-     * Drops the paragraph nodes that hold no content.
+     * Drops the paragraph nodes that hold no content, at the top level and in list
+     * items at any depth.
      *
      * @param  array<int|string, mixed>  $nodes  Bard content
      * @return array<int|string, mixed> The content without its empty paragraphs, keys kept
@@ -1790,14 +1791,69 @@ class TextProcessor
     private static function withoutEmptyParagraphs(
         array $nodes
     ): array {
-        return \array_filter(
-            $nodes,
-            fn ($node): bool => ! (
-                \is_array($node)
-                && ($node['type'] ?? null) === 'paragraph'
-                && (($node['content'] ?? []) === [])
+        return \array_map(
+            self::withoutEmptyListItemParagraphs(...),
+            \array_filter(
+                $nodes,
+                fn ($node): bool => ! self::isEmptyParagraph($node)
             )
         );
+    }
+
+    /**
+     * Drops the empty paragraphs from the list items in a node.
+     *
+     * Bard requires a list item to start with a paragraph, so an item's leading
+     * empty paragraph stays when no other paragraph would take its place.
+     *
+     * @param  mixed  $node  A Bard node
+     * @return mixed The node without the empty paragraphs in its list items
+     */
+    private static function withoutEmptyListItemParagraphs(
+        mixed $node
+    ): mixed {
+        // Only a node with content can hold a list item
+        if (! \is_array($node) || ! \is_array($node['content'] ?? null)) {
+            return $node;
+        }
+
+        $content = \array_values(\array_map(
+            self::withoutEmptyListItemParagraphs(...),
+            $node['content']
+        ));
+
+        // A list item keeps its other nodes
+        if (($node['type'] ?? null) === 'listItem') {
+            $kept = \array_values(\array_filter(
+                $content,
+                fn ($child): bool => ! self::isEmptyParagraph($child)
+            ));
+
+            $first = $kept[0] ?? null;
+            $startsWithParagraph = \is_array($first) && ($first['type'] ?? null) === 'paragraph';
+
+            $content = self::isEmptyParagraph($content[0] ?? null) && ! $startsWithParagraph
+                ? [$content[0], ...$kept]
+                : $kept;
+        }
+
+        $node['content'] = $content;
+
+        return $node;
+    }
+
+    /**
+     * Whether a Bard node is a paragraph that holds no content.
+     *
+     * @param  mixed  $node  A Bard node
+     * @return bool True for an empty paragraph
+     */
+    private static function isEmptyParagraph(
+        mixed $node
+    ): bool {
+        return \is_array($node)
+            && ($node['type'] ?? null) === 'paragraph'
+            && (($node['content'] ?? []) === []);
     }
 
     /**

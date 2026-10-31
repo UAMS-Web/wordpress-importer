@@ -688,6 +688,17 @@ describe('replaceShortcode', function (): void {
             ->toBe('<p>a</p><h3>y</h3><p>b</p><h3>y</h3><p>c</p>');
     });
 
+    it('replaces a shortcode too long for a pattern to hold', function (): void {
+        $original = '[x]'.\str_repeat('a', 70000).'[/x]';
+
+        expect(ShortcodeProcessor::replaceShortcode("a\n{$original}\nb", $original, '</p><h3>y</h3><p>'))
+            ->toBe('a</p><h3>y</h3><p>b');
+    });
+
+    it('leaves the content alone for an empty shortcode', function (): void {
+        expect(ShortcodeProcessor::replaceShortcode('a', '', '<i>y</i>'))->toBe('a');
+    });
+
     it('falls back to the plain replacement when the pattern fails', function (): void {
         // A one-step backtrack limit with the JIT off fails the pattern
         $limit = \ini_get('pcre.backtrack_limit');
