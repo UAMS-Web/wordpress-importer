@@ -637,6 +637,17 @@ describe('importing a file', function (): void {
         expect($importer->getFileCache())->toBe(['https://uams.edu/a.pdf:files' => 'news/a.pdf']);
     });
 
+    it('reads an entry by the arguments it was set with', function (): void {
+        $importer = new AssetImporterTestImporter(new AssetImporterTestHandler);
+
+        $importer->setFileCache('https://uams.edu/a.pdf', 'news/a.pdf');
+        $importer->setFileCache('https://uams.edu/a.pdf', 'news/b.pdf', 'images');
+
+        expect($importer->getFileCacheEntry('https://uams.edu/a.pdf'))->toBe('news/a.pdf')
+            ->and($importer->getFileCacheEntry('https://uams.edu/a.pdf', 'images'))->toBe('news/b.pdf')
+            ->and($importer->getFileCacheEntry('https://uams.edu/c.pdf'))->toBeNull();
+    });
+
     it('warns and imports nothing without a URL', function (): void {
         $warnings = assetImporterTestWarnings();
 
