@@ -172,7 +172,7 @@ Command signature:
 statamic:import:wordpress [<file>] [--source=wxr|api] [--site=<id>] [--modified-after=<when>]
                           [--network=<url>] [--key-from-stdin]
                           [--unsupported-content=abort|skip|import] [--content-type=<type>]
-                          [--minerva-generation=v1|v2]
+                          [--minerva-generation=v1|v2] [--verify]
 ```
 
 `<file>` is **optional**: with `--source=wxr` it is the export to read, and with `--source=api` it is the directory the run materializes WXR into.
@@ -187,6 +187,7 @@ statamic:import:wordpress [<file>] [--source=wxr|api] [--site=<id>] [--modified-
 | `--unsupported-content` | `abort` | Non-interactive policy for content carrying unsupported blocks (Classic, Freeform, Details), or KB entries without topics: `abort`, `skip` or `import`. |
 | `--content-type` | — | The single content type to import, for an unattended run. Without it a non-interactive run imports the first supported type, reports the rest as untouched, and exits non-zero. |
 | `--minerva-generation` | — | The MinervaKB generation the site runs, `v1` or `v2`, with `--source=api`. Where the migration API serves the installed plugin's header, read from disk, its `Text Domain` decides the generation and the option is not needed; a declaration that header contradicts is refused. Otherwise it is required to import from a site that serves both generations' settings rows, which is refused without it. Read it from the network plugins page (`wp-admin/network/plugins.php`) before the run. A declared generation whose row was not served is refused, and so is the option on a file-sourced run. |
+| `--verify` | off | Run the whole import against a temporary copy of the content and assets, print the same counts, and leave this application's own directories unchanged. See [Verification runs](#verification-runs). |
 
 **`--site` does not name a network**, only a site within one — a blog id is unique only inside its own network, so the same id means a different site on each. The network comes from `--network`, or from the address you paste at the prompt when that option is absent.
 
@@ -258,6 +259,23 @@ Before import, the command warns about content patterns that typically need manu
 - MinervaKB entries without required topic assignments
 
 You can choose whether to continue after warnings are shown.
+
+## Verification runs
+
+`--verify` answers "what would this import do?" without doing it. The run reads and processes everything a real import does and prints the same summary lines, and for each redirect domain host a line with the number of entries stored with a `wordpress_post_id`:
+
+```bash
+php artisan statamic:import:wordpress storage/app/imports/gouams-com --source=api --network=https://go.uams.edu --site=3 --content-type=redirect_rule --verify
+```
+
+**How it works.** At the start of the run the Stache stores, the blueprints, fieldsets and forms, and the disks behind the asset containers are copied to a directory under the system temporary directory, and this process is pointed at the copy, with its caches held in memory. The copy is deleted when the run ends, whether it succeeds or fails. An import writes from too many places, and depends too much on what is already stored, for a run that wrote nothing to report the same counts.
+
+- **The guarantee covers the content and asset directories.** They are not written to, even if the run fails or is killed. A killed run leaves its copy behind under the temporary directory (`wordpress-import-verify-*`), which is safe to delete.
+- **The search index rebuild and the Laravel cache clear are skipped**, since both act on this application rather than on the copy. Bard sanitization and the dataless entry sweep run against the copy.
+- **`--source=api` still materializes its WXR parts** into the directory the `file` argument names.
+- **The copy costs disk space and time** in proportion to the content and asset directories, so check there is room in the temporary directory first.
+- **A setup that cannot be contained is refused**, and nothing is imported: an asset container on a disk that is not local, or Statamic's Git integration turned on.
+- **Listeners the host application registers are not contained.** A listener that writes to its own location on an entry save still runs.
 
 ## Navigation Menu Import
 

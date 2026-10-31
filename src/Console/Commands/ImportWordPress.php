@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File as LaravelFile;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use RuntimeException;
 use Statamic\Entries\Collection as StatamicCollection;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Collection;
@@ -69,6 +70,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Peop
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\VerificationWorkspace;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
@@ -147,7 +149,8 @@ class ImportWordPress extends Command
         {--key-from-stdin : Read that network\'s migration API key from the first line of standard input rather than asking for it, so an API-sourced run needs no terminal. Requires --network}
         {--unsupported-content=abort : Non-interactive policy for content containing unsupported blocks (Classic, Freeform, Details) or KB entries without topics: abort|skip|import}
         {--content-type= : The single content type to import, for an unattended run. Without it a non-interactive run imports the first supported type and reports the rest as untouched, exiting non-zero}
-        {--minerva-generation= : The MinervaKB generation this site runs, v1 or v2, when --source=api, as read from the network plugins page. Needed only where the migration API serves no plugin header naming the generation and both generations\' settings rows are served, which is otherwise refused. A declaration the header contradicts is refused}';
+        {--minerva-generation= : The MinervaKB generation this site runs, v1 or v2, when --source=api, as read from the network plugins page. Needed only where the migration API serves no plugin header naming the generation and both generations\' settings rows are served, which is otherwise refused. A declaration the header contradicts is refused}
+        {--verify : Run the whole import against a temporary copy of the content and assets, print the same counts, and leave the application\'s own directories unchanged}';
 
     /**
      * The console command description.
@@ -510,11 +513,51 @@ class ImportWordPress extends Command
         // run produced. Anything older predates it and is not this run's to delete (wordpress-importer-archive#1160).
         $this->runStartedAt = \microtime(true);
 
-        return AssetReferenceUpdates::withDisabled(
+        $run = fn (): int => AssetReferenceUpdates::withDisabled(
             fn (): int => SearchIndexUpdates::withDisabled(
                 fn (): int => $this->runImport()
             )
         );
+
+        return $this->isVerificationRun() ? $this->runInWorkspace($run) : $run();
+    }
+
+    /**
+     * Whether this run leaves the application's own directories unchanged (#254).
+     */
+    private function isVerificationRun(): bool
+    {
+        return $this->option('verify') === true;
+    }
+
+    /**
+     * Run the import against a temporary copy of what it writes, removing the copy however
+     * the run ends (#254).
+     *
+     * @param  callable(): int  $run  The import
+     * @return int The import's exit code, or 1 when the workspace cannot be set up
+     */
+    private function runInWorkspace(callable $run): int
+    {
+        try {
+            $workspace = VerificationWorkspace::enter();
+        } catch (RuntimeException $e) {
+            $this->error("The verification run was refused: {$e->getMessage()} Nothing was imported.");
+
+            return 1;
+        }
+
+        $this->info('Verification run: writing to a temporary copy. This application\'s content and assets will not change.');
+
+        try {
+            return $run();
+        } finally {
+            if ($workspace->leave()) {
+                $this->info('Verification run: the temporary copy was removed.');
+            } else {
+                $this->warn("Verification run: the temporary copy at '{$workspace->root()}' could not be removed. Delete it by hand.");
+            }
+        }
     }
 
     /**
@@ -2429,11 +2472,14 @@ class ImportWordPress extends Command
         // Clear form creation cache
         $this->formPluginCoordinator->clearAllCaches();
 
-        // Clear Laravel cache
-        Artisan::call('cache:clear');
+        // A verification run's cache is its own, and is dropped with the workspace
+        if (! $this->isVerificationRun()) {
+            // Clear Laravel cache
+            Artisan::call('cache:clear');
 
-        // Confirm to user that cache was cleared
-        $this->info('Laravel cache cleared.');
+            // Confirm to user that cache was cleared
+            $this->info('Laravel cache cleared.');
+        }
 
         // Sanitize Bard content (YAML separators and unquoted nbsp text) in all
         // entries so YAML is formatted properly when the import is completed. The pass
@@ -2448,8 +2494,14 @@ class ImportWordPress extends Command
         // Rebuild search indexes once now that all content is imported. Live
         // search-index updates were disabled for the run (see handle()), so this
         // single pass replaces the hundreds of per-save full rebuilds that would
-        // otherwise have dominated the import.
-        SearchIndexUpdates::reindexAll($this->output);
+        // otherwise have dominated the import. A verification run skips it: search
+        // indexes live outside the workspace, so a rebuild would fill the host's real
+        // indexes with content that is about to be deleted (#254).
+        if ($this->isVerificationRun()) {
+            $this->info('Skipping search index rebuild - a verification run leaves the indexes as they are.');
+        } else {
+            SearchIndexUpdates::reindexAll($this->output);
+        }
 
         // Remove any dataless entry files this run materialized, before the summary is
         // rendered so the removals appear in it rather than after it (wordpress-importer-archive#1160).
