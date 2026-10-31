@@ -74,7 +74,7 @@ composer stan    # phpstan analyse --memory-limit=-1
 composer ci      # @stan, pint --test, @test — aborts at the first failure
 ```
 
-**Remote CI runs on every pull request, and `main` requires three checks: `CI`, `Attribution footer` and `Closing keywords`** (#163). Validation also runs locally:
+**Remote CI runs on every pull request, on Linux and Windows (#186), and `main` requires three checks: `CI`, `Attribution footer` and `Closing keywords`** (#163). Validation also runs locally:
 
 ```bash
 node scripts/ci-local.mjs                      # every job, in this checkout

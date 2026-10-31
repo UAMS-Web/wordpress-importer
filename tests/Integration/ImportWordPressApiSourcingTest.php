@@ -416,7 +416,7 @@ it('materializes the site into the named directory, pointing every loader at the
 
     expect($parts)->toBe([$destination.'/wordpress-export.001.xml', $destination.'/wordpress-export.002.xml'])
         ->and(is_dir($destination))->toBeTrue()
-        ->and(fileperms($destination) & 0o777)->toBe(0o775 & ~umask())
+        ->and(fileperms($destination) & 0o777)->toBe(\PHP_OS_FAMILY === 'Windows' ? 0o777 : 0o775 & ~umask())
         ->and($command->materializer?->reads)->toBe([[12, '2026-01-01', 'page']])
         ->and($command->materializer?->scopeClear)->toBeTrue()
         ->and(iwasBaseUrl($command->materializer?->client))->toBe('https://network.test')

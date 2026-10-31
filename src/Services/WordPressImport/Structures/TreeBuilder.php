@@ -7,6 +7,7 @@ namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Structures;
 use Illuminate\Support\Facades\File as IlluminateFileFacade;
 use Illuminate\Support\Facades\Log;
 use Statamic\Facades\Collection;
+use Statamic\Facades\Path;
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Stache\Repositories\CollectionTreeRepository;
 use Statamic\Structures\CollectionStructure;
@@ -648,7 +649,7 @@ class TreeBuilder
                 ) {
                     $canonicalPath = $pathsIndex->get($entryId);
                     foreach ($fileGroup as $fileInfo) {
-                        if ($fileInfo['path'] === $canonicalPath) {
+                        if (self::isSamePath($fileInfo['path'], $canonicalPath)) {
                             $fileToKeep = $fileInfo;
 
                             // Paths are unique, so no later file matches the index too
@@ -669,7 +670,7 @@ class TreeBuilder
                 ) {
                     $canonicalPath = $pathsIndex->get($entryId);
                     foreach ($fileGroup as $fileInfo) {
-                        if ($fileInfo['path'] === $canonicalPath) {
+                        if (self::isSamePath($fileInfo['path'], $canonicalPath)) {
                             $fileToKeep = $fileInfo;
 
                             // Paths are unique, so no later file matches the index too
@@ -720,6 +721,21 @@ class TreeBuilder
                 }
             }
         }
+    }
+
+    /**
+     * Whether a file on disk is the one the Stache's paths index names.
+     *
+     * The two spell a Windows path differently: the Stache tidies its paths to forward
+     * slashes, and a directory listing ends them with a backslash (#186).
+     *
+     * @param  string  $path  The file's path, from a directory listing
+     * @param  mixed  $indexed  What the paths index holds for the entry
+     * @return bool True when both name the same file
+     */
+    private static function isSamePath(string $path, mixed $indexed): bool
+    {
+        return \is_string($indexed) && Path::tidy($path) === Path::tidy($indexed);
     }
 
     /**
