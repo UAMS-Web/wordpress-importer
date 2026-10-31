@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Services\BardContentSanitizer;
 use Illuminate\Support\Facades\Log;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\ReusableBlockEntryCreator;
@@ -17,6 +16,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBl
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 /**
@@ -189,7 +189,7 @@ function reusableBlockCoordinator(XmlParser $parser, array $references = []): Re
 
 it('does nothing when the content referenced no reusable block', function (): void {
     $coordinator = reusableBlockCoordinator(reusableBlockParser(['1']));
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $coordinator->processReusableBlockImports('default', $output);
 
@@ -205,7 +205,7 @@ it('enables the collection and its structure, imports each referenced block once
     WpBlockBlockProcessor::addWpBlockPostId('1');
     WpBlockBlockProcessor::addWpBlockPostId('3');
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $coordinator->processReusableBlockImports('research', $output);
 
     expect($output->fetch())->toBe("Processing reusable content imports...\n")
@@ -228,7 +228,7 @@ it('imports the blocks the imported blocks reference, each once, until none is n
     ]);
     WpBlockBlockProcessor::addWpBlockPostId('1');
 
-    $coordinator->processReusableBlockImports('default', new BufferedOutput);
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
 
     expect(array_merge(...array_column($coordinator->creator->created, 'items')))->toBe(['1', '2', '3']);
 });
@@ -246,7 +246,7 @@ it('stops after a hundred rounds of new references, and says so', function (): v
     $coordinator = reusableBlockCoordinator(reusableBlockParser($ids), $references);
     WpBlockBlockProcessor::addWpBlockPostId('1');
 
-    $coordinator->processReusableBlockImports('default', new BufferedOutput);
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
 
     expect($coordinator->creator->created)->toHaveCount(100);
 
@@ -265,7 +265,7 @@ it('says nothing about a limit it did not reach', function (): void {
     $coordinator = reusableBlockCoordinator(reusableBlockParser(['1']));
     WpBlockBlockProcessor::addWpBlockPostId('1');
 
-    $coordinator->processReusableBlockImports('default', new BufferedOutput);
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
 
     $log->shouldNotHaveReceived('warning');
 });
@@ -283,7 +283,7 @@ it('refuses to import before it is given a parser and an asset importer', functi
 
     WpBlockBlockProcessor::addWpBlockPostId('1');
 
-    expect(fn () => $coordinator->processReusableBlockImports('default', new BufferedOutput))
+    expect(fn () => $coordinator->processReusableBlockImports('default', new LfBufferedOutput))
         ->toThrow(Exception::class, 'XML parser or asset importer not set for wp_block imports.');
 })->with([
     'neither' => [false, false],
@@ -300,7 +300,7 @@ it('skips every block when the parser has no file to re-read it from', function 
     WpBlockBlockProcessor::addWpBlockPostId('1');
     WpBlockBlockProcessor::addWpBlockPostId('2');
 
-    $coordinator->processReusableBlockImports('default', new BufferedOutput);
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
 
     expect($coordinator->creator->created)->toBe([]);
 });
