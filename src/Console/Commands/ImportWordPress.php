@@ -2499,11 +2499,17 @@ class ImportWordPress extends Command
         // single pass replaces the hundreds of per-save full rebuilds that would
         // otherwise have dominated the import. A verification run skips it: search
         // indexes live outside the workspace, so a rebuild would fill the host's real
-        // indexes with content that is about to be deleted (#254).
+        // indexes with content that is about to be deleted (#254). A run whose imported
+        // types none declare the pass wrote nothing for reader-facing search, but its
+        // redirect domain entries belong in the Control Panel's own index, so only that
+        // one is rebuilt (#229).
         if ($this->isVerificationRun()) {
             $this->info('Skipping search index rebuild - a verification run leaves the indexes as they are.');
-        } else {
+        } elseif (ContentTypeReads::runsPass(ContentTypeReads::PASS_SEARCH_INDEX, $importedContentTypes)) {
             SearchIndexUpdates::reindexAll($this->output);
+        } else {
+            $this->info('Rebuilding only the Control Panel search index - no imported content type declares the full rebuild.');
+            SearchIndexUpdates::reindexAll($this->output, [SearchIndexUpdates::CP_INDEX]);
         }
 
         // Remove any dataless entry files this run materialized, before the summary is

@@ -7,13 +7,13 @@ use Statamic\Facades\Site;
 use Statamic\Globals\GlobalSet as ConcreteGlobalSet;
 use Statamic\Globals\Variables;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 /**
@@ -82,7 +82,7 @@ function globalCreatorParser(): XmlParser
  */
 function globalCreatorRun(GlobalCreator $creator, string $contentType = 'redirect_rule'): string
 {
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $creator->createGlobals('default', $contentType, 'redirects', globalCreatorParser(), new AssetImporter, $output);
 

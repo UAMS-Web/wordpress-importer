@@ -5,12 +5,13 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Prompter;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * The MinervaKB settings `Prompter` explains where the settings file comes from, then asks for
@@ -78,6 +79,12 @@ function minervaKbSettingsPrompterRun(bool $prompts, ?string $answers, ?array $k
                 return self::SUCCESS;
             }
 
+            // Laravel Prompts throws on Windows before it reads a key, and the command falls
+            // back there
+            if (\PHP_OS_FAMILY === 'Windows') {
+                Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+            }
+
             // Command::run() turns the fallback on, and fallbackWhen() only ever turns it
             // on, so it is turned off directly for the call and turned back on after
             $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
@@ -94,7 +101,7 @@ function minervaKbSettingsPrompterRun(bool $prompts, ?string $answers, ?array $k
         }
     };
 
-    $buffer = new BufferedOutput;
+    $buffer = new LfBufferedOutput;
     $command->setLaravel(app());
     $command->run($input, $buffer);
 

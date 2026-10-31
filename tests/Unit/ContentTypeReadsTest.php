@@ -20,14 +20,14 @@ it('declares the body companions, the link targets and both passes for every typ
             ->toBe(['page', 'post', 'uamspeople']);
     }
 
-    expect(ContentTypeReads::passes($contentType))->toBe(['navigation', 'bard_sanitization']);
+    expect(ContentTypeReads::passes($contentType))->toBe(['navigation', 'bard_sanitization', 'search_index']);
 })->with(['page', 'post', 'uamspeople', 'tshowcase', 'logo-list-item', 'advert']);
 
 it('adds pages to a knowledge base, after the body companions and once', function (): void {
     expect(ContentTypeReads::companions('kb', false))
         ->toBe(['attachment', 'wp_block', 'nav_menu_item', 'tablepress_table', 'page'])
         ->and(ContentTypeReads::linkTargets('kb', false))->toBe(['page', 'post', 'uamspeople'])
-        ->and(ContentTypeReads::passes('kb'))->toBe(['navigation', 'bard_sanitization']);
+        ->and(ContentTypeReads::passes('kb'))->toBe(['navigation', 'bard_sanitization', 'search_index']);
 });
 
 it('reads only attachments and the link targets for redirect rules on a site', function (): void {
@@ -52,6 +52,9 @@ it('runs a pass when any imported type declares it', function (string $pass, arr
     'a page run, navigation' => [ContentTypeReads::PASS_NAVIGATION, ['page'], true],
     'a page run, Bard' => [ContentTypeReads::PASS_BARD_SANITIZATION, ['page'], true],
     'a redirect run, navigation' => [ContentTypeReads::PASS_NAVIGATION, ['redirect_rule'], false],
+    'a page run, search indexes' => [ContentTypeReads::PASS_SEARCH_INDEX, ['page'], true],
+    'a redirect run, search indexes' => [ContentTypeReads::PASS_SEARCH_INDEX, ['redirect_rule'], false],
+    'pages then redirects, search indexes' => [ContentTypeReads::PASS_SEARCH_INDEX, ['page', 'redirect_rule'], true],
     'a redirect run, Bard' => [ContentTypeReads::PASS_BARD_SANITIZATION, ['redirect_rule'], false],
     'redirects then pages' => [ContentTypeReads::PASS_NAVIGATION, ['redirect_rule', 'page'], true],
     'pages then redirects' => [ContentTypeReads::PASS_NAVIGATION, ['page', 'redirect_rule'], true],

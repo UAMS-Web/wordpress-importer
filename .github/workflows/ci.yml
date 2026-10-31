@@ -13,6 +13,13 @@ concurrency:
 permissions:
   contents: read
 
+# Bash on both operating systems. The `run` steps are bash, and a Windows runner's
+# default shell is PowerShell, which reads `$GITHUB_OUTPUT` and `set -o pipefail` as
+# something else entirely.
+defaults:
+  run:
+    shell: bash
+
 # REQUIRED CHECKS (#163). A ruleset for this repository requires three contexts
 # on `main`: `CI`, `Attribution footer` and `Closing keywords`, the same three the
 # Statamic add-ons and `uamswp-migration-api` require. `CI` is the last job in
@@ -24,6 +31,12 @@ permissions:
 # otherwise. Do not rename `CI`. The other two are the jobs of
 # `check-attribution-footer.yml` and `check-closing-keyword-across-lines.yml`.
 # Job names must stay unique across every workflow in this repository.
+#
+# WINDOWS LEG (#186). Every job but `CI` is a matrix over `ubuntu-latest` and
+# `windows-latest`, so a Windows-only defect shows on the pull request. `fail-fast:
+# false` lets both legs report when one fails. `CI` needs each job once, and a
+# matrix job's result covers all of its legs. No Windows job is `continue-on-error`
+# or skipped to reach green; `scripts/ci-local.test.mjs` holds all of this.
 #
 # RUN_REMOTE_CI: off switch, mirroring uams-statamic (UAMS-Web/uams-statamic-archive#980).
 # Every job but `CI` is gated on `if: vars.RUN_REMOTE_CI != 'false'`. Set an
@@ -60,9 +73,13 @@ permissions:
 
 jobs:
   validate:
-    name: Composer validate
-    runs-on: ubuntu-latest
+    name: Composer validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -80,9 +97,13 @@ jobs:
         run: composer validate --no-check-publish --no-check-all
 
   pest:
-    name: Pest (Unit + Integration suites)
-    runs-on: ubuntu-latest
+    name: Pest (Unit + Integration suites) (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -92,7 +113,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: intl, mbstring, dom, fileinfo, simplexml, xml
+          extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
           ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
@@ -131,16 +152,23 @@ jobs:
         run: vendor/bin/pest --testsuite=Unit,Integration
 
   pint:
-    name: Pint
-    runs-on: ubuntu-latest
+    name: Pint (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
+      # `composer install` checks platform requirements, and a Windows PHP does not load
+      # `fileinfo` by default.
       - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: fileinfo
           coverage: none
           tools: composer:v2
 
@@ -185,9 +213,13 @@ jobs:
           vendor/bin/pint --test . $dirs
 
   spell:
-    name: Spell check
-    runs-on: ubuntu-latest
+    name: Spell check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -230,9 +262,13 @@ jobs:
           fi
 
   node-test:
-    name: Node tests
-    runs-on: ubuntu-latest
+    name: Node tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -258,9 +294,13 @@ jobs:
         run: node --test "scripts/*.test.mjs"
 
   python-test:
-    name: Python tests
-    runs-on: ubuntu-latest
+    name: Python tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -280,9 +320,13 @@ jobs:
         run: node scripts/python-tests.mjs
 
   phpstan:
-    name: PHPStan
-    runs-on: ubuntu-latest
+    name: PHPStan (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -326,9 +370,13 @@ jobs:
         run: vendor/bin/phpstan analyse --no-progress --error-format=github --memory-limit=-1
 
   rector:
-    name: Rector
-    runs-on: ubuntu-latest
+    name: Rector (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
 

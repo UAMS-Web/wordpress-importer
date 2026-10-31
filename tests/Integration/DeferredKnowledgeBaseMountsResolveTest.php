@@ -11,9 +11,9 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * `DeferredKnowledgeBaseMounts::resolve()` mounts each knowledge base of a site beneath the
@@ -77,7 +77,7 @@ it('mounts a knowledge base beneath the page its WordPress parent became, keepin
     deferredMountEntry('knowledge_bases', 'kb-root-1', 'help', ['intro' => 'Kept']);
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     $root = deferredMountRoot('kb-root-1');
@@ -93,7 +93,7 @@ it('says the parent page was not imported, logs it, and drops the mount', functi
     $log = Log::spy();
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect($output->fetch())->toBe("Warning: Could not mount knowledge base \u{2014} its parent page (WordPress ID '42') was not imported. The knowledge base will resolve at its default URL. Import the parent page and re-run to mount it.\n")
@@ -115,7 +115,7 @@ it('says the knowledge base root was not found, logs it, and drops the mount', f
     $log = Log::spy();
 
     DeferredKnowledgeBaseMounts::defer('kb-root-9', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect($output->fetch())->toBe("Warning: Could not mount knowledge base \u{2014} root entry 'kb-root-9' was not found.\n")
@@ -139,7 +139,7 @@ it('mounts the knowledge bases after one it cannot, and keeps another site\'s fo
     DeferredKnowledgeBaseMounts::defer('kb-root-2', '7', 'research');
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect(deferredMountRoot('kb-root-1')->get('mount_parent'))->toBe(['about-42-abcdefgh'])
@@ -155,7 +155,7 @@ it('looks the parent up among the pages of the site only', function (): void {
     deferredMountEntry('knowledge_bases', 'kb-root-1', 'help');
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect($output->fetch())->toContain("its parent page (WordPress ID '42') was not imported");
@@ -166,7 +166,7 @@ it('looks the root up among the knowledge bases only', function (): void {
     deferredMountEntry('pages', 'kb-root-1', 'not-a-knowledge-base');
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect($output->fetch())->toContain("root entry 'kb-root-1' was not found");
@@ -182,7 +182,7 @@ it('saves the mounted knowledge base root', function (): void {
     });
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    DeferredKnowledgeBaseMounts::resolve('default', new BufferedOutput);
+    DeferredKnowledgeBaseMounts::resolve('default', new LfBufferedOutput);
 
     expect($saved)->toBe(['kb-root-1']);
 });
@@ -205,7 +205,7 @@ it('names an entry without a slug as blank when it reports the mount', function 
     }
 
     DeferredKnowledgeBaseMounts::defer('kb-root-1', '42', 'default');
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     DeferredKnowledgeBaseMounts::resolve('default', $output);
 
     expect($output->fetch())->toBe("Mounted knowledge base '' beneath page ''.\n");

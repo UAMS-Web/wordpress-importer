@@ -316,6 +316,12 @@ class NonAcfBlockParser
                     // Use skip count from shortcode processor result
                     $skipCount = $this->resolveSkipCount($result);
 
+                    // The set stands alone, so what surrounded its shortcode goes to
+                    // the content that follows it (#180)
+                    if (isset($result['surrounding_html'])) {
+                        $accumulator[] = ['html' => $result['surrounding_html']];
+                    }
+
                     // Return result with direct set for PageBuilderParser
                     return [
                         'processed' => true,
@@ -523,7 +529,7 @@ class NonAcfBlockParser
         );
 
         // Parse with Tiptap into Bard format
-        $bardContent = $this->bardParser->parse($processedHtml);
+        $bardContent = BardParser::wrapRootText($this->bardParser->parse($processedHtml));
 
         // Check if the Bard content is empty after parsing
         if ($bardContent === []) {
