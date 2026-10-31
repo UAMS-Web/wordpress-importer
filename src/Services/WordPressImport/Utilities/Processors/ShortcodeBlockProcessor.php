@@ -442,7 +442,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         );
 
         // A non-breaking space is no more content than a space is
-        return \trim(\str_replace(['&nbsp;', "\u{A0}"], ' ', \strip_tags($around))) === '';
+        return \trim(\str_replace("\u{A0}", ' ', \strip_tags($around))) === '';
     }
 
     /**
