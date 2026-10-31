@@ -21,6 +21,7 @@ use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Fieldset;
+use Statamic\Facades\Glide;
 use Statamic\Facades\Path;
 use Statamic\Facades\Stache;
 use Statamic\Filesystem\FlysystemAdapter;
@@ -331,6 +332,40 @@ it('does not take a dataless entry the host already has for one the run made', f
     expect($status)->toBe(0)
         ->and($output)->not->toContain('dataless entry file')
         ->and(\is_file($file))->toBeTrue();
+});
+
+it('sends the image cache to the copy and leaves the host cache as it was', function (): void {
+    config(['cache.stores.glide' => ['driver' => 'file', 'path' => verifyDiskRoot().'-glide']]);
+    Glide::cacheStore()->put('host-key', 'kept');
+    $setting = config('statamic.assets.image_manipulation.cache');
+
+    $workspace = VerificationWorkspace::enter();
+    $during = Glide::cacheStore()->get('host-key');
+    Glide::cacheStore()->put('run-key', 'dropped');
+    Glide::cacheDisk()->put('derivative.jpg', 'written during the run');
+    $reached = \is_file($workspace->root().'/image-cache/derivative.jpg');
+    $workspace->leave();
+
+    expect($during)->toBeNull()
+        ->and($reached)->toBeTrue()
+        ->and(Glide::cacheStore()->get('host-key'))->toBe('kept')
+        ->and(Glide::cacheStore()->get('run-key'))->toBeNull()
+        ->and(config('statamic.assets.image_manipulation.cache'))->toBe($setting);
+
+    File::deleteDirectory(verifyDiskRoot().'-glide');
+});
+
+it('does nothing the second time it is left', function (): void {
+    $workspace = VerificationWorkspace::enter();
+    $workspace->leave();
+
+    config(['statamic.stache.cache_store' => 'set-after-leaving']);
+    $second = $workspace->leave();
+
+    expect($second)->toBeTrue()
+        ->and(config('statamic.stache.cache_store'))->toBe('set-after-leaving');
+
+    config(['statamic.stache.cache_store' => 'verify_file']);
 });
 
 it('leaves the store that has no directory alone', function (): void {

@@ -19,6 +19,7 @@ use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Blink;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Fieldset;
+use Statamic\Facades\Glide;
 use Statamic\Facades\Path;
 use Statamic\Facades\Stache;
 use Statamic\Stache\Stores\AggregateStore;
@@ -63,6 +64,16 @@ class VerificationWorkspace
     private const string CACHE_STORE = 'array';
 
     /**
+     * The disk that holds a run's image derivatives, inside the workspace.
+     */
+    private const string IMAGE_CACHE_DISK = 'wordpress_import_verification_images';
+
+    /**
+     * The cache store Statamic keeps its image cache manifest in.
+     */
+    private const string IMAGE_CACHE_STORE = 'glide';
+
+    /**
      * The configuration this class changes, restored when the run ends.
      *
      * @var list<string>
@@ -73,6 +84,9 @@ class VerificationWorkspace
         'statamic.forms.forms',
         'statamic.git.automatic',
         'statamic.assets.image_manipulation.generate_presets_on_upload',
+        'statamic.assets.image_manipulation.cache',
+        'filesystems.disks.'.self::IMAGE_CACHE_DISK,
+        'cache.stores.'.self::IMAGE_CACHE_STORE,
         'queue.default',
         'asset_metadata.yaml_directory',
     ];
@@ -147,6 +161,10 @@ class VerificationWorkspace
             // A failed filesystem call arrives as a PHP warning Laravel has turned into this
             throw $e instanceof ErrorException ? new RuntimeException($e->getMessage(), 0, $e) : $e;
         }
+
+        // The command's `terminate()` calls `exit`, which runs no `finally` block. A second
+        // leave() finds nothing saved and no directory, so a normal run's hook does nothing.
+        \register_shutdown_function($workspace->leave(...));
 
         return $workspace;
     }
@@ -253,6 +271,9 @@ class VerificationWorkspace
      */
     private function moveCaches(): void
     {
+        // Statamic defines this store on first use, so what is saved below is what it would use
+        Glide::cacheStore();
+
         foreach (self::CONFIG_KEYS as $key) {
             $this->savedConfig[$key] = config($key);
         }
@@ -264,13 +285,19 @@ class VerificationWorkspace
             // Read on each save, so a save in the run queues no commit of the host's repository
             'statamic.git.automatic' => false,
 
-            // Derivatives are written to the host's image cache, outside the workspace
+            // A run has no use for derivatives, and a focal point change generates them anyway
             'statamic.assets.image_manipulation.generate_presets_on_upload' => false,
+
+            // Saving, replacing and deleting an asset each act on the image cache
+            'filesystems.disks.'.self::IMAGE_CACHE_DISK => ['driver' => 'local', 'root' => $this->root.'/image-cache'],
+            'statamic.assets.image_manipulation.cache' => self::IMAGE_CACHE_DISK,
+            'cache.stores.'.self::IMAGE_CACHE_STORE => ['driver' => self::CACHE_STORE],
 
             // A worker would run a job later, against the host, naming a deleted file
             'queue.default' => 'sync',
         ]);
 
+        Cache::forgetDriver(self::IMAGE_CACHE_STORE);
         Cache::store(self::CACHE_STORE)->clear();
 
         $this->reloadStoreState();
@@ -541,6 +568,8 @@ class VerificationWorkspace
         }
 
         if ($this->savedConfig !== []) {
+            Cache::forgetDriver(self::IMAGE_CACHE_STORE);
+            Storage::forgetDisk(self::IMAGE_CACHE_DISK);
             Cache::store(self::CACHE_STORE)->clear();
 
             $this->reloadStoreState();
