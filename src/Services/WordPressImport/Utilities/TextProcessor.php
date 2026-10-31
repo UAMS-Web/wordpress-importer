@@ -1072,13 +1072,21 @@ class TextProcessor
                                     );
                                 } elseif (\is_string($resultHtml)) { // Check if the result contains HTML content
 
-                                    // Parse the HTML and keep its first node
-                                    $parsedContent = $bardParser->parse($resultHtml)[0] ?? null;
+                                    // Parse the HTML and keep its first node; a shortcode
+                                    // block's HTML can also hold what surrounded its
+                                    // shortcode, so all of it is kept (#180)
+                                    $parsedNodes = $bardParser->parse($resultHtml);
+                                    $parsedContent = $parsedNodes[0] ?? null;
 
                                     // Add it when the HTML parsed to something; HTML that parses
                                     // to nothing adds no node
                                     if ($parsedContent !== null) {
-                                        $bardContent[] = $parsedContent;
+                                        $bardContent = \array_merge(
+                                            $bardContent,
+                                            $blockType === 'shortcode'
+                                                ? BardParser::wrapRootText($parsedNodes)
+                                                : [$parsedContent]
+                                        );
                                     }
                                 }
 
@@ -1131,7 +1139,7 @@ class TextProcessor
                                     if ($blockType === 'shortcode') {
                                         $bardContent = \array_merge(
                                             $bardContent,
-                                            $parsedResult
+                                            BardParser::wrapRootText($parsedResult)
                                         );
                                     } else {
                                         $bardContent[] = $firstParsed;

@@ -767,17 +767,35 @@ it('process keeps what surrounds a lone shortcode, in the content a string retur
         ->not->toContain('['.$name);
 })->with([
     'text around a caption' => ['Lead [caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption] tail', 'caption', 'Lead'],
-    'text around a show-people' => ['Lead [show-people ids="1"] tail', 'show-people', 'tail'],
-    'an image beside a show-people' => ['<img src="https://example.com/img.jpg">[show-people ids="1"]', 'show-people', '<img'],
-    'a paragraph after a block with no closing comment' => ['[show-people ids="1"]<p>After</p>', 'show-people', 'After'],
 ]);
+
+it('process returns what surrounds a shortcode beside its page builder set', function (string $inner, string $html, string $surrounding): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBeArray()->toHaveKey('page_builder_set')
+        ->and($result['surrounding_html'] ?? null)->toBe($surrounding)
+        ->and($result['html'] ?? null)->toContain($html)->toContain('data-set-type="people"');
+})->with([
+    'text' => ['Lead [show-people ids="1"] tail', 'Lead ', 'Lead  tail'],
+    'a paragraph after a block with no closing comment' => ['[show-people ids="1"]<p>After</p>', '<p>After</p>', '<p>After</p>'],
+]);
+
+it('process returns no surrounding html for a shortcode that is all the block holds', function (): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<!-- wp:shortcode -->[show-people ids="1"]<!-- /wp:shortcode -->');
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBeArray()->not->toHaveKey('surrounding_html');
+});
 
 it('process reads a wrapper holding only the shortcode as a lone shortcode', function (string $inner): void {
     $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    expect($result)->toBeArray()->toHaveKey('page_builder_set');
+    expect($result)->toBeArray()->toHaveKey('page_builder_set')->not->toHaveKey('surrounding_html');
 })->with([
     'bare' => '[show-people ids="1"]',
     'in a paragraph' => '<p>[show-people ids="1"]</p>',

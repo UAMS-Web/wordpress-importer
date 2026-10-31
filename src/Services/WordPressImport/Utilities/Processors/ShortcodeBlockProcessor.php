@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * Processes WordPress wp:shortcode blocks into Tiptap-compatible HTML for
@@ -28,13 +27,6 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @var list<string>
      */
     private const array HTML_ONLY_SHORTCODES = ['caption'];
-
-    /**
-     * Elements that sit in a line of text, so a run of them needs a paragraph.
-     *
-     * @var list<string>
-     */
-    private const array INLINE_ELEMENTS = ['a', 'abbr', 'b', 'br', 'cite', 'code', 'em', 'i', 'mark', 'small', 'span', 'strong', 'sub', 'sup', 'u'];
 
     /**
      * The shortcode processor instance.
@@ -89,8 +81,9 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
      * @param  ?string  $pageSlug  The page slug for shortcode processing (optional)
      * @return array<int|string, mixed>|string|null Tiptap HTML string; or an array with 'html', 'skipCount' and 'page_builder_set'
-     *                                              when a single shortcode returns a replicator block, and with 'html' and 'skipCount'
-     *                                              alone for a single [caption]; or null if no valid content
+     *                                              when a single shortcode returns a replicator block, with 'surrounding_html' too when
+     *                                              the block holds more than the shortcode, and with 'html' and 'skipCount' alone for a
+     *                                              [caption] that is all the block holds; or null if no valid content
      */
     public function process(
         DOMNode $node,
@@ -204,11 +197,10 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // ---
-        // When the block holds exactly one registered shortcode and nothing else, try
-        // process(..., 'page_builder'), and return the html with the page builder set
-        // when the handler builds one, or the html alone for a caption. Anything else
-        // in the block falls to the loop below, which keeps it around the shortcode
-        // (#180)
+        // When the block holds exactly one registered shortcode, try process(...,
+        // 'page_builder'), and return the html with the page builder set when the
+        // handler builds one, or the html alone for a caption that is all the block
+        // holds
         // ---
 
         // Check if block contains exactly one shortcode
@@ -225,10 +217,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $name = self::extractShortcodeName($single);
 
             // Check if a handler is registered for this shortcode
-            if (
-                isset($this->shortcodeProcessor->getHandlers()[$name])
-                && self::isAloneInBlock($single, $shortcodeContent)
-            ) {
+            if (isset($this->shortcodeProcessor->getHandlers()[$name])) {
                 // Use the single shortcode for page_builder processing
                 $shortcode = $single;
 
@@ -253,20 +242,26 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 // A replicator block (it has a type) is the page builder set
                 $hasPageBuilderSet = isset($pageBuilderBlock['type']);
 
+                // What the block holds besides the shortcode has to be kept (#180)
+                $isAlone = self::isAloneInBlock($single, $shortcodeContent);
+
                 // ---
                 // Return the html with a skip count over the whole block, so the
                 // caller does not read the block's inner nodes a second time, when
-                // the handler builds a page builder set, or for a caption, which
+                // the handler builds a page builder set, or for a lone caption, which
                 // builds none (#119) but keeps the shape it had when it did, so the
                 // Bard route still adds its image once. Any other shortcode falls to
-                // the loop below, which renders it itself. The name and the list are
-                // strings, so in_array()'s strict flag, which phpstan-strict-rules
-                // requires, changes no result.
+                // the loop below, which renders it itself, among whatever surrounds
+                // it. The name and the list are strings, so in_array()'s strict flag,
+                // which phpstan-strict-rules requires, changes no result.
                 // ---
                 // @pest-mutate-ignore: TrueToFalse
                 if (
                     $hasPageBuilderSet
-                    || \in_array($name, self::HTML_ONLY_SHORTCODES, true)
+                    || (
+                        $isAlone
+                        && \in_array($name, self::HTML_ONLY_SHORTCODES, true)
+                    )
                 ) {
                     // ---
                     // Generate Tiptap HTML so the Bard path (TextProcessor) can add
@@ -284,14 +279,23 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                         $pageSlug
                     );
 
+                    $original = self::extractShortcodeOriginal($single);
+
                     $result = [
-                        'html' => $tiptapHtmlForBard,
+                        'html' => $isAlone
+                            ? $tiptapHtmlForBard
+                            : \str_replace($original, $tiptapHtmlForBard, $shortcodeContent),
                         'skipCount' => self::blockSkipCount($node),
                     ];
 
-                    // Return the page builder set beside the html when there is one
+                    // Return the page builder set beside the html when there is one,
+                    // with what surrounds the shortcode for a route that takes the set
                     if ($hasPageBuilderSet) {
                         $result['page_builder_set'] = $pageBuilderBlock;
+
+                        if (! $isAlone) {
+                            $result['surrounding_html'] = \str_replace($original, '', $shortcodeContent);
+                        }
                     }
 
                     return $result;
@@ -391,7 +395,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         if ($hasProcessedShortcode
         && \trim($remainingContent) !== '') {
             // Return processed content when shortcodes were successfully converted
-            return self::withBareTextInParagraphs($processedContent);
+            return $processedContent;
         }
 
         // Check if we processed any shortcodes and meaningful content remains
@@ -418,93 +422,14 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     }
 
     /**
-     * Wraps each run of text and inline markup at the top of converted block content
-     * in a paragraph.
-     *
-     * The text around a converted shortcode has no block of its own, and a Bard
-     * document cannot hold a text node at its root (#180). Content with no such text
-     * comes back byte for byte.
-     *
-     * @param  string  $html  The converted block content
-     * @return string The content, with bare text in paragraphs
-     */
-    private static function withBareTextInParagraphs(
-        string $html
-    ): string {
-        $doc = TextProcessor::loadHtml($html);
-        $root = $doc->documentElement;
-
-        // loadHtml() always appends the root, so this only narrows the type
-        // @pest-mutate-ignore: RemoveEarlyReturn
-        if (! $root instanceof DOMElement) {
-            return $html;
-        }
-
-        // The paragraph the current run of bare nodes is going into
-        $paragraph = null;
-        $wrapped = false;
-
-        // Walk a copy, since wrapping a node moves it out of the live list
-        foreach (\iterator_to_array($root->childNodes) as $node) {
-            // Whitespace between blocks is left where it is
-            if (
-                $paragraph === null
-                && $node instanceof DOMText
-                && \trim($node->data) === ''
-            ) {
-                continue;
-            }
-
-            // Anything that is not bare ends the run
-            if (! self::isBareNode($node)) {
-                $paragraph = null;
-
-                continue;
-            }
-
-            // Open a paragraph where the run starts, without the space that followed
-            // the shortcode
-            if ($paragraph === null) {
-                $paragraph = $doc->createElement('p');
-                $root->insertBefore($paragraph, $node);
-                $wrapped = true;
-
-                if ($node instanceof DOMText) {
-                    $node->data = \ltrim($node->data);
-                }
-            }
-
-            $paragraph->appendChild($node);
-        }
-
-        return $wrapped ? TextProcessor::getInnerHtml($doc) : $html;
-    }
-
-    /**
-     * Whether a node belongs in a paragraph rather than standing as a block.
-     *
-     * @param  DOMNode  $node  A top-level node of block content
-     * @return bool True for text and inline elements
-     */
-    private static function isBareNode(
-        DOMNode $node
-    ): bool {
-        return $node instanceof DOMText
-            || (
-                $node instanceof DOMElement
-                && \in_array($node->nodeName, self::INLINE_ELEMENTS, true)
-            );
-    }
-
-    /**
      * Whether a shortcode is all a block's content holds.
      *
      * A wrapper around the shortcode is not content of its own, so a `<p>` or `<div>`
-     * holding only the shortcode counts as alone; an image is.
+     * holding only the shortcode counts as alone.
      *
      * @param  array<int|string, mixed>  $shortcode  The extracted shortcode
      * @param  string  $content  The block's content
-     * @return bool True when nothing is left of the content without the shortcode
+     * @return bool True when no text is left of the content without the shortcode
      */
     private static function isAloneInBlock(
         array $shortcode,
@@ -516,8 +441,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $content
         );
 
-        // A non-breaking space, as saveHTML() writes it or as text, is no more content than a space is
-        return \trim(\str_replace("\u{A0}", ' ', \strip_tags($around, '<img>'))) === '';
+        // A non-breaking space is no more content than a space is
+        return \trim(\str_replace(['&nbsp;', "\u{A0}"], ' ', \strip_tags($around))) === '';
     }
 
     /**
@@ -542,8 +467,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     }
 
     /**
-     * Reads the content of a wp:shortcode block: its text, trimmed, and its elements'
-     * HTML, from the opening comment to the closing one.
+     * Reads the content of a wp:shortcode block: its text and its elements' HTML, from
+     * the opening comment to the closing one.
      *
      * process() returns this content unchanged when it converts no shortcode in it,
      * which is how a caller can tell that the block's own nodes still hold it.
@@ -562,13 +487,10 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $currentNode instanceof DOMNode
             && ! self::matchesClosingShortcodeComment($currentNode)
         ) {
+            // A text node keeps its own whitespace, which can separate it from an
+            // element beside it
             if ($currentNode instanceof DOMText) {
-                $textContent = \trim(
-                    self::extractNodeValueString($currentNode->nodeValue)
-                );
-                if ($textContent !== '') {
-                    $shortcodeContent .= $textContent;
-                }
+                $shortcodeContent .= self::extractNodeValueString($currentNode->nodeValue);
             } elseif ($currentNode instanceof DOMElement) {
                 $ownerDocument = $currentNode->ownerDocument;
 
@@ -584,9 +506,6 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $currentNode = $currentNode->nextSibling;
         }
 
-        // Each piece is trimmed text or an element's HTML, which saveHTML() writes
-        // with no whitespace around it, so the content has none at its edges
-        // @pest-mutate-ignore: UnwrapTrim
         return \trim($shortcodeContent);
     }
 

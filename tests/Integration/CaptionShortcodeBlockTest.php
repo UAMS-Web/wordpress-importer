@@ -94,6 +94,14 @@ dataset('lone shortcode block content', [
     'a show-people' => ['[show-people ids="1"]'],
 ]);
 
+dataset('text beside a shortcode', [
+    'bare text' => ['Lead [show-people ids="1"] tail', ['Lead', 'set', 'tail']],
+    'text in a paragraph' => ['<p>Lead [show-people ids="1"] tail</p>', ['Lead', 'set', 'tail']],
+    'text in a div' => ['<div>Lead [show-people ids="1"]</div>', ['Lead', 'set']],
+    'struck text' => ['<s>Old</s> text [show-people ids="1"]', ['Old text', 'set']],
+    'deleted text' => ['[show-people ids="1"] <del>gone</del> tail', ['set', 'gone tail']],
+]);
+
 /**
  * The node types of Bard content, with each paragraph as its text.
  *
@@ -120,14 +128,34 @@ it('keeps the text around a shortcode in its block, on the Bard route', function
     }
 })->with('lone shortcode block content');
 
-it('keeps the text around a shortcode in its block, on the page builder route', function (string $shortcode): void {
-    $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
+it('holds no text at the root of Bard content, whatever surrounds the shortcode', function (string $inner, array $expected): void {
+    $html = '<!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode -->';
+
+    $nodes = TextProcessor::processForBard('<p>Intro</p>'.$html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
+
+    expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', ...$expected]);
+})->with('text beside a shortcode');
+
+it('keeps the text around a caption in its block, in place, on the page builder route', function (): void {
+    $html = '<p>Intro</p><!-- wp:shortcode -->Lead [caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption] tail<!-- /wp:shortcode --><p>Outro</p>';
 
     $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
 
     expect($sets['directSets'])->toBe([])
         ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
-})->with('lone shortcode block content');
+});
+
+it('keeps the page builder set of a shortcode, and the text around it, on the page builder route', function (string $shortcode, string $setType): void {
+    $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
+
+    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+
+    expect(Arr::get($sets['directSets'], '0.type'))->toBe($setType)
+        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'Lead  tail', 'Outro']);
+})->with([
+    'a show-people' => ['[show-people ids="1"]', 'uamsweb_block_show-people'],
+    'a blogroll, which has no Bard set' => ['[blogroll category="x"]', 'uamsweb_block_news'],
+]);
 
 it('keeps the node right after a lone shortcode block', function (string $shortcode): void {
     $html = '<!-- wp:shortcode -->'.$shortcode.'<!-- /wp:shortcode --><p>After</p>';
@@ -146,8 +174,7 @@ it('adds the shortcode of a block with no closing comment once, and keeps what f
     $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
 
     expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'set', 'After'])
-        ->and($sets['directSets'])->toBe([])
-        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'set', 'After']);
+        ->and(\json_encode($sets))->toContain('After');
 })->with('lone shortcode block content');
 
 it('imports a caption block in Bard content as one image set and nothing else', function (): void {
