@@ -147,7 +147,8 @@ it('measures the files under a directory, at every depth', function (): void {
     try {
         expect(iwhCall(iwhCommand(), 'calculateDirectoryFilesize', $root))->toBe(15);
     } finally {
-        unlink($root.'/link-to-nested');
+        // Windows removes a link to a directory with `rmdir()`
+        PHP_OS_FAMILY === 'Windows' ? rmdir($root.'/link-to-nested') : unlink($root.'/link-to-nested');
         unlink($root.'/nested/deeper/c.txt');
         unlink($root.'/nested/b.txt');
         unlink($root.'/a.txt');

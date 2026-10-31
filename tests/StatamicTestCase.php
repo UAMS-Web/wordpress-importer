@@ -197,8 +197,11 @@ abstract class StatamicTestCase extends AddonTestCase
             // without this branch, a link planted here to a sibling directory has
             // that sibling's files deleted.
             // ---
+            // Windows removes a link to a directory with `rmdir()`, not `unlink()`.
             if (\is_link($path)) {
-                @\unlink($path);
+                if (! @\unlink($path)) {
+                    @\rmdir($path);
+                }
 
                 continue;
             }
