@@ -1484,3 +1484,15 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: write every rule and let the host app choose.** The collection has one entry per host and source, and the importer finds an entry by that pair, so a second entry for a source would be matched by neither the re-run nor the host's lookup in a defined order.
 
 **Rejected: refuse the run.** The shadowed rule never answers a request, so dropping it loses nothing the domain serves. The report keeps it visible.
+
+## Remote CI runs every job on Windows as well as Linux (#186)
+
+**Decided 2026-10-31, on #186.** Every job in `.github/workflows/ci.yml` but `CI` is a matrix over `ubuntu-latest` and `windows-latest`, with `fail-fast: false` so that both legs report. The whole workflow runs its steps in bash, because a Windows runner defaults to PowerShell. The ruleset does not change: it requires `CI`, and `CI` still needs each job once, because a matrix job's result covers all of its legs.
+
+**Why.** Every remote job ran on Linux, so a Windows-only defect surfaced only when someone next worked on a Windows machine. Standard Windows runners are free on a public repository; the cost is a longer queue under the organization's concurrent-job limit.
+
+**Rejected: a parallel Windows job per Linux job.** It doubles the file and the `needs:` list for check names no clearer than the matrix gives.
+
+**Rejected: running a subset on Windows.** The timings that would justify narrowing it did not exist yet. Narrowing is a later decision.
+
+**Not changed: whether the local chain gates a merge.**

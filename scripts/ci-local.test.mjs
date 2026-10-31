@@ -173,6 +173,29 @@ describe('local-ci.json against ci.yml', () => {
             }
         })
 
+        // The Windows leg (#186). A matrix keeps one `needs:` entry per job, so this is what
+        // fails when a job stops running on Windows: nothing in `needs:` would change.
+        it('runs every job on both operating systems, each leg reporting', () => {
+            assert.ok(chained.length >= 8, `read ${chained.length} chained jobs`)
+
+            for (const job of chained) {
+                const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
+
+                assert.match(own, /^ {4}runs-on: \$\{\{ matrix\.os \}\}$/m, `${job} does not run on the matrix`)
+                assert.match(own, /^ {8}os: \[ubuntu-latest, windows-latest\]$/m, `${job} does not list both operating systems`)
+                assert.match(own, /^ {6}fail-fast: false$/m, `${job} lets one leg cancel the other`)
+                assert.match(own, /^ {4}name: .*\(\$\{\{ matrix\.os \}\}\)$/m, `${job}'s checks do not name their operating system`)
+            }
+        })
+
+        it('tolerates no failure, on either operating system', () => {
+            assert.doesNotMatch(ci.slice(ci.indexOf('\njobs:')), /^\s*continue-on-error:/m)
+        })
+
+        it('runs every step in bash, which a Windows runner does not default to', () => {
+            assert.match(ci, /^defaults:\n {2}run:\n {4}shell: bash$/m)
+        })
+
         // The step's script, run as the runner would with RESULTS set as `join(needs.*.result, ' ')` sets it.
         const script = (/^ {8}run: \|\n((?: {10}.*\n?)+)/m.exec(body)?.[1] ?? '').replace(/^ {10}/gm, '')
         const run = (results) => spawnSync('bash', ['-e', '-c', script], { encoding: 'utf8', env: { ...process.env, RESULTS: results } })
