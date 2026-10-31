@@ -1157,10 +1157,11 @@ class ImportWordPress extends Command
      * leads to it.
      *
      * Every Laravel command points the static Laravel Prompts configuration at itself when
-     * it runs, and nothing points it back. A command called inside the import, as a host
-     * app's `EntrySaved` listener can do through a synchronous queue, leaves every later
-     * question drawn into that command's buffered output while this one waits on the
-     * keyboard (#228). So each command that finishes during the import hands Prompts back.
+     * it runs, and `Artisan::call()` does not point it back. A command called that way
+     * inside the import, as a host app's `EntrySaved` listener can do through a synchronous
+     * queue, leaves every later question drawn into that command's buffered output while
+     * this one waits on the keyboard (#228). So each command that finishes during the
+     * import hands Prompts back.
      *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
      * @return int Exit code (0 for success, 1 for failure)
