@@ -7,7 +7,6 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
@@ -17,6 +16,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Validator;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * Sourcing MinervaKB plugin configuration from the options endpoint (issue wordpress-importer-archive#586).
@@ -208,7 +208,7 @@ it('produces settings identical to the file-sourced path', function (): void {
     $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'minerva-kb-settings.json';
     \file_put_contents($path, \json_encode($settings));
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $fromFile = loadedSettings((new Loader)->loadSettings($path, $output));
 
@@ -227,7 +227,7 @@ it('carries both sources through Validator and Extractor to the same output', fu
     $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'minerva-kb-settings.json';
     \file_put_contents($path, \json_encode($settings));
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $validator = new Validator;
     $extractor = new Extractor;
 
@@ -253,7 +253,7 @@ it('ignores the file path entirely once the API source is set', function (): voi
 
     fakeOptionsEndpoint(minervaKbSettings());
 
-    $settings = apiLoader()->loadSettings($decoy, new BufferedOutput);
+    $settings = apiLoader()->loadSettings($decoy, new LfBufferedOutput);
 
     expect($settings['search_title'] ?? null)->toBe('Search the knowledge base');
 });
@@ -263,7 +263,7 @@ it('raises when the options payload carries no MinervaKB row', function (): void
     // import that reports success having configured nothing.
     fakeOptionsEndpoint(null);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(
             MigrationApiException::class,
             'served no MinervaKB settings row (tried "uamswp-minerva-kb-options", "minerva-kb-options")'
@@ -275,7 +275,7 @@ it('names both causes and the withheld counts when the row is missing', function
     // offer both readings rather than assert one. wordpress-importer-archive#665 is what resolves it.
     fakeOptionsEndpoint(null, ['by_shape' => 3, 'by_name' => 11]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'Either MinervaKB is not installed on this site, it is installed but was never '
         .'configured, or the options endpoint withheld the row (it reports 3 withheld by '
@@ -290,7 +290,7 @@ it('raises when the row is present but empty', function (): void {
         'denied' => ['by_shape' => 0, 'by_name' => 0],
     ], 200)]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(
             MigrationApiException::class,
             'served no MinervaKB settings row (tried "uamswp-minerva-kb-options", "minerva-kb-options")'
@@ -305,7 +305,7 @@ it('does not swallow the raise in the loader generic handler', function (): void
     $threw = false;
 
     try {
-        apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
     } catch (MigrationApiException) {
         $threw = true;
     }
@@ -316,7 +316,7 @@ it('does not swallow the raise in the loader generic handler', function (): void
 it('scopes the options read to the requested site', function (): void {
     fakeOptionsEndpoint(minervaKbSettings());
 
-    apiLoader(4)->loadSettings('/ignored.json', new BufferedOutput);
+    apiLoader(4)->loadSettings('/ignored.json', new LfBufferedOutput);
 
     Http::assertSent(fn (Request $request): bool => \str_contains($request->url(), 'site=4'));
 });
@@ -324,7 +324,7 @@ it('scopes the options read to the requested site', function (): void {
 it('reads the documented options route', function (): void {
     fakeOptionsEndpoint(minervaKbSettings());
 
-    apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+    apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
 
     Http::assertSent(fn (Request $request): bool => \str_contains(
         $request->url(),
@@ -335,7 +335,7 @@ it('reads the documented options route', function (): void {
 it('tells the operator which source the settings came from', function (): void {
     fakeOptionsEndpoint(minervaKbSettings());
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     apiLoader()->loadSettings('/ignored.json', $output);
 
     expect(\trim($output->fetch()))
@@ -348,7 +348,7 @@ it('still reads a file when no API source is configured', function (): void {
     $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'settings.json';
     \file_put_contents($path, \json_encode(minervaKbSettings()));
 
-    $settings = (new Loader)->loadSettings($path, new BufferedOutput);
+    $settings = (new Loader)->loadSettings($path, new LfBufferedOutput);
 
     expect($settings['cpt_label_name'] ?? null)->toBe('Article');
 
@@ -359,7 +359,7 @@ it('still reads a file when no API source is configured', function (): void {
 it('reports a transport failure rather than returning nothing', function (): void {
     Http::fake(['*' => Http::response('gateway down', 502)]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(MigrationApiException::class, 'HTTP 502');
 });
 
@@ -370,16 +370,16 @@ it('reports malformed served JSON against the option key rather than a file path
     ], 200)]);
 
     $log = Log::spy();
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $settings = apiLoader()->loadSettings('/some/decoy/path.json', $output);
 
     expect($settings)->toBeNull()
         // The operator sees the console, not the log, so assert both — and assert the whole
-        // thing. `BufferedOutput` renders through Symfony's formatter, which strips the
+        // thing. `LfBufferedOutput` renders through Symfony's formatter, which strips the
         // `<error>` tags, so these are the plain lines an operator actually reads. The fetch
         // notice comes first because the row *was* read; it was the parse that failed.
-        // `BufferedOutput` writes `PHP_EOL`, so this two-line message is CRLF-separated on
+        // `LfBufferedOutput` writes `PHP_EOL`, so this two-line message is CRLF-separated on
         // Windows and LF-separated elsewhere. What is under test is WHICH lines are printed,
         // not how the console terminates one, so the actual is folded to a single form first.
         ->and(\preg_replace('/\R/', "\n", \trim($output->fetch())))->toBe(
@@ -402,7 +402,7 @@ it('reports malformed file JSON against the file path', function (): void {
     \file_put_contents($path, '{not valid json');
 
     $log = Log::spy();
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     expect((new Loader)->loadSettings($path, $output))->toBeNull()
         ->and(\trim($output->fetch()))->toBe('Invalid JSON format: Syntax error');
@@ -420,7 +420,7 @@ it('reports a file it cannot read rather than treating it as empty', function ()
     $log = Log::spy();
 
     $missing = $this->workingDirectory.\DIRECTORY_SEPARATOR.'no-such-file.json';
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $settings = @(new Loader)->loadSettings($missing, $output);
 
@@ -449,7 +449,7 @@ it('returns to the file source when the API source is cleared', function (): voi
     $loader = apiLoader();
     $loader->clearMigrationApiSource();
 
-    $settings = loadedSettings($loader->loadSettings($path, new BufferedOutput));
+    $settings = loadedSettings($loader->loadSettings($path, new LfBufferedOutput));
 
     expect($settings['search_title'] ?? null)->toBe('FROM THE FILE');
 
@@ -482,7 +482,7 @@ it('reaches the loader through the selector when the API source is set', functio
     fakeOptionsEndpoint(minervaKbSettings());
 
     $loader = apiLoader();
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $settings = makeSelector($loader)->select(
         scriptedInput(),
@@ -500,7 +500,7 @@ it('never prompts for a file when the API source is set', function (): void {
     // The prompt is what produced the skip. A scripted run reaching it would return null.
     fakeOptionsEndpoint(minervaKbSettings());
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     makeSelector(apiLoader())->select(scriptedInput(), $output, new Command);
 
@@ -515,7 +515,7 @@ it('raises through the selector when the row is absent, rather than skipping', f
 
     expect(fn () => makeSelector(apiLoader())->select(
         scriptedInput(),
-        new BufferedOutput,
+        new LfBufferedOutput,
         new Command
     ))->toThrow(
         MigrationApiException::class,
@@ -525,7 +525,7 @@ it('raises through the selector when the row is absent, rather than skipping', f
 
 it('still prompts for a file when no API source is configured', function (): void {
     // The WXR path is unchanged: a scripted run with no file skips, as it always has.
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $settings = makeSelector(new Loader)->select(
         scriptedInput(),
@@ -548,7 +548,7 @@ it('refuses a site that serves both generations\' rows, rather than guessing whi
         'uamswp-minerva-kb-options' => minervaKbV2Settings(),
     ]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -566,7 +566,7 @@ it('names both rows, the withheld counts and how to recover when it refuses', fu
     );
 
     try {
-        apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
         $message = '';
     } catch (MigrationApiException $e) {
         $message = $e->getMessage();
@@ -593,7 +593,7 @@ it('names both rows, the withheld counts and how to recover when it refuses', fu
 it('reads the v2 row on a site that carries only that one', function (): void {
     fakeOptionsRows(['uamswp-minerva-kb-options' => minervaKbV2Settings()]);
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines');
 });
@@ -603,7 +603,7 @@ it('still reads the v1 row on a site that carries only that one', function (): v
     // and a preference implemented as a rename rather than a preference would break them.
     fakeOptionsRows(['minerva-kb-options' => minervaKbDriftedV1Settings()]);
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines')
@@ -621,7 +621,7 @@ it('skips a candidate row that is present but empty rather than stopping on it',
         'denied' => ['by_shape' => 0, 'by_name' => 0],
     ], 200)]);
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines');
 });
@@ -634,7 +634,7 @@ it('raises on a site where the plugin is active but was never configured', funct
     // into a quiet success.
     fakeOptionsRows([]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'it is installed but was never configured'
     );
@@ -688,7 +688,7 @@ it('refuses an orphaned row where no MinervaKB plugin is installed', function ()
         ['UAMSWP-minervakb', 'some-other-plugin']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'no MinervaKB plugin installed'
     );
@@ -705,7 +705,7 @@ it('still loads where the plugin directory is running under a second casing', fu
         ['UAMSWP-minervakb']
     );
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines');
 });
@@ -720,7 +720,7 @@ it('does not refuse when the plugin set cannot settle the question', function ()
         ['a-plugin-that-left']
     );
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines');
 });
@@ -730,7 +730,7 @@ it('does not refuse when the payload carries no plugin provenance at all', funct
     // the signal is not evidence for the claim.
     fakeOptionsRows(['uamswp-minerva-kb-options' => minervaKbV2Settings()]);
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines');
 });
@@ -783,7 +783,7 @@ it('refuses where both are served even though active_plugins names the v1 entry 
         ['__UAMSWP-minervakb/minervakb.php', 'some-other/some-other.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -802,7 +802,7 @@ it('refuses where both are served even though active_plugins names the v2 entry 
         ['UAMSWP-minervakb/uamswp-minervakb.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -818,7 +818,7 @@ it('reads active_plugins whether it decodes to a list or to a numeric map', func
         [3 => '__UAMSWP-minervakb/minervakb.php', 7 => 'other/other.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(MigrationApiException::class, 'is written by v2, which is not what runs here');
 });
 
@@ -832,7 +832,7 @@ it('refuses where both are served and active_plugins names no generation', funct
         ['unrelated/unrelated.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -847,7 +847,7 @@ it('reads the only row served even where the entry file names the other generati
         ['uamswp-minervakb/uamswp-minervakb.php']
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     // The row read is unchanged. The generation IS consulted now — it simply does not get to
@@ -865,7 +865,7 @@ it('says so when the installed generation names a row that was not served', func
         ['uamswp-minervakb/uamswp-minervakb.php']
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     apiLoader()->loadSettings('/ignored.json', $output);
 
     $text = $output->fetch();
@@ -886,7 +886,7 @@ it('quotes the withheld counts in the disagreement warning, because absence is n
         ['by_shape' => 4, 'by_name' => 9, 'total' => 13]
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     apiLoader()->loadSettings('/ignored.json', $output);
 
     expect($output->fetch())->toContain('4 rows withheld by shape and 9 by name');
@@ -901,7 +901,7 @@ it('does not warn where the installed generation is the row it served', function
         ['UAMSWP-minervakb/minervakb.php']
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     apiLoader()->loadSettings('/ignored.json', $output);
 
     expect($output->fetch())->not->toContain('not among those the migration API served');
@@ -918,7 +918,7 @@ it('refuses where both entry files appear at once and both rows are served', fun
         ['UAMSWP-minervakb/minervakb.php', 'UAMSWP-minervakb/uamswp-minervakb.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -936,7 +936,7 @@ it('gives the no-plugin diagnosis ahead of the both-rows one where both apply', 
         ['UAMSWP-minervakb']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'no MinervaKB plugin installed'
     );
@@ -950,7 +950,7 @@ it('refuses where the v1 plugin is active and only the v2 row was served', funct
         ['__UAMSWP-minervakb/minervakb.php']
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(MigrationApiException::class, 'is written by v2, which is not what runs here');
 });
 
@@ -964,7 +964,7 @@ it('names the row it refused and quotes the withheld counts', function (): void 
     );
 
     try {
-        apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
         $message = '';
     } catch (MigrationApiException $e) {
         $message = $e->getMessage();
@@ -983,7 +983,7 @@ it('still imports where the v1 plugin is active and its own row was served', fun
         ['UAMSWP-minervakb/minervakb.php']
     );
 
-    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines');
 });
@@ -997,7 +997,7 @@ it('does not refuse on the v2 entry file, whose name a v1 plugin has run under',
         ['uamswp-minervakb/uamswp-minervakb.php']
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines')
@@ -1012,7 +1012,7 @@ it('reads the declared v2 row where both are served, and says the operator chose
         'uamswp-minerva-kb-options' => minervaKbV2Settings(),
     ]);
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader(null, 'v2')->loadSettings('/ignored.json', $output));
 
     // The drifted values specifically, so a loader that named v2 and read v1 cannot pass
@@ -1028,7 +1028,7 @@ it('reads the declared v1 row where both are served', function (): void {
         'uamswp-minerva-kb-options' => minervaKbV2Settings(),
     ]);
 
-    $settings = loadedSettings(apiLoader(null, 'v1')->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader(null, 'v1')->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines')
         ->and($settings['show_related_articles'])->toBe('false');
@@ -1043,7 +1043,7 @@ it('refuses a declared generation whose row was not served, naming both rows and
     );
 
     try {
-        apiLoader(null, 'v1')->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader(null, 'v1')->loadSettings('/ignored.json', new LfBufferedOutput);
         $message = '';
     } catch (MigrationApiException $e) {
         $message = $e->getMessage();
@@ -1066,7 +1066,7 @@ it('reads the declared row over an entry file that names the other generation', 
         ['__UAMSWP-minervakb/minervakb.php']
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader(null, 'v2')->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines')
@@ -1084,7 +1084,7 @@ it('still refuses a declared generation where no MinervaKB plugin is installed',
         ['UAMSWP-minervakb']
     );
 
-    expect(fn () => apiLoader(null, 'v2')->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader(null, 'v2')->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'no MinervaKB plugin installed'
     );
@@ -1102,7 +1102,7 @@ it('does not carry a declaration into a later source that sets none', function (
     $loader->clearMigrationApiSource();
     $loader->setMigrationApiSource(new Client('https://example.test', 'shhh'));
 
-    expect(fn () => $loader->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => $loader->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -1192,7 +1192,7 @@ it('refuses a declaration the plugin header on disk contradicts, naming both gen
     ]);
 
     try {
-        apiLoader(null, 'v2')->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader(null, 'v2')->loadSettings('/ignored.json', new LfBufferedOutput);
         $message = '';
     } catch (MigrationApiException $e) {
         $message = $e->getMessage();
@@ -1210,7 +1210,7 @@ it('refuses a declaration the plugin header on disk contradicts, naming both gen
 it('refuses a declared v1 where the header on disk is v2', function (): void {
     fakeOptionsWithPluginHeaders(bothMinervaKbRows(), [pluginWithTextDomain('uamswp-minerva-kb')]);
 
-    expect(fn () => apiLoader(null, 'v1')->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader(null, 'v1')->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'declares Text Domain "uamswp-minerva-kb", which is generation v2'
     );
@@ -1219,7 +1219,7 @@ it('refuses a declared v1 where the header on disk is v2', function (): void {
 it('accepts a declaration the header on disk agrees with, as before', function (): void {
     fakeOptionsWithPluginHeaders(bothMinervaKbRows(), [pluginWithTextDomain('uamswp-minerva-kb')]);
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader(null, 'v2')->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines')
@@ -1229,7 +1229,7 @@ it('accepts a declaration the header on disk agrees with, as before', function (
 it('reads the v1 row where both are served and the header on disk is v1, and says why', function (): void {
     fakeOptionsWithPluginHeaders(bothMinervaKbRows(), [pluginWithTextDomain('minerva-kb')]);
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines')
@@ -1243,7 +1243,7 @@ it('reads the v1 row where both are served and the header on disk is v1, and say
 it('reads the v2 row where both are served and the header on disk is v2', function (): void {
     fakeOptionsWithPluginHeaders(bothMinervaKbRows(), [pluginWithTextDomain('uamswp-minerva-kb')]);
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines')
@@ -1253,7 +1253,7 @@ it('reads the v2 row where both are served and the header on disk is v2', functi
 it('keeps the both-rows refusal where no header names a generation', function (array $plugins): void {
     fakeOptionsWithPluginHeaders(bothMinervaKbRows(), $plugins);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'served both MinervaKB settings rows'
     );
@@ -1272,7 +1272,7 @@ it('keeps a declaration where no header names a generation', function (): void {
         pluginWithTextDomain('uamswp-minerva-kb', 'b/b.php'),
     ]);
 
-    $settings = loadedSettings(apiLoader(null, 'v2')->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader(null, 'v2')->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines');
 });
@@ -1282,10 +1282,10 @@ it('treats a payload without the plugins field exactly as before', function (): 
     // are refused
     fakeOptionsRows(bothMinervaKbRows());
 
-    $settings = loadedSettings(apiLoader(null, 'v1')->loadSettings('/ignored.json', new BufferedOutput));
+    $settings = loadedSettings(apiLoader(null, 'v1')->loadSettings('/ignored.json', new LfBufferedOutput));
 
     expect($settings['search_placeholder'])->toBe('ex.: Guidelines')
-        ->and(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+        ->and(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(MigrationApiException::class, 'served both MinervaKB settings rows');
 });
 
@@ -1296,7 +1296,7 @@ it('reads the only row served where the header on disk names its generation', fu
     );
 
     // The v1 entry file would refuse this under #1133; the header on disk outranks it
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     $settings = loadedSettings(apiLoader()->loadSettings('/ignored.json', $output));
 
     expect($settings['search_placeholder'])->toBe('e.g., Guidelines')
@@ -1316,7 +1316,7 @@ it('refuses where the header on disk names a generation whose row was not served
     ]);
 
     try {
-        apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+        apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
         $message = '';
     } catch (MigrationApiException $e) {
         $message = $e->getMessage();
@@ -1341,7 +1341,7 @@ it('words the refusal of a v1 site served only the v2 row in full', function ():
         ['by_shape' => 2, 'by_name' => 5, 'total' => 7]
     );
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'The MinervaKB plugin active on this site is v1 (its entry file is minervakb.php), '
         .'and v1 writes "minerva-kb-options", which the migration API did not serve. The row it did serve '
@@ -1360,7 +1360,7 @@ it('words the warning that the installed generation\'s row was not served in ful
         ['by_shape' => 2, 'by_name' => 5, 'total' => 7]
     );
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     apiLoader()->loadSettings('/ignored.json', $output);
 
     expect($output->fetch())->toContain(
@@ -1377,7 +1377,7 @@ it('words the warning that the installed generation\'s row was not served in ful
 it('words the refusal of a row left by a plugin that is not installed in full', function (): void {
     fakeOptionsWithPlugins(['uamswp-minerva-kb-options' => minervaKbV2Settings()], [], ['UAMSWP-minervakb']);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))->toThrow(
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))->toThrow(
         MigrationApiException::class,
         'The migration API served a MinervaKB settings row ("uamswp-minerva-kb-options"), but this site has no '
         ."MinervaKB plugin installed \u{2014} the endpoint reports the plugin directory as not "
@@ -1402,7 +1402,7 @@ it('finds the v1 entry file however active_plugins is served or cased', function
         ], 200),
     ]);
 
-    expect(fn () => apiLoader()->loadSettings('/ignored.json', new BufferedOutput))
+    expect(fn () => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput))
         ->toThrow(MigrationApiException::class, 'is written by v2, which is not what runs here');
 })->with([
     'a JSON object string' => ['{"3":"UAMSWP-minervakb/minervakb.php"}'],
@@ -1420,7 +1420,7 @@ it('reads the denylist halves on their own, and only a mention of the plugin cou
         ], 200),
     ]);
 
-    $load = fn (): ?array => apiLoader()->loadSettings('/ignored.json', new BufferedOutput);
+    $load = fn (): ?array => apiLoader()->loadSettings('/ignored.json', new LfBufferedOutput);
 
     if ($refused) {
         expect($load)->toThrow(MigrationApiException::class, 'has no MinervaKB plugin installed');
@@ -1442,7 +1442,7 @@ it('reports a file it fails to read for any other reason, and logs it', function
         }
     };
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     expect($loader->loadSettings('/settings.json', $output))->toBeNull()
         ->and($output->fetch())->toBe("Error loading settings file: disk gone\n");
@@ -1455,7 +1455,7 @@ it('reports a file whose JSON is not an object or a list, and logs it', function
     \file_put_contents($path, '5');
 
     $log = Log::spy();
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     expect((new Loader)->loadSettings($path, $output))->toBeNull()
         ->and($output->fetch())->toBe("Invalid JSON format: expected an object or array.\n");
@@ -1467,7 +1467,7 @@ it('words an invalid JSON error with the parser\'s reason', function (): void {
     $path = $this->workingDirectory.\DIRECTORY_SEPARATOR.'broken.json';
     \file_put_contents($path, '{not valid json');
 
-    $output = new BufferedOutput(decorated: true);
+    $output = new LfBufferedOutput(decorated: true);
     (new Loader)->loadSettings($path, $output);
 
     expect($output->fetch())->toBe("\e[37;41mInvalid JSON format: Syntax error\e[39;49m\n");

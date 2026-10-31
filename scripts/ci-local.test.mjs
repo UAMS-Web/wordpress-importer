@@ -53,7 +53,8 @@ describe('runnerArgs', () => {
     })
 
     it('puts the slot beside the primary when invoked from a linked worktree', () => {
-        const dir = realpathSync(mkdtempSync(join(tmpdir(), 'ci-local-')))
+        // `.native` expands a Windows short name such as RUNNER~1, as git does.
+        const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'ci-local-')))
         const git = (cwd, ...args) => {
             const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
             assert.equal(r.status, 0, r.stderr)
@@ -171,6 +172,30 @@ describe('local-ci.json against ci.yml', () => {
                 const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
                 assert.match(own, /^ {4}if: vars\.RUN_REMOTE_CI != 'false'$/m, `${job} is not gated`)
             }
+        })
+
+        // The Windows leg (#186). A matrix keeps one `needs:` entry per job, so this is what
+        // fails when a job stops running on Windows: nothing in `needs:` would change.
+        it('runs every job on both operating systems, each leg reporting', () => {
+            assert.ok(chained.length >= 8, `read ${chained.length} chained jobs`)
+
+            for (const job of chained) {
+                const own = ci.slice(ci.indexOf(`\n  ${job}:\n`) + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
+
+                assert.match(own, /^ {4}runs-on: \$\{\{ matrix\.os \}\}$/m, `${job} does not run on the matrix`)
+                assert.match(own, /^ {8}os: \[ubuntu-latest, windows-latest\]$/m, `${job} does not list both operating systems`)
+                assert.match(own, /^ {6}fail-fast: false$/m, `${job} lets one leg cancel the other`)
+                assert.doesNotMatch(own, /^\s*(?:exclude|include):/m, `${job} narrows its matrix`)
+                assert.match(own, /^ {4}name: .*\(\$\{\{ matrix\.os \}\}\)$/m, `${job}'s checks do not name their operating system`)
+            }
+        })
+
+        it('tolerates no failure, on either operating system', () => {
+            assert.doesNotMatch(ci.slice(ci.indexOf('\njobs:')), /^[\s-]*continue-on-error:/m)
+        })
+
+        it('runs every step in bash, which a Windows runner does not default to', () => {
+            assert.match(ci, /^defaults:\n {2}run:\n {4}shell: bash$/m)
         })
 
         // The step's script, run as the runner would with RESULTS set as `join(needs.*.result, ' ')` sets it.
