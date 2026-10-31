@@ -49,6 +49,11 @@ final class ContentTypeReads
     public const string PASS_BARD_SANITIZATION = 'bard_sanitization';
 
     /**
+     * The search index pass: rebuilds every configured search index once.
+     */
+    public const string PASS_SEARCH_INDEX = 'search_index';
+
+    /**
      * Companions of every type with a body.
      *
      * Each of these is read out of the export by a type other than itself, and every one of
@@ -197,8 +202,9 @@ final class ContentTypeReads
     /**
      * The passes after the content-type loop that a run importing this type runs.
      *
-     * Redirect rules run neither: their import writes the redirects global set or the
-     * redirect domains collection, which carry no menu, no site setting and no Bard text.
+     * Redirect rules run none: their import writes the redirects global set or the
+     * redirect domains collection, which carry no menu, no site setting and no Bard text,
+     * and which the host's reader-facing search does not hold (#229).
      *
      * @param  string  $contentType  The requested content type
      * @return list<string> The declared passes
@@ -208,7 +214,7 @@ final class ContentTypeReads
     ): array {
         return $contentType === self::REDIRECT_RULE
             ? []
-            : [self::PASS_NAVIGATION, self::PASS_BARD_SANITIZATION];
+            : [self::PASS_NAVIGATION, self::PASS_BARD_SANITIZATION, self::PASS_SEARCH_INDEX];
     }
 
     /**

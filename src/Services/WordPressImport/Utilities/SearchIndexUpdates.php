@@ -122,7 +122,9 @@ class SearchIndexUpdates
      * content becomes searchable. This is a single pass over the same indexes the
      * per-save listener would otherwise have thrashed once per save, so it is
      * strictly cheaper than leaving live updates on during the import. Per-index
-     * failures are logged and skipped rather than aborting the run.
+     * failures are logged and skipped rather than aborting the run, and each one
+     * reaches the end-of-import warning summary, since that index is left as it was
+     * before the import (#229).
      *
      * @param  OutputInterface|null  $output  Optional console output for progress.
      */
@@ -153,6 +155,12 @@ class SearchIndexUpdates
                 }
 
                 Log::warning("SearchIndexUpdates: failed to rebuild search index '{$indexLabel}': ".$e->getMessage());
+
+                ImportWarningManager::addWarning(
+                    'search',
+                    'index_rebuild_failed',
+                    ['index' => $indexLabel, 'error' => $e->getMessage()]
+                );
 
                 $output?->writeln("          - <comment>Could not rebuild search index '{$indexLabel}': {$e->getMessage()}</comment>");
             }

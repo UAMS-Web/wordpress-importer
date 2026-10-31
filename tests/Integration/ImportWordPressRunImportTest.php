@@ -1099,6 +1099,8 @@ it('imports redirect rules into the redirects global set, asking how to treat ma
         ->and(IwriLog::of('entries.create'))->toBe([])
         ->and($output)->toContain("Skipping navigation menu import - no imported content type declares it.\n")
         ->and($output)->toContain("Skipping Bard content sanitization - no imported content type declares it.\n")
+        ->and($output)->toContain("Skipping search index rebuild - no imported content type declares it.\n")
+        ->and($output)->not->toContain('Rebuilding search indexes')
         ->and(IwriLog::of('navigation.confirm'))->toBe([]);
 });
 

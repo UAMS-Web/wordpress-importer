@@ -33,6 +33,7 @@ use Statamic\Facades\Search;
 use Statamic\Search\Index;
 use Statamic\Search\UpdateItemIndexes;
 use Symfony\Component\Console\Output\BufferedOutput;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -319,6 +320,24 @@ it('logs a failed index and carries on to the next', function (): void {
     ]);
 
     $log->shouldHaveReceived('warning', ["SearchIndexUpdates: failed to rebuild search index 'default': disk full"]);
+});
+
+it('puts each failed index in the warning summary and no rebuilt one', function (): void {
+    Log::spy();
+    ImportWarningManager::clearWarnings();
+
+    $failing = searchIndexStub($this->createMock(Index::class), 'audiences', new RuntimeException('Call to a member function collections() on null'));
+    $next = searchIndexStub($this->createMock(Index::class), 'cp');
+
+    Search::shouldReceive('indexes')->once()->andReturn(collect([$failing, $next]));
+
+    SearchIndexUpdates::reindexAll();
+
+    expect(ImportWarningManager::getWarnings('search', 'index_rebuild_failed'))->toBe([
+        ['index' => 'audiences', 'error' => 'Call to a member function collections() on null'],
+    ]);
+
+    ImportWarningManager::clearWarnings();
 });
 
 it('labels an index whose name is not a string as unknown', function (?Throwable $failure, string $line): void {

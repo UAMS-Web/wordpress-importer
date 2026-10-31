@@ -2448,8 +2448,13 @@ class ImportWordPress extends Command
         // Rebuild search indexes once now that all content is imported. Live
         // search-index updates were disabled for the run (see handle()), so this
         // single pass replaces the hundreds of per-save full rebuilds that would
-        // otherwise have dominated the import.
-        SearchIndexUpdates::reindexAll($this->output);
+        // otherwise have dominated the import. A run whose imported types none declare
+        // the pass changed nothing an index holds, so it skips the rebuild (#229).
+        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_SEARCH_INDEX, $importedContentTypes)) {
+            SearchIndexUpdates::reindexAll($this->output);
+        } else {
+            $this->info('Skipping search index rebuild - no imported content type declares it.');
+        }
 
         // Remove any dataless entry files this run materialized, before the summary is
         // rendered so the removals appear in it rather than after it (wordpress-importer-archive#1160).
