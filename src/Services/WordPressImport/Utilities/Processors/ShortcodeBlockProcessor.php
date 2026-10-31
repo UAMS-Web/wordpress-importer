@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * Processes WordPress wp:shortcode blocks into Tiptap-compatible HTML for
@@ -27,6 +28,13 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @var list<string>
      */
     private const array HTML_ONLY_SHORTCODES = ['caption'];
+
+    /**
+     * Elements that sit in a line of text, so a run of them needs a paragraph.
+     *
+     * @var list<string>
+     */
+    private const array INLINE_ELEMENTS = ['a', 'abbr', 'b', 'br', 'cite', 'code', 'em', 'i', 'mark', 'small', 'span', 'strong', 'sub', 'sup', 'u'];
 
     /**
      * The shortcode processor instance.
@@ -196,9 +204,11 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // ---
-        // When the block holds exactly one registered shortcode, try process(...,
-        // 'page_builder'), and return the html with the page builder set when the
-        // handler builds one, or the html alone for a caption
+        // When the block holds exactly one registered shortcode and nothing else, try
+        // process(..., 'page_builder'), and return the html with the page builder set
+        // when the handler builds one, or the html alone for a caption. Anything else
+        // in the block falls to the loop below, which keeps it around the shortcode
+        // (#180)
         // ---
 
         // Check if block contains exactly one shortcode
@@ -215,7 +225,10 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             $name = self::extractShortcodeName($single);
 
             // Check if a handler is registered for this shortcode
-            if (isset($this->shortcodeProcessor->getHandlers()[$name])) {
+            if (
+                isset($this->shortcodeProcessor->getHandlers()[$name])
+                && self::isAloneInBlock($single, $shortcodeContent)
+            ) {
                 // Use the single shortcode for page_builder processing
                 $shortcode = $single;
 
@@ -378,7 +391,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         if ($hasProcessedShortcode
         && \trim($remainingContent) !== '') {
             // Return processed content when shortcodes were successfully converted
-            return $processedContent;
+            return self::withBareTextInParagraphs($processedContent);
         }
 
         // Check if we processed any shortcodes and meaningful content remains
@@ -402,6 +415,109 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
 
         // Return null only if content is truly empty
         return null;
+    }
+
+    /**
+     * Wraps each run of text and inline markup at the top of converted block content
+     * in a paragraph.
+     *
+     * The text around a converted shortcode has no block of its own, and a Bard
+     * document cannot hold a text node at its root (#180). Content with no such text
+     * comes back byte for byte.
+     *
+     * @param  string  $html  The converted block content
+     * @return string The content, with bare text in paragraphs
+     */
+    private static function withBareTextInParagraphs(
+        string $html
+    ): string {
+        $doc = TextProcessor::loadHtml($html);
+        $root = $doc->documentElement;
+
+        // loadHtml() always appends the root, so this only narrows the type
+        // @pest-mutate-ignore: RemoveEarlyReturn
+        if (! $root instanceof DOMElement) {
+            return $html;
+        }
+
+        // The paragraph the current run of bare nodes is going into
+        $paragraph = null;
+        $wrapped = false;
+
+        // Walk a copy, since wrapping a node moves it out of the live list
+        foreach (\iterator_to_array($root->childNodes) as $node) {
+            // Whitespace between blocks is left where it is
+            if (
+                $paragraph === null
+                && $node instanceof DOMText
+                && \trim($node->data) === ''
+            ) {
+                continue;
+            }
+
+            // Anything that is not bare ends the run
+            if (! self::isBareNode($node)) {
+                $paragraph = null;
+
+                continue;
+            }
+
+            // Open a paragraph where the run starts, without the space that followed
+            // the shortcode
+            if ($paragraph === null) {
+                $paragraph = $doc->createElement('p');
+                $root->insertBefore($paragraph, $node);
+                $wrapped = true;
+
+                if ($node instanceof DOMText) {
+                    $node->data = \ltrim($node->data);
+                }
+            }
+
+            $paragraph->appendChild($node);
+        }
+
+        return $wrapped ? TextProcessor::getInnerHtml($doc) : $html;
+    }
+
+    /**
+     * Whether a node belongs in a paragraph rather than standing as a block.
+     *
+     * @param  DOMNode  $node  A top-level node of block content
+     * @return bool True for text and inline elements
+     */
+    private static function isBareNode(
+        DOMNode $node
+    ): bool {
+        return $node instanceof DOMText
+            || (
+                $node instanceof DOMElement
+                && \in_array($node->nodeName, self::INLINE_ELEMENTS, true)
+            );
+    }
+
+    /**
+     * Whether a shortcode is all a block's content holds.
+     *
+     * A wrapper around the shortcode is not content of its own, so a `<p>` or `<div>`
+     * holding only the shortcode counts as alone; an image is.
+     *
+     * @param  array<int|string, mixed>  $shortcode  The extracted shortcode
+     * @param  string  $content  The block's content
+     * @return bool True when nothing is left of the content without the shortcode
+     */
+    private static function isAloneInBlock(
+        array $shortcode,
+        string $content
+    ): bool {
+        $around = \str_replace(
+            self::extractShortcodeOriginal($shortcode),
+            '',
+            $content
+        );
+
+        // A non-breaking space, as saveHTML() writes it or as text, is no more content than a space is
+        return \trim(\str_replace("\u{A0}", ' ', \strip_tags($around, '<img>'))) === '';
     }
 
     /**

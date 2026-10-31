@@ -15,6 +15,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/CaptionShortcodeBlockTest.php
  */
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -87,6 +88,67 @@ it('imports a page builder caption as an image set carrying its caption text', f
 
     $log->shouldNotHaveReceived('warning', [Mockery::pattern('/No content provided for \[caption\]/'), Mockery::any()]);
 });
+
+dataset('lone shortcode block content', [
+    'a caption' => ['[caption id="attachment_1" align="alignright" width="300"]<img src="https://example.com/img.jpg" />My caption[/caption]'],
+    'a show-people' => ['[show-people ids="1"]'],
+]);
+
+/**
+ * The node types of Bard content, with each paragraph as its text.
+ *
+ * @param  array<int|string, mixed>  $nodes  The Bard nodes
+ * @return list<mixed> Each node's type, or a paragraph's text
+ */
+function shortcodeBlockNodeSummary(array $nodes): array
+{
+    return \array_values(\array_map(
+        static fn (mixed $node): mixed => Arr::get($node, 'type') === 'paragraph'
+            ? \implode('', \array_column((array) Arr::get($node, 'content', []), 'text'))
+            : Arr::get($node, 'type'),
+        $nodes
+    ));
+}
+
+it('keeps the text around a shortcode in its block, on the Bard route', function (string $shortcode): void {
+    $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
+
+    foreach ([true, false] as $useWpAutoP) {
+        $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, $useWpAutoP);
+
+        expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
+    }
+})->with('lone shortcode block content');
+
+it('keeps the text around a shortcode in its block, on the page builder route', function (string $shortcode): void {
+    $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
+
+    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+
+    expect($sets['directSets'])->toBe([])
+        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
+})->with('lone shortcode block content');
+
+it('keeps the node right after a lone shortcode block', function (string $shortcode): void {
+    $html = '<!-- wp:shortcode -->'.$shortcode.'<!-- /wp:shortcode --><p>After</p>';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
+    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+
+    expect(shortcodeBlockNodeSummary($nodes))->toBe(['set', 'After'])
+        ->and(\json_encode($sets['content']))->toContain('After');
+})->with('lone shortcode block content');
+
+it('adds the shortcode of a block with no closing comment once, and keeps what follows', function (string $shortcode): void {
+    $html = '<p>Intro</p><!-- wp:shortcode -->'.$shortcode.'<p>After</p>';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
+    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+
+    expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'set', 'After'])
+        ->and($sets['directSets'])->toBe([])
+        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'set', 'After']);
+})->with('lone shortcode block content');
 
 it('imports a caption block in Bard content as one image set and nothing else', function (): void {
     $html = "<!-- wp:paragraph --><p>Intro</p><!-- /wp:paragraph -->\n<!-- wp:shortcode -->\n[caption id=\"attachment_1\" align=\"alignright\" width=\"300\"]<img src=\"https://example.com/img.jpg\" />My caption[/caption]\n<!-- /wp:shortcode -->\n<!-- wp:paragraph --><p>Outro</p><!-- /wp:paragraph -->";

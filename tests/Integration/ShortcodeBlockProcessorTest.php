@@ -747,15 +747,44 @@ function shortcodeBlockRequireHtmlOnlyResult(mixed $result): string
 }
 
 it('process counts every remaining sibling when a caption block has no closing comment', function (): void {
-    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption]</div><p>After</p>';
+    $html = '<!-- wp:shortcode --><div>[caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption]</div><div></div>';
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, $html);
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    // The opening comment, the div and the paragraph; no closing comment to add
+    // The opening comment and the two divs; no closing comment to add
     expect(is_array($result) ? ($result['skipCount'] ?? null) : null)->toBe(3);
 });
+
+it('process keeps what surrounds a lone shortcode, in the content a string returns', function (string $inner, string $name, string $kept): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBeString()
+        ->toContain($kept)
+        ->not->toContain('['.$name);
+})->with([
+    'text around a caption' => ['Lead [caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption] tail', 'caption', 'Lead'],
+    'text around a show-people' => ['Lead [show-people ids="1"] tail', 'show-people', 'tail'],
+    'an image beside a show-people' => ['<img src="https://example.com/img.jpg">[show-people ids="1"]', 'show-people', '<img'],
+    'a paragraph after a block with no closing comment' => ['[show-people ids="1"]<p>After</p>', 'show-people', 'After'],
+]);
+
+it('process reads a wrapper holding only the shortcode as a lone shortcode', function (string $inner): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBeArray()->toHaveKey('page_builder_set');
+})->with([
+    'bare' => '[show-people ids="1"]',
+    'in a paragraph' => '<p>[show-people ids="1"]</p>',
+    'in a div' => '<div>[show-people ids="1"]</div>',
+    'beside a non-breaking space in an element' => '<p>&nbsp;[show-people ids="1"]</p>',
+    'beside a non-breaking space in text' => '&nbsp;[show-people ids="1"]',
+]);
 
 it('process returns the text and a skip count for a lone caption with no image', function (): void {
     // A caption with no image keeps its text (#164); the block is still skipped
