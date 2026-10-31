@@ -322,6 +322,19 @@ it('logs a failed index and carries on to the next', function (): void {
     $log->shouldHaveReceived('warning', ["SearchIndexUpdates: failed to rebuild search index 'default': disk full"]);
 });
 
+it('rebuilds only the indexes it is told to, by handle', function (): void {
+    $default = searchIndexStub($this->createMock(Index::class), 'default');
+    $default->method('handle')->willReturn('default');
+    $default->expects($this->never())->method('update');
+    $cp = searchIndexStub($this->createMock(Index::class), 'cp_default');
+    $cp->method('handle')->willReturn('cp');
+    $cp->expects($this->once())->method('update');
+
+    Search::shouldReceive('indexes')->once()->andReturn(collect([$default, $cp]));
+
+    SearchIndexUpdates::reindexAll(null, [SearchIndexUpdates::CP_INDEX]);
+});
+
 it('puts each failed index in the warning summary and no rebuilt one', function (): void {
     Log::spy();
     ImportWarningManager::clearWarnings();

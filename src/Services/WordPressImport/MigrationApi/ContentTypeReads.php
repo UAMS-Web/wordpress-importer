@@ -49,7 +49,8 @@ final class ContentTypeReads
     public const string PASS_BARD_SANITIZATION = 'bard_sanitization';
 
     /**
-     * The search index pass: rebuilds every configured search index once.
+     * The search index pass: rebuilds every configured search index once. A run without
+     * it still rebuilds the Control Panel's index.
      */
     public const string PASS_SEARCH_INDEX = 'search_index';
 
@@ -204,7 +205,7 @@ final class ContentTypeReads
      *
      * Redirect rules run none: their import writes the redirects global set or the
      * redirect domains collection, which carry no menu, no site setting and no Bard text,
-     * and which the host's reader-facing search does not hold (#229).
+     * and which the host's reader-facing search indexes do not hold (#229).
      *
      * @param  string  $contentType  The requested content type
      * @return list<string> The declared passes

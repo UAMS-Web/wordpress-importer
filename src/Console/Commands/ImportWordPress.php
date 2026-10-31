@@ -2449,11 +2449,13 @@ class ImportWordPress extends Command
         // search-index updates were disabled for the run (see handle()), so this
         // single pass replaces the hundreds of per-save full rebuilds that would
         // otherwise have dominated the import. A run whose imported types none declare
-        // the pass changed nothing an index holds, so it skips the rebuild (#229).
+        // the pass wrote nothing for reader-facing search, but its redirect domain entries
+        // belong in the Control Panel's own index, so only that one is rebuilt (#229).
         if (ContentTypeReads::runsPass(ContentTypeReads::PASS_SEARCH_INDEX, $importedContentTypes)) {
             SearchIndexUpdates::reindexAll($this->output);
         } else {
-            $this->info('Skipping search index rebuild - no imported content type declares it.');
+            $this->info('Rebuilding only the Control Panel search index - no imported content type declares the full rebuild.');
+            SearchIndexUpdates::reindexAll($this->output, [SearchIndexUpdates::CP_INDEX]);
         }
 
         // Remove any dataless entry files this run materialized, before the summary is

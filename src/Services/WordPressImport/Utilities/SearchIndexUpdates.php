@@ -58,6 +58,12 @@ use Throwable;
 class SearchIndexUpdates
 {
     /**
+     * The handle of the index behind the Control Panel's command palette, which Statamic
+     * adds when the search config does not define it, over all content.
+     */
+    public const string CP_INDEX = 'cp';
+
+    /**
      * The events `UpdateItemIndexes` subscribes to, mapped to their handler id.
      *
      * Mirrors {@see UpdateItemIndexes::subscribe()} so {@see self::disable()}
@@ -127,13 +133,19 @@ class SearchIndexUpdates
      * before the import (#229).
      *
      * @param  OutputInterface|null  $output  Optional console output for progress.
+     * @param  list<string>|null  $only  The index handles to rebuild, or null for every index
      */
-    public static function reindexAll(?OutputInterface $output = null): void
+    public static function reindexAll(?OutputInterface $output = null, ?array $only = null): void
     {
         $output?->writeln('      - Rebuilding search indexes for imported content...');
 
         foreach (Search::indexes() as $index) {
             if (! ($index instanceof Index)) {
+                continue;
+            }
+
+            // A localized index shares its handle with the others of its name
+            if ($only !== null && ! \in_array($index->handle(), $only, true)) {
                 continue;
             }
 
