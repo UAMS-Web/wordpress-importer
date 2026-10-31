@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
@@ -181,6 +182,11 @@ function hasQuestionHelperRun(Closure $body, ?string $answers = null): array
  */
 function hasQuestionHelperWithRealPrompts(array $keys, Closure $body): mixed
 {
+    // Laravel Prompts throws on Windows before it reads a key, and the command falls back there
+    if (\PHP_OS_FAMILY === 'Windows') {
+        Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+    }
+
     $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
     $fallback->setValue(null, false);
     Prompt::fake($keys);

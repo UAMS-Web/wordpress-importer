@@ -113,7 +113,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: intl, mbstring, dom, fileinfo, simplexml, xml
+          extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
           ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
@@ -162,10 +162,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # `composer install` checks platform requirements, and a Windows PHP does not load
+      # `fileinfo` by default.
       - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: fileinfo
           coverage: none
           tools: composer:v2
 

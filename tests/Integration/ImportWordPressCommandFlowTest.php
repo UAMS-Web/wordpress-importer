@@ -238,6 +238,17 @@ function iwcfOutput(BufferedOutput $buffer): string
 }
 
 /**
+ * A path with forward slashes, so that it compares the same on every platform.
+ *
+ * @param  string  $path  The path
+ * @return string The path
+ */
+function iwcfSlashes(string $path): string
+{
+    return \str_replace('\\', '/', $path);
+}
+
+/**
  * Write a file the run reads as an export, and answer its path.
  */
 function iwcfFile(string $path): string
@@ -348,7 +359,7 @@ it('imports every part of a split export as one import, saying so', function ():
     [$command, $buffer] = iwcfCommand(['file' => $second]);
 
     expect(iwcfCall($command, 'runImport'))->toBe(7)
-        ->and($command->imports)->toBe([[$first, $second]])
+        ->and(\array_map(iwcfSlashes(...), $command->imports[0] ?? []))->toBe([iwcfSlashes($first), iwcfSlashes($second)])
         ->and(iwcfOutput($buffer))->toBe("Detected split export: importing 2 parts as a single import.\n");
 });
 

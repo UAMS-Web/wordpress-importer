@@ -7,13 +7,13 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Taxonomies\Taxonomy;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\PeopleGroupValidator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * `BaseTaxonomyValidator` checks the terms content references against what its destination
@@ -102,7 +102,7 @@ function baseTaxonomyReference(string $term, string $siteSpecific, string $pageS
  */
 function baseTaxonomyValidate(array $termsUsed, ?BaseTaxonomyValidator $validator = null): string
 {
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     ($validator ?? new BaseTaxonomyValidatorTestValidator)->validateTerms($termsUsed, 'adverts', 'default', $output);
 
     return $output->fetch();
@@ -169,7 +169,7 @@ it('names the collection and the page each created term is used on', function (a
     $adverts->title('Classified Adverts');
     $adverts->save();
 
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
     (new BaseTaxonomyValidatorTestValidator)->create($missingTerms, $collection, 'default', $output);
     $printed = $output->fetch();
 

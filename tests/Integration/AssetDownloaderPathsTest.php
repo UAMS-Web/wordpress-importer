@@ -866,6 +866,11 @@ describe('reading a file\'s type', function (): void {
     ]);
 
     it('reads nothing from a file it cannot read', function (): void {
+        // `chmod()` cannot take read access away on Windows
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('chmod() does not deny reading on Windows.');
+        }
+
         $path = assetDownloaderPathsFile('BM00');
         \chmod($path, 0000);
 

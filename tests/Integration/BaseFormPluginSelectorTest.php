@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -209,6 +210,11 @@ function baseFormPluginSelectorRun(Closure $body, ?string $answers = null): arra
  */
 function baseFormPluginSelectorWithRealPrompts(array $keys, Closure $body): ?array
 {
+    // Laravel Prompts throws on Windows before it reads a key, and the command falls back there
+    if (\PHP_OS_FAMILY === 'Windows') {
+        Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+    }
+
     $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
     $fallback->setValue(null, false);
     Prompt::fake($keys);

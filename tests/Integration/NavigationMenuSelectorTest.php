@@ -8,12 +8,13 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * `NavigationMenuSelector` on a file-sourced run: it lists the export's navigation menus, asks
@@ -95,7 +96,7 @@ function navigationMenuSelectorParser(string $directory, string $terms, string $
  * Run one of the selector's questions inside a real Command::run(), which routes prompts to
  * the input's stream.
  *
- * @param  Closure(NavigationMenuSelector, ArrayInput, BufferedOutput, Command): mixed  $ask  The question
+ * @param  Closure(NavigationMenuSelector, ArrayInput, LfBufferedOutput, Command): mixed  $ask  The question
  * @param  ?string  $answers  The scripted answers, or null for a run that is not interactive
  * @param  bool  $prompts  Whether Laravel Prompts are supported
  * @param  ?array<mixed>  $keys  The keys the real Laravel Prompts answer with, or null for the fallback a test run uses
@@ -141,7 +142,7 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
         {
             $selector = new NavigationMenuSelectorTestSelector($this->prompts);
             $output = $this->output->getOutput();
-            assert($output instanceof BufferedOutput);
+            assert($output instanceof LfBufferedOutput);
             $input = $this->input;
             assert($input instanceof ArrayInput);
 
@@ -154,6 +155,12 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
             $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
 
             if ($this->keys !== null) {
+                // Laravel Prompts throws on Windows before it reads a key, and the command
+                // falls back there
+                if (\PHP_OS_FAMILY === 'Windows') {
+                    Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+                }
+
                 $fallback->setValue(null, false);
                 Prompt::fake($this->keys);
             }
@@ -169,7 +176,7 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
         }
     };
 
-    $buffer = new BufferedOutput(decorated: true);
+    $buffer = new LfBufferedOutput(decorated: true);
     $command->setLaravel(app());
     $command->run($input, $buffer);
 
@@ -179,21 +186,21 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
 /**
  * Ask which menu to import from the given parser.
  *
- * @return Closure(NavigationMenuSelector, ArrayInput, BufferedOutput, Command): ?string
+ * @return Closure(NavigationMenuSelector, ArrayInput, LfBufferedOutput, Command): ?string
  */
 function navigationMenuSelectorChoose(XmlParser $parser): Closure
 {
-    return fn (NavigationMenuSelector $selector, ArrayInput $input, BufferedOutput $output, Command $command): ?string => $selector->selectNavigationMenu($parser, $input, $output, $command);
+    return fn (NavigationMenuSelector $selector, ArrayInput $input, LfBufferedOutput $output, Command $command): ?string => $selector->selectNavigationMenu($parser, $input, $output, $command);
 }
 
 /**
  * Ask whether a menu occupies the primary position, for the given parser.
  *
- * @return Closure(NavigationMenuSelector, ArrayInput, BufferedOutput, Command): bool
+ * @return Closure(NavigationMenuSelector, ArrayInput, LfBufferedOutput, Command): bool
  */
 function navigationMenuSelectorConfirm(XmlParser $parser): Closure
 {
-    return fn (NavigationMenuSelector $selector, ArrayInput $input, BufferedOutput $output, Command $command): bool => $selector->confirmActivePrimaryNavigation($parser, $input, $output, $command);
+    return fn (NavigationMenuSelector $selector, ArrayInput $input, LfBufferedOutput $output, Command $command): bool => $selector->confirmActivePrimaryNavigation($parser, $input, $output, $command);
 }
 
 /**
@@ -398,7 +405,7 @@ function navigationMenuSelectorFromApi(array $payload): NavigationMenuSelector
  */
 function navigationMenuSelectorConfirmFromApi(NavigationMenuSelector $selector, XmlParser $parser): array
 {
-    $output = new BufferedOutput(decorated: true);
+    $output = new LfBufferedOutput(decorated: true);
     $answer = $selector->confirmActivePrimaryNavigation($parser, new ArrayInput([]), $output, new Command);
 
     return [$answer, $output->fetch()];
@@ -438,7 +445,7 @@ it('reads the options table once for both questions, and again for a new source'
     $parser = navigationMenuSelectorParser($this->workingDirectory, navigationMenuSelectorTerm('2', 'main', 'Main'));
 
     navigationMenuSelectorConfirmFromApi($selector, $parser);
-    $slug = $selector->selectNavigationMenu($parser, new ArrayInput([]), new BufferedOutput, new Command);
+    $slug = $selector->selectNavigationMenu($parser, new ArrayInput([]), new LfBufferedOutput, new Command);
 
     Http::assertSentCount(1);
     expect($slug)->toBe('main');
@@ -495,7 +502,7 @@ it('answers no, and says why, where the options table cannot be read', function 
 
 it('chooses no menu, without listing any, where the migration API names none', function (): void {
     $selector = navigationMenuSelectorFromApi(['options' => ['stylesheet' => 'uams-2020', 'theme_mods_uams-2020' => ['nav_menu_locations' => []]]]);
-    $output = new BufferedOutput;
+    $output = new LfBufferedOutput;
 
     $slug = $selector->selectNavigationMenu(
         navigationMenuSelectorParser($this->workingDirectory, navigationMenuSelectorTerm('2', 'main', 'Main')),

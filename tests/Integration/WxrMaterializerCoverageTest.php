@@ -315,6 +315,11 @@ it('refuses to write a manifest it cannot encode', function (): void {
 });
 
 it('refuses to go on when it cannot write the manifest', function (): void {
+    // `chmod()` cannot take write access to a directory away on Windows
+    if (\PHP_OS_FAMILY === 'Windows') {
+        $this->markTestSkipped('chmod() does not deny writing to a directory on Windows.');
+    }
+
     wmcFake();
     \chmod($this->workingDirectory, 0555);
 
