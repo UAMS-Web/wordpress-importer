@@ -6,8 +6,6 @@ use App\Services\BardContentSanitizer;
 use Illuminate\Console\Command;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\OutputStyle;
-use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
-use Illuminate\Foundation\Console\Kernel;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -1598,12 +1596,6 @@ it('asks each overwrite question, and whether to import more, when it can', func
 ]);
 
 it('shows the next question after a command runs inside the import', function (bool $prompts): void {
-    // A test run leaves console events off, and a host app's run has them on
-    $kernel = app(ConsoleKernel::class);
-    assert($kernel instanceof Kernel);
-    $kernel->rerouteSymfonyCommandEvents();
-    $kernel->setArtisan(null);
-
     iwriCollection('pages');
     [$command] = iwriCommand();
     $command->prompts = $prompts;
@@ -1613,6 +1605,9 @@ it('shows the next question after a command runs inside the import', function (b
     // the test fails here rather than blocking there
     IwriEntries::$onCreate = static function () use ($command): void {
         Artisan::call('env');
+
+        // A test run leaves the console events off, so this says what a host app's run does
+        event(new CommandFinished('env', new ArrayInput([]), new BufferedOutput, 0));
 
         expect((new ReflectionMethod(Prompt::class, 'output'))->invoke(null))
             ->toBe((new ReflectionProperty(Command::class, 'output'))->getValue($command));
@@ -1628,11 +1623,6 @@ it('shows the next question after a command runs inside the import', function (b
 ]);
 
 it('leaves Laravel Prompts alone once the import has ended', function (): void {
-    $kernel = app(ConsoleKernel::class);
-    assert($kernel instanceof Kernel);
-    $kernel->rerouteSymfonyCommandEvents();
-    $kernel->setArtisan(null);
-
     iwriCollection('pages');
     [$command] = iwriCommand();
 
