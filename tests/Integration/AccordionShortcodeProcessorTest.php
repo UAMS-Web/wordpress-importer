@@ -21,6 +21,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/AccordionShortcodeProcessorTest.php
  */
 
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
@@ -28,6 +29,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingConte
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\AccordionShortcodeProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\ExportsCorpus;
 
 uses(StatamicTestCase::class);
 
@@ -644,5 +646,234 @@ describe('a [section] tag left unconverted (#167)', function (): void {
         accordionFlattened('[section title="A"]one[/section][section]two[/section]');
 
         expect(ImportWarningManager::getWarnings('content', 'unconverted_accordion_sections'))->toBe([]);
+    });
+});
+
+/**
+ * Counts the nodes of a Bard tree by what they are and where they sit.
+ *
+ * @param  mixed  $nodes  Bard content
+ * @param  bool  $inListItem  Whether these nodes sit inside a list item
+ * @return array{empty: int, emptyInListItem: int, heading: int, headingInListItem: int} The counts
+ */
+function accordionNodeCounts(mixed $nodes, bool $inListItem = false): array
+{
+    $counts = ['empty' => 0, 'emptyInListItem' => 0, 'heading' => 0, 'headingInListItem' => 0];
+
+    foreach (\is_array($nodes) ? $nodes : [] as $node) {
+        if (! \is_array($node)) {
+            continue;
+        }
+
+        $type = $node['type'] ?? null;
+        $key = match (true) {
+            $type === 'heading' => 'heading',
+            $type === 'paragraph' && ($node['content'] ?? []) === [] => 'empty',
+            default => null,
+        };
+
+        if ($key !== null) {
+            $counts[$inListItem ? $key.'InListItem' : $key]++;
+        }
+
+        // Add what the node holds, which sits in a list item if the node is one
+        foreach (accordionNodeCounts($node['content'] ?? [], $inListItem || $type === 'listItem') as $name => $count) {
+            $counts[$name] += $count;
+        }
+    }
+
+    return $counts;
+}
+
+describe('in a list, and with sections that leave their lists uneven (#178)', function (): void {
+    it('leaves no empty paragraph in the list item an accordion sits in', function (): void {
+        $content = accordionSectionContent('<ul><li>Item [accordion][section title="A"]Body[/section][/accordion] tail</li><li>Next</li></ul>');
+
+        expect(accordionNodeCounts($content))->toBe([
+            'empty' => 0,
+            'emptyInListItem' => 0,
+            'heading' => 0,
+            'headingInListItem' => 1,
+        ]);
+    });
+
+    it('drops empty paragraphs from a list item at any depth', function (): void {
+        $content = accordionSectionContent('<ul><li>One<p></p><ul><li>Two<p></p>Three</li></ul></li></ul>');
+
+        expect(accordionNodeCounts($content)['emptyInListItem'])->toBe(0)
+            ->and(accordionBardOutline($content))->toBe(['bulletList: OneTwoThree']);
+    });
+
+    it('filters list items only, and keeps the paragraph an item must start with', function (array $node, array $expected): void {
+        // The parser normalizes most of these shapes away, so the filter is called directly
+        $filter = new ReflectionMethod(TextProcessor::class, 'withoutEmptyParagraphs');
+
+        expect($filter->invoke(null, [$node]))->toBe([$expected]);
+    })->with(function (): array {
+        $empty = ['type' => 'paragraph'];
+        $text = ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'a']]];
+        $list = ['type' => 'bulletList', 'content' => [['type' => 'listItem', 'content' => [$text]]]];
+
+        return [
+            'an empty item' => [
+                ['type' => 'listItem', 'content' => [$empty]],
+                ['type' => 'listItem', 'content' => [$empty]],
+            ],
+            'an item that opens on a list' => [
+                ['type' => 'listItem', 'content' => [$empty, $list, $empty]],
+                ['type' => 'listItem', 'content' => [$empty, $list]],
+            ],
+            'an item with a paragraph later' => [
+                ['type' => 'listItem', 'content' => [$empty, $text, $empty]],
+                ['type' => 'listItem', 'content' => [$text]],
+            ],
+            'an item that starts on a list and has no empty paragraph' => [
+                ['type' => 'listItem', 'content' => [$list]],
+                ['type' => 'listItem', 'content' => [$list]],
+            ],
+            'an item nested in a list' => [
+                ['type' => 'bulletList', 'content' => [['type' => 'listItem', 'content' => [$text, $empty]]]],
+                ['type' => 'bulletList', 'content' => [['type' => 'listItem', 'content' => [$text]]]],
+            ],
+            'a node that is not a list item' => [
+                ['type' => 'blockquote', 'content' => [$text, $empty]],
+                ['type' => 'blockquote', 'content' => [$text, $empty]],
+            ],
+        ];
+    });
+
+    it('keeps a list a section leaves open out of the sections after it', function (): void {
+        $content = accordionSectionContent('[accordion][section title="A"]<ul><li>Open[/section][section title="B"]Next[/section][/accordion]');
+
+        expect(accordionBardOutline($content))->toBe([
+            'heading3: A',
+            'bulletList: Open',
+            'heading3: B',
+            'paragraph: Next',
+        ]);
+    });
+
+    it('closes what a section leaves open and drops what it never opened', function (string $body, string $expected): void {
+        // The leading paragraph tag keeps wpautop off the body
+        expect(accordionFlattened('[section title="A"]<p>'.$body.'[/section]'))
+            ->toBe('</p><h3>A</h3><p><p>'.$expected.'</p><p></p><p>');
+    })->with([
+        'balanced' => ['<ul><li>a</li></ul>', '<ul><li>a</li></ul>'],
+        'an open list' => ['<ul><li>a', '<ul><li>a</li></ul>'],
+        'an open nested list' => ['<ol><li><ul><li>a', '<ol><li><ul><li>a</li></ul></li></ol>'],
+        'a stray close' => ['a</ul>b</li>', 'ab'],
+        'a list closed around an open item' => ['<ul><li>a</ul>', '<ul><li>a</li></ul>'],
+        'an item closed around an open list' => ['<ul><li><ol><li>a</li></li></ul>', '<ul><li><ol><li>a</li></ol></li></ul>'],
+        'an item left open before the next' => ['<ul><li>a<li>b</li></ul>', '<ul><li>a</li><li>b</li></ul>'],
+        'attributes and case' => ['<UL class="x"><LI>a</LI></UL>', '<UL class="x"><LI>a</LI></UL>'],
+        'a tag that only starts like one' => ['<link></ul>', '<link>'],
+    ]);
+
+    it('leaves a balanced body alone, reading no list tag where there is none', function (string $body): void {
+        // The closes shown here close nothing, so the real ones have to stay
+        expect(accordionFlattened('[section title="A"]<p>'.$body.'[/section]'))
+            ->toBe('</p><h3>A</h3><p><p>'.$body.'</p><p></p><p>');
+    })->with([
+        'a comment' => ['<ul><li><!-- </li></ul> -->a</li></ul>'],
+        'an empty comment' => ['<ul><li><!-->a</li></ul>'],
+        'a comment with dashes' => ['<ul><li><!-- a - b -- c </ul> -->d</li></ul>'],
+        'another tag\'s attribute' => ['<ul><li><a title="a</ul>b" href="x">c</a></li></ul>'],
+        'single quotes' => ["<ul><li><a title='</li>'>c</a></li></ul>"],
+        'a list tag\'s own attribute' => ['<ul title="</ul>"><li data-x=\'<li>\'>a</li></ul>'],
+        'a stray less-than sign' => ['<ul><li>a<b and c</li></ul>'],
+    ]);
+
+    it('balances a section with a comment too long for a lazy match', function (): void {
+        $body = '<ul><li>a<!-- '.\str_repeat('x', 2000000).' -->';
+
+        expect(accordionFlattened('[section title="A"]<p>'.$body.'[/section]'))
+            ->toEndWith('--></li></ul></p><p></p><p>');
+    });
+
+    it('keeps the body and names the page when the balancing pattern fails', function (): void {
+        // A one-step backtrack limit with the JIT off fails the pattern
+        $limit = \ini_get('pcre.backtrack_limit');
+        $jit = \ini_get('pcre.jit');
+        \ini_set('pcre.backtrack_limit', '1');
+        \ini_set('pcre.jit', '0');
+
+        // Longer than the 100-character snippet the warning keeps
+        $body = '<ul><li>'.\str_repeat('word ', 30);
+
+        try {
+            $result = (new ReflectionMethod(AccordionShortcodeProcessor::class, 'balanceLists'))
+                ->invoke(null, $body, 'default', 'slug');
+        } finally {
+            \ini_set('pcre.backtrack_limit', (string) $limit);
+            \ini_set('pcre.jit', (string) $jit);
+        }
+
+        expect($result)->toBe($body)
+            ->and(ImportWarningManager::getWarnings('content', 'unbalanced_accordion_sections'))->toBe([[
+                'site' => 'default',
+                'page_slug' => 'slug',
+                'error' => 'Backtrack limit exhausted',
+                'content_snippet' => \substr($body, 0, 100),
+                'page_url' => null,
+            ]]);
+    });
+
+    it('opens no leading paragraph for a break before the first section', function (string $break): void {
+        expect(accordionFlattened($break.'[section title="A"]one[/section]'))
+            ->toStartWith('</p><h3>A</h3>');
+    })->with([
+        'an entity' => ['&nbsp;'],
+        'the character' => ["\u{00A0}"],
+        'several, among whitespace' => ["&nbsp; \u{00A0}<br />\n"],
+    ]);
+
+    it('still opens a leading paragraph for text before the first section', function (): void {
+        expect(accordionFlattened('&nbsp;Intro[section title="A"]one[/section]'))
+            ->toStartWith('</p><p>Intro</p><h3>A</h3>');
+    });
+
+    it('keeps a non-breaking space inside a section body', function (): void {
+        expect(accordionFlattened('[section title="A"]<p>one&nbsp;two</p>[/section]'))
+            ->toContain('one&nbsp;two');
+    });
+
+    it('converts an accordion too long for the JIT stack', function (): void {
+        $body = \str_repeat('A long paragraph of section text. ', 3000);
+        $content = accordionSectionContent('[accordion][section title="A"]'.$body.'[/section][/accordion]');
+
+        expect(accordionNodeCounts($content)['heading'])->toBe(1)
+            ->and(\json_encode($content))->not->toContain('[section');
+    });
+
+    it('imports the nicuguidebook Medications page cleanly', function (): void {
+        $export = ExportsCorpus::path('WordPress/wordpress-export_inside-uams-edu_nicuguidebook.xml');
+
+        if ($export === null) {
+            Assert::markTestSkipped(ExportsCorpus::SKIP_MESSAGE);
+        }
+
+        // A clone without this export is a broken clone, not an absent corpus
+        expect($export)->toBeFile();
+
+        $xml = \simplexml_load_file($export, SimpleXMLElement::class, LIBXML_PARSEHUGE | LIBXML_NOCDATA);
+        expect($xml)->toBeInstanceOf(SimpleXMLElement::class);
+
+        /** @var SimpleXMLElement $xml */
+        $xml->registerXPathNamespace('wp', 'http://wordpress.org/export/1.2/');
+        $items = $xml->xpath('//item[wp:post_id="610"]');
+        expect($items)->toHaveCount(1);
+
+        /** @var array<int, SimpleXMLElement> $items */
+        $source = (string) $items[0]->children('content', true)->encoded;
+
+        // Run under `php -d pcre.jit=0` as well: ini_set() does not reach the JIT here
+        $content = accordionSectionContent($source);
+
+        expect(accordionNodeCounts($content))->toBe([
+            'empty' => 0,
+            'emptyInListItem' => 0,
+            'heading' => 119,
+            'headingInListItem' => 0,
+        ])->and(\json_encode($content))->not->toContain('[section');
     });
 });

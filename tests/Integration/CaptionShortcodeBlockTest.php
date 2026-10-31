@@ -10,7 +10,8 @@ declare(strict_types=1);
  * the caption takes the image set the Bard route makes, inside a content block
  * (#119). `NonAcfBlockParser` is driven node by node, as `PageBuilderParser`
  * drives it, and its accumulated content finalized. In Bard content the block's
- * inner nodes must not be read a second time after the image set is added.
+ * inner nodes must not be read a second time after the image set is added. A
+ * quote in a caption must not end the set markup that carries its text (#177).
  *
  * @command  php vendor/bin/pest tests/Integration/CaptionShortcodeBlockTest.php
  */
@@ -222,3 +223,35 @@ it('imports a caption block in Bard content as one image set and nothing else', 
         ->and(\json_encode($images[0] ?? null))->toContain('"caption":"My caption"')
         ->and(\json_encode($nodes))->not->toContain('[\\/caption]');
 });
+
+it('keeps the whole text of a caption holding a quote, and leaves no stray text', function (
+    string $tag,
+    string $image,
+    string $text,
+    bool $useWpAutoP
+): void {
+    $html = '<p>Intro</p>'."\n\n".$tag.$image.' Melissa '.$text.' Evans swings at Rebsamen Park.[/caption]'."\n\n".'<p>Outro</p>';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, $useWpAutoP);
+
+    // The nodes around the set are the two paragraphs, so nothing is left over
+    $types = \array_map(static fn (mixed $node): mixed => \is_array($node) ? ($node['type'] ?? null) : null, $nodes);
+    $caption = Arr::get($nodes, '1.attrs.values.caption');
+
+    expect($types)->toBe(['paragraph', 'set', 'paragraph'])
+        ->and(\trim(\strip_tags(\is_string($caption) ? $caption : '')))->toBe('Melissa "Mimi" Evans swings at Rebsamen Park.')
+        ->and(\json_encode($nodes))->not->toContain('\\">');
+})->with([
+    'bare' => '[caption]',
+    'attributed' => '[caption id="attachment_1" align="alignleft" width="300"]',
+])->with([
+    'an image with a plain alt' => '<img src="https://example.com/a.jpg" alt="Mimi" />',
+    'an image with a quote in its alt' => '<img src="https://example.com/a.jpg" alt="Melissa &quot;Mimi&quot; Evans" />',
+    'a linked image with a quote in its alt' => '<a href="https://example.com/a.jpg"><img src="https://example.com/a.jpg" alt="Melissa &quot;Mimi&quot; Evans" /></a>',
+])->with([
+    'a bare quote' => '"Mimi"',
+    'an encoded quote' => '&quot;Mimi&quot;',
+])->with([
+    'with WpAutoP' => true,
+    'without WpAutoP' => false,
+]);

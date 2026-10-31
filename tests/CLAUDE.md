@@ -167,3 +167,7 @@ keeps its own default interactive one has the confirmation read STDIN — it pas
 only because pest's STDIN yields EOF there, and blocked until killed under an open pipe.
 Measured on macOS: 0s from `/dev/null`, killed at the bound from `(sleep 60) |`. Give the
 command the **same** input the test controls, every time.
+
+## Rule — assert console line endings through `LfBufferedOutput`
+
+**Symfony ends each console line with `PHP_EOL`, so a test comparing a whole `BufferedOutput` buffer against `\n` text passes on Linux and fails on the Windows leg of CI (#186).** Use [`Support/LfBufferedOutput.php`](Support/LfBufferedOutput.php) wherever a test asserts line endings exactly. `toContain` on a single line needs neither.
