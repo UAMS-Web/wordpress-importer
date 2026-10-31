@@ -1568,12 +1568,16 @@ it('asks each overwrite question, and whether to import more, when it can', func
         : " Would you like to import more content? (yes/no) [no]:\n > \n";
 
     // The questions pad their options to the terminal, and a Windows console is wider than 80
+    $columns = \getenv('COLUMNS');
     \putenv('COLUMNS=80');
 
-    // Pages: entries, assets and tables all "Create", then import more. Redirects: sets
-    // "Create", then press Enter to stop at the default, no.
-    [$status, $output] = iwriInteractive($command, [iwriPart($this, [['type' => 'page', 'content' => '[table id=3 /]'], 'redirect_rule'])], "2\n2\n2\nyes\n2\n\n");
-    \putenv('COLUMNS');
+    try {
+        // Pages: entries, assets and tables all "Create", then import more. Redirects: sets
+        // "Create", then press Enter to stop at the default, no.
+        [$status, $output] = iwriInteractive($command, [iwriPart($this, [['type' => 'page', 'content' => '[table id=3 /]'], 'redirect_rule'])], "2\n2\n2\nyes\n2\n\n");
+    } finally {
+        \putenv($columns === false ? 'COLUMNS' : "COLUMNS={$columns}");
+    }
 
     expect($status)->toBe(0)
         ->and(IwriLog::of('entries.entryOverwrite'))->toBe([['Create an additional file']])

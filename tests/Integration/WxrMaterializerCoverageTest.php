@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Assert;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
@@ -317,7 +318,7 @@ it('refuses to write a manifest it cannot encode', function (): void {
 it('refuses to go on when it cannot write the manifest', function (): void {
     // `chmod()` cannot take write access to a directory away on Windows
     if (\PHP_OS_FAMILY === 'Windows') {
-        $this->markTestSkipped('chmod() does not deny writing to a directory on Windows.');
+        Assert::markTestSkipped('chmod() does not deny writing to a directory on Windows.');
     }
 
     wmcFake();

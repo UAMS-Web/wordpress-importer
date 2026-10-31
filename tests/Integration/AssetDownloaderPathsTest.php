@@ -866,18 +866,27 @@ describe('reading a file\'s type', function (): void {
     ]);
 
     it('reads nothing from a file it cannot read', function (): void {
-        // `chmod()` cannot take read access away on Windows
+        $path = assetDownloaderPathsFile('BM00');
+        $user = \escapeshellarg((string) \getenv('USERNAME'));
+
+        // `chmod()` cannot take read access away on Windows, where an ACL does
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('chmod() does not deny reading on Windows.');
+            \exec('icacls '.\escapeshellarg($path).' /deny '.\escapeshellarg((string) \getenv('USERNAME').':(R)').' 2>NUL');
+        } else {
+            \chmod($path, 0000);
         }
 
-        $path = assetDownloaderPathsFile('BM00');
-        \chmod($path, 0000);
+        $result = assetDownloaderPathsCall('detectFileTypeFromMagicBytes', $path);
 
-        expect(assetDownloaderPathsCall('detectFileTypeFromMagicBytes', $path))->toBeNull();
+        if (\PHP_OS_FAMILY === 'Windows') {
+            \exec('icacls '.\escapeshellarg($path).' /remove:d '.$user.' 2>NUL');
+        } else {
+            \chmod($path, 0600);
+        }
 
-        \chmod($path, 0600);
         \unlink($path);
+
+        expect($result)->toBeNull();
     });
 
     it('reads nothing from a file that is not there', function (): void {

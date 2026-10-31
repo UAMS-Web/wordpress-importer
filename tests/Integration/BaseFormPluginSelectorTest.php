@@ -210,8 +210,9 @@ function baseFormPluginSelectorRun(Closure $body, ?string $answers = null): arra
  */
 function baseFormPluginSelectorWithRealPrompts(array $keys, Closure $body): ?array
 {
-    // Laravel Prompts throws on Windows before it reads a key, and the command falls back there
-    if (\PHP_OS_FAMILY === 'Windows') {
+    // Laravel Prompts throws on Windows before it reads a key, and the command falls back
+    // there. With no keys to press the body never reaches a prompt, so it still runs.
+    if (\PHP_OS_FAMILY === 'Windows' && $keys !== []) {
         Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
     }
 

@@ -736,7 +736,7 @@ it('passes over empty files, unparseable files, files with no id and single file
 
     $context = $warnings[0][1] ?? null;
 
-    expect(\str_replace('\\', '/', \is_array($context) ? (string) ($context['file'] ?? '') : ''))->toBe(\str_replace('\\', '/', $bad))
+    expect(\str_replace('\\', '/', \is_array($context) && \is_string($context['file'] ?? null) ? $context['file'] : ''))->toBe(\str_replace('\\', '/', $bad))
         ->and(\is_array($context) && \is_string($context['error'] ?? null) && $context['error'] !== '')->toBeTrue();
 });
 

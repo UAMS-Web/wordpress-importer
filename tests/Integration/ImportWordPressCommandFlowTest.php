@@ -359,7 +359,7 @@ it('imports every part of a split export as one import, saying so', function ():
     [$command, $buffer] = iwcfCommand(['file' => $second]);
 
     expect(iwcfCall($command, 'runImport'))->toBe(7)
-        ->and(\array_map(iwcfSlashes(...), $command->imports[0] ?? []))->toBe([iwcfSlashes($first), iwcfSlashes($second)])
+        ->and(\array_map(static fn (array $parts): array => \array_map(iwcfSlashes(...), $parts), $command->imports))->toBe([[iwcfSlashes($first), iwcfSlashes($second)]])
         ->and(iwcfOutput($buffer))->toBe("Detected split export: importing 2 parts as a single import.\n");
 });
 

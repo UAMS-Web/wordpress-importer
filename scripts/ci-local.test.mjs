@@ -185,12 +185,13 @@ describe('local-ci.json against ci.yml', () => {
                 assert.match(own, /^ {4}runs-on: \$\{\{ matrix\.os \}\}$/m, `${job} does not run on the matrix`)
                 assert.match(own, /^ {8}os: \[ubuntu-latest, windows-latest\]$/m, `${job} does not list both operating systems`)
                 assert.match(own, /^ {6}fail-fast: false$/m, `${job} lets one leg cancel the other`)
+                assert.doesNotMatch(own, /^\s*(?:exclude|include):/m, `${job} narrows its matrix`)
                 assert.match(own, /^ {4}name: .*\(\$\{\{ matrix\.os \}\}\)$/m, `${job}'s checks do not name their operating system`)
             }
         })
 
         it('tolerates no failure, on either operating system', () => {
-            assert.doesNotMatch(ci.slice(ci.indexOf('\njobs:')), /^\s*continue-on-error:/m)
+            assert.doesNotMatch(ci.slice(ci.indexOf('\njobs:')), /^[\s-]*continue-on-error:/m)
         })
 
         it('runs every step in bash, which a Windows runner does not default to', () => {

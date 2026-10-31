@@ -146,6 +146,12 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
             $input = $this->input;
             assert($input instanceof ArrayInput);
 
+            // Laravel Prompts throws on Windows before it reads a key, and the command falls
+            // back there
+            if (\PHP_OS_FAMILY === 'Windows' && $this->keys !== null) {
+                Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+            }
+
             // Only the call itself runs outside the testing environment, so the rest of the
             // run is the test run it is
             app()['env'] = $this->testing ? 'testing' : 'production';
@@ -155,12 +161,6 @@ function navigationMenuSelectorRun(Closure $ask, ?string $answers, bool $prompts
             $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
 
             if ($this->keys !== null) {
-                // Laravel Prompts throws on Windows before it reads a key, and the command
-                // falls back there
-                if (\PHP_OS_FAMILY === 'Windows') {
-                    Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
-                }
-
                 $fallback->setValue(null, false);
                 Prompt::fake($this->keys);
             }
