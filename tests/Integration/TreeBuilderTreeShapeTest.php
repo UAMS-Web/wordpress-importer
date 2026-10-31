@@ -830,7 +830,16 @@ it('reports a delete that returns false as a failure, and still deletes the rest
         ->and(ImportWarningManager::getWarnings('content', 'duplicate_entry_file_not_deleted'))->toBe([$context]);
 
     $log->shouldHaveReceived('error', ['TreeBuilder::cleanupDuplicateEntryFiles: Failed to delete duplicate file', $context]);
-    $log->shouldHaveReceived('info')->once();
+    $log->shouldNotHaveReceived('info', [
+        'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
+        [
+            'collection' => 'pages',
+            'site' => 'default',
+            'entry_id' => 'dupe',
+            'deleted_file' => 'b.md',
+            'kept_file' => 'a.md',
+        ],
+    ]);
     $log->shouldHaveReceived('info', [
         'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
         [
