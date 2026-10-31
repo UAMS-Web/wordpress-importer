@@ -110,12 +110,44 @@ dataset('text beside a shortcode', [
  */
 function shortcodeBlockNodeSummary(array $nodes): array
 {
-    return \array_values(\array_map(
-        static fn (mixed $node): mixed => Arr::get($node, 'type') === 'paragraph'
-            ? \implode('', \array_column((array) Arr::get($node, 'content', []), 'text'))
-            : Arr::get($node, 'type'),
-        $nodes
-    ));
+    $summary = [];
+
+    foreach ($nodes as $node) {
+        $type = \is_array($node) ? ($node['type'] ?? null) : null;
+        $children = \is_array($node) ? ($node['content'] ?? null) : null;
+
+        // Anything but a paragraph reads as its type
+        if ($type !== 'paragraph' || ! \is_array($children)) {
+            $summary[] = $type;
+
+            continue;
+        }
+
+        // A paragraph reads as its text
+        $text = '';
+
+        foreach ($children as $child) {
+            $childText = \is_array($child) ? ($child['text'] ?? null) : null;
+            $text .= \is_string($childText) ? $childText : '';
+        }
+
+        $summary[] = $text;
+    }
+
+    return $summary;
+}
+
+/**
+ * The body nodes of a finalized content block.
+ *
+ * @param  mixed  $content  The finalized content set
+ * @return array<int|string, mixed> Its body, or nothing when it has none
+ */
+function shortcodeBlockBody(mixed $content): array
+{
+    $body = \is_array($content) ? ($content['body'] ?? null) : null;
+
+    return \is_array($body) ? $body : [];
 }
 
 it('keeps the text around a shortcode in its block, on the Bard route', function (string $shortcode): void {
@@ -142,7 +174,7 @@ it('keeps the text around a caption in its block, in place, on the page builder 
     $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
 
     expect($sets['directSets'])->toBe([])
-        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
+        ->and(shortcodeBlockNodeSummary(shortcodeBlockBody($sets['content'])))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
 });
 
 it('keeps the page builder set of a shortcode, and the text around it, on the page builder route', function (string $shortcode, string $setType): void {
@@ -151,7 +183,7 @@ it('keeps the page builder set of a shortcode, and the text around it, on the pa
     $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
 
     expect(Arr::get($sets['directSets'], '0.type'))->toBe($setType)
-        ->and(shortcodeBlockNodeSummary((array) Arr::get($sets['content'], 'body')))->toBe(['Intro', 'Lead  tail', 'Outro']);
+        ->and(shortcodeBlockNodeSummary(shortcodeBlockBody($sets['content'])))->toBe(['Intro', 'Lead  tail', 'Outro']);
 })->with([
     'a show-people' => ['[show-people ids="1"]', 'uamsweb_block_show-people'],
     'a blogroll, which has no Bard set' => ['[blogroll category="x"]', 'uamsweb_block_news'],
