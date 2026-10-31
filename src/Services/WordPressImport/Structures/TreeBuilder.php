@@ -13,6 +13,7 @@ use Statamic\Structures\CollectionStructure;
 use Statamic\Yaml\Yaml;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
 
@@ -691,33 +692,47 @@ class TreeBuilder
 
             // Delete duplicate files
             foreach ($filesToDelete as $fileInfo) {
+                // `delete()` returns false for a file it cannot remove, and rarely throws
                 try {
-                    IlluminateFileFacade::delete($fileInfo['path']);
-                    $output->writeln(
-                        "<comment>Deleted duplicate entry file: {$fileInfo['filename']} (ID: {$entryId})</comment>"
-                    );
-                    Log::info(
-                        'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
-                        [
-                            'collection' => $collectionHandle,
-                            'site' => $site,
-                            'entry_id' => $entryId,
-                            'deleted_file' => $fileInfo['filename'],
-                            'kept_file' => $fileToKeep['filename'],
-                        ]
-                    );
+                    $error = IlluminateFileFacade::delete($fileInfo['path'])
+                        ? null
+                        : 'The filesystem could not delete the file';
                 } catch (\Exception $e) {
+                    $error = $e->getMessage();
+                }
+
+                // A file still on disk is reported as a failure, and the group moves on
+                if ($error !== null) {
+                    $context = [
+                        'collection' => $collectionHandle,
+                        'site' => $site,
+                        'entry_id' => $entryId,
+                        'file' => $fileInfo['path'],
+                        'error' => $error,
+                    ];
+
                     Log::error(
                         'TreeBuilder::cleanupDuplicateEntryFiles: Failed to delete duplicate file',
-                        [
-                            'collection' => $collectionHandle,
-                            'site' => $site,
-                            'entry_id' => $entryId,
-                            'file' => $fileInfo['path'],
-                            'error' => $e->getMessage(),
-                        ]
+                        $context
                     );
+                    ImportWarningManager::addWarning('content', 'duplicate_entry_file_not_deleted', $context);
+
+                    continue;
                 }
+
+                $output->writeln(
+                    "<comment>Deleted duplicate entry file: {$fileInfo['filename']} (ID: {$entryId})</comment>"
+                );
+                Log::info(
+                    'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
+                    [
+                        'collection' => $collectionHandle,
+                        'site' => $site,
+                        'entry_id' => $entryId,
+                        'deleted_file' => $fileInfo['filename'],
+                        'kept_file' => $fileToKeep['filename'],
+                    ]
+                );
             }
         }
     }
