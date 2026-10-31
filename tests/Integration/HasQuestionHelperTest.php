@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Laravel\Prompts\Key;
 use Laravel\Prompts\Prompt;
+use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Helper\FormatterHelper;
 use Symfony\Component\Console\Helper\HelperSet;
 use Symfony\Component\Console\Helper\QuestionHelper;
@@ -15,6 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * `HasQuestionHelper` asks through Laravel Prompts where they are supported and through the
@@ -181,6 +183,12 @@ function hasQuestionHelperRun(Closure $body, ?string $answers = null): array
  */
 function hasQuestionHelperWithRealPrompts(array $keys, Closure $body): mixed
 {
+    // Laravel Prompts throws on Windows before it reads a key, and the command falls back
+    // there. With no keys to press the body never reaches a prompt, so it still runs.
+    if (\PHP_OS_FAMILY === 'Windows' && $keys !== []) {
+        Assert::markTestSkipped('Laravel Prompts does not run on Windows.');
+    }
+
     $fallback = new ReflectionProperty(Prompt::class, 'shouldFallback');
     $fallback->setValue(null, false);
     Prompt::fake($keys);
@@ -529,7 +537,7 @@ it('validates through Laravel Prompts, accepting an empty answer, and offers its
 ]);
 
 it('shows a refused answer its reason as an error', function (bool $prompts): void {
-    $errors = new BufferedOutput(decorated: true);
+    $errors = new LfBufferedOutput(decorated: true);
 
     [$result] = hasQuestionHelperRun(
         fn (InputInterface $input, OutputInterface $output, Command $command): mixed => hasQuestionHelperWithRealPrompts(
