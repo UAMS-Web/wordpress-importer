@@ -679,6 +679,17 @@ it('keeps the indexed file of an undated pair in a dated collection', function (
     expect(treeShapeFilesIn($dir))->toBe(['b.md']);
 });
 
+it('keeps the indexed file when the paths index spells it with other slashes', function (): void {
+    ['dir' => $dir, 'store' => $store] = treeShapeStache();
+    treeShapeCollection();
+    treeShapeFile($dir, 'a.md', 'dupe');
+    $store->paths = ['dupe' => \str_replace('/', '\\', treeShapeFile($dir, 'b.md', 'dupe'))];
+
+    treeShapeBuilder()->cleanup('pages', 'default', new BufferedOutput);
+
+    expect(treeShapeFilesIn($dir))->toBe(['b.md']);
+});
+
 it('keeps the indexed file in an undated collection, even when another is date-prefixed', function (): void {
     ['dir' => $dir, 'store' => $store] = treeShapeStache();
     treeShapeCollection();
@@ -725,7 +736,7 @@ it('passes over empty files, unparseable files, files with no id and single file
 
     $context = $warnings[0][1] ?? null;
 
-    expect(\is_array($context) ? $context['file'] ?? null : null)->toBe($bad)
+    expect(\str_replace('\\', '/', \is_array($context) && \is_string($context['file'] ?? null) ? $context['file'] : ''))->toBe(\str_replace('\\', '/', $bad))
         ->and(\is_array($context) && \is_string($context['error'] ?? null) && $context['error'] !== '')->toBeTrue();
 });
 
@@ -764,7 +775,7 @@ it('logs a file it cannot delete, and moves on', function (): void {
             'collection' => 'pages',
             'site' => 'default',
             'entry_id' => 'dupe',
-            'file' => $first,
+            'file' => \str_replace('\\', '/', \dirname($first)).\DIRECTORY_SEPARATOR.\basename($first),
             'error' => 'locked',
         ],
     ]);
