@@ -3,12 +3,19 @@
 declare(strict_types=1);
 
 use App\Services\BardContentSanitizer;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Database\Schema\Blueprint as SchemaBlueprint;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Statamic\Assets\AssetContainer as ConcreteAssetContainer;
 use Statamic\Entries\Entry as ConcreteEntry;
 use Statamic\Events\EntrySaved;
+use Statamic\Events\StacheCleared;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -16,7 +23,9 @@ use Statamic\Facades\Entry;
 use Statamic\Facades\Fieldset;
 use Statamic\Facades\Path;
 use Statamic\Facades\Stache;
+use Statamic\Filesystem\FlysystemAdapter;
 use Statamic\Globals\GlobalSet as ConcreteGlobalSet;
+use Statamic\Stache\Stores\Store;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
@@ -79,6 +88,17 @@ afterEach(function (): void {
 });
 
 /**
+ * A model on a connection of its own, as the host's asset model is.
+ */
+class VerifyRow extends Model
+{
+    /**
+     * @var string|UnitEnum|null The connection
+     */
+    protected $connection = 'verify_assets';
+}
+
+/**
  * The root of the disk behind the test's asset container.
  */
 function verifyDiskRoot(): string
@@ -110,7 +130,7 @@ function verifyListing(): array
 {
     $listing = [];
 
-    foreach ([\dirname(ContentRoot::collections()), verifyDiskRoot()] as $directory) {
+    foreach ([\dirname(ContentRoot::collections()), verifyDiskRoot(), verifyDiskRoot().'-cache'] as $directory) {
         foreach (File::allFiles($directory, true) as $file) {
             $listing[Path::tidy($file->getPathname())] = (string) \sha1_file($file->getPathname());
         }
@@ -249,6 +269,7 @@ it('puts every location and setting back when the run ends', function (): void {
     $blueprints = Blueprint::directory();
     $fieldsets = Fieldset::directory();
     $forms = config('statamic.forms.forms');
+    $cache = config('cache.default');
 
     verifyRun(true);
 
@@ -257,6 +278,7 @@ it('puts every location and setting back when the run ends', function (): void {
         ->and(Fieldset::directory())->toBe($fieldsets)
         ->and(config('statamic.forms.forms'))->toBe($forms)
         ->and(config('statamic.stache.cache_store'))->toBe('verify_file')
+        ->and(config('cache.default'))->toBe($cache)
         ->and(config('filesystems.disks.verify_assets.root'))->toBe(verifyDiskRoot());
 });
 
@@ -273,10 +295,161 @@ it('refuses an asset disk it cannot copy, and imports nothing', function (): voi
         ->and(verifyListing())->toBe($before);
 });
 
-it('refuses a run when Statamic Git integration is enabled', function (): void {
-    config(['statamic.git.enabled' => true]);
+it('turns off what would act on the host later, and back on afterwards', function (): void {
+    $presets = 'statamic.assets.image_manipulation.generate_presets_on_upload';
 
-    expect(fn () => VerificationWorkspace::enter())->toThrow(RuntimeException::class, 'Statamic Git integration is enabled');
+    config([
+        'statamic.git.enabled' => true,
+        'statamic.git.automatic' => true,
+        $presets => true,
+        'queue.default' => 'redis',
+    ]);
+
+    $workspace = VerificationWorkspace::enter();
+    $during = [config('statamic.git.automatic'), config($presets), config('queue.default')];
+    $workspace->leave();
+
+    expect($during)->toBe([false, false, 'sync'])
+        ->and(config('statamic.git.automatic'))->toBeTrue()
+        ->and(config($presets))->toBeTrue()
+        ->and(config('queue.default'))->toBe('redis');
+});
+
+it('does not take a dataless entry the host already has for one the run made', function (): void {
+    $file = ContentRoot::collections().'/redirect_domains/default/already-here.md';
+    File::ensureDirectoryExists(\dirname($file));
+    \file_put_contents($file, "---\nid: already-here\n---\n");
+
+    // A copy takes the current time, so this puts it in a later second than a stamp taken
+    // before the workspace was set up, which a large site reaches without help
+    Event::listen(TransactionBeginning::class, function (): void {
+        \usleep(1_100_000);
+    });
+
+    [$status, $output] = verifyRun(true);
+
+    expect($status)->toBe(0)
+        ->and($output)->not->toContain('dataless entry file')
+        ->and(\is_file($file))->toBeTrue();
+});
+
+it('leaves the store that has no directory alone', function (): void {
+    // Statamic registers `assets` with no directory and tidies it to '/', which prefixes
+    // every absolute path on macOS and Linux; the test case's fake directory hides that
+    $store = Stache::store('assets');
+    \assert($store instanceof Store);
+    $store->directory(null);
+
+    $workspace = VerificationWorkspace::enter();
+    $moved = $store->directory();
+    $workspace->leave();
+
+    expect($moved)->toBe('/');
+});
+
+it('rolls back what a run writes to the database', function (): void {
+    Schema::create('verify_rows', function (SchemaBlueprint $table): void {
+        $table->string('value');
+    });
+
+    Event::listen(EntrySaved::class, function (): void {
+        DB::table('verify_rows')->insert(['value' => 'saved']);
+    });
+
+    verifyRun(true);
+    $afterVerification = DB::table('verify_rows')->count();
+
+    verifyRun(false);
+
+    expect($afterVerification)->toBe(0)
+        ->and(DB::table('verify_rows')->count())->toBeGreaterThan(0);
+});
+
+it('holds the connection behind an Eloquent repository, and releases it', function (): void {
+    config([
+        'database.connections.verify_assets' => ['driver' => 'sqlite', 'database' => ':memory:'],
+        'statamic.eloquent-driver.assets' => ['driver' => 'eloquent', 'model' => VerifyRow::class],
+        'statamic.eloquent-driver.entries' => ['driver' => 'file', 'model' => 'Not\A\Model'],
+    ]);
+
+    $workspace = VerificationWorkspace::enter();
+    $during = DB::connection('verify_assets')->transactionLevel();
+    $workspace->leave();
+
+    expect($during)->toBe(1)
+        ->and(DB::connection('verify_assets')->transactionLevel())->toBe(0);
+});
+
+it('moves the directory the host dual-writes asset metadata to', function (): void {
+    File::ensureDirectoryExists(verifyDiskRoot().'-metadata');
+    \file_put_contents(verifyDiskRoot().'-metadata/1.yml', 'alt: kept');
+    config(['asset_metadata.yaml_directory' => verifyDiskRoot().'-metadata']);
+
+    $workspace = VerificationWorkspace::enter();
+    $during = config()->string('asset_metadata.yaml_directory');
+    $copied = \file_get_contents($during.'/1.yml');
+    $workspace->leave();
+
+    expect(\str_starts_with($during, $workspace->root()))->toBeTrue()
+        ->and($copied)->toBe('alt: kept')
+        ->and(config('asset_metadata.yaml_directory'))->toBe(verifyDiskRoot().'-metadata');
+
+    File::deleteDirectory(verifyDiskRoot().'-metadata');
+});
+
+it('sends an upload through a container to the copy', function (): void {
+    $workspace = VerificationWorkspace::enter();
+    $during = AssetContainer::findByHandle('verify');
+    \assert($during instanceof ConcreteAssetContainer);
+    $disk = $during->disk();
+    \assert($disk instanceof FlysystemAdapter);
+    $disk->put('uploaded.txt', 'written during the run');
+    $copy = config()->string('filesystems.disks.verify_assets.root').'/uploaded.txt';
+    $reached = \is_file($copy);
+    $workspace->leave();
+
+    expect($reached)->toBeTrue()
+        ->and(\is_file(verifyDiskRoot().'/uploaded.txt'))->toBeFalse();
+});
+
+it('reports a copy that fails with a PHP warning as a refusal', function (): void {
+    $calls = 0;
+
+    Storage::shouldReceive('forgetDisk')->andReturnUsing(function () use (&$calls): void {
+        if (++$calls === 1) {
+            throw new ErrorException('copy(): Permission denied');
+        }
+    });
+
+    expect(fn () => VerificationWorkspace::enter())->toThrow(RuntimeException::class, 'copy(): Permission denied');
+});
+
+it('puts everything back when the setup fails partway', function (): void {
+    $directories = Stache::stores()->map(fn ($store) => $store->directory())->all();
+    $calls = 0;
+
+    Storage::shouldReceive('forgetDisk')->andReturnUsing(function () use (&$calls): void {
+        if (++$calls === 1) {
+            throw new RuntimeException('the disk would not move');
+        }
+    });
+
+    expect(fn () => VerificationWorkspace::enter())->toThrow(RuntimeException::class, 'the disk would not move')
+        ->and(Stache::stores()->map(fn ($store) => $store->directory())->all())->toBe($directories)
+        ->and(config('statamic.stache.cache_store'))->toBe('verify_file')
+        ->and(DB::connection()->transactionLevel())->toBe(0);
+});
+
+it('still deletes the copy and restores when the final clear fails', function (): void {
+    $workspace = VerificationWorkspace::enter();
+
+    Event::listen(StacheCleared::class, function (): void {
+        throw new RuntimeException('the clear failed');
+    });
+
+    expect($workspace->leave())->toBeTrue()
+        ->and(\is_dir($workspace->root()))->toBeFalse()
+        ->and(config('statamic.stache.cache_store'))->toBe('verify_file');
 });
 
 it('removes a nested disk with the disk that holds it, sharing one copy', function (): void {

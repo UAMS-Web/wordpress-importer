@@ -268,14 +268,16 @@ You can choose whether to continue after warnings are shown.
 php artisan statamic:import:wordpress storage/app/imports/gouams-com --source=api --network=https://go.uams.edu --site=3 --content-type=redirect_rule --verify
 ```
 
-**How it works.** At the start of the run the Stache stores, the blueprints, fieldsets and forms, and the disks behind the asset containers are copied to a directory under the system temporary directory, and this process is pointed at the copy, with its caches held in memory. The copy is deleted when the run ends, whether it succeeds or fails. An import writes from too many places, and depends too much on what is already stored, for a run that wrote nothing to report the same counts.
+**How it works.** At the start of the run the Stache stores, the blueprints, fieldsets and forms, and the disks behind the asset containers are copied to a directory under the system temporary directory, and this process is pointed at the copy, with its caches held in memory. Database writes stay inside a transaction on the default connection and on each connection behind an Eloquent Statamic repository, and that transaction is rolled back. The copy is deleted when the run ends, whether it succeeds or fails. An import writes from too many places, and depends too much on what is already stored, for a run that wrote nothing to report the same counts.
 
-- **The guarantee covers the content and asset directories.** They are not written to, even if the run fails or is killed. A killed run leaves its copy behind under the temporary directory (`wordpress-import-verify-*`), which is safe to delete.
+- **The guarantee covers the content and asset directories, and the host's asset metadata directory (`asset_metadata.yaml_directory`).** They are not written to, even if the run fails or is killed. A killed run leaves its copy behind under the temporary directory (`wordpress-import-verify-*`), which is safe to delete.
 - **The search index rebuild and the Laravel cache clear are skipped**, since both act on this application rather than on the copy. Bard sanitization and the dataless entry sweep run against the copy.
 - **`--source=api` still materializes its WXR parts** into the directory the `file` argument names.
 - **The copy costs disk space and time** in proportion to the content and asset directories, so check there is room in the temporary directory first.
-- **A setup that cannot be contained is refused**, and nothing is imported: an asset container on a disk that is not local, or Statamic's Git integration turned on.
-- **Listeners the host application registers are not contained.** A listener that writes to its own location on an entry save still runs.
+- **Automatic Git commits and preset image generation are off for the run, and jobs run synchronously**, so a save queues no commit of this application's repository and leaves nothing for a worker to do later.
+- **A database write holds its connection's write lock until the run ends.** On SQLite that blocks other writers to that database for the rest of the run.
+- **A setup that cannot be contained is refused**, and nothing is imported: an asset container on a disk that is not local.
+- **Listeners the host application registers are not contained.** A listener that writes to its own location on an entry save still runs, and so does a write to a connection the list above does not name. A failed download still clears that image's cached derivative.
 
 ## Navigation Menu Import
 

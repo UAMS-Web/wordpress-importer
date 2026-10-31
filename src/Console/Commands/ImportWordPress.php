@@ -547,6 +547,9 @@ class ImportWordPress extends Command
             return 1;
         }
 
+        // The copies are newer than the old stamp, and the sweep bounds itself by it
+        $this->runStartedAt = \microtime(true);
+
         $this->info('Verification run: writing to a temporary copy. This application\'s content and assets will not change.');
 
         try {

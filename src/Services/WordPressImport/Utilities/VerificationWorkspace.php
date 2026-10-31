@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
 
+use ErrorException;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Statamic\Assets\AssetContainer as StatamicAssetContainer;
@@ -40,8 +45,15 @@ use Throwable;
  * duplicate of itself, so no path read from the host's cache may survive into the run. The
  * in-memory store also keeps a verification run from clearing the host's own cache.
  *
+ * **Databases are held rather than copied.** Asset metadata and the knowledge base's engagement
+ * counts are rows, not files, so each connection a run can write through stays inside one
+ * transaction that is rolled back at the end, and a killed run's transaction dies with it.
+ *
  * A setup that cannot be fully contained is refused, not attempted, because a partly moved
  * run is the failure this class exists to prevent.
+ *
+ * Statamic keeps per-run state a store exposes no way to reset (`Store::$usedIndexes`, Blink's
+ * named stores), so the process should end after {@see self::leave()}, as the command does.
  */
 class VerificationWorkspace
 {
@@ -59,6 +71,10 @@ class VerificationWorkspace
         'statamic.stache.cache_store',
         'cache.default',
         'statamic.forms.forms',
+        'statamic.git.automatic',
+        'statamic.assets.image_manipulation.generate_presets_on_upload',
+        'queue.default',
+        'asset_metadata.yaml_directory',
     ];
 
     /**
@@ -88,6 +104,13 @@ class VerificationWorkspace
      * @var array<string, string>
      */
     private array $savedDiskRoots = [];
+
+    /**
+     * The connections holding a transaction for this run.
+     *
+     * @var list<Connection>
+     */
+    private array $heldConnections = [];
 
     /**
      * The blueprint directory to restore, or null while it has not moved.
@@ -121,7 +144,8 @@ class VerificationWorkspace
             // Whatever moved before the failure is moved back, then the failure is the caller's
             $workspace->leave();
 
-            throw $e;
+            // A failed filesystem call arrives as a PHP warning Laravel has turned into this
+            throw $e instanceof ErrorException ? new RuntimeException($e->getMessage(), 0, $e) : $e;
         }
 
         return $workspace;
@@ -140,9 +164,12 @@ class VerificationWorkspace
             if ($this->savedStores !== []) {
                 Stache::clear();
             }
-        } finally {
-            $this->restore();
+        } catch (Throwable $e) {
+            // The stores go back regardless, and the run's own failure must not be replaced
+            Log::warning("Verification workspace: the Stache could not be cleared: {$e->getMessage()}");
         }
+
+        $this->restore();
 
         return ! \is_dir($this->root) || File::deleteDirectory($this->root);
     }
@@ -164,11 +191,6 @@ class VerificationWorkspace
      */
     private function prepare(): void
     {
-        // Git automation would commit the run's saves, and it reads the host's repository
-        if (config('statamic.git.enabled') === true) {
-            throw new RuntimeException('Statamic Git integration is enabled, so a save during the run could reach the repository.');
-        }
-
         // Read while the Stache still answers from the host's directories
         $diskRoots = $this->localAssetDiskRoots();
 
@@ -178,12 +200,13 @@ class VerificationWorkspace
 
         // First, so nothing later can read a path from the host's cache
         $this->moveCaches();
+        $this->holdConnections();
         $this->copyDirectories($diskRoots);
         $this->moveStores();
         $this->moveTemplates();
         $this->moveDisks($diskRoots);
 
-        // Forget everything held in memory from before the move
+        // Forget what the Stache and Blink's default store hold from before the move
         Stache::clear();
         Blink::flush();
 
@@ -203,7 +226,7 @@ class VerificationWorkspace
 
         foreach (AssetContainer::all() as $container) {
             if (! $container instanceof StatamicAssetContainer) {
-                continue;
+                throw new RuntimeException('An asset container of an unknown class cannot be copied.');
             }
 
             $handle = $container->diskHandle();
@@ -237,11 +260,61 @@ class VerificationWorkspace
         config([
             'statamic.stache.cache_store' => self::CACHE_STORE,
             'cache.default' => self::CACHE_STORE,
+
+            // Read on each save, so a save in the run queues no commit of the host's repository
+            'statamic.git.automatic' => false,
+
+            // Derivatives are written to the host's image cache, outside the workspace
+            'statamic.assets.image_manipulation.generate_presets_on_upload' => false,
+
+            // A worker would run a job later, against the host, naming a deleted file
+            'queue.default' => 'sync',
         ]);
 
         Cache::store(self::CACHE_STORE)->clear();
 
         $this->reloadStoreState();
+    }
+
+    /**
+     * Begin a transaction on every connection the run can write through.
+     */
+    private function holdConnections(): void
+    {
+        foreach ($this->writableConnections() as $name) {
+            $connection = DB::connection($name);
+
+            $connection->beginTransaction();
+
+            $this->heldConnections[] = $connection;
+        }
+    }
+
+    /**
+     * The default connection, and each one behind an Eloquent Statamic repository.
+     *
+     * @return list<string|null>
+     */
+    private function writableConnections(): array
+    {
+        $names = [DB::getDefaultConnection()];
+        $repositories = config('statamic.eloquent-driver');
+
+        foreach (\is_array($repositories) ? $repositories : [] as $repository) {
+            $model = \is_array($repository) ? ($repository['model'] ?? null) : null;
+
+            // A model reads its connection in its constructor, as the host's Asset does
+            if (
+                \is_array($repository)
+                && ($repository['driver'] ?? null) === 'eloquent'
+                && \is_string($model)
+                && \is_subclass_of($model, Model::class)
+            ) {
+                $names[] = (new $model)->getConnectionName();
+            }
+        }
+
+        return \array_values(\array_unique($names));
     }
 
     /**
@@ -295,6 +368,12 @@ class VerificationWorkspace
     private function copyDirectories(array $diskRoots): void
     {
         $sources = \array_merge($diskRoots, $this->templateDirectories());
+
+        $metadata = $this->assetMetadataDirectory();
+
+        if ($metadata !== null) {
+            $sources[] = $metadata;
+        }
 
         foreach ($this->stores() as $store) {
             $sources[] = $this->storeDirectory($store);
@@ -355,6 +434,24 @@ class VerificationWorkspace
         Fieldset::setDirectory($this->requireCopyOf($directories['fieldsets']));
 
         config(['statamic.forms.forms' => $this->requireCopyOf($directories['forms'])]);
+
+        $metadata = $this->assetMetadataDirectory();
+
+        if ($metadata !== null) {
+            config(['asset_metadata.yaml_directory' => $this->requireCopyOf($metadata)]);
+        }
+    }
+
+    /**
+     * The directory the host dual-writes asset metadata to, outside every store.
+     *
+     * @return ?string The directory, or null when the host keeps none
+     */
+    private function assetMetadataDirectory(): ?string
+    {
+        $directory = config('asset_metadata.yaml_directory');
+
+        return \is_string($directory) && $directory !== '' ? $directory : null;
     }
 
     /**
@@ -387,6 +484,12 @@ class VerificationWorkspace
             $directories[] = $this->storeDirectory($store);
         }
 
+        $metadata = $this->assetMetadataDirectory();
+
+        if ($metadata !== null) {
+            $directories[] = $metadata;
+        }
+
         foreach (\array_keys($this->savedDiskRoots) as $handle) {
             $root = config("filesystems.disks.{$handle}.root");
 
@@ -405,6 +508,17 @@ class VerificationWorkspace
      */
     private function restore(): void
     {
+        foreach ($this->heldConnections as $connection) {
+            try {
+                $connection->rollBack(0);
+            } catch (Throwable $e) {
+                // A lost connection has already abandoned its transaction
+                Log::warning("Verification workspace: the transaction on '{$connection->getName()}' could not be rolled back: {$e->getMessage()}");
+            }
+        }
+
+        $this->heldConnections = [];
+
         foreach ($this->savedStores as $saved) {
             $saved['store']->directory($saved['directory']);
         }
@@ -451,8 +565,8 @@ class VerificationWorkspace
         $stores = [];
 
         foreach (Stache::stores() as $store) {
-            // Statamic documents a string, and `assets`, which has no directory, answers null
-            if ((bool) $store->directory()) {
+            // `assets` has no directory, which Statamic registers as null and tidies to '/'
+            if (\rtrim($store->directory(), '/') !== '') {
                 $stores[] = $store;
             }
         }
