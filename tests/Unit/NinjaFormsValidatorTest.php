@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator;
 
 /**
  * Validation of `.nff` export files (#10).

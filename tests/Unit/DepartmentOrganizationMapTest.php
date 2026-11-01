@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/DepartmentOrganizationMapTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
 
 it('returns the designated organization for a mapped site', function (): void {
     $map = new DepartmentOrganizationMap(

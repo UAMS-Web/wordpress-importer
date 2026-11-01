@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Globals;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals;
 
 /**
  * The result of applying one site's `department_organization` designation.

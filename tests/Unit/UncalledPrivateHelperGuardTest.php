@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\PrivateMethodUsage;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\PrivateMethodUsage;
 
 /**
  * Guards the class of residue wordpress-importer-archive#533 / wordpress-importer-archive#740 removed, rather than its instances.

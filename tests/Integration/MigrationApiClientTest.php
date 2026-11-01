@@ -7,9 +7,9 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * The migration API client (issue wordpress-importer-archive#657).

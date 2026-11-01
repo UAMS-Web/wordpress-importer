@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits;
 
 /**
  * Trait for a prompt that ends the command run when it has nothing to offer.

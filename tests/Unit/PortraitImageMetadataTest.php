@@ -20,8 +20,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/PortraitImageMetadataTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 
 it('carries alt, caption, and creator off the attachment', function (): void {
     $metadata = FileProcessor::buildAttachmentImageMetadata([

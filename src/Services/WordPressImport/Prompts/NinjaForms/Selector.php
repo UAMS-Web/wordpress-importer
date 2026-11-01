@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator as NinjaFormsValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator as NinjaFormsValidator;
 
 /**
  * Handles user interaction for Ninja Forms export file selection.

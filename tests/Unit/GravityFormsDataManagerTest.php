@@ -9,8 +9,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/GravityFormsDataManagerTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
 
 it('names its plugin and starts empty', function (): void {
     $manager = new DataManager;

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseContentDetector;
 
 /**
  * Detects Gravity Forms usage in WordPress XML export content.

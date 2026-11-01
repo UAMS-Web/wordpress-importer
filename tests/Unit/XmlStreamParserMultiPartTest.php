@@ -9,8 +9,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/XmlStreamParserMultiPartTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 beforeEach(function (): void {
     // Create an isolated scratch directory for this test's part fixtures

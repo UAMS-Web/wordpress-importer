@@ -17,14 +17,14 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

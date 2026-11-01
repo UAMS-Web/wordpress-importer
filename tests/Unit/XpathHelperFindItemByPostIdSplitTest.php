@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/XpathHelperFindItemByPostIdSplitTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 beforeEach(function (): void {
     // Create an isolated scratch directory for this test's part fixtures

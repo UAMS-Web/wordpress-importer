@@ -18,7 +18,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TextProcessorParseLimitsTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 it('keeps text nested past libxml\'s default depth, as unclosed links in real content do', function (): void {
     // Unclosed <a><strong> pairs, each nesting inside the last, as on the clinicaleducation pages

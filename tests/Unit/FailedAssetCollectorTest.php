@@ -12,7 +12,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/FailedAssetCollectorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
 
 beforeEach(function (): void {
     FailedAssetCollector::clearFailedUrls();

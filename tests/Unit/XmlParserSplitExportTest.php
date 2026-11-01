@@ -9,8 +9,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/XmlParserSplitExportTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Write a WXR part whose channel metadata is fixed (duplicated across parts) and

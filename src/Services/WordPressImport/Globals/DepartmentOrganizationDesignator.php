@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Globals;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals;
 
 use Statamic\Entries\Entry;
 use Statamic\Facades\GlobalSet;
 use Statamic\Globals\Variables as StatamicVariables;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
 
 /**
  * Writes a site's `department_organization` designation into

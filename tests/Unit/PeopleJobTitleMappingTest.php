@@ -26,7 +26,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/PeopleJobTitleMappingTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
 
 beforeEach(function (): void {
     $this->creator = new PeopleEntryCreator;

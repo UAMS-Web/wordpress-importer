@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\RssBlockParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\WordPressCoreBlockParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\RssBlockParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\WordPressCoreBlockParser;
 
 /**
  * An RSS block parser that records what it is given.

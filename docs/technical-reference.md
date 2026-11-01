@@ -14,11 +14,11 @@ This file focuses on:
 
 ## Overview
 
-The `ImportWordPress` Artisan command is provided by the Composer package **`uams-web/wordpress-importer`**. In this repository, implementation code lives under `src/`; when the package is installed in a Statamic app, it is typically under `vendor/uams-web/wordpress-importer/src/`. The command imports a WordPress WXR export into Statamic with interactive prompts, content-type mapping, asset handling, and taxonomy validation.
+The `ImportWordPress` Artisan command is provided by the Composer package **`uams-web/aether-wordpress-importer`**. In this repository, implementation code lives under `src/`; when the package is installed in a Statamic app, it is typically under `vendor/uams-web/aether-wordpress-importer/src/`. The command imports a WordPress WXR export into Statamic with interactive prompts, content-type mapping, asset handling, and taxonomy validation.
 
-- **Command class**: `UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress`
-- **Importer services**: `UAMSWeb\WordPressImporter\Services\WordPressImport\...`
-- **Registration**: `UAMSWeb\WordPressImporter\ServiceProvider` (Statamic addon service provider)
+- **Command class**: `UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress`
+- **Importer services**: `UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\...`
+- **Registration**: `UAMSWeb\Aether\WordPressImporter\ServiceProvider` (Statamic addon service provider)
 
 ## Usage
 
@@ -1965,7 +1965,7 @@ The address is refused unless it is an absolute `https://` URL carrying a host, 
 
 ### Cleaning API-sourced content
 
-`news.uams.edu`'s WXR export is cleaned with [`uams-web/wordpress-wxr-cleanup`](https://github.com/UAMS-Web/wordpress-wxr-cleanup) before it is imported. When the same site is read through the migration API, the importer runs that cleaner itself: `WxrMaterializer` passes every part it writes through `Transform::withDefaultRules()`, the pipeline the cleaner's CLI runs. So a post maps the same way from either source (#1303).
+`news.uams.edu`'s WXR export is cleaned with [`uams-web/aether-wordpress-importer-cleanup`](https://github.com/UAMS-Web/aether-wordpress-importer-cleanup) before it is imported. When the same site is read through the migration API, the importer runs that cleaner itself: `WxrMaterializer` passes every part it writes through `Transform::withDefaultRules()`, the pipeline the cleaner's CLI runs. So a post maps the same way from either source (#1303).
 
 Only listed sites are cleaned, matched against the host of the site's `base_blog_url`:
 

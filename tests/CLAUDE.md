@@ -23,7 +23,7 @@ A new test's base class and its directory must agree: a host-bound test dropped 
 | `Tests\TestCase` (via `use Tests\TestCase;`) | `tests/Feature` | the **full host Statamic app** (`CreatesApplication`): real collections, blueprints, Stache, DB | needs the **real content model** (real entries/terms/collections/blueprints), a real import, behavior of the host's **console-kernel dispatcher** itself, or an external fixture corpus (see the signal below) |
 | `StatamicTestCase` (via `uses(StatamicTestCase::class)`) | `tests/Integration` | a **minimal Statamic** via Orchestra Testbench (`AddonTestCase`) — the importer provider, container, facades; **no** real content | needs a booted container / Statamic facades / container-resolved services, but **not** real collections/entries/terms/Stache |
 | `LaravelHttpTestCase` (same namespace, no import) | `tests/Unit` | a **minimal Laravel app**: container + events + HTTP/console kernels + `Illuminate\Http\Client\Factory`. **No config repository, no Statamic.** | its *only* framework need is `Http::fake()` / the HTTP client |
-| `TestCase` with **no** `use Tests\TestCase;` → this package's `UAMSWeb\WordPressImporter\Tests\TestCase` | `tests/Unit` | **nothing** — a bare `PHPUnit\Framework\TestCase` | is pure logic: string/XML parsing, reflection on plain objects, fully-mocked collaborators that never hit the container |
+| `TestCase` with **no** `use Tests\TestCase;` → this package's `UAMSWeb\Aether\WordPressImporter\Tests\TestCase` | `tests/Unit` | **nothing** — a bare `PHPUnit\Framework\TestCase` | is pure logic: string/XML parsing, reflection on plain objects, fully-mocked collaborators that never hit the container |
 
 ### The signal — how much boot does it need?
 
@@ -52,7 +52,7 @@ Host-bound tests (everything in `tests/Feature/`) run **only inside the host Sta
 
 ```
 cd /path/to/uams-statamic
-php artisan test vendor/uams-web/wordpress-importer/tests/Feature/…
+php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/…
 ```
 
 They do **not** run in standalone package CI (which runs `tests/Unit` and `tests/Integration`), and neither `composer test` nor PHPStan catches a wrong base class. Only the host-app run does. When you re-link or add a host-bound test, verify it there — the `host-app-tests` skill is the setup + run procedure.

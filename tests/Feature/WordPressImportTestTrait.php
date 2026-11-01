@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Feature;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Feature;
 
 use Mockery\CompositeExpectation;
 use Mockery\Expectation;
@@ -20,27 +20,27 @@ use Statamic\Stache\Repositories\CollectionTreeRepository;
 use Statamic\Stache\Stache;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\LogoListItemEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PageEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleNotices;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleState;
-use UAMSWeb\WordPressImporter\Tests\Support\IsolatedStateScratch;
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\LogoListItemEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PageEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleNotices;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleState;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\IsolatedStateScratch;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 /**
  * Trait for WordPress import test utilities.

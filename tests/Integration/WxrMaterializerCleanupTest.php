@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Http;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UamsWeb\WxrCleanup\Transform;
+use UAMSWeb\Aether\WordPressImporter\Cleanup\Transform;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * The WXR cleaner runs on migration API content for the sites whose exports it cleans (wordpress-importer-archive#1303).
  *
- * The WXR workflow cleans `news.uams.edu`'s export with `uams-web/wordpress-wxr-cleanup`
+ * The WXR workflow cleans `news.uams.edu`'s export with `uams-web/aether-wordpress-importer-cleanup`
  * before importing it. Content read through the migration API did not pass through the
  * cleaner, so the same post mapped differently depending on its source. These tests read the
  * materialized parts back with the real `XmlParser`, the class the importer reads exports with.

@@ -5,9 +5,9 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 
 uses(TestCase::class);
 
@@ -32,7 +32,7 @@ afterEach(function (): void {
  * downstream when each block parser runs them through
  * `TextProcessor::processForBard()` / `HtmlTagStripper::strip()`.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/AcfBlockEntityDecodeTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/AcfBlockEntityDecodeTest.php
  */
 it('keeps a uams-content block with a &quot; entity and round-trips the value', function (): void {
     $logSpy = Log::spy();

@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\PasswordVerifier;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\PasswordVerifier;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests that `PasswordVerifier` verifies against a hash and nothing else (issue #5).

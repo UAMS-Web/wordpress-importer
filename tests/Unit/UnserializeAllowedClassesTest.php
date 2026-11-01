@@ -15,8 +15,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/UnserializeAllowedClassesTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AttachmentCreditResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AttachmentCreditResolver;
 
 /**
  * Probe object whose `__wakeup()` records that it ran, used to prove postmeta

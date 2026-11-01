@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\KbTopicsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\MinervaKBBlockParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\KbTopicsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\MinervaKBBlockParser;
 
 /**
  * A topics parser that records what it is given.

@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 use PHPUnit\Framework\Assert;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
 
 /**
  * Remember a temporary file for cleanup, or hand back and forget every one so far.

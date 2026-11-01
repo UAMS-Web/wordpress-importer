@@ -1,6 +1,6 @@
 # Decisions
 
-The durable, terse cross-ticket decision log for `UAMS-Web/wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, newest at the bottom of its section. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
+The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, newest at the bottom of its section. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
 
 ## Versioning and releases
 
@@ -27,7 +27,7 @@ Flip `hitl` → `afk` in the *same change* that records a fork's resolution. An 
 
 ## Test base-class selection
 
-Every test extends one of **three** base classes, chosen by whether it needs the booted host app: `Tests\TestCase` (full host Statamic app), `LaravelHttpTestCase` (minimal Laravel — HTTP client only), or the bare package `UAMSWeb\WordPressImporter\Tests\TestCase` (pure `PHPUnit\Framework\TestCase`). Never "fix" a PHPStan error by downgrading a host-bound test's base class — that trades a static nit for a silent runtime break. The rule and its rationale live in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (refs `wordpress-importer-archive#366`, `wordpress-importer-archive#359`).
+Every test extends one of **three** base classes, chosen by whether it needs the booted host app: `Tests\TestCase` (full host Statamic app), `LaravelHttpTestCase` (minimal Laravel — HTTP client only), or the bare package `UAMSWeb\Aether\WordPressImporter\Tests\TestCase` (pure `PHPUnit\Framework\TestCase`). Never "fix" a PHPStan error by downgrading a host-bound test's base class — that trades a static nit for a silent runtime break. The rule and its rationale live in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (refs `wordpress-importer-archive#366`, `wordpress-importer-archive#359`).
 
 ## Test framework and boot model — Pest, with testbench for the light Statamic band
 

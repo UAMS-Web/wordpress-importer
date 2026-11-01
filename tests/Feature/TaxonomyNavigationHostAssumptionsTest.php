@@ -6,11 +6,11 @@ use Statamic\Contracts\Structures\Nav as NavContract;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Nav as NavFacade;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
@@ -37,7 +37,7 @@ uses(WordPressImportTestCase::class);
  * against the same Statamic structures, so the marginal value here does not
  * justify pointing a destructive write at real content.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/TaxonomyNavigationHostAssumptionsTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/TaxonomyNavigationHostAssumptionsTest.php
  */
 
 /**

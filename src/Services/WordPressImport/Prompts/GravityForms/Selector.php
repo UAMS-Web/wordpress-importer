@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator as GravityFormsValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator as GravityFormsValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
 
 /**
  * Handles user interaction for Gravity Forms export file selection.

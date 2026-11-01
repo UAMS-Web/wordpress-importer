@@ -27,8 +27,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/Issue378RegressionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 // Reset the protected static URL->post-ID map before and after each test so
 // state does not leak across the suite.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseFormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseFormIdExtractor;
 
 /**
  * Extracts Gravity Forms IDs from WordPress XML export content.

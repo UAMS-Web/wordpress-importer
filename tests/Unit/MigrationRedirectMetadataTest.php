@@ -26,7 +26,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/MigrationRedirectMetadataTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Build a WXR `<item>` carrying the given post id and author nicename.

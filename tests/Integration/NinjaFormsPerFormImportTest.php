@@ -7,10 +7,10 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Fields\Blueprint;
 use Statamic\Fields\Field;
 use Statamic\Forms\Form;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 require_once __DIR__.'/../Support/form-audit-test-support.php';
 

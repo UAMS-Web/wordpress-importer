@@ -12,7 +12,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/OutboundUrlGuardTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 
 afterEach(function (): void {
     // Restore the system resolver, or an injected fake leaks into every later

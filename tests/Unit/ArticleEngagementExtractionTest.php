@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\KnowledgeBase\ArticleEngagementSeeder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\KnowledgeBase\ArticleEngagementSeeder;
 
 /**
  * Tests the MinervaKB → sideband-store mapping (issue wordpress-importer-archive#427).

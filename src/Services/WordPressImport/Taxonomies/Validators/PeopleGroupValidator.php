@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\Validators;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
 
 /**
  * Validates people_group taxonomy terms used in people entries and show-people

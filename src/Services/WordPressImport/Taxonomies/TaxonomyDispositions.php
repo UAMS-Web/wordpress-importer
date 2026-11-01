@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies;
 
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 
 /**
  * Records the destination *shape* each WordPress taxonomy imports into.
@@ -115,7 +115,7 @@ final class TaxonomyDispositions
         // `nav_menu` deliberately does NOT belong here, though it looks like it
         // should. Navigation IS imported, through `nav_menu_item` posts read
         // straight from the export by
-        // {@see \UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector}.
+        // {@see \UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector}.
         // Recording it would make the term pass announce "N term(s) not
         // imported" for menus that imported fine — so it is left unrecorded and
         // tracked as owned-elsewhere, exactly as `kbtopic` is.

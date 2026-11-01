@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormBlueprintCreatorTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormBlueprintCreatorTrait;
 
 /**
  * Creates Statamic form blueprints from Ninja Forms exports.

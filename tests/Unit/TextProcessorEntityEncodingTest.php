@@ -15,7 +15,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TextProcessorEntityEncodingTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * Run a fragment through the load/save round-trip TextProcessor uses.

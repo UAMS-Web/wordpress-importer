@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ApplyValueCalculationTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FieldtypeMapping;
 
 /**
  * Invoke the trait's protected static calculation helper on the concrete class.

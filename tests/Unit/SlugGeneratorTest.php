@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/SlugGeneratorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SlugGenerator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SlugGenerator;
 
 it('uses the WordPress slug when there is one, ignoring the title', function (): void {
     [$slug] = SlugGenerator::generateSlugAndId('about-us', '42', 'A Different Title');

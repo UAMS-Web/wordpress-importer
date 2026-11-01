@@ -13,8 +13,8 @@ declare(strict_types=1);
 use Statamic\Entries\Entry;
 use Statamic\Facades\Site;
 use Statamic\Sites\Site as StatamicSite;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

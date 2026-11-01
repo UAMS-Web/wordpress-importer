@@ -12,9 +12,9 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AudioSeriesRegistryTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesRegistry;
 
 /**
  * Clear the registry's initialized flag and the manager's registered series.

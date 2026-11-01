@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Support;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 
 /**
  * Process-wide record of `content/` observations already reported.

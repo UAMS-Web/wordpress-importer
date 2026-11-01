@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/LinkHelperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkHelper;
 
 /**
  * A class that records being woken from a serialized string.

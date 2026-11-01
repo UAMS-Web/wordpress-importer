@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities;
 
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -713,7 +713,7 @@ trait FormBlueprintCreatorTrait
         $currentClass = $this::class;
 
         // Extract the plugin name from the class namespace
-        // e.g., "UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormBlueprintCreator"
+        // e.g., "UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormBlueprintCreator"
         // becomes "FormidableForms"
         $namespaceParts = \explode(
             '\\',
@@ -722,7 +722,7 @@ trait FormBlueprintCreatorTrait
         $pluginName = $namespaceParts[\count($namespaceParts) - 2]; // Second to last part
 
         // Construct the mapping class name
-        $mappingClass = "UAMSWeb\\WordPressImporter\\Services\\WordPressImport\\Forms\\Utilities\\{$pluginName}\\FieldtypeMapping";
+        $mappingClass = "UAMSWeb\\Aether\\WordPressImporter\\Services\\WordPressImport\\Forms\\Utilities\\{$pluginName}\\FieldtypeMapping";
 
         return $mappingClass;
     }

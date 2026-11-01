@@ -11,12 +11,12 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\MigrationApiFormLoader;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\MigrationApiFormLoader;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * `BaseFormPluginSelector`, through a minimal plugin: the API path, both prompt paths, and

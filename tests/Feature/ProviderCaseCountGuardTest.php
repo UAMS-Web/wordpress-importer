@@ -24,7 +24,7 @@ declare(strict_types=1);
  * parsing a literal - which is why this must run inside the full Pest suite,
  * where every file-level provider function is already loaded during collection.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/ProviderCaseCountGuardTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/ProviderCaseCountGuardTest.php
  */
 
 it('keeps each consolidated import file under its executable-case ceiling', function (string $relativeFile, int $ceiling): void {

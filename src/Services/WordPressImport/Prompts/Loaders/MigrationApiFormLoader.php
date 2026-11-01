@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
 
 /**
  * Sources a form plugin's definitions from the migration API, or from a file.

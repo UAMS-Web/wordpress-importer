@@ -11,7 +11,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/RestrictionHelperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
 
 it('formats the roles as a quoted list for the import notes', function (mixed $role, string $expected): void {
     expect(RestrictionHelper::formatRolesForNotes($role))->toBe($expected);

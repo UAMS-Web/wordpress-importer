@@ -10,9 +10,9 @@ use Statamic\Fieldtypes\Toggle;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
 
 uses(TestCase::class);
 
@@ -50,7 +50,7 @@ afterEach(function (): void {
  * and no asset container is needed. `crop` / `modal` / `more_query` are bound
  * through the real fieldtypes' `augment()`, which is the production shape.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/GalleryBlockImportRenderTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/GalleryBlockImportRenderTest.php
  */
 
 /**

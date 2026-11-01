@@ -13,8 +13,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/XmlParserGetTermsTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 beforeEach(function (): void {
     // A self-contained WordPress term export exercising getTerms(): three

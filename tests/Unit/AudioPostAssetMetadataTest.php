@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AudioPostAssetMetadataTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
 
 it('returns defaults matching the Statamic audio asset blueprint contract', function (): void {
     $defaults = AudioPostAssetMetadata::defaults();

@@ -23,7 +23,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/PostCategoryPrimaryOrderTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
 
 beforeEach(function (): void {
     $this->creator = new PostEntryCreator;
