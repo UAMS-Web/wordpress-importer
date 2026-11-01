@@ -2021,16 +2021,16 @@ class ImportWordPress extends Command
                 }
             }
 
-            // Check people_groups for uamspeople, tshowcase, or pages with show-people shortcodes
+            // ---
+            // Check people_groups for uamspeople and tshowcase. Pages with show-people
+            // shortcodes need no check here: EntryCreator::createEntries() enables
+            // people and people_groups for them once they are imported.
+            // ---
             if (
                 $destinationType === 'collection'
                 && (
                     $contentType === 'uamspeople'
                     || $contentType === 'tshowcase'
-                    || (
-                        $contentType === 'page'
-                        && $this->entryCreator->hasShowPeople($contentType)
-                    )
                 )
             ) {
                 // Check if taxonomy enabling was successful
