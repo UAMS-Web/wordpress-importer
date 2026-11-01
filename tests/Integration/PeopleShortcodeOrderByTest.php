@@ -29,7 +29,7 @@ uses(StatamicTestCase::class);
 it('passes a supported orderby through unchanged', function (string $orderBy): void {
     $logSpy = people1233OrderBySpyLog();
 
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => $orderBy]))->toBe($orderBy);
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => $orderBy]))->toBe($orderBy);
 
     $logSpy->shouldNotHaveReceived('warning', [
         Mockery::pattern('/resolveOrderBy/'),
@@ -40,7 +40,7 @@ it('passes a supported orderby through unchanged', function (string $orderBy): v
 it('maps menu_order to none, which the plugin sorted the same way', function (): void {
     $logSpy = people1233OrderBySpyLog();
 
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => 'menu_order']))->toBe('none');
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => 'menu_order']))->toBe('none');
 
     $logSpy->shouldNotHaveReceived('warning', [
         Mockery::pattern('/resolveOrderBy/'),
@@ -51,7 +51,7 @@ it('maps menu_order to none, which the plugin sorted the same way', function ():
 it('imports orderby=date as none and logs it', function (): void {
     $logSpy = people1233OrderBySpyLog();
 
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => 'date']))->toBe('none');
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => 'date']))->toBe('none');
 
     $logSpy->shouldHaveReceived('warning', [
         Mockery::on(
@@ -65,7 +65,7 @@ it('imports orderby=date as none and logs it', function (): void {
 it('imports another unsupported orderby as none and logs it', function (string $orderBy): void {
     $logSpy = people1233OrderBySpyLog();
 
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => $orderBy]))->toBe('none');
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => $orderBy]))->toBe('none');
 
     $logSpy->shouldHaveReceived('warning', [
         Mockery::pattern('/resolveOrderBy/'),
@@ -74,14 +74,14 @@ it('imports another unsupported orderby as none and logs it', function (string $
 })->with(['lastname', 'firstname', 'id', 'rand']);
 
 it('matches orderby case-insensitively, as the processor lowercases attributes', function (): void {
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => 'Menu_Order']))->toBe('none')
-        ->and(people1233OrderBy($this->createMock(AssetImporter::class), ['orderby' => 'DATE']))->toBe('none');
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => 'Menu_Order']))->toBe('none')
+        ->and(people1233OrderBy($this::createStub(AssetImporter::class), ['orderby' => 'DATE']))->toBe('none');
 });
 
 it('imports a missing orderby as the default without a warning', function (): void {
     $logSpy = people1233OrderBySpyLog();
 
-    expect(people1233OrderBy($this->createMock(AssetImporter::class), []))->toBe('sortpriority');
+    expect(people1233OrderBy($this::createStub(AssetImporter::class), []))->toBe('sortpriority');
 
     $logSpy->shouldNotHaveReceived('warning', [
         Mockery::pattern('/resolveOrderBy/'),

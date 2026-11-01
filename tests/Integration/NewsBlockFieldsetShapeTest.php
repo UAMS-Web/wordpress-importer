@@ -37,7 +37,7 @@ beforeEach(function (): void {
     $this->blogroll = new BlogrollShortcodeProcessor;
 
     // Mock AssetImporter — no asset work happens in this block
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 
     // Silent console output
     $this->output = new NullOutput;

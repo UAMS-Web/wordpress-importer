@@ -31,25 +31,25 @@ it(
     ): void {
         // Every plugin reports having content, so all three detection branches run;
         // only the per-plugin "data loaded" results vary across the truth-table rows.
-        $gravity = $this->createMock(GravityFormsCoordinator::class);
+        $gravity = $this::createStub(GravityFormsCoordinator::class);
         $gravity->method('hasGravityFormsContent')->willReturn(true);
         $gravity->method('handleGravityFormsDetection')->willReturn($gravityLoaded);
 
-        $formidable = $this->createMock(FormidableFormsCoordinator::class);
+        $formidable = $this::createStub(FormidableFormsCoordinator::class);
         $formidable->method('hasFormidableFormsContent')->willReturn(true);
         $formidable->method('handleFormidableFormsDetection')->willReturn($formidableLoaded);
 
-        $ninja = $this->createMock(NinjaFormsCoordinator::class);
+        $ninja = $this::createStub(NinjaFormsCoordinator::class);
         $ninja->method('hasNinjaFormsContent')->willReturn(true);
         $ninja->method('handleNinjaFormsDetection')->willReturn($ninjaLoaded);
 
         $coordinator = new FormPluginCoordinator($gravity, $formidable, $ninja);
 
         $result = $coordinator->handleFormPluginDetection(
-            $this->createMock(XmlParser::class),
-            $this->createMock(InputInterface::class),
-            $this->createMock(OutputInterface::class),
-            $this->createMock(Command::class)
+            $this::createStub(XmlParser::class),
+            $this::createStub(InputInterface::class),
+            $this::createStub(OutputInterface::class),
+            $this::createStub(Command::class)
         );
 
         expect($result)->toBe($expected);

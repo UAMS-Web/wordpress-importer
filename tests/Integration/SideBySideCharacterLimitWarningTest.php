@@ -33,7 +33,7 @@ beforeEach(function (): void {
     ProcessingContext::setWordPressPageLink('https://example.org/clinic/');
 
     // Uploads enabled, and every image import answers with one asset path
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
     $this->assetImporter->method('getUploadImages')->willReturn(true);
     $this->assetImporter->method('importImage')->willReturn('images/side.jpg');
 

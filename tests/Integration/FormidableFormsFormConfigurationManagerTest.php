@@ -137,7 +137,7 @@ function ffcmConfirmationView(array $content, array $view = []): array
 
 beforeEach(function (): void {
     $this->manager = new FormConfigurationManager;
-    $this->importer = $this->createMock(AssetImporter::class);
+    $this->importer = $this::createStub(AssetImporter::class);
     ImportWarningManager::clearWarnings();
 });
 

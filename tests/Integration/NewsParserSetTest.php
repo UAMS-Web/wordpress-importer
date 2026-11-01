@@ -29,7 +29,7 @@ uses(StatamicTestCase::class);
 beforeEach(function (): void {
     // Real parser under test, with a mocked importer it never calls
     $this->parser = new NewsParser;
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
     $this->output = new NullOutput;
 
     // Resolver memoization and warnings are process-wide statics

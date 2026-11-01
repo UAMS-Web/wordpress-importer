@@ -43,7 +43,7 @@ it('skips an ACF closing-tag comment via the early return, regardless of surroun
 
     // Mock the AssetImporter to avoid its config()-dependent constructor; the
     // closing-tag branch returns before any AssetImporter method is used.
-    $assetImporter = $this->createMock(AssetImporter::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
 
     [$comment, $nodes] = acfCommentNode($commentText);
 

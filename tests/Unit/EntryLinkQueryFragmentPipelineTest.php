@@ -67,7 +67,7 @@ it('orders the query before the fragment on a resolved entry link', function (st
         $wordPressUrl,
         'default',
         assetImporterForBaseUrl(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)->toBe($expected);
@@ -95,7 +95,7 @@ it('rewrites the query before the fragment in page-body HTML', function (): void
         $html,
         'default',
         assetImporterForBaseUrl(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)

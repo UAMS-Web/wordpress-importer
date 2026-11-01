@@ -76,7 +76,7 @@ it('imports a page builder caption as an image set carrying its caption text', f
     $log = Log::spy();
     $html = '<!-- wp:shortcode -->[caption id="attachment_1" align="alignright" width="300"]<img src="https://example.com/img.jpg" />My caption[/caption]<!-- /wp:shortcode -->';
 
-    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+    $sets = nonAcfCaptionSets($html, $this::createStub(AssetImporter::class));
     $content = $sets['content'];
     $encoded = (string) \json_encode($content);
 
@@ -155,7 +155,7 @@ it('keeps the text around a shortcode in its block, on the Bard route', function
     $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
 
     foreach ([true, false] as $useWpAutoP) {
-        $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, $useWpAutoP);
+        $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
 
         expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
     }
@@ -164,7 +164,7 @@ it('keeps the text around a shortcode in its block, on the Bard route', function
 it('holds no text at the root of Bard content, whatever surrounds the shortcode', function (string $inner, array $expected): void {
     $html = '<!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode -->';
 
-    $nodes = TextProcessor::processForBard('<p>Intro</p>'.$html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
+    $nodes = TextProcessor::processForBard('<p>Intro</p>'.$html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
 
     expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', ...$expected]);
 })->with('text beside a shortcode');
@@ -172,7 +172,7 @@ it('holds no text at the root of Bard content, whatever surrounds the shortcode'
 it('keeps the text around a caption in its block, in place, on the page builder route', function (): void {
     $html = '<p>Intro</p><!-- wp:shortcode -->Lead [caption id="attachment_1"]<img src="https://example.com/img.jpg" />My caption[/caption] tail<!-- /wp:shortcode --><p>Outro</p>';
 
-    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+    $sets = nonAcfCaptionSets($html, $this::createStub(AssetImporter::class));
 
     expect($sets['directSets'])->toBe([])
         ->and(shortcodeBlockNodeSummary(shortcodeBlockBody($sets['content'])))->toBe(['Intro', 'Lead', 'set', 'tail', 'Outro']);
@@ -181,7 +181,7 @@ it('keeps the text around a caption in its block, in place, on the page builder 
 it('keeps the page builder set of a shortcode, and the text around it, on the page builder route', function (string $shortcode, string $setType): void {
     $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
 
-    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+    $sets = nonAcfCaptionSets($html, $this::createStub(AssetImporter::class));
 
     expect(Arr::get($sets['directSets'], '0.type'))->toBe($setType)
         ->and(shortcodeBlockNodeSummary(shortcodeBlockBody($sets['content'])))->toBe(['Intro', 'Lead  tail', 'Outro']);
@@ -193,8 +193,8 @@ it('keeps the page builder set of a shortcode, and the text around it, on the pa
 it('keeps the node right after a lone shortcode block', function (string $shortcode): void {
     $html = '<!-- wp:shortcode -->'.$shortcode.'<!-- /wp:shortcode --><p>After</p>';
 
-    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
-    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+    $sets = nonAcfCaptionSets($html, $this::createStub(AssetImporter::class));
 
     expect(shortcodeBlockNodeSummary($nodes))->toBe(['set', 'After'])
         ->and(\json_encode($sets['content']))->toContain('After');
@@ -203,8 +203,8 @@ it('keeps the node right after a lone shortcode block', function (string $shortc
 it('adds the shortcode of a block with no closing comment once, and keeps what follows', function (string $shortcode): void {
     $html = '<p>Intro</p><!-- wp:shortcode -->'.$shortcode.'<p>After</p>';
 
-    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
-    $sets = nonAcfCaptionSets($html, $this->createMock(AssetImporter::class));
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+    $sets = nonAcfCaptionSets($html, $this::createStub(AssetImporter::class));
 
     expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'set', 'After'])
         ->and(\json_encode($sets))->toContain('After');
@@ -213,7 +213,7 @@ it('adds the shortcode of a block with no closing comment once, and keeps what f
 it('imports a caption block in Bard content as one image set and nothing else', function (): void {
     $html = "<!-- wp:paragraph --><p>Intro</p><!-- /wp:paragraph -->\n<!-- wp:shortcode -->\n[caption id=\"attachment_1\" align=\"alignright\" width=\"300\"]<img src=\"https://example.com/img.jpg\" />My caption[/caption]\n<!-- /wp:shortcode -->\n<!-- wp:paragraph --><p>Outro</p><!-- /wp:paragraph -->";
 
-    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, false);
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
 
     // The image appears once, with its caption, and no raw shortcode text is left
     $types = \array_map(static fn (mixed $node): mixed => \is_array($node) ? ($node['type'] ?? null) : null, $nodes);
@@ -232,7 +232,7 @@ it('keeps the whole text of a caption holding a quote, and leaves no stray text'
 ): void {
     $html = '<p>Intro</p>'."\n\n".$tag.$image.' Melissa '.$text.' Evans swings at Rebsamen Park.[/caption]'."\n\n".'<p>Outro</p>';
 
-    $nodes = TextProcessor::processForBard($html, 'default', $this->createMock(AssetImporter::class), new NullOutput, $useWpAutoP);
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
 
     // The nodes around the set are the two paragraphs, so nothing is left over
     $types = \array_map(static fn (mixed $node): mixed => \is_array($node) ? ($node['type'] ?? null) : null, $nodes);

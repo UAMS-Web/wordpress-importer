@@ -277,8 +277,8 @@ it('resolves each branch of resolveTarget against the academicsenate fixture', f
     );
 
     // Build minimal dependencies for the resolveTarget signature
-    $assetImporter = $this->createMock(AssetImporter::class);
-    $output = $this->createMock(OutputInterface::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
+    $output = $this::createStub(OutputInterface::class);
     $site = 'academicsenate';
 
     // ---
