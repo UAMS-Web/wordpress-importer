@@ -706,7 +706,7 @@ describe('saving an entry', function (): void {
 
     it('saves an additional entry beside one that exists, under its first numbered slug and its own id', function (): void {
         // ---
-        // Pins today's behavior, which #265 records: Statamic stores the slug without
+        // Pins today's behavior, which #340 records: Statamic stores the slug without
         // its dot, so the search for a free slug never finds the stored one and every
         // copy takes `.1`, and the copy keeps the id generated for this run rather
         // than the one the search made.

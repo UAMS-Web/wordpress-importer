@@ -769,7 +769,7 @@ abstract class BaseEntryCreator
                 case 'Create an additional file':
                     // ---
                     // Number the copy `{slug}.1`, dropping a number the slug already
-                    // carries. This is all the path does until #265 is fixed: Statamic
+                    // carries. This is all the path does until #340 is fixed: Statamic
                     // stores a slug without its dot, so no stored slug matches a numbered
                     // one and every copy takes `.1`, and the copy keeps the ID set above.
                     // ---

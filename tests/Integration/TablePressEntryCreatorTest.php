@@ -714,6 +714,26 @@ describe('saving a table', function (): void {
         expect(tablePressEntries()['default_tablepress-121']->get('title'))->toBe('The other table');
     });
 
+    it('counts only its own collection when numbering a copy', function (): void {
+        $collection = CollectionFacade::make('other_tables');
+        $collection->sites(['default']);
+        $collection->save();
+        $other = new Entry;
+        $other->collection('other_tables');
+        $other->locale('default');
+        $other->slug('default_tablepress-12_copy-1');
+        $other->save();
+        $export = tablePressExport([['meta' => tablePressMeta()]]);
+        tablePressRun($export);
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior('Create an additional file');
+
+        tablePressRun($export, $creator);
+
+        expect(\array_keys(tablePressEntries()))->toContain('default_tablepress-12_copy-1')
+            ->not->toContain('default_tablepress-12_copy-2');
+    });
+
     it('deletes a file left under the old slug format', function (): void {
         $export = tablePressExport([['id' => '601', 'meta' => tablePressMeta()]]);
         $stale = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-12-601');

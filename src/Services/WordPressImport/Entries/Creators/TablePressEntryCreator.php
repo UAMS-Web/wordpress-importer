@@ -776,7 +776,6 @@ class TablePressEntryCreator extends BaseEntryCreator
                     // An underscore stays, and no export id reads as a copy of another.
                     // ---
                     $counter = 1;
-                    $savedSlug = $entrySlug;
                     while (
                         $this->countEntriesBySlug(
                             $collectionHandle,
@@ -1611,14 +1610,9 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $collectionHandle,
         string $slug
     ): int {
-        // ---
-        // Create a typed query for collection and slug criteria. Only the dotted slugs
-        // of #265 are counted, which no entry in any collection is stored under, so the
-        // collection criterion changes no count.
-        // ---
+        // Create a typed query for collection and slug criteria
         $query = $this->makeEntryQuery();
 
-        // @pest-mutate-ignore: RemoveMethodCall
         $query->where(
             'collection',
             $collectionHandle
