@@ -752,6 +752,32 @@ describe('saving a table', function (): void {
             @\unlink($kept);
         }
     });
+
+    it('keeps the file of a table whose export ID holds a hyphen, and deletes its old slug file', function (string $behavior): void {
+        $export = tablePressExport([['id' => '801', 'meta' => tablePressMeta(['_tablepress_export_table_id' => 'my-table'])]]);
+        tablePressRun($export);
+        $canonical = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table');
+        $stale = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table-801');
+        @\mkdir(\dirname($stale), 0777, true);
+        \file_put_contents($canonical, "---\ntitle: canonical\n---\n");
+        \file_put_contents($stale, "---\ntitle: stale\n---\n");
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior($behavior);
+
+        try {
+            tablePressRun($export, $creator);
+
+            expect(\file_exists($canonical))->toBeTrue()
+                ->and(\file_exists($stale))->toBeFalse();
+        } finally {
+            @\unlink($canonical);
+            @\unlink($stale);
+        }
+    })->with([
+        'skip' => ['Skip matching files'],
+        'additional' => ['Create an additional file'],
+        'overwrite' => ['Overwrite matching files'],
+    ]);
 });
 
 describe('dating a table', function (): void {
