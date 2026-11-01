@@ -828,6 +828,9 @@ class EntryCreator
             // Set asset importer on coordinator
             $this->reusableBlockCoordinator->setAssetImporter($assetImporter);
 
+            // Handle existing blocks as the run handles its other entries
+            $this->reusableBlockCoordinator->setEntryOverwriteBehavior($this->entryOverwriteBehavior);
+
             // Clear tracked wp_block post IDs
             $this->reusableBlockCoordinator->clearWpBlockPostIds();
         }

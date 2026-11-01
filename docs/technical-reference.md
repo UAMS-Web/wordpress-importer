@@ -264,7 +264,7 @@ After the cache is cleared, the command prompts the user to decide whether to im
 ## Overwrite Behaviors
 
 During import, users are prompted to choose how to handle existing content:
-- **Entries**: Overwrite, skip, or create additional entries for matching IDs.
+- **Entries**: Overwrite, skip, or create additional entries for matching IDs. The answer also covers the reusable blocks the run's content refers to, in `reusable_content`. Under "Create an additional file" a block gets a new copy, and the content imported on that run refers to it.
 - **Assets**: Overwrite, skip, or create additional files for matching assets (if asset upload is enabled).
 - **Tables**: Similar options for TablePress content if detected.
 - **Redirects**: Options for handling matching source URLs in global sets.
