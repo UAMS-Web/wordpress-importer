@@ -132,7 +132,7 @@ final class PeopleEntryTestConverter extends ContentProcessor
      */
     public static function returning(array $result): self
     {
-        $converter = (new ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $converter = new ReflectionClass(self::class)->newInstanceWithoutConstructor();
         $converter->result = $result;
 
         return $converter;
@@ -424,6 +424,7 @@ function peopleEntryRun(string $export, PeopleEntryTestConverter $converter, ?Pe
 {
     $parser = new XmlParser;
     $parser->parse($export);
+
     $output = new BufferedOutput;
     $creator ??= peopleEntryTestCreator();
     $mapper = new PeopleEntryTestMapper;
@@ -601,7 +602,7 @@ describe('importing a person', function (): void {
                 .'institutional or research context for it. A second video was not imported, because the blueprint carries '
                 .'one URL per context: https://vimeo.test/v',
             'mapped' => true,
-            'updated_at' => (new DateTime('2025-04-02 10:00:00'))->getTimestamp(),
+            'updated_at' => new DateTime('2025-04-02 10:00:00')->getTimestamp(),
         ])
             ->and($entry->id())->toStartWith('pat-doe-501-')
             ->and(\is_array($jobTitle) ? \array_map(static fn (mixed $set): mixed => \is_array($set) ? \array_diff_key($set, ['id' => true]) : $set, $jobTitle) : $jobTitle)
@@ -643,7 +644,7 @@ describe('importing a person', function (): void {
             ->and($run['output'])->toContain("Processing 'tshowcase-categories' taxonomy terms");
     });
 
-    it('ignores postmeta of the other post type\'s prefix and unknown fields', function (): void {
+    it("ignores postmeta of the other post type's prefix and unknown fields", function (): void {
         peopleEntryRun(peopleEntryExport([['slug' => 'plain', 'meta' => ['_tsemail' => 'show@example.test', '_psunknown' => 'x', 'email' => 'bare']]]), PeopleEntryTestConverter::returning(peopleEntryBody()));
         $data = peopleEntryData(peopleEntry('plain'));
 
@@ -787,7 +788,7 @@ describe('people groups', function (): void {
 
     it('falls back to the slug for a group with a blank name, and skips a blank site slug', function (): void {
         $creator = new PeopleEntryCreator;
-        (new ReflectionProperty(PeopleEntryCreator::class, 'siteSpecificPeopleGroups'))->setValue($creator, [
+        new ReflectionProperty(PeopleEntryCreator::class, 'siteSpecificPeopleGroups')->setValue($creator, [
             ['site_specific' => 'default_alpha', 'original' => '', 'name' => ''],
             ['site_specific' => '', 'original' => 'beta', 'name' => 'Beta'],
             ['site_specific' => 'default_alpha', 'original' => 'alpha', 'name' => ''],
@@ -806,7 +807,7 @@ describe('people groups', function (): void {
     });
 });
 
-describe('the content type\'s other answers', function (): void {
+describe("the content type's other answers", function (): void {
     it('has no people, post categories or post tags', function (): void {
         $creator = new PeopleEntryCreator;
 
@@ -914,7 +915,7 @@ describe('what else reaches the entry', function (): void {
 
         peopleEntryRun(peopleEntryExport([['slug' => 'pictured', 'meta' => ['_thumbnail_id' => '900']]]), PeopleEntryTestConverter::returning(peopleEntryBody()), assetImporter: $importer);
 
-        expect($importer->imports)->toBe([['https://example.test/wp-content/uploads/2025/04/portrait.jpg', '', 'portraits']])
+        expect($importer->imports)->toBe([['https://example.test/wp-content/uploads/2025/04/portrait.jpg', 'default', 'portraits']])
             ->and(peopleEntryData(peopleEntry('pictured')))->toHaveKey('portrait')
             ->and(peopleEntryData(peopleEntry('pictured'))['portrait'])->toBe($expected);
     })->with([
@@ -968,7 +969,7 @@ describe('the class itself', function (): void {
         // class's own lines; there the import tests fail instead, because each first
         // loads the class under the application's error handler.
         // ---
-        $file = (new ReflectionClass(PeopleEntryCreator::class))->getFileName();
+        $file = new ReflectionClass(PeopleEntryCreator::class)->getFileName();
         $source = \is_string($file) ? \file_get_contents($file) : false;
 
         if (! \is_string($source)) {

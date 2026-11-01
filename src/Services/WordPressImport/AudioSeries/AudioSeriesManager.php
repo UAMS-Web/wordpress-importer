@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Statamic\Assets\Asset;
 use Statamic\Facades\Asset as AssetFacade;
 use Statamic\Facades\Term as TermFacade;
+use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -218,8 +219,13 @@ class AudioSeriesManager
         $expectedSubtype = $config->getSubtype();
         $expectedDescription = $config->getDescription();
 
-        // Check if term already exists
+        // Check if term already exists. The lookup answers a localized term, so work
+        // on the term it localizes (#194)
         $existingTerm = TermFacade::find("{$taxonomyHandle}::{$termSlug}");
+
+        if ($existingTerm instanceof LocalizedTerm) {
+            $existingTerm = $existingTerm->term();
+        }
 
         // Handle existing term
         if ($existingTerm instanceof Term) {

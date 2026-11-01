@@ -40,6 +40,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
@@ -1085,6 +1086,7 @@ class KbEntryCreator extends BaseEntryCreator
         // Step 2: Recursively create topics in parent-before-child order
         // This ensures parent topics exist before creating child topics
         $created = []; // Track which topics have already been created to avoid duplicates
+        $inProgress = []; // Track the topics waiting on their parent, so a parent cycle ends
 
         // ---
         // Define a recursive closure to create topics in parent-before-child order,
@@ -1093,6 +1095,7 @@ class KbEntryCreator extends BaseEntryCreator
         $createTopicRecursively = function (int|string $termId, string $parentId) use (
             &$createTopicRecursively,
             &$created,
+            &$inProgress,
             $kbtopicTermMap,
             $output,
             $site,
@@ -1118,16 +1121,34 @@ class KbEntryCreator extends BaseEntryCreator
                 ''
             );
 
+            // Mark this topic as waiting on its parent
+            $inProgress[$termId] = true;
+
+            // A parent still waiting on this topic can never be created first (#281)
+            $inCycle = isset($inProgress[$parentTermId]);
+
+            if ($inCycle) {
+                $this->reportTopicParentCycle(
+                    (string) $termId,
+                    $parentTermId,
+                    $site
+                );
+            }
+
             // ---
             // Create a parent topic first and file this topic under it. A term whose
-            // parent is not a topic is filed under the knowledge base instead.
+            // parent is not a topic, or is in a cycle with it, is filed under the
+            // knowledge base instead.
             // ---
-            $parentEntryId = isset($kbtopicTermMap[$parentTermId])
+            $parentEntryId = ! $inCycle && isset($kbtopicTermMap[$parentTermId])
                 ? $createTopicRecursively(
                     $parentTermId,
                     $parentId
                 )
                 : $parentId;
+
+            // A later topic may name this one as an ordinary parent
+            unset($inProgress[$termId]);
 
             // Create this topic, and store its entry ID to avoid duplicates
             $created[$termId] = $this->createTopicEntryFromData(
@@ -1163,6 +1184,40 @@ class KbEntryCreator extends BaseEntryCreator
 
         // Display completion message with counts for user feedback
         $output->writeln('Processed '.\count($kbtopicTermMap).' kbtopic terms, created '.\count($this->topicIdMap).' topic entries.');
+    }
+
+    /**
+     * Report a topic that is filed under the knowledge base because of a parent cycle.
+     *
+     * @param  string  $termId  The WordPress term ID of the topic
+     * @param  string  $parentTermId  The WordPress term ID of the parent it names
+     * @param  string  $site  Selected site handle
+     */
+    private function reportTopicParentCycle(
+        string $termId,
+        string $parentTermId,
+        string $site
+    ): void {
+        // Log the cycle for debugging
+        Log::warning(
+            "KbEntryCreator::processTopics: kbtopic term {$termId} names parent term {$parentTermId} in a parent cycle, so it is filed under the knowledge base",
+            [
+                'term_id' => $termId,
+                'parent_term_id' => $parentTermId,
+                'site' => $site,
+            ]
+        );
+
+        // Report it in the run's summary
+        ImportWarningManager::addWarning(
+            'content',
+            'kb_topic_parent_cycles',
+            [
+                'term_id' => $termId,
+                'parent_term_id' => $parentTermId,
+                'site' => $site,
+            ]
+        );
     }
 
     /**

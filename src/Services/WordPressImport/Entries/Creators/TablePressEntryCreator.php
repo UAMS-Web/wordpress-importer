@@ -14,7 +14,8 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Symfony\Component\Console\Output\OutputInterface;
-use Tiptap\Editor;
+use Tiptap\Core\DOMParser;
+use Tiptap\Core\Schema;
 use Tiptap\Nodes\Document;
 use Tiptap\Nodes\Paragraph;
 use Tiptap\Nodes\Text;
@@ -325,12 +326,10 @@ class TablePressEntryCreator extends BaseEntryCreator
             // ---
             // @pest-mutate-ignore: EmptyStringToNotEmpty
             if ($excerptEncoded !== '') {
-                $editor = new Editor([
-                    'extensions' => [
-                        new Document,
-                        new Paragraph,
-                        new Text,
-                    ],
+                $schema = new Schema([
+                    new Document,
+                    new Paragraph,
+                    new Text,
                 ]);
                 $html = html_entity_decode(
                     $excerptEncoded,
@@ -338,15 +337,17 @@ class TablePressEntryCreator extends BaseEntryCreator
                     'UTF-8'
                 );
                 // ---
+                // An excerpt is always HTML, so it goes to the parser directly:
+                // `Editor::setContent()` reads text that decodes as JSON, such as `42`
+                // or a quoted caption, as a document (#267).
+                //
                 // The Tiptap parser finds no document body in an excerpt with no body
                 // content (whitespace, comments, or head-only markup such as a title or
                 // a script), and throws a TypeError from its DOM reader. That is an
-                // excerpt with no description, so it must not end the import. Any other
-                // TypeError is let through: an excerpt that decodes as JSON throws one
-                // of its own, and its text would be lost (#267).
+                // excerpt with no description, so it must not end the import.
                 // ---
                 try {
-                    $document = $editor->setContent($html)->getDocument();
+                    $document = $schema->apply(new DOMParser($schema)->process($html));
                 } catch (\TypeError $error) {
                     if (! \str_contains($error->getMessage(), 'DOMParser::getDocumentBody()')) {
                         throw $error;
