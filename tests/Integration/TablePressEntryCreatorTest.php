@@ -688,17 +688,30 @@ describe('saving a table', function (): void {
             }
         }
 
-        // ---
-        // The copies take the slug `default_tablepress-12.1`, which Statamic stores
-        // without its dot, so both land on table 121's slug, and the id the data
-        // carries is not the entry's (#265).
-        // ---
+        \sort($saved);
+
         expect($saved)->toBe([
             ['default_tablepress-12', true],
-            ['default_tablepress-121', false],
-            ['default_tablepress-121', false],
+            ['default_tablepress-12_copy-1', true],
+            ['default_tablepress-12_copy-2', true],
         ])
-            ->and($outputs[0])->toContain("Saving entry with slug 'default_tablepress-12' for collection 'tables'");
+            ->and($outputs[0])->toContain("Saving entry with slug 'default_tablepress-12_copy-1' for collection 'tables'")
+            ->and($outputs[1])->toContain("Saving entry with slug 'default_tablepress-12_copy-2' for collection 'tables'");
+    });
+
+    it('leaves table 121 its own slug after a copy of table 12', function (): void {
+        $export = tablePressExport([['meta' => tablePressMeta()]]);
+        tablePressRun($export);
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior('Create an additional file');
+        tablePressRun($export, $creator);
+
+        tablePressRun(tablePressExport([[
+            'title' => 'The other table',
+            'meta' => tablePressMeta(['_tablepress_export_table_id' => '121']),
+        ]]));
+
+        expect(tablePressEntries()['default_tablepress-121']->get('title'))->toBe('The other table');
     });
 
     it('deletes a file left under the old slug format', function (): void {
@@ -981,13 +994,13 @@ describe('saving rules', function (): void {
         $ids = [];
 
         foreach (EntryFacade::all() as $entry) {
-            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables' && tablePressSlug($entry) === 'default_tablepress-121') {
+            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables' && tablePressSlug($entry) === 'default_tablepress-12_copy-1') {
                 $ids[] = $entry->get('id');
             }
         }
 
         expect($ids)->toHaveCount(1)
-            ->and(\is_string($ids[0] ?? null) ? $ids[0] : '')->toMatch('/^default_tablepress-12\.1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
+            ->and(\is_string($ids[0] ?? null) ? $ids[0] : '')->toMatch('/^default_tablepress-12_copy-1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
     });
 });
 
