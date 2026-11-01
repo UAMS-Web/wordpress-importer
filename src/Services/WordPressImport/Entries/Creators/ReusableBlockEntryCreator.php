@@ -259,8 +259,14 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                     $postId
                 );
 
-                // Skip to next item in loop. The block is not registered in
-                // WpBlockRegistry (#245)
+                // Register the existing entry, so a reference to this block resolves
+                $this->registerBlockEntry(
+                    $postId,
+                    $existingEntry,
+                    $entryId
+                );
+
+                // Skip to next item in loop
                 continue;
             }
 
@@ -361,19 +367,11 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
 
             // Check if entry was saved successfully
             if ($entry instanceof Entry) {
-                // ---
-                // The id the entry was SAVED under, not the one generated for this
-                // run. Overwriting a matched entry preserves its existing id (wordpress-importer-archive#767),
-                // so a map keyed on the generated id would name an entry that does
-                // not exist — the same stale-id failure wordpress-importer-archive#761 fixed in the deferred
-                // related-articles pass.
-                // ---
-                $savedEntryId = \is_string($entry->id()) ? $entry->id() : $entryId;
-
                 // Register mapping in global registry for block processor access
-                WpBlockRegistry::registerMapping(
+                $this->registerBlockEntry(
                     $postId,
-                    $savedEntryId
+                    $entry,
+                    $entryId
                 );
             }
 
@@ -410,6 +408,33 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
 
         // Return empty array (reusable blocks don't need page data for tree building)
         return [];
+    }
+
+    /**
+     * Register a block's entry in WpBlockRegistry under the entry's own id.
+     *
+     * That id, not the one generated for this run: a matched entry keeps its
+     * existing id (wordpress-importer-archive#767), so a map keyed on the generated
+     * id would name an entry that does not exist, the same stale-id failure
+     * wordpress-importer-archive#761 fixed in the deferred related-articles pass.
+     *
+     * @param  string  $postId  The block's WordPress post ID
+     * @param  Entry  $entry  The saved or existing entry
+     * @param  string  $generatedEntryId  The id generated for this run, for an entry without its own
+     */
+    private function registerBlockEntry(
+        string $postId,
+        Entry $entry,
+        string $generatedEntryId
+    ): void {
+        // Prefer the entry's own id
+        $entryId = \is_string($entry->id()) ? $entry->id() : $generatedEntryId;
+
+        // Register mapping in global registry for block processor access
+        WpBlockRegistry::registerMapping(
+            $postId,
+            $entryId
+        );
     }
 
     /**

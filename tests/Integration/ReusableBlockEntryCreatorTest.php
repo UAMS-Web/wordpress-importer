@@ -33,6 +33,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningMa
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
@@ -343,6 +344,7 @@ afterEach(function (): void {
     LinkProcessor::clearDeferredData();
     BaseEntryCreator::clearTaxonomyCaches();
     WpBlockRegistry::clear();
+    WpBlockBlockProcessor::clearWpBlockPostIds();
     ImportWarningManager::clearWarnings();
     ProcessingContext::clearXmlPath();
     ProcessingContext::clearWordPressPageLink();
@@ -478,9 +480,10 @@ describe('importing a block', function (): void {
 });
 
 describe('importing a block that already exists', function (): void {
-    it('skips it when told to, registering its URL but not its entry, and carries on', function (): void {
+    it('skips it when told to, registering its URL and its existing entry, and carries on', function (): void {
         $export = reusableBlockExport([['id' => '701', 'slug' => 'one'], ['id' => '702', 'slug' => 'two']]);
         reusableBlockRun($export, ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => []]));
+        $ids = ['701' => reusableBlockEntry('one')->id(), '702' => reusableBlockEntry('two')->id()];
 
         // A new run starts with nothing registered
         LinkProcessor::clearDeferredData();
@@ -494,12 +497,27 @@ describe('importing a block that already exists', function (): void {
 
         $map = (new ReflectionProperty(LinkProcessor::class, 'urlToPostIdMap'))->getValue();
 
-        // Characterization of #245: a reference to a skipped block cannot resolve
+        // The ids are the existing entries', not the ones generated for this run
         expect($converter->calls)->toBe([])
             ->and($mapper->mapped)->toBe([])
-            ->and(WpBlockRegistry::getAllMappings())->toBe([])
+            ->and(WpBlockRegistry::getAllMappings())->toBe($ids)
             ->and(\is_array($map) ? ($map['https://example.test/wp_block/702/'] ?? null) : null)->toBe('702')
             ->and($run['output'])->not->toContain('Processing reusable content');
+    });
+
+    it('resolves a reference to a skipped block', function (): void {
+        $export = reusableBlockExport([['id' => '701', 'slug' => 'one']]);
+        reusableBlockRun($export, ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => []]));
+        $id = reusableBlockEntry('one')->id();
+        WpBlockRegistry::clear();
+
+        $creator = new ReusableBlockEntryCreator;
+        $creator->setEntryOverwriteBehavior('Skip matching files');
+        reusableBlockRun($export, ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => []]), $creator);
+
+        $reference = (new WpBlockBlockProcessor)->process(new DOMComment(' wp:block {"ref":701} /'), ['ref' => 701], 'default', new AssetImporter, new BufferedOutput);
+
+        expect($reference['entryId'] ?? null)->toBe($id);
     });
 
     it('imports a block that does not exist yet when told to skip existing ones', function (): void {
