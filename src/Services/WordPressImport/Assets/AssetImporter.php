@@ -27,6 +27,13 @@ class AssetImporter
     protected bool $uploadImages;
 
     /**
+     * Containers whose files sit at the root rather than in a folder for each site.
+     *
+     * @var list<string> The container handles
+     */
+    private const array CONTAINERS_WITHOUT_SITE_FOLDERS = ['portraits'];
+
+    /**
      * Configuration setting for whether file uploads are enabled.
      *
      * @var bool Whether file uploads are enabled
@@ -789,7 +796,7 @@ class AssetImporter
      * failed downloads gracefully.
      *
      * @param  string  $url  The URL of the file to import
-     * @param  string  $site  The Statamic site handle for asset paths
+     * @param  string  $site  The Statamic site handle, for asset paths where the container has site folders and for what is reported
      * @param  OutputInterface  $output  Console output for logging
      * @param  string  $container  The target container (e.g., 'files', 'images', 'portraits')
      * @param  SameSitePolicy  $sameSitePolicy  Policy for handling different-site assets
@@ -907,14 +914,17 @@ class AssetImporter
         // Generate unique filename from URL
         $originalFilename = AssetUtils::generateUniqueFilename($url);
 
+        // A container with no per-site folder keeps every file at its root
+        $folder = \in_array($container, self::CONTAINERS_WITHOUT_SITE_FOLDERS, true) ? '' : $site;
+
         // Construct the target path for the file
-        $path = $site !== '' ? "{$site}/{$originalFilename}" : $originalFilename;
+        $path = $folder !== '' ? "{$folder}/{$originalFilename}" : $originalFilename;
 
         // Import the file using the overwrite handler
         $importedPath = $this->overwriteHandler->handleFileImport(
             $url,
             $path,
-            $site,
+            $folder,
             $container,
             $output,
             $this->downloader,
