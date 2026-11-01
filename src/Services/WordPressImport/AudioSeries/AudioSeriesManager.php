@@ -397,10 +397,8 @@ class AudioSeriesManager
         $cacheKey = $url.'|'.($strippedSegmentTitle ?? 'null').'|'.$postId.'|'.$strippedPostTitle;
 
         // Check cache for existing import
-        $fileCache = $assetImporter->getFileCache();
-        if (isset($fileCache[$cacheKey])) {
-            $cachedPath = $fileCache[$cacheKey];
-
+        $cachedPath = $assetImporter->getFileCacheEntry($cacheKey);
+        if ($cachedPath !== null) {
             return is_string($cachedPath)
                 ? $cachedPath
                 : null;
