@@ -255,8 +255,6 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                     case 'Create an additional set':
                         $output->writeln("  - Creating additional redirect rule '$source' with same source URL.");
 
-                        // Inside a switch, continue acts as break, so the two cannot differ.
-                        // @pest-mutate-ignore: BreakToContinue
                         break; // No modification to source, just add it
                     case 'Overwrite matching sets':
                         $output->writeln("  - Overwriting existing redirect rule '$source' (ID: $ruleId).");
@@ -264,8 +262,6 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                         $existingRedirects = \array_values($existingRedirects); // Reindex
                         $isUpdate = true;
 
-                        // Inside a switch, continue acts as break, so the two cannot differ.
-                        // @pest-mutate-ignore: BreakToContinue
                         break;
                 }
             }

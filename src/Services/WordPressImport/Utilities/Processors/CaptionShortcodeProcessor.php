@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use DOMElement;
-use DOMNode;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -102,9 +101,9 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
 
         // Extract <img> tag and caption text
         $doc = TextProcessor::loadHtml($content);
-        $images = $doc->getElementsByTagName('img');
+        $img = $doc->getElementsByTagName('img')->item(0);
 
-        if ($images->length === 0) {
+        if ($img === null) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -126,46 +125,31 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             return null;
         }
 
-        $img = $images->item(0);
-
-        // Stop processing when the extracted image node is invalid
-        if (! $img instanceof DOMElement) {
-            return null;
-        }
-
         // Get the parent node of the image element
         $parent = $img->parentNode;
 
-        // Check if the image is wrapped in an anchor tag
+        // Check if the image is wrapped in an anchor tag. Only an element carries that
+        // name, so the type check narrows the parent and decides nothing.
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (
-            $parent instanceof DOMNode
+            $parent instanceof DOMElement
             && $parent->nodeName === 'a'
         ) {
-            // Capture the parent container node of the anchor
-            $anchorContainer = $parent->parentNode;
-
-            // Stop anchor unwrapping when parent container is missing
-            if (! $anchorContainer instanceof DOMNode) {
-                return null;
-            }
-
-            // Move the image element to the same position as the link
-            $anchorContainer->insertBefore(
-                $img,
-                $parent
-            );
-
-            // Remove the now-empty anchor tag from the DOM
-            $anchorContainer->removeChild($parent);
+            // Put the image where the link was, which removes the link
+            $parent->replaceWith($img);
         }
 
         $imgHtml = $doc->saveHTML($img);
 
-        // Stop processing when image HTML serialization fails
+        // Stop processing when image HTML serialization fails. A node of its own
+        // document always serializes, so this only narrows the type.
+        // @pest-mutate-ignore: FalseToTrue
         if ($imgHtml === false) {
             return null;
         }
 
+        // The image's HTML came from this document, so the match below replaces this
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         $captionText = '';
 
         // Extract caption text (content after <img> tag)
@@ -178,10 +162,7 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             $contentText,
             $matches
         );
-        if (
-            $captionMatch === 1
-            && \trim($matches[1]) !== ''
-        ) {
+        if ($captionMatch === 1) {
             $captionText = $this->unwrapParagraphs($matches[1]);
         }
 
@@ -192,7 +173,9 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
                 ? (string) $attributes['align']
                 : '';
 
-            // Normalize align attribute by removing 'align' prefix
+            // Normalize align attribute by removing 'align' prefix. This pattern cannot
+            // fail, so the fallback only narrows the type.
+            // @pest-mutate-ignore: EmptyStringToNotEmpty
             $blockAttributes['align'] = \preg_replace(
                 '/^align/',
                 '',
@@ -446,17 +429,12 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * Extract normalized value payload from an image set structure.
      *
-     * @param  array<int|string, mixed>|null  $set  Parsed image set
+     * @param  array<int|string, mixed>  $set  Parsed image set
      * @return array<int|string, mixed> Normalized values payload
      */
     private function extractSetValues(
-        ?array $set
+        array $set
     ): array {
-        // Return empty values when the parsed set is unavailable
-        if ($set === null) {
-            return [];
-        }
-
         // Return nested values when attrs.values exists as an array
         if (
             isset($set['attrs'])
@@ -506,22 +484,7 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
     private function extractNullableString(
         mixed $value
     ): ?string {
-        // Return null for null values
-        if ($value === null) {
-            return null;
-        }
-
-        // Return string values directly
-        if (\is_string($value)) {
-            return $value;
-        }
-
-        // Return scalar values as strings
-        if (\is_scalar($value)) {
-            return (string) $value;
-        }
-
-        // Return null for unsupported value types
-        return null;
+        // Return scalar values as strings, and null for anything else
+        return \is_scalar($value) ? (string) $value : null;
     }
 }

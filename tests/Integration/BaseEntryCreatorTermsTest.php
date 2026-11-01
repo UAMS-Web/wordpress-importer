@@ -818,8 +818,7 @@ describe('the flat term pass', function (): void {
 
         expect(termsSaved())->toBe([
             'probe_tax::default_my-old_term' => 'Old title',
-            // Statamic's slug setter drops the dot of the importer's ".1" (#193)
-            'probe_tax::default_my-old_term1' => 'Default — My Old Term',
+            'probe_tax::default_my-old_term-1' => 'Default — My Old Term',
         ]);
     });
 
@@ -849,11 +848,10 @@ describe('the flat term pass', function (): void {
 
         $probe->call('createTaxonomyTermsFromStoredData', [['original' => 'dup', 'name' => 'First'], ['original' => 'dup', 'name' => 'Second']], 'probe_tax', 'default', new BufferedOutput);
 
-        // Statamic's slug setter drops the dot of the importer's ".1" and ".2" (#193)
         expect(termsSaved())->toBe([
             'probe_tax::default_dup' => 'Old title',
-            'probe_tax::default_dup1' => 'Default — First',
-            'probe_tax::default_dup2' => 'Default — Second',
+            'probe_tax::default_dup-1' => 'Default — First',
+            'probe_tax::default_dup-2' => 'Default — Second',
         ]);
     });
 
