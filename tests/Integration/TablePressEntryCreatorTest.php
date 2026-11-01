@@ -1108,9 +1108,18 @@ describe('mapping options and reporting Premium features', function (): void {
     ]);
 });
 
-describe('an excerpt Tiptap reads as JSON', function (): void {
-    it('lets the TypeError for a quoted-string excerpt through, as main does (#267)', function (): void {
-        expect(fn () => tablePressRun(tablePressExport([['excerpt' => '"Quoted caption"', 'meta' => tablePressMeta()]])))
-            ->toThrow(TypeError::class, 'Cannot access offset of type string on string');
-    });
+describe('an excerpt that decodes as JSON', function (): void {
+    it('stores its text as the description', function (string $excerpt): void {
+        tablePressRun(tablePressExport([['excerpt' => $excerpt, 'meta' => tablePressMeta()]]));
+
+        expect(tablePressEntry('default_tablepress-12')->get('description'))
+            ->toBe([['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $excerpt]]]]);
+    })->with([
+        'a quoted string' => ['"Quoted caption"'],
+        'a number' => ['42'],
+        'an object' => ['{"a":1}'],
+        'a list' => ['[1,2]'],
+        'a boolean' => ['true'],
+        'null' => ['null'],
+    ]);
 });
