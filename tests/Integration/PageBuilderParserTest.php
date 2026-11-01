@@ -273,7 +273,7 @@ class PbFakeNonAcf extends NonAcfBlockParser
     /**
      * The parseNode() result for each node label.
      *
-     * @var array<string, array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>}>
+     * @var array<string, array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string}>
      */
     public array $results = [];
 
@@ -302,7 +302,7 @@ class PbFakeNonAcf extends NonAcfBlockParser
      * @param  array<int|string, mixed>  $terms
      * @param  array<int|string, mixed>  $items
      * @param  array<int|string, mixed>  $unaddressedBlocks
-     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>}
+     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string}
      */
     public function parseNode(
         DOMNode $node,
@@ -547,6 +547,32 @@ it('keeps the sets of the nodes in their order, with the non-ACF content around 
     ])
         ->and($run['results'][1])->toBe(['processed' => true, 'skipCount' => 1])
         ->and(array_column($fakes['nonAcf']->calls, 1))->toBe(['p:A', [['html' => 'A']], 'p:B', [['html' => 'B']]]);
+});
+
+it('puts a direct set after the non-ACF content ahead of it', function (): void {
+    $fakes = pbParser();
+    $fakes['nonAcf']->results['c:wp:shortcode'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct')];
+
+    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><!-- wp:shortcode --><p>B</p>'));
+
+    expect($run['content'])->toBe([
+        ['type' => 'text', 'html' => 'A'],
+        pbSet('direct'),
+        ['type' => 'text', 'html' => 'B'],
+    ]);
+});
+
+it('puts what follows a direct set\'s shortcode after the set', function (): void {
+    $fakes = pbParser();
+    $fakes['nonAcf']->results['c:wp:shortcode'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct'), 'htmlAfterSet' => 'tail'];
+
+    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><!-- wp:shortcode --><p>B</p>'));
+
+    expect($run['content'])->toBe([
+        ['type' => 'text', 'html' => 'A'],
+        pbSet('direct'),
+        ['type' => 'text', 'html' => 'tail|B'],
+    ]);
 });
 
 it('finalizes at an ACF block whose skip count reaches the end of the nodes', function (): void {
@@ -807,16 +833,6 @@ it('passes a comment that is not a wp:block on to the other parsers', function (
     'a wp:block followed by more text' => ['<!-- wp:block {"ref":1} more -->'],
     'an element' => ['<p>wp:block {"ref":1}</p>'],
 ]);
-
-it('adds the set a non-ACF node made directly, before the non-ACF content that is still accumulating', function (): void {
-    $fakes = pbParser();
-    $fakes['nonAcf']->pushes['p:D'] = [];
-    $fakes['nonAcf']->results['p:D'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct')];
-
-    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><p>D</p>'));
-
-    expect($run['content'])->toBe([pbSet('direct'), ['type' => 'text', 'html' => 'A']]);
-});
 
 it('lifts the ACF blocks out of the HTML a non-ACF node added, after the content accumulated before them', function (string $tail): void {
     $fakes = pbParser();
