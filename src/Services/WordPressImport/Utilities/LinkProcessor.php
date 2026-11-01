@@ -3598,6 +3598,7 @@ class LinkProcessor
      * @param  callable  $findCallback  The callback function to find the entry
      * @param  int  $retryCount  Number of retry attempts (default: 2)
      * @param  int  $retryDelay  Delay between retries in microseconds (default: 100000)
+     * @param  ?callable(int): void  $sleep  Makes each wait, given its microseconds (default: `usleep`)
      * @return ?Entry The found entry or null if not found
      */
     public static function findEntryWithRetry(
@@ -3605,8 +3606,12 @@ class LinkProcessor
         int $retryCount = 2,
         // A microsecond either way is no different wait
         // @pest-mutate-ignore: DecrementInteger, IncrementInteger
-        int $retryDelay = 100000
+        int $retryDelay = 100000,
+        ?callable $sleep = null
     ): ?Entry {
+        // Wait with the given callable, or for real
+        $sleep ??= usleep(...);
+
         // Initialize entry variable for lookup results
         $statamicEntry = null;
 
@@ -3647,7 +3652,7 @@ class LinkProcessor
             // Brief delay before the next targeted retry to let a just-saved
             // entry's cache writes settle (skip the wait after the final attempt)
             if ($i < $retryCount - 1) {
-                usleep($retryDelay);
+                $sleep($retryDelay);
             }
         }
 
