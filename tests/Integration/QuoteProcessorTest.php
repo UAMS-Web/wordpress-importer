@@ -362,10 +362,8 @@ it('rejects a text node that reads like the block comment', function (): void {
 });
 
 it('warns with the site, page and attributes when no blockquote is found', function (?string $pageSlug, string $logged): void {
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($logged): bool {
-        return str_contains($message, 'QuoteProcessor::process: No valid wp:quote blockquote found')
-            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'attributes' => ['align' => 'wide']];
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No valid wp:quote blockquote found')
+        && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'attributes' => ['align' => 'wide']]);
 
     $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote --><p>Not a quote.</p><!-- /wp:quote -->');
 
@@ -378,10 +376,8 @@ it('warns with the site, page and attributes when no blockquote is found', funct
 it('warns once, with the start of the block, when the quote has no paragraphs', function (?string $pageSlug, string $logged): void {
     $blockquote = '<blockquote class="wp-block-quote"><cite>'.str_repeat('a', 120).'</cite></blockquote>';
 
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($blockquote, $logged): bool {
-        return str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
-            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'node_html' => substr($blockquote, 0, 100).'...'];
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
+        && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'node_html' => substr($blockquote, 0, 100).'...']);
 
     $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote -->'.$blockquote.'<!-- /wp:quote -->');
 
@@ -477,12 +473,10 @@ it('stops collecting sibling paragraphs at the closing comment', function (): vo
 });
 
 it('warns and returns null when no paragraph parses to any content', function (): void {
-    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context): bool {
-        return str_contains($message, 'QuoteProcessor::process: No valid paragraph content parsed in wp:quote block')
-            && ($context['site'] ?? null) === 'test-site'
-            && ($context['pageSlug'] ?? null) === 'test-page'
-            && ($context['node_html'] ?? null) === substr('<blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120), 0, 100).'...';
-    });
+    Log::shouldReceive('warning')->once()->withArgs(fn (string $message, array $context): bool => str_contains($message, 'QuoteProcessor::process: No valid paragraph content parsed in wp:quote block')
+        && ($context['site'] ?? null) === 'test-site'
+        && ($context['pageSlug'] ?? null) === 'test-page'
+        && ($context['node_html'] ?? null) === substr('<blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120), 0, 100).'...');
 
     $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120).'</script></p></blockquote><!-- /wp:quote -->';
 
