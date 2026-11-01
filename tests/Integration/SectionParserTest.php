@@ -196,7 +196,7 @@ it('joins fragments, ignoring ones that are not arrays or carry no string html',
 
 it('renders InnerBlocks without wpautop, so a blank line does not split a paragraph', function (): void {
     expect(sectionSet([], [['html' => "First line\n\nSecond line"]])['body'])->toBe([
-        ['type' => 'text', 'text' => 'First lineSecond line', 'attrs' => []],
+        ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First lineSecond line']], 'attrs' => []],
     ]);
 });
 

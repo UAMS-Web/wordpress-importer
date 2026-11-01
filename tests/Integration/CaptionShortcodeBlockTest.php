@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\NonAcfBlockParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\PageBuilderParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -59,6 +62,10 @@ function nonAcfCaptionSets(string $html, AssetImporter $assetImporter): array
 
         if (isset($result['directSet'])) {
             $directSets[] = $result['directSet'];
+        }
+
+        if (isset($result['htmlAfterSet'])) {
+            $accumulator[] = ['html' => $result['htmlAfterSet']];
         }
 
         $index += \max(0, $result['skipCount'] - 1);
@@ -151,6 +158,66 @@ function shortcodeBlockBody(mixed $content): array
     return \is_array($body) ? $body : [];
 }
 
+it('keeps text beside a caption in paragraphs outside a shortcode block', function (bool $useWpAutoP): void {
+    $html = 'Lead [caption id="attachment_1"]<img src="https://example.com/a.jpg" /> Melissa[/caption] tail';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
+
+    expect(shortcodeBlockNodeSummary($nodes))->toBe(['Lead', 'set', 'tail']);
+})->with([
+    'with WpAutoP' => true,
+    'without WpAutoP' => false,
+]);
+
+it('keeps the href of a link beside a shortcode, and drops none around it', function (): void {
+    $html = '<p>Intro</p><!-- wp:shortcode --><a href="https://example.com/more">More</a> [show-people ids="1"]<!-- /wp:shortcode --><p>Outro</p>';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+
+    expect(Arr::get($nodes, '1.content.0.marks.0.attrs.href'))->toBe('https://example.com/more')
+        ->and(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'More', 'set', 'Outro']);
+});
+
+it('reports an image beside a shortcode, naming the site and the post', function (string $html): void {
+    ImportWarningManager::clearWarnings();
+    ProcessingContext::setWordPressPageLink('https://example.com/the-page');
+
+    try {
+        TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, pageSlug: 'the-page');
+        $warnings = ImportWarningManager::getWarnings('content', 'images_beside_shortcodes');
+    } finally {
+        ImportWarningManager::clearWarnings();
+        ProcessingContext::clearWordPressPageLink();
+    }
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0] ?? [])->toMatchArray([
+            'site' => 'default',
+            'page_slug' => 'the-page',
+            'page_link' => 'https://example.com/the-page',
+            'content_snippet' => '<img src="https://example.com/a.jpg">',
+        ]);
+})->with([
+    'a post of one block' => ['<!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"]<!-- /wp:shortcode -->'],
+    'a lone shortcode with a set' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"]<!-- /wp:shortcode -->'],
+    'two shortcodes' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"] [show-people ids="2"]<!-- /wp:shortcode -->'],
+]);
+
+it('reports no image that a shortcode holds, or a block without one', function (string $html): void {
+    ImportWarningManager::clearWarnings();
+
+    TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+    $warnings = ImportWarningManager::getWarnings('content', 'images_beside_shortcodes');
+    ImportWarningManager::clearWarnings();
+
+    expect($warnings)->toBe([]);
+})->with([
+    'an image in a caption' => ['<!-- wp:shortcode -->[caption id="attachment_1"]<img src="https://example.com/a.jpg" /> Text[/caption]<!-- /wp:shortcode -->'],
+    'no image' => ['<!-- wp:shortcode -->Lead [show-people ids="1"]<!-- /wp:shortcode -->'],
+    'an image the block keeps, its shortcodes converting to nothing' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[caption][/caption] [caption][/caption]<!-- /wp:shortcode -->'],
+    'an image in a block with no shortcode' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg"><!-- /wp:shortcode -->'],
+]);
+
 it('keeps the text around a shortcode in its block, on the Bard route', function (string $shortcode): void {
     $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';
 
@@ -189,6 +256,48 @@ it('keeps the page builder set of a shortcode, and the text around it, on the pa
     'a show-people' => ['[show-people ids="1"]', 'uamsweb_block_show-people'],
     'a blogroll, which has no Bard set' => ['[blogroll category="x"]', 'uamsweb_block_news'],
 ]);
+
+it('keeps the text on each side of a shortcode on its side of the set, through the page builder parser', function (): void {
+    $doc = new DOMDocument;
+    $doc->loadHTML('<html><body><p>Intro</p><!-- wp:shortcode -->Lead [show-people ids="1"] tail<!-- /wp:shortcode --><p>Outro</p></body></html>', LIBXML_NOERROR);
+    $body = $doc->getElementsByTagName('body')->item(0);
+
+    if (! $body instanceof DOMElement) {
+        throw new RuntimeException('The test HTML has no body.');
+    }
+
+    $assetImporter = $this::createStub(AssetImporter::class);
+    $parser = new PageBuilderParser;
+    $parser->resetStaticVariables();
+    $nodes = $body->childNodes;
+    $content = [];
+
+    // Walk the nodes as the importer does, honoring each skip count
+    for ($index = 0; $index < $nodes->length; $index++) {
+        $node = $nodes->item($index);
+
+        if (! $node instanceof DOMNode) {
+            continue;
+        }
+
+        $result = $parser->parseNode($node, $index, $nodes, $content, 'default', $assetImporter, new NullOutput);
+        $skipCount = $result['skipCount'] ?? 0;
+        $index += \is_int($skipCount) ? \max(0, $skipCount - 1) : 0;
+    }
+
+    $parser->forceFinalization($content, 'default', $assetImporter, new NullOutput);
+    $parser->resetStaticVariables();
+
+    // A set reads as its type, and content as the text of its nodes
+    $summary = [];
+
+    foreach ($content as $set) {
+        $body = shortcodeBlockBody($set);
+        $summary = [...$summary, ...($body === [] ? [data_get($set, 'type')] : shortcodeBlockNodeSummary($body))];
+    }
+
+    expect($summary)->toBe(['Intro', 'Lead', 'uamsweb_block_show-people', 'tail', 'Outro']);
+});
 
 it('keeps the node right after a lone shortcode block', function (string $shortcode): void {
     $html = '<!-- wp:shortcode -->'.$shortcode.'<!-- /wp:shortcode --><p>After</p>';
@@ -259,11 +368,10 @@ it('keeps the whole text of a caption holding a quote, and leaves no stray text'
 it('stores a caption as written, whether or not WpAutoP runs', function (string $image, string $text, string $expected): void {
     $html = "Intro\n\n[caption id=\"attachment_1\" align=\"alignleft\" width=\"300\"]".$image.' '.$text."[/caption]\n\nOutro";
 
-    // Bare text stays a text node without WpAutoP, so only the set's place is the same
-    foreach ([[true, ['Intro', 'set', 'Outro']], [false, ['text', 'set', 'text']]] as [$useWpAutoP, $summary]) {
+    foreach ([true, false] as $useWpAutoP) {
         $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
 
-        expect(shortcodeBlockNodeSummary($nodes))->toBe($summary)
+        expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'set', 'Outro'])
             ->and(Arr::get($nodes, '1.attrs.values.caption'))->toBe($expected);
     }
 })->with([
