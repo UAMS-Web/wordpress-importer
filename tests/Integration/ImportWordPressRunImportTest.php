@@ -722,7 +722,6 @@ it('imports pages into the pages collection, building their tree, then runs the 
             'assets.baseBlogUrl',
             'types.select',
             'sites.isEnabled',
-            'entries.hasShowPeople',
             'entries.entryOverwrite',
             'taxonomyOverwrite.select',
             'entries.taxonomyOverwrite',
@@ -1176,22 +1175,22 @@ it('warns that only region validation is missing for provider blocks', function 
         ->and($output)->not->toContain('LocationType');
 });
 
-it('needs people groups for people and showcases, and for pages showing people', function (string $type, string $collection, bool $showPeople, bool $asked): void {
+it('needs people groups for people and showcases, and not for pages showing people', function (string $type, string $collection, bool $asked): void {
     iwriCollection($collection);
     [$command, $buffer, $stands] = iwriCommand();
-    $stands['entries']->showPeople = $showPeople;
+    $stands['entries']->showPeople = true;
     $stands['siteManager']->missingDestinations = ['people_groups'];
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, [$type])]);
 
     expect($status)->toBe($asked ? 1 : 0)
-        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked);
+        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked)
+        ->and(IwriLog::of('entries.hasShowPeople'))->toBe([]);
 })->with([
-    'people' => ['uamspeople', 'people', false, true],
-    'a showcase' => ['tshowcase', 'people', false, true],
-    'pages showing people' => ['page', 'pages', true, true],
-    'pages showing nobody' => ['page', 'pages', false, false],
-    'posts' => ['post', 'posts', true, false],
+    'people' => ['uamspeople', 'people', true],
+    'a showcase' => ['tshowcase', 'people', true],
+    'pages' => ['page', 'pages', false],
+    'posts' => ['post', 'posts', false],
 ]);
 
 it('needs classified categories for classifieds', function (): void {
