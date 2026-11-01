@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Support;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * A case that plants files in this process's fake Stache directory before the

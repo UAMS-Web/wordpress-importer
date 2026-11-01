@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
 
 /**
  * Unit tests for the framework-free paths of {@see DeferredKnowledgeBaseMounts}.

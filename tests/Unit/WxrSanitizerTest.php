@@ -17,13 +17,13 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/WxrSanitizerTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizingStreamFilter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizingStreamFilter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Write a string to a temporary file and register it for cleanup.

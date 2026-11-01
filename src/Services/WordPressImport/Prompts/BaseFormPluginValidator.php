@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts;
 
 /**
  * Base class for form plugin validators.

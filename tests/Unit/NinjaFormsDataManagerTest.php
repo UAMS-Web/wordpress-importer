@@ -10,8 +10,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/NinjaFormsDataManagerTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
 
 it('names its plugin and starts empty', function (): void {
     $manager = new DataManager;

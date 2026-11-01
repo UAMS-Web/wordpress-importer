@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/LogosItemCategoriesValidatorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\LogosItemCategoriesValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\LogosItemCategoriesValidator;
 
 it('names the logos item categories taxonomy and its labels', function (string $method, string $expected): void {
     $validator = (new ReflectionClass(LogosItemCategoriesValidator::class))->newInstanceWithoutConstructor();

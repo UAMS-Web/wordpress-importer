@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Stache as StacheFacade;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 
 uses(TestCase::class);
 
@@ -31,7 +31,7 @@ afterEach(function (): void {
  * asks the Stache for the `entries` store (i.e. never triggers a full-store
  * clear).
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/FindEntryWithRetryTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/FindEntryWithRetryTest.php
  */
 it('resolves a deferred link that misses on its first attempt using only targeted invalidation', function (): void {
     // Spy the Stache facade so we can prove the helper never reaches for the

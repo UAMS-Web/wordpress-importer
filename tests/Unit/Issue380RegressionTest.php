@@ -23,7 +23,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/Issue380RegressionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
 
 /**
  * Invoke the protected static FieldtypeMapping::applyValueTranslation() via

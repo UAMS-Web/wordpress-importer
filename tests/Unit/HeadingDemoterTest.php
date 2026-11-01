@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/HeadingDemoterTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
 
 /**
  * A Bard heading node at a given level.

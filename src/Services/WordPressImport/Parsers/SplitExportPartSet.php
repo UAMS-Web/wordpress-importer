@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers;
 
 /**
  * Immutable description of the WXR file(s) that make up a single logical import.

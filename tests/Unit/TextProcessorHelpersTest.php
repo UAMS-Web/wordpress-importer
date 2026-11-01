@@ -11,7 +11,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TextProcessorHelpersTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * The HTML of a loaded document's root, without the root element itself.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleNotices;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleNotices;
 
 beforeEach(function (): void {
     ContentSubmoduleNotices::reset();

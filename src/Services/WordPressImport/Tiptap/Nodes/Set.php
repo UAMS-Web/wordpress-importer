@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes;
 
 use DOMAttr;
 use DOMElement;
 use Statamic\Fieldtypes\RowId;
 use Tiptap\Core\Node;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\PullQuote;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Table;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\PullQuote;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Table;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
 /**
  * Tiptap node for parsing Statamic Bard sets from HTML elements.

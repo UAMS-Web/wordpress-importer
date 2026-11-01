@@ -10,8 +10,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AbstractSetRendererTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\AbstractSetRenderer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\AbstractSetRenderer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
 /**
  * A plain object with the given properties, as tiptap-php hands nodes around.

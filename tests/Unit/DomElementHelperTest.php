@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/DomElementHelperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\DomElementHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DomElementHelper;
 
 it('returns the same element when the node is an element', function (): void {
     $element = (new DOMDocument)->createElement('p', 'text');

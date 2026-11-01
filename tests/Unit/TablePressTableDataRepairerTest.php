@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TablePressTableDataRepairer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TablePressTableDataRepairer;
 
 /**
  * Tests recovery of TablePress cell JSON whose HTML attributes carry unescaped quotes.

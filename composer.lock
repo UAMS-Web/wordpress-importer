@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a7c798a756b8bd792fe64b0b337c6424",
+    "content-hash": "60c53c5598945f0bb212520f492f5d0c",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -8830,17 +8830,17 @@
             "time": "2025-12-02T11:56:42+00:00"
         },
         {
-            "name": "uams-web/wordpress-wxr-cleanup",
-            "version": "v1.1.0",
+            "name": "uams-web/aether-wordpress-importer-cleanup",
+            "version": "v2.0.0",
             "source": {
                 "type": "git",
-                "url": "git@github.com:UAMS-Web/wordpress-wxr-cleanup.git",
-                "reference": "c353ba753372dfc0991f9b20f6a317d6e563d8a9"
+                "url": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup.git",
+                "reference": "45001fcfda7a239a50ddcf8c6f953772420ea36a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/UAMS-Web/wordpress-wxr-cleanup/zipball/c353ba753372dfc0991f9b20f6a317d6e563d8a9",
-                "reference": "c353ba753372dfc0991f9b20f6a317d6e563d8a9",
+                "url": "https://api.github.com/repos/UAMS-Web/aether-wordpress-importer-cleanup/zipball/45001fcfda7a239a50ddcf8c6f953772420ea36a",
+                "reference": "45001fcfda7a239a50ddcf8c6f953772420ea36a",
                 "shasum": ""
             },
             "require": {
@@ -8864,49 +8864,19 @@
             "type": "library",
             "autoload": {
                 "psr-4": {
-                    "UamsWeb\\WxrCleanup\\": "src/"
+                    "UAMSWeb\\Aether\\WordPressImporter\\Cleanup\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "UamsWeb\\WxrCleanup\\Tests\\": "tests/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "pest"
-                ],
-                "refactor": [
-                    "rector"
-                ],
-                "refactor:sweep": [
-                    "rector --clear-cache --config=rector-sweep.php"
-                ],
-                "test:refactor": [
-                    "rector --dry-run"
-                ],
-                "test:refactor:sweep": [
-                    "rector --dry-run --clear-cache --config=rector-sweep.php"
-                ],
-                "pint": [
-                    "pint"
-                ],
-                "test:pint": [
-                    "pint --test"
-                ],
-                "stan": [
-                    "phpstan analyse"
-                ]
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
             "description": "Deterministic CLI tool to transform WordPress WXR exports — strips legacy <table> markup for Statamic import.",
             "support": {
-                "source": "https://github.com/UAMS-Web/wordpress-wxr-cleanup/tree/v1.1.0",
-                "issues": "https://github.com/UAMS-Web/wordpress-wxr-cleanup/issues"
+                "issues": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup/issues",
+                "source": "https://github.com/UAMS-Web/aether-wordpress-importer-cleanup/tree/v2.0.0"
             },
-            "time": "2026-10-26T19:27:04+00:00"
+            "time": "2026-11-01T10:53:08+00:00"
         },
         {
             "name": "ueberdosis/tiptap-php",

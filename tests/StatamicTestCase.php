@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests;
+namespace UAMSWeb\Aether\WordPressImporter\Tests;
 
 use Statamic\Facades\Stache;
 use Statamic\Fields\BlueprintRepository;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use UAMSWeb\WordPressImporter\ServiceProvider;
+use UAMSWeb\Aether\WordPressImporter\ServiceProvider;
 
 /**
  * Base test case for the light Statamic band (wordpress-importer-archive#319, decision B).

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
 
 /**
  * Validates Gravity Forms export file content.

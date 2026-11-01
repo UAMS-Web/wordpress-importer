@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ContentTypeReadsTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
 
 it('declares the body companions, the link targets and both passes for every type with a body', function (string $contentType): void {
     // On a vanity domain too: only redirect rules read less there

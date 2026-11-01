@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Support;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestTrait;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestTrait;
 
 /**
  * Names and reclaims the per-test snapshot directories

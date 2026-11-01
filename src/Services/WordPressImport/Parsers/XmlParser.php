@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers;
 
 use SimpleXMLElement;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Parses WordPress XML export files to extract content types, items, and terms.

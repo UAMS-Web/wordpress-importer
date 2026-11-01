@@ -18,7 +18,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ShortcodeAttributeListTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
 
 /**
  * Whether ShortcodeProcessor reads a bracketed name and its attribute text as a shortcode.

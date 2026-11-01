@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
 /**
  * Turns the Redirection and Pretty Links rules the migration API serves into `redirect_rule` items (wordpress-importer-archive#1307).

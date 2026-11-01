@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/WpAutoPTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 
 it('returns nothing for blank text', function (string $text): void {
     expect((new WpAutoP)->process($text))->toBe('');

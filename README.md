@@ -21,12 +21,20 @@ This addon is designed for real migration work: it parses WordPress exports, let
 Install with Composer:
 
 ```bash
-composer require uams-web/wordpress-importer
+composer require uams-web/aether-wordpress-importer
 ```
 
 The addon service provider is auto-discovered by Laravel/Statamic.
 
-**Code layout:** this repository’s PHP lives under `src/` (Composer package `uams-web/wordpress-importer`). The import command class is `UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress`, registered by `UAMSWeb\WordPressImporter\ServiceProvider`.
+**Moving from `uams-web/wordpress-importer`:** the package and its namespace were renamed, and the old package is abandoned. A consumer changes three things:
+
+- Require `uams-web/aether-wordpress-importer` in place of `uams-web/wordpress-importer`. GitHub redirects the old repository URL; Composer does not redirect the old package name.
+- Replace `UAMSWeb\WordPressImporter\` with `UAMSWeb\Aether\WordPressImporter\` in any import of a class from this package.
+- Replace `vendor/uams-web/wordpress-importer/` with `vendor/uams-web/aether-wordpress-importer/` in any path, such as a host-app test command.
+
+The artisan command, its options and the environment variables keep their names. The package has no configuration file, publish tag or published asset to rename.
+
+**Code layout:** this repository’s PHP lives under `src/` (Composer package `uams-web/aether-wordpress-importer`). The import command class is `UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress`, registered by `UAMSWeb\Aether\WordPressImporter\ServiceProvider`.
 
 ## Setting up the migration API (only for `--source=api`)
 
@@ -365,10 +373,10 @@ The declaration is deliberately local. Measuring what `uams-statamic` consumes i
 | Channel | Declared |
 | --- | --- |
 | Console command | `statamic:import:wordpress`, and the eight options documented under [Usage](#usage): `--source`, `--site`, `--modified-after`, `--network`, `--key-from-stdin`, `--unsupported-content`, `--content-type`, `--minerva-generation` |
-| Service provider | `UAMSWeb\WordPressImporter\ServiceProvider`, auto-discovered through `extra.laravel.providers`; the `ImportWordPress` command binding it performs; and the `protect.entry` middleware alias it registers |
+| Service provider | `UAMSWeb\Aether\WordPressImporter\ServiceProvider`, auto-discovered through `extra.laravel.providers`; the `ImportWordPress` command binding it performs; and the `protect.entry` middleware alias it registers |
 | Classes | the 22 below |
 
-Classes are listed relative to `UAMSWeb\WordPressImporter\Services\WordPressImport\`. **Consumed by** records where the app reached for it when the table was last seeded — `runtime` in the app's own code, `tests` in the app's own test suite. Both count: removing either breaks the consumer.
+Classes are listed relative to `UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\`. **Consumed by** records where the app reached for it when the table was last seeded — `runtime` in the app's own code, `tests` in the app's own test suite. Both count: removing either breaks the consumer.
 
 | Class | Consumed by |
 | --- | --- |
@@ -399,7 +407,7 @@ Classes are listed relative to `UAMSWeb\WordPressImporter\Services\WordPressImpo
 
 ## Releasing
 
-Releases are **retrospective semver tags on `main`** — a changelog checkpoint, not a deploy gate. Cut a tag whenever a batch of vetted changes has landed, and always **before `uams-statamic` consumes them**: the app pins this package by a tagged caret range (`"uams-web/wordpress-importer": "^0.20"` as of 2026-09-21), not `dev-main`, so a tag has to exist for the new work to be requirable. A tag survives a force-push to `main`; a raw `dev-main` branch commit does not (the failure behind `UAMS-Web/uams-statamic`#904 / #905).
+Releases are **retrospective semver tags on `main`** — a changelog checkpoint, not a deploy gate. Cut a tag whenever a batch of vetted changes has landed, and always **before `uams-statamic` consumes them**: the app pins this package by a tagged caret range (`"uams-web/aether-wordpress-importer": "^0.20"` as of 2026-09-21), not `dev-main`, so a tag has to exist for the new work to be requirable. A tag survives a force-push to `main`; a raw `dev-main` branch commit does not (the failure behind `UAMS-Web/uams-statamic`#904 / #905).
 
 **Versioning** — stay in `0.x` until the eventual `1.0.0` (Launch); every tag before then is a pre-release.
 
@@ -420,12 +428,12 @@ gh release create v0.6.0 --title 'v0.6.0 — <Theme>' --notes-file notes.md --pr
 
 **Release-note style** — title `vX.Y.Z — <Theme>` (em dash), a one-sentence milestone lead, then a closed, ordered set of `##` buckets: `Breaking changes`, `What's new`, `What's fixed`, `Security`, `Maintenance and tooling`. One linked bullet per change (`[#N]` for a PR, a backticked short SHA for a direct commit); no `by @author`; write "and", never `&`; use the Oxford comma. The full style guide and a body generator (`gen_release_notes.py`) live in the consumer repo `UAMS-Web/uams-statamic` under `.claude/skills/writing-release-notes/`.
 
-**After tagging**, bump the constraint in `uams-statamic` (edit `composer.json`, then `composer update uams-web/wordpress-importer`) when the app should adopt the new release — normally through its recurring dependency-update pass.
+**After tagging**, bump the constraint in `uams-statamic` (edit `composer.json`, then `composer update uams-web/aether-wordpress-importer`) when the app should adopt the new release — normally through its recurring dependency-update pass.
 
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/UAMS-Web/wordpress-importer/issues)
-- Source: [GitHub Repository](https://github.com/UAMS-Web/wordpress-importer)
+- Issues: [GitHub Issues](https://github.com/UAMS-Web/aether-wordpress-importer/issues)
+- Source: [GitHub Repository](https://github.com/UAMS-Web/aether-wordpress-importer)
 
 ## License
 

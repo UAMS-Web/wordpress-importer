@@ -23,8 +23,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/FormidableXmlFileLoaderTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableXmlFileLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableXmlFileLoader;
 
 /**
  * Invoke the loader's protected `convertXmlToArray()` against an XML string.

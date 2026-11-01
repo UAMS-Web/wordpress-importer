@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Support;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 
 /**
  * Splits what a host-app import test wrote into a guarded submodule from
@@ -26,7 +26,7 @@ namespace UAMSWeb\WordPressImporter\Tests\Support;
  * by tolerating it. This package holds the same line with no list at all,
  * because it has somewhere better to put an expected write: the path belongs in
  * that test's {@see
- * \UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestTrait::snapshotIsolatedState()}
+ * \UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestTrait::snapshotIsolatedState()}
  * call, which restores it. (PHPStan at level max independently refuses the
  * empty-list form — `foreach.emptyArray` — so it could not be carried over inert.)
  *

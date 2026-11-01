@@ -16,8 +16,8 @@ declare(strict_types=1);
 
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Stache\Stache;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

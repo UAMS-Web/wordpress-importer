@@ -1,5 +1,5 @@
 {
-    "name": "uams-web-wordpress-importer",
+    "name": "uams-web-aether-wordpress-importer",
     "private": true,
     "description": "Dev-only tooling for the WordPress importer Composer package. Not published, not required by the consuming app.",
     "scripts": {
