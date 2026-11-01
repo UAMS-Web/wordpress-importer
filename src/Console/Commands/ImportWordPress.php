@@ -541,8 +541,8 @@ class ImportWordPress extends Command
     {
         try {
             $workspace = VerificationWorkspace::enter();
-        } catch (RuntimeException $e) {
-            $this->error("The verification run was refused: {$e->getMessage()} Nothing was imported.");
+        } catch (RuntimeException $runtimeException) {
+            $this->error("The verification run was refused: {$runtimeException->getMessage()} Nothing was imported.");
 
             return 1;
         }
@@ -550,7 +550,7 @@ class ImportWordPress extends Command
         // The copies are newer than the old stamp, and the sweep bounds itself by it
         $this->runStartedAt = \microtime(true);
 
-        $this->info('Verification run: writing to a temporary copy. This application\'s content and assets will not change.');
+        $this->info("Verification run: writing to a temporary copy. This application's content and assets will not change.");
 
         try {
             return $run();

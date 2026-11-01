@@ -154,12 +154,12 @@ class VerificationWorkspace
 
         try {
             $workspace->prepare();
-        } catch (Throwable $e) {
+        } catch (Throwable $throwable) {
             // Whatever moved before the failure is moved back, then the failure is the caller's
             $workspace->leave();
 
             // A failed filesystem call arrives as a PHP warning Laravel has turned into this
-            throw $e instanceof ErrorException ? new RuntimeException($e->getMessage(), 0, $e) : $e;
+            throw $throwable instanceof ErrorException ? new RuntimeException($throwable->getMessage(), 0, $throwable) : $throwable;
         }
 
         // The command's `terminate()` calls `exit`, which runs no `finally` block. A second
@@ -182,9 +182,9 @@ class VerificationWorkspace
             if ($this->savedStores !== []) {
                 Stache::clear();
             }
-        } catch (Throwable $e) {
+        } catch (Throwable $throwable) {
             // The stores go back regardless, and the run's own failure must not be replaced
-            Log::warning("Verification workspace: the Stache could not be cleared: {$e->getMessage()}");
+            Log::warning("Verification workspace: the Stache could not be cleared: {$throwable->getMessage()}");
         }
 
         $this->restore();
