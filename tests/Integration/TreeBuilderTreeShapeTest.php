@@ -18,6 +18,7 @@ use Statamic\Structures\CollectionStructure;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -38,6 +39,7 @@ beforeEach(function (): void {
     TreeBuilder::resetProcessedCollections();
     ProcessingContext::clearWordPressPageLink();
     ProcessingContext::clearFormConfigContext();
+    ImportWarningManager::clearWarnings();
 });
 
 afterEach(function (): void {
@@ -777,6 +779,86 @@ it('logs a file it cannot delete, and moves on', function (): void {
             'entry_id' => 'dupe',
             'file' => \str_replace('\\', '/', \dirname($first)).\DIRECTORY_SEPARATOR.\basename($first),
             'error' => 'locked',
+        ],
+    ]);
+
+    expect(ImportWarningManager::getWarnings('content', 'duplicate_entry_file_not_deleted'))->toHaveCount(1);
+});
+
+it('reports a delete that returns false as a failure, and still deletes the rest of the group', function (): void {
+    ['dir' => $dir] = treeShapeStache();
+    treeShapeCollection();
+    $log = Log::spy();
+
+    treeShapeFile($dir, 'a.md', 'dupe');
+    treeShapeFile($dir, 'b.md', 'dupe');
+    treeShapeFile($dir, 'c.md', 'dupe');
+    $output = new BufferedOutput;
+
+    // A filesystem that behaves as Laravel's does for a file it cannot remove
+    $filesystem = new class extends Filesystem
+    {
+        /** @var mixed The path of the file that could not be removed */
+        public mixed $stuck = null;
+
+        /**
+         * Return false for `b.md`, and delete anything else.
+         *
+         * @param  string|array<mixed>  $paths  The paths to delete
+         */
+        public function delete($paths): bool
+        {
+            if (\is_string($paths) && \basename($paths) === 'b.md') {
+                $this->stuck = $paths;
+
+                return false;
+            }
+
+            return parent::delete($paths);
+        }
+    };
+
+    IlluminateFileFacade::swap($filesystem);
+
+    try {
+        treeShapeBuilder()->cleanup('pages', 'default', $output);
+    } finally {
+        // Put the real filesystem back, so the temporary directory can be removed
+        IlluminateFileFacade::swap(new Filesystem);
+    }
+
+    $context = [
+        'collection' => 'pages',
+        'site' => 'default',
+        'entry_id' => 'dupe',
+        'file' => $filesystem->stuck,
+        'error' => 'The filesystem could not delete the file',
+    ];
+
+    expect($filesystem->stuck)->toBeString()
+        ->and(treeShapeFilesIn($dir))->toBe(['a.md', 'b.md'])
+        ->and($output->fetch())->toBe('Deleted duplicate entry file: c.md (ID: dupe)'.\PHP_EOL)
+        ->and(ImportWarningManager::getWarnings('content', 'duplicate_entry_file_not_deleted'))->toBe([$context]);
+
+    $log->shouldHaveReceived('error', ['TreeBuilder::cleanupDuplicateEntryFiles: Failed to delete duplicate file', $context]);
+    $log->shouldNotHaveReceived('info', [
+        'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
+        [
+            'collection' => 'pages',
+            'site' => 'default',
+            'entry_id' => 'dupe',
+            'deleted_file' => 'b.md',
+            'kept_file' => 'a.md',
+        ],
+    ]);
+    $log->shouldHaveReceived('info', [
+        'TreeBuilder::cleanupDuplicateEntryFiles: Deleted duplicate file',
+        [
+            'collection' => 'pages',
+            'site' => 'default',
+            'entry_id' => 'dupe',
+            'deleted_file' => 'c.md',
+            'kept_file' => 'a.md',
         ],
     ]);
 });

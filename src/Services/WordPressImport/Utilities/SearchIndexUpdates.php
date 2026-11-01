@@ -58,6 +58,12 @@ use Throwable;
 class SearchIndexUpdates
 {
     /**
+     * The handle of the index behind the Control Panel's command palette, which Statamic
+     * adds when the search config does not define it, over all content.
+     */
+    public const string CP_INDEX = 'cp';
+
+    /**
      * The events `UpdateItemIndexes` subscribes to, mapped to their handler id.
      *
      * Mirrors {@see UpdateItemIndexes::subscribe()} so {@see self::disable()}
@@ -122,16 +128,24 @@ class SearchIndexUpdates
      * content becomes searchable. This is a single pass over the same indexes the
      * per-save listener would otherwise have thrashed once per save, so it is
      * strictly cheaper than leaving live updates on during the import. Per-index
-     * failures are logged and skipped rather than aborting the run.
+     * failures are logged and skipped rather than aborting the run, and each one
+     * reaches the end-of-import warning summary, since that index is left as it was
+     * before the import (#229).
      *
      * @param  OutputInterface|null  $output  Optional console output for progress.
+     * @param  list<string>|null  $only  The index handles to rebuild, or null for every index
      */
-    public static function reindexAll(?OutputInterface $output = null): void
+    public static function reindexAll(?OutputInterface $output = null, ?array $only = null): void
     {
         $output?->writeln('      - Rebuilding search indexes for imported content...');
 
         foreach (Search::indexes() as $index) {
             if (! ($index instanceof Index)) {
+                continue;
+            }
+
+            // A localized index shares its handle with the others of its name
+            if ($only !== null && ! \in_array($index->handle(), $only, true)) {
                 continue;
             }
 
@@ -153,6 +167,12 @@ class SearchIndexUpdates
                 }
 
                 Log::warning("SearchIndexUpdates: failed to rebuild search index '{$indexLabel}': ".$e->getMessage());
+
+                ImportWarningManager::addWarning(
+                    'search',
+                    'index_rebuild_failed',
+                    ['index' => $indexLabel, 'error' => $e->getMessage()]
+                );
 
                 $output?->writeln("          - <comment>Could not rebuild search index '{$indexLabel}': {$e->getMessage()}</comment>");
             }

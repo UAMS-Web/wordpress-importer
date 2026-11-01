@@ -961,6 +961,21 @@ class AssetImporter
     }
 
     /**
+     * Get a file cache entry by the arguments it was set with.
+     *
+     * @param  string  $url  The URL key
+     * @param  string  $container  The container context
+     * @return mixed The cached value, or null when there is none
+     */
+    public function getFileCacheEntry(
+        string $url,
+        string $container = 'files'
+    ): mixed {
+        // Read under the key `setFileCache()` writes
+        return self::$fileCache[self::generateFileCacheKey($url, $container)] ?? null;
+    }
+
+    /**
      * Set a file cache entry with container-aware key.
      *
      * @param  string  $url  The URL key
