@@ -1,5 +1,5 @@
 {
-    "_hash": "da7414629e86b5de0a138973729ae999c8c068622a79c3a50d50a5a1ee178703",
+    "_hash": "2b2ecfb1558e9a3650e1436a0fa8efba10f29d74ab048aee0dfc7456c2443d73",
     "patches": {
         "pestphp/pest-plugin-mutate": [
             {
@@ -7,6 +7,26 @@
                 "description": "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)",
                 "url": "patches/pest-plugin-mutate-ignore-annotated-statement.patch",
                 "sha256": "6e7b44d2ad69b8f58fc9cdf066d06dcdbd48a022f326422925868d38882141a2",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Let a mutant child on Windows run its tests and write files, so its failure is a real kill (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)",
+                "url": "patches/pest-plugin-mutate-windows-mutant-child.patch",
+                "sha256": "271de098bca63d353603fba96662c31db99767130fce8512142d00e383e2fa07",
+                "depth": 1,
+                "extra": {
+                    "provenance": "patches-file:patches.json"
+                }
+            },
+            {
+                "package": "pestphp/pest-plugin-mutate",
+                "description": "Widen or refuse a mutant child's filter that cannot launch or compile, so it cannot score a kill without running a test (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)",
+                "url": "patches/pest-plugin-mutate-windows-filter-length.patch",
+                "sha256": "ea282babd9d1af72e45957610b00d7ef1e3428d1c4f06ea16199c963fe1fffe0",
                 "depth": 1,
                 "extra": {
                     "provenance": "patches-file:patches.json"
