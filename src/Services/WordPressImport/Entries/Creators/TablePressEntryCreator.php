@@ -762,6 +762,8 @@ class TablePressEntryCreator extends BaseEntryCreator
         $existingBySlug = $existingBySlugQuery->first();
 
         // Handle overwrite behavior
+        $savedSlug = $entrySlug;
+
         if ($existingById || $existingBySlug) {
             switch ($this->overwriteBehavior) {
                 case 'Skip matching files':
@@ -769,30 +771,27 @@ class TablePressEntryCreator extends BaseEntryCreator
 
                     return null;
                 case 'Create an additional file':
+                    // ---
+                    // Statamic drops a dot from a slug, so `12.1` would land on table 121.
+                    // An underscore stays, and no export id reads as a copy of another.
+                    // ---
                     $counter = 1;
-                    $newSlug = $entrySlug;
                     while (
                         $this->countEntriesBySlug(
                             $collectionHandle,
-                            $newSlug
+                            $savedSlug
                         ) > 0
                     ) {
-                        $newSlug = "$entrySlug.$counter";
-
-                        // ---
-                        // Statamic stores the slug without its dot, so the dotted slug
-                        // never counts and the loop runs once whichever way the counter
-                        // moves (#265).
-                        // ---
-                        // @pest-mutate-ignore: PostIncrementToPostDecrement
+                        $savedSlug = "{$entrySlug}_copy-$counter";
                         $counter++;
                     }
 
-                    $entry->slug($newSlug);
+                    $entry->slug($savedSlug);
                     $entryId = $this->generateUniqueId(
-                        $newSlug,
+                        $savedSlug,
                         $entryId
                     );
+                    $entry->id($entryId);
                     $data['id'] = $entryId;
                     break;
                 case 'Overwrite matching files':
@@ -878,7 +877,7 @@ class TablePressEntryCreator extends BaseEntryCreator
         $entry->data($data);
         $entry->save();
 
-        $output->writeln("  - <info>Saving entry with slug '$entrySlug' for collection '$collectionHandle'</info>");
+        $output->writeln("  - <info>Saving entry with slug '$savedSlug' for collection '$collectionHandle'</info>");
 
         return $entry;
     }
@@ -1611,14 +1610,9 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $collectionHandle,
         string $slug
     ): int {
-        // ---
-        // Create a typed query for collection and slug criteria. Only the dotted slugs
-        // of #265 are counted, which no entry in any collection is stored under, so the
-        // collection criterion changes no count.
-        // ---
+        // Create a typed query for collection and slug criteria
         $query = $this->makeEntryQuery();
 
-        // @pest-mutate-ignore: RemoveMethodCall
         $query->where(
             'collection',
             $collectionHandle
