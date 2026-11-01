@@ -50,7 +50,7 @@
         "php": "^8.4",
         "james-heinrich/getid3": "^1.9",
         "laravel/prompts": "^0.3",
-        "statamic/cms": "6.37.0",
+        "statamic/cms": "6.39.0",
         "uams-web/aether-wordpress-importer-cleanup": "^2.0"
     },
     "require-dev": {
