@@ -325,14 +325,14 @@ describe('building the importer', function (): void {
     it('passes the overwrite behavior to its handler', function (): void {
         $handler = new AssetImporterTestHandler;
 
-        (new AssetImporterTestImporter($handler))->setAssetOverwriteBehavior('Skip matching files');
+        new AssetImporterTestImporter($handler)->setAssetOverwriteBehavior('Skip matching files');
 
         expect($handler->behaviors)->toBe(['Skip matching files']);
     });
 });
 
 describe('importing an image', function (): void {
-    it('hands the attachment\'s file, text and page URL to the handler and caches the path', function (): void {
+    it("hands the attachment's file, text and page URL to the handler and caches the path", function (): void {
         $handler = new AssetImporterTestHandler(['news/2020-01-Photo.jpg']);
         $importer = new AssetImporterTestImporter($handler);
         $output = new BufferedOutput;
@@ -369,7 +369,7 @@ describe('importing an image', function (): void {
     it('hands no page URL when the attachment has none', function (): void {
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
-        (new AssetImporterTestImporter($handler))->importImage('6', 'news', assetImporterTestAttachments(), new BufferedOutput);
+        new AssetImporterTestImporter($handler)->importImage('6', 'news', assetImporterTestAttachments(), new BufferedOutput);
 
         expect(\array_slice($handler->images[0] ?? [], 8))->toBe([null]);
     });
@@ -379,7 +379,7 @@ describe('importing an image', function (): void {
         $handler = new AssetImporterTestHandler;
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter($handler))->importImage('', 'news', assetImporterTestAttachments(), $output, pageUrl: $pageUrl))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importImage('', 'news', assetImporterTestAttachments(), $output, pageUrl: $pageUrl))->toBeNull()
             ->and($handler->images)->toBe([])
             ->and($output->fetch())->toBe('')
             ->and($warnings->logged)->toBe([['AssetImporter::importImage: No attachment ID provided for image import'.$suffix, ['site' => 'news', ...$entry]]]);
@@ -393,7 +393,7 @@ describe('importing an image', function (): void {
         $handler = new AssetImporterTestHandler;
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter($handler))->importImage('5', 'news', assetImporterTestAttachments(), $output))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importImage('5', 'news', assetImporterTestAttachments(), $output))->toBeNull()
             ->and($handler->images)->toBe([])
             ->and($output->fetch())->toBe('');
     });
@@ -401,7 +401,7 @@ describe('importing an image', function (): void {
     it('assumes a fallback URL unless told there is none', function (): void {
         $warnings = assetImporterTestWarnings();
 
-        (new AssetImporterTestImporter(new AssetImporterTestHandler))->importImage('9', 'news', assetImporterTestAttachments(), new BufferedOutput);
+        new AssetImporterTestImporter(new AssetImporterTestHandler)->importImage('9', 'news', assetImporterTestAttachments(), new BufferedOutput);
 
         expect($warnings->logged)->toBe([]);
     });
@@ -410,7 +410,7 @@ describe('importing an image', function (): void {
         $warnings = assetImporterTestWarnings();
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter(new AssetImporterTestHandler))->importImage('9', 'news', assetImporterTestAttachments(), $output, hasFallbackUrl: $hasFallback))->toBeNull()
+        expect(new AssetImporterTestImporter(new AssetImporterTestHandler)->importImage('9', 'news', assetImporterTestAttachments(), $output, hasFallbackUrl: $hasFallback))->toBeNull()
             ->and($output->fetch())->toBe("  - No attachment found for ID '9'.".PHP_EOL)
             ->and($warnings->logged)->toBe($expected);
     })->with([
@@ -423,7 +423,7 @@ describe('importing an image', function (): void {
         $handler = new AssetImporterTestHandler;
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter($handler))->importImage('4', 'news', assetImporterTestAttachments(), $output))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importImage('4', 'news', assetImporterTestAttachments(), $output))->toBeNull()
             ->and($handler->images)->toBe([])
             ->and($output->fetch())->toBe("  - No attachment URL found for attachment ID '4'.".PHP_EOL)
             ->and($warnings->logged)->toBe([["AssetImporter::importImage: No attachment URL found for ID '4'", ['site' => 'news']]]);
@@ -460,7 +460,7 @@ describe('importing an image', function (): void {
     it('applies the same-site policy to an image on another site', function (SameSitePolicy $policy, ?string $expected): void {
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
-        expect((new AssetImporterTestImporter($handler, 'https://example.org'))->importImage('5', 'news', assetImporterTestAttachments(), new BufferedOutput, $policy))->toBe($expected)
+        expect(new AssetImporterTestImporter($handler, 'https://example.org')->importImage('5', 'news', assetImporterTestAttachments(), new BufferedOutput, $policy))->toBe($expected)
             ->and($handler->images)->toHaveCount($expected === 'news/p.jpg' ? 1 : 0);
     })->with([
         'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg'],
@@ -470,7 +470,7 @@ describe('importing an image', function (): void {
 });
 
 describe('importing a thumbnail', function (): void {
-    it('hands the attachment\'s file, text and page URL to the handler and caches the path', function (): void {
+    it("hands the attachment's file, text and page URL to the handler and caches the path", function (): void {
         $handler = new AssetImporterTestHandler(['news/2020-01-Photo.jpg']);
         $importer = new AssetImporterTestImporter($handler);
         $output = new BufferedOutput;
@@ -506,7 +506,7 @@ describe('importing a thumbnail', function (): void {
     it('hands no page URL when the attachment has none', function (): void {
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
-        (new AssetImporterTestImporter($handler))->importThumbnail('6', assetImporterTestAttachments(), 'news', new BufferedOutput);
+        new AssetImporterTestImporter($handler)->importThumbnail('6', assetImporterTestAttachments(), 'news', new BufferedOutput);
 
         expect(\array_slice($handler->images[0] ?? [], 8))->toBe([null]);
     });
@@ -515,7 +515,7 @@ describe('importing a thumbnail', function (): void {
         config(['wordpress-import.upload_images' => $uploads]);
         $warnings = assetImporterTestWarnings();
 
-        expect((new AssetImporterTestImporter(new AssetImporterTestHandler))->importThumbnail('', assetImporterTestAttachments(), 'news', new BufferedOutput, pageUrl: 'https://uams.edu/page'))->toBeNull()
+        expect(new AssetImporterTestImporter(new AssetImporterTestHandler)->importThumbnail('', assetImporterTestAttachments(), 'news', new BufferedOutput, pageUrl: 'https://uams.edu/page'))->toBeNull()
             ->and($warnings->logged)->toBe([[
                 'AssetImporter::importThumbnail: No thumbnail ID provided (from entry: https://uams.edu/page)',
                 ['site' => 'news', 'attachments_count' => 3, 'upload_images_enabled' => $uploads, 'entry_url' => 'https://uams.edu/page'],
@@ -529,7 +529,7 @@ describe('importing a thumbnail', function (): void {
         config(['wordpress-import.upload_images' => false]);
         $handler = new AssetImporterTestHandler;
 
-        expect((new AssetImporterTestImporter($handler))->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput))->toBeNull()
             ->and($handler->images)->toBe([]);
     });
 
@@ -537,7 +537,7 @@ describe('importing a thumbnail', function (): void {
         $warnings = assetImporterTestWarnings();
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter(new AssetImporterTestHandler))->importThumbnail('9', assetImporterTestAttachments(), 'news', $output))->toBeNull()
+        expect(new AssetImporterTestImporter(new AssetImporterTestHandler)->importThumbnail('9', assetImporterTestAttachments(), 'news', $output))->toBeNull()
             ->and($output->fetch())->toBe('')
             ->and($warnings->logged)->toBe([["AssetImporter::importThumbnail: No attachment found for thumbnail ID '9'", ['site' => 'news']]]);
     });
@@ -547,7 +547,7 @@ describe('importing a thumbnail', function (): void {
         $handler = new AssetImporterTestHandler;
         $output = new BufferedOutput;
 
-        expect((new AssetImporterTestImporter($handler))->importThumbnail('4', assetImporterTestAttachments(), 'news', $output))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importThumbnail('4', assetImporterTestAttachments(), 'news', $output))->toBeNull()
             ->and($handler->images)->toBe([])
             ->and($output->fetch())->toBe("  - No attachment URL found for thumbnail ID '4'.".PHP_EOL)
             ->and($warnings->logged)->toBe([["AssetImporter::importThumbnail: No attachment URL found for ID '4'", ['site' => 'news']]]);
@@ -577,7 +577,7 @@ describe('importing a thumbnail', function (): void {
     it('applies the same-site policy to a thumbnail on another site', function (SameSitePolicy $policy, ?string $expected): void {
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
-        expect((new AssetImporterTestImporter($handler, 'https://example.org'))->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput, $policy))->toBe($expected)
+        expect(new AssetImporterTestImporter($handler, 'https://example.org')->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput, $policy))->toBe($expected)
             ->and($handler->images)->toHaveCount($expected === 'news/p.jpg' ? 1 : 0);
     })->with([
         'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg'],
@@ -615,9 +615,28 @@ describe('importing a file', function (): void {
     it('imports into the files container, without a site, when given neither', function (): void {
         $handler = new AssetImporterTestHandler(['2020-01-Report.pdf']);
 
-        (new AssetImporterTestImporter($handler))->importFile('https://uams.edu/wp-content/uploads/2020/01/Report.pdf', '', new BufferedOutput);
+        new AssetImporterTestImporter($handler)->importFile('https://uams.edu/wp-content/uploads/2020/01/Report.pdf', '', new BufferedOutput);
 
         expect($handler->files[0] ?? [])->toBe(['https://uams.edu/wp-content/uploads/2020/01/Report.pdf', '2020-01-Report.pdf', '', 'files', null, null, null, null]);
+    });
+
+    it('imports a portrait to the root of its container, whichever site it is for', function (): void {
+        $handler = new AssetImporterTestHandler(['2020-01-Portrait.jpg']);
+
+        new AssetImporterTestImporter($handler)->importFile('https://uams.edu/wp-content/uploads/2020/01/Portrait.jpg', 'news', new BufferedOutput, 'portraits');
+
+        expect($handler->files[0] ?? [])->toBe(['https://uams.edu/wp-content/uploads/2020/01/Portrait.jpg', '2020-01-Portrait.jpg', '', 'portraits', null, null, null, null]);
+    });
+
+    it('names the site being imported when the policy skips a portrait', function (): void {
+        $handler = new AssetImporterTestHandler;
+
+        new AssetImporterTestImporter($handler, 'https://example.org')->importFile('https://uams.edu/p.jpg', 'news', new BufferedOutput, 'portraits', SameSitePolicy::SKIP_DIFFERENT_SITE, 'https://example.org/page/');
+
+        expect($handler->files)->toBe([])
+            ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([
+                ['url' => 'https://uams.edu/p.jpg', 'container' => 'portraits', 'site' => 'news', 'page_url' => 'https://example.org/page/'],
+            ]);
     });
 
     it('shares the cache between sizes of one image', function (): void {
@@ -653,7 +672,7 @@ describe('importing a file', function (): void {
     it('warns and imports nothing without a URL', function (): void {
         $warnings = assetImporterTestWarnings();
 
-        expect((new AssetImporterTestImporter(new AssetImporterTestHandler))->importFile('', 'news', new BufferedOutput))->toBeNull()
+        expect(new AssetImporterTestImporter(new AssetImporterTestHandler)->importFile('', 'news', new BufferedOutput))->toBeNull()
             ->and($warnings->logged)->toBe([['AssetImporter::importFile: No URL provided for file import', ['site' => 'news']]]);
     });
 
@@ -661,7 +680,7 @@ describe('importing a file', function (): void {
         config(['wordpress-import.upload_files' => false]);
         $handler = new AssetImporterTestHandler;
 
-        expect((new AssetImporterTestImporter($handler))->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput))->toBeNull()
+        expect(new AssetImporterTestImporter($handler)->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput))->toBeNull()
             ->and($handler->files)->toBe([]);
     });
 
