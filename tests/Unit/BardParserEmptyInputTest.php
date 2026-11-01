@@ -13,11 +13,11 @@ it('parses empty or whitespace-only HTML to no content', function (string $html)
     'mixed whitespace' => [" \n\t\r\n "],
 ]);
 
-it('parses a line of plain text to a text node', function (): void {
+it('parses a line of plain text to a paragraph', function (): void {
     // This literal is the string Pest's EmptyStringToNotEmpty mutator puts in place of '', so
     // the whitespace guard's comparison against '' is pinned by an input as well as by blanks.
     expect((new BardParser)->parse('PEST Mutator was here!'))
-        ->toBe([['type' => 'text', 'text' => 'PEST Mutator was here!']]);
+        ->toBe([['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'PEST Mutator was here!']]]]);
 });
 
 it('parses HTML that is only a WordPress block comment to no content', function (): void {

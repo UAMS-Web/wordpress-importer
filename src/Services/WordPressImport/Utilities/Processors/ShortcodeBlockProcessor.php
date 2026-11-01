@@ -12,7 +12,9 @@ use DOMText;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Processes WordPress wp:shortcode blocks into Tiptap-compatible HTML for
@@ -81,8 +83,8 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term objects from XML
      * @param  ?string  $pageSlug  The page slug for shortcode processing (optional)
      * @return array<int|string, mixed>|string|null Tiptap HTML string; or an array with 'html', 'skipCount' and 'page_builder_set'
-     *                                              when a single shortcode returns a replicator block, with 'surrounding_html' too when
-     *                                              the block holds more than the shortcode, and with 'html' and 'skipCount' alone for a
+     *                                              when a single shortcode returns a replicator block, with 'html_before' and 'html_after'
+     *                                              too for what the block holds on each side of the shortcode, and with 'html' and 'skipCount' alone for a
      *                                              [caption] that is all the block holds; or null if no valid content
      */
     public function process(
@@ -289,14 +291,24 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     ];
 
                     // Return the page builder set beside the html when there is one,
-                    // with what surrounds the shortcode for a route that takes the set
+                    // with what is on each side of the shortcode for a route that
+                    // takes the set
                     if ($hasPageBuilderSet) {
                         $result['page_builder_set'] = $pageBuilderBlock;
 
                         if (! $isAlone) {
-                            $result['surrounding_html'] = \str_replace($original, '', $shortcodeContent);
+                            $result += self::contentAround($original, $shortcodeContent);
                         }
                     }
+
+                    // This html replaces the block's nodes, so an image beside the
+                    // shortcode is lost
+                    self::reportImageBesideShortcodes(
+                        $shortcodes,
+                        $shortcodeContent,
+                        $site,
+                        $pageSlug
+                    );
 
                     return $result;
                 }
@@ -378,6 +390,17 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             }
         }
 
+        // The converted content replaces the block's nodes, so an image beside a
+        // shortcode is lost. Content that converted nothing stays with those nodes.
+        if ($hasProcessedShortcode) {
+            self::reportImageBesideShortcodes(
+                $shortcodes,
+                $shortcodeContent,
+                $site,
+                $pageSlug
+            );
+        }
+
         // A recognized-but-dropped shortcode that was the sole content of a wrapper
         // (e.g. "<p>[subpage-list]</p>") leaves an empty "<p></p>" behind. When deciding
         // whether anything meaningful survived, ignore such empty-paragraph residue so a
@@ -422,6 +445,127 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
     }
 
     /**
+     * Records an image a block holds beside its shortcodes for the run summary.
+     *
+     * A block whose shortcode was converted is parsed from its HTML, and BardParser
+     * has no image node, so the image is not imported. An image inside a shortcode,
+     * as in a [caption], belongs to that shortcode and is not reported.
+     *
+     * @param  array<int|string, mixed>  $shortcodes  The shortcodes extracted from the block
+     * @param  string  $content  The block's content
+     * @param  string  $site  The Statamic site handle
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     */
+    private static function reportImageBesideShortcodes(
+        array $shortcodes,
+        string $content,
+        string $site,
+        ?string $pageSlug
+    ): void {
+        // Only what surrounds the shortcodes is looked at
+        $around = self::withoutShortcodes($shortcodes, $content);
+
+        if (\preg_match('/<img\b[^>]*>/i', $around, $image) !== 1) {
+            return;
+        }
+
+        ImportWarningManager::addWarning(
+            'content',
+            'images_beside_shortcodes',
+            [
+                'site' => $site,
+                'page_slug' => $pageSlug ?? '',
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_substr($image[0], 0, 100)
+                    .(\mb_strlen($image[0]) > 100 ? '...' : ''),
+                'reason' => 'An image beside a shortcode in a wp:shortcode block '
+                    .'was not imported.',
+            ]
+        );
+    }
+
+    /**
+     * Whether content holds an image or text beside the given shortcodes.
+     *
+     * A wrapper around a shortcode is not content of its own.
+     *
+     * @param  array<int|string, mixed>  $shortcodes  The shortcodes extracted from the content
+     * @param  string  $content  The content
+     * @return bool True when something is left of the content without the shortcodes
+     */
+    public static function holdsContentBesideShortcodes(
+        array $shortcodes,
+        string $content
+    ): bool {
+        $around = self::withoutShortcodes($shortcodes, $content);
+
+        return \preg_match('/<img\b/i', $around) === 1
+            || self::holdsText($around);
+    }
+
+    /**
+     * The content left when the given shortcodes are taken out of it.
+     *
+     * @param  array<int|string, mixed>  $shortcodes  The extracted shortcodes
+     * @param  string  $content  The content
+     * @return string What surrounds the shortcodes
+     */
+    private static function withoutShortcodes(
+        array $shortcodes,
+        string $content
+    ): string {
+        foreach ($shortcodes as $shortcode) {
+            if (\is_array($shortcode)) {
+                $content = \str_replace(
+                    self::extractShortcodeOriginal($shortcode),
+                    '',
+                    $content
+                );
+            }
+        }
+
+        return $content;
+    }
+
+    /**
+     * Splits a block's content at a shortcode, keeping each side that holds text.
+     *
+     * @param  string  $original  The shortcode as the block holds it
+     * @param  string  $content  The block's content
+     * @return array{html_before?: string, html_after?: string} The sides that hold text
+     */
+    private static function contentAround(
+        string $original,
+        string $content
+    ): array {
+        $position = \strpos($content, $original);
+
+        if ($position === false) {
+            return ['html_after' => $content];
+        }
+
+        $before = \substr($content, 0, $position);
+        $after = \substr($content, $position + \strlen($original));
+
+        return \array_filter(
+            ['html_before' => $before, 'html_after' => $after],
+            self::holdsText(...)
+        );
+    }
+
+    /**
+     * Whether HTML holds text, a non-breaking space being no more text than a space.
+     *
+     * @param  string  $html  The HTML
+     * @return bool True when text is left without the tags
+     */
+    private static function holdsText(
+        string $html
+    ): bool {
+        return \trim(\str_replace("\u{A0}", ' ', \strip_tags($html))) !== '';
+    }
+
+    /**
      * Whether a shortcode is all a block's content holds.
      *
      * A wrapper around the shortcode is not content of its own, so a `<p>` or `<div>`
@@ -435,14 +579,11 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         array $shortcode,
         string $content
     ): bool {
-        $around = \str_replace(
+        return ! self::holdsText(\str_replace(
             self::extractShortcodeOriginal($shortcode),
             '',
             $content
-        );
-
-        // A non-breaking space is no more content than a space is
-        return \trim(\str_replace("\u{A0}", ' ', \strip_tags($around))) === '';
+        ));
     }
 
     /**

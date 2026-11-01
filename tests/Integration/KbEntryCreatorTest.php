@@ -2012,7 +2012,7 @@ describe('articles, more closely', function (): void {
     it('converts content without adding paragraphs, as a whole body', function (): void {
         kbEntryRun(kbEntryExport([kbEntryTopic('5', 'billing')], [kbEntryArticle('901', ['billing'], ['slug' => 'lines', 'content' => "One\n\nTwo"])]));
 
-        expect(kbEntry('lines')->get('content'))->toBe([['type' => 'text', 'text' => 'OneTwo', 'attrs' => []]]);
+        expect(kbEntry('lines')->get('content'))->toBe([['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'OneTwo']], 'attrs' => []]]);
     });
 
     it('records the date of an article for the deferred pass, or none without one', function (): void {

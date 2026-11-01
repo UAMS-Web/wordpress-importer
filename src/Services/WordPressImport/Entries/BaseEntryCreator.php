@@ -21,7 +21,9 @@ use Statamic\Facades\Site as SiteFacade;
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Facades\Term as TermFacade;
+use Statamic\Sites\Site;
 use Statamic\Stache\Query\EntryQueryBuilder;
+use Statamic\Support\Str;
 use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -683,8 +685,8 @@ abstract class BaseEntryCreator
      * Handles entry saving based on the configured overwrite behavior:
      *   - "Overwrite": Deletes existing entry and saves new one.
      *   - "Skip": Skips saving if entry exists.
-     *   - "Create an additional file": Generates a new slug/ID and saves as a new
-     *     entry.
+     *   - "Create an additional file": Saves a new entry under `{slug}_copy-{n}`, with
+     *     a new ID if the existing entry holds the one given.
      *
      * Determines the published status from status_and_visibility if $published is
      * null, defaulting to false for drafts or pending entries.
@@ -723,7 +725,6 @@ abstract class BaseEntryCreator
         }
 
         $entryId = $entryIdValue;
-        $originalSlug = $entrySlug;
 
         // Determine published status if not explicitly set
         if ($published === null) {
@@ -767,17 +768,24 @@ abstract class BaseEntryCreator
 
                     // Handle case where additional entries should be created with unique slugs
                 case 'Create an additional file':
+                    $entrySlug = $this->additionalEntrySlug(
+                        $collectionHandle,
+                        $site,
+                        $entrySlug
+                    );
+
+                    // Post and people data carry the slug as a field of its own
+                    if (isset($data['slug'])) {
+                        $data['slug'] = $entrySlug;
+                    }
+
                     // ---
-                    // Number the copy `{slug}.1`, dropping a number the slug already
-                    // carries. This is all the path does until #340 is fixed: Statamic
-                    // stores a slug without its dot, so no stored slug matches a numbered
-                    // one and every copy takes `.1`, and the copy keeps the ID set above.
+                    // The entry drops `id` from its data below, so `id()` is the only id
+                    // it has. One the matched entry holds would save over that entry.
                     // ---
-                    $entrySlug = \preg_replace(
-                        '/\.\d+$/',
-                        '',
-                        $originalSlug
-                    ).'.1';
+                    if ($existingEntry->id() === $entryId) {
+                        $entryId = $entrySlug.'-'.Str::uuid();
+                    }
 
                     // Exit switch statement after handling additional file creation
                     break;
@@ -942,6 +950,66 @@ abstract class BaseEntryCreator
     }
 
     /**
+     * Read a slug as Statamic stores it, slugged in its site's language.
+     *
+     * @param  string  $entrySlug  The slug
+     * @param  string  $site  The site handle
+     * @return string The stored slug
+     */
+    private function storedEntrySlug(string $entrySlug, string $site): string
+    {
+        $siteModel = SiteFacade::get($site);
+
+        return self::mixedToStringValue(Str::slug(
+            $entrySlug,
+            '-',
+            $siteModel instanceof Site ? $siteModel->lang() : null
+        ));
+    }
+
+    /**
+     * Find the slug for an additional copy of an entry.
+     *
+     * The search runs on the slug Statamic stores: a dot would not survive it, so a
+     * copy of `12` named `12.1` would land on `121`. An underscore survives it, and
+     * WordPress slugs do not read as a copy of another.
+     *
+     * @param  string  $collectionHandle  The collection handle
+     * @param  string  $site  The site handle
+     * @param  string  $entrySlug  The slug of the entry being copied
+     * @return string The first free `{slug}_copy-{n}`
+     */
+    private function additionalEntrySlug(
+        string $collectionHandle,
+        string $site,
+        string $entrySlug
+    ): string {
+        $storedSlug = $this->storedEntrySlug($entrySlug, $site);
+        $counter = 1;
+
+        do {
+            $copySlug = "{$storedSlug}_copy-$counter";
+            $counter++;
+
+            $query = $this->newEntryQuery();
+            $query->where(
+                'collection',
+                $collectionHandle
+            );
+            $query->where(
+                'site',
+                $site
+            );
+            $query->where(
+                'slug',
+                $copySlug
+            );
+        } while ($query->first() !== null);
+
+        return $copySlug;
+    }
+
+    /**
      * Check if an entry already exists, handling both exact ID matches and slug/post
      * ID matches.
      *
@@ -1034,7 +1102,7 @@ abstract class BaseEntryCreator
         // ---
         $matchingEntries = $matchingEntryQuery->get();
         // @pest-mutate-ignore: InstanceOfToTrue
-        $matchingEntry = $matchingEntries instanceof Collection ? $matchingEntries->first(
+        $sameEntries = $matchingEntries instanceof Collection ? $matchingEntries->filter(
             static function (mixed $entry) use ($wpPostId, $baseSlug): bool {
                 // A query for entries returns entries; this only narrows the type
                 // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn, FalseToTrue
@@ -1083,6 +1151,15 @@ abstract class BaseEntryCreator
                     );
             }
         ) : null;
+
+        // ---
+        // An additional copy carries the post ID of the entry it copies, so the entry
+        // on the slug itself goes first, or a later run would take the copy for it
+        // ---
+        $storedSlug = $this->storedEntrySlug($entrySlug, $site);
+        $matchingEntry = $sameEntries?->first(
+            static fn (mixed $entry): bool => $entry instanceof Entry && $entry->slug() === $storedSlug
+        ) ?? $sameEntries?->first();
 
         // ---
         // Return the found existing entry or null if none exists. A collection's
@@ -1276,8 +1353,9 @@ abstract class BaseEntryCreator
 
                         // Loop until we find a unique slug
                         do {
-                            // Append counter to create unique slug
-                            $newSlug = "{$siteSpecificSlug}.{$counter}";
+                            // Append counter to create unique slug, in a form Statamic's
+                            // slug setter keeps, so a later run finds it (#193)
+                            $newSlug = "{$siteSpecificSlug}-{$counter}";
 
                             // Update cache key with new slug
                             $newCacheKey = "{$statamicTaxonomyHandle}::{$newSlug}";

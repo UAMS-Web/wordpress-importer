@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\QuoteProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -28,6 +31,10 @@ beforeEach(function (): void {
 
     // Create DOMDocument for HTML manipulation in tests
     $this->doc = new DOMDocument;
+
+    // A log context carries whatever the last test left here, and a parallel worker shares it
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearFormConfigContext();
 });
 
 it('can process a valid wp:quote comment', function (): void {
@@ -344,6 +351,144 @@ it('omits the author attribute for an empty citation', function (): void {
 
     // Should not contain author attribute for empty citation
     expect($outputHtml)->not->toContain('data-set-attr-author');
+});
+
+it('rejects an empty comment', function (): void {
+    expect($this->processor->canProcess($this->doc->createComment('   '), 'test-site', 'test-page'))->toBeFalse();
+});
+
+it('rejects a text node that reads like the block comment', function (): void {
+    expect($this->processor->canProcess($this->doc->createTextNode('wp:quote'), 'test-site', 'test-page'))->toBeFalse();
+});
+
+it('warns with the site, page and attributes when no blockquote is found', function (?string $pageSlug, string $logged): void {
+    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($logged): bool {
+        return str_contains($message, 'QuoteProcessor::process: No valid wp:quote blockquote found')
+            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'attributes' => ['align' => 'wide']];
+    });
+
+    $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote --><p>Not a quote.</p><!-- /wp:quote -->');
+
+    expect($this->processor->process($comment, ['align' => 'wide'], 'test-site', $this->assetImporter, quoteProcessorNullOutput(), [], [], $pageSlug))->toBeNull();
+})->with([
+    'a page slug' => ['a-page', 'a-page'],
+    'no page slug' => [null, 'none'],
+]);
+
+it('warns once, with the start of the block, when the quote has no paragraphs', function (?string $pageSlug, string $logged): void {
+    $blockquote = '<blockquote class="wp-block-quote"><cite>'.str_repeat('a', 120).'</cite></blockquote>';
+
+    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context) use ($blockquote, $logged): bool {
+        return str_contains($message, 'QuoteProcessor::process: No paragraphs found in wp:quote block')
+            && $context === ['site' => 'test-site', 'pageSlug' => $logged, 'node_html' => substr($blockquote, 0, 100).'...'];
+    });
+
+    $comment = quoteProcessorCommentNode($this->doc, '<!-- wp:quote -->'.$blockquote.'<!-- /wp:quote -->');
+
+    expect($this->processor->process($comment, [], 'test-site', $this->assetImporter, quoteProcessorNullOutput(), [], [], $pageSlug))->toBeNull();
+})->with([
+    'a page slug' => ['a-page', 'a-page'],
+    'no page slug' => [null, 'none'],
+]);
+
+it('writes the set markup with the nonce, the alignment and the quote', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p>Words.</p></blockquote><!-- /wp:quote -->';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    $quote = htmlspecialchars((string) json_encode([['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Words.']]]]));
+
+    expect($outputHtml)->toBe('<div data-set-type="pull_quote"'.SetMarkupNonce::attribute().' data-set-attr-align="aligncenter" data-set-attr-quote="'.$quote.'"></div>');
+});
+
+it('escapes the author in the set markup', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p>Words.</p><cite>A "named" person</cite></blockquote><!-- /wp:quote -->';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    expect($outputHtml)->toContain('data-set-attr-author="A &quot;named&quot; person"');
+});
+
+it('takes the alignment from the attribute, then from the class', function (array $attributes, string $class, string $expected): void {
+    /** @var array<string, mixed> $attributes */
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote '.$class.'"><p>Words.</p></blockquote><!-- /wp:quote -->';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html, $attributes);
+
+    expect($outputHtml)->toContain('data-set-attr-align="'.$expected.'"');
+})->with([
+    'the attribute wins over the class' => [['align' => 'wide'], 'aligncenter', 'alignwide'],
+    'the class, with no attribute' => [[], 'alignwide', 'alignwide'],
+    'a side alignment narrows to center' => [['align' => 'left'], '', 'aligncenter'],
+    'an attribute that is not scalar falls back to the class' => [['align' => ['wide']], 'alignwide', 'alignwide'],
+    'a scalar attribute is read as text' => [['align' => 5], 'alignwide', 'aligncenter'],
+]);
+
+it('reads past another comment among the sibling paragraphs', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"></blockquote><!-- wp:paragraph --><p>After a comment.</p>'
+        .'<!-- /wp:paragraph --><p>Names /wp:quote in its text.</p><p>Last.</p><!-- /wp:quote -->';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    expect($outputHtml)->toContain('After a comment.');
+    expect($outputHtml)->toContain('Last.');
+});
+
+it('stops at the last sibling when the closing comment is missing', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"></blockquote><p>Unclosed.</p>';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    expect($outputHtml)->toContain('Unclosed.');
+});
+
+it('returns null for a node outside any document', function (): void {
+    expect($this->processor->process(new DOMDocument, [], 'test-site', $this->assetImporter, quoteProcessorNullOutput()))->toBeNull();
+});
+
+it('reads a citation from the siblings when the paragraphs are siblings too', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"></blockquote><p>A sibling paragraph.</p>'
+        .'<cite>A sibling author</cite><div>ignored</div><!-- /wp:quote -->';
+
+    $result = quoteProcessorProcess($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    if (! is_array($result)) {
+        throw new RuntimeException('Expected the process result to be an array.');
+    }
+
+    $outputHtml = quoteProcessorResultHtml($result);
+
+    expect($outputHtml)->toContain('data-set-attr-author="A sibling author"');
+    expect($outputHtml)->toContain('A sibling paragraph.');
+    expect($outputHtml)->not->toContain('ignored');
+
+    // The blockquote, three siblings and the closing comment
+    expect($result['skipCount'])->toBe(5);
+});
+
+it('stops collecting sibling paragraphs at the closing comment', function (): void {
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"></blockquote><p>Inside.</p>'
+        .'<!-- /wp:quote --><p>Outside.</p>';
+
+    $outputHtml = quoteProcessorRequireHtml($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    expect($outputHtml)->toContain('Inside.');
+    expect($outputHtml)->not->toContain('Outside.');
+});
+
+it('warns and returns null when no paragraph parses to any content', function (): void {
+    Log::shouldReceive('warning')->once()->withArgs(function (string $message, array $context): bool {
+        return str_contains($message, 'QuoteProcessor::process: No valid paragraph content parsed in wp:quote block')
+            && ($context['site'] ?? null) === 'test-site'
+            && ($context['pageSlug'] ?? null) === 'test-page'
+            && ($context['node_html'] ?? null) === substr('<blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120), 0, 100).'...';
+    });
+
+    $html = '<!-- wp:quote --><blockquote class="wp-block-quote"><p><script>'.str_repeat('a', 120).'</script></p></blockquote><!-- /wp:quote -->';
+
+    $result = quoteProcessorProcess($this->processor, $this->doc, $this->assetImporter, quoteProcessorNullOutput(), $html);
+
+    expect($result)->toBeNull();
 });
 
 /**
