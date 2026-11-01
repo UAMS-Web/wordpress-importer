@@ -312,15 +312,14 @@ class PostAudioProcessor
         }
 
         // Extract content before the first segment
-        $beforeFirst = \trim(
-            \substr(
-                $content,
-                0,
-                $firstH3Pos
-            )
+        $beforeFirst = \substr(
+            $content,
+            0,
+            $firstH3Pos
         );
 
-        // Remove any <h2> element that immediately precedes the first <h3> element
+        // Remove any <h2> element that immediately precedes the first <h3> element,
+        // which also trims it
         $beforeFirst = $this->removeH2BeforeH3($beforeFirst);
 
         // Find the last [/accordion] tag
@@ -360,7 +359,7 @@ class PostAudioProcessor
         // Combine content before first segment and after last segment
         $introParts = \array_filter(
             [$beforeFirst, $afterLast],
-            fn (string $part): bool => \trim($part) !== ''
+            fn (string $part): bool => $part !== ''
         );
 
         // Return the combined intro content
@@ -534,13 +533,13 @@ class PostAudioProcessor
         // Extract title text from <h3> tag and clean it
         if (
             \preg_match(
-                '/<h3[^>]*>(.*?)<\/h3>/s',
+                '/<h3[^>]*>.*?<\/h3>/s',
                 $segment,
                 $matches
             ) === 1
         ) {
             // Strip HTML tags from the extracted title
-            return HtmlTagStripper::strip($matches[1]);
+            return HtmlTagStripper::strip($matches[0]);
         }
 
         // Return empty string if no title is found
@@ -697,18 +696,11 @@ class PostAudioProcessor
 
         // Extract text between "Download this episode</a>" and [accordion]
         $downloadLinkLength = \strlen($downloadLinkPattern);
-        $introText = \trim(
-            \substr(
-                $segment,
-                $lastATagPos + $downloadLinkLength,
-                $accordionPos - $lastATagPos - $downloadLinkLength
-            )
+        $introText = \substr(
+            $segment,
+            $lastATagPos + $downloadLinkLength,
+            $accordionPos - $lastATagPos - $downloadLinkLength
         );
-
-        // Return empty array if no intro text is found
-        if ($introText === '') {
-            return [];
-        }
 
         // Process the intro text using TextProcessor with wpautop enabled
         return TextProcessor::processForBard(
@@ -791,11 +783,6 @@ class PostAudioProcessor
         OutputInterface $output,
         ?string $pageSlug
     ): array {
-        // Return empty array if intro content is empty or only whitespace
-        if (\trim($intro) === '') {
-            return [];
-        }
-
         // Remove <img> elements from intro content before processing
         $intro = $this->removeImageElements($intro);
 
@@ -883,12 +870,10 @@ class PostAudioProcessor
         }
 
         // Extract intro content (everything before [audio] shortcode)
-        $introContent = \trim(
-            \substr(
-                $content,
-                0,
-                $audioPos
-            )
+        $introContent = \substr(
+            $content,
+            0,
+            $audioPos
         );
 
         // Extract the segment content (from [audio] to end of content)
@@ -929,40 +914,15 @@ class PostAudioProcessor
             $postId
         );
 
-        // Combine intro content: content before [audio] + segment intro text + content after [/accordion]
-        $allIntroContent = [];
-
-        // Add content before [audio] shortcode
-        if ($introContent !== '') {
-            $allIntroContent[] = $introContent;
-        }
-
-        // Add segment intro text (between download link and [accordion])
-        if ($segmentIntroText !== '') {
-            $allIntroContent[] = $segmentIntroText;
-        }
-
-        // Process combined intro content
-        // Initialize empty array for processed intro content
-        $processedIntro = [];
-
-        // Process intro content if there is any content to process
-        if ($allIntroContent !== []) {
-            // Combine all intro content parts with double newlines
-            $combinedIntro = \implode(
-                "\n\n",
-                $allIntroContent
-            );
-
-            // Process the combined intro content for Bard format
-            $processedIntro = $this->processIntroContent(
-                $combinedIntro,
-                $site,
-                $assetImporter,
-                $output,
-                $pageSlug
-            );
-        }
+        // Process the content before [audio] and the segment intro text (between the
+        // download link and [accordion]) as one intro
+        $processedIntro = $this->processIntroContent(
+            $introContent."\n\n".$segmentIntroText,
+            $site,
+            $assetImporter,
+            $output,
+            $pageSlug
+        );
 
         // If there's content after the last [/accordion], add it to intro
         if ($lastAccordionPos !== false) {
@@ -971,37 +931,22 @@ class PostAudioProcessor
             // the content from [audio] on, so the segment's last [/accordion] is also the
             // content's.
             // ---
-            $afterAccordion = \trim(
-                \substr(
-                    $content,
-                    $audioPos + $lastAccordionPos + \strlen('[/accordion]')
-                )
+            $afterAccordion = \substr(
+                $content,
+                $audioPos + $lastAccordionPos + \strlen('[/accordion]')
             );
 
-            // Process the after-accordion content if it exists
-            if ($afterAccordion !== '') {
-                // Process the after-accordion content for Bard format
-                $afterAccordionProcessed = $this->processIntroContent(
+            // Process the after-accordion content for Bard format and add it to the intro
+            $processedIntro = \array_merge(
+                $processedIntro,
+                $this->processIntroContent(
                     $afterAccordion,
                     $site,
                     $assetImporter,
                     $output,
                     $pageSlug
-                );
-
-                // Combine intro content
-                if (
-                    $processedIntro !== []
-                    && $afterAccordionProcessed !== []
-                ) {
-                    $processedIntro = \array_merge(
-                        $processedIntro,
-                        $afterAccordionProcessed
-                    );
-                } elseif ($afterAccordionProcessed !== []) { // Use only after-accordion content if no other intro content exists
-                    $processedIntro = $afterAccordionProcessed;
-                }
-            }
+                )
+            );
         }
 
         // Return the processed single segment format content
@@ -1041,7 +986,7 @@ class PostAudioProcessor
         ?string $postId = null
     ): array {
         // Strip HTML tags from post title for segment title, fallback to empty string
-        $title = ($postTitle !== null && $postTitle !== '') ? HtmlTagStripper::strip($postTitle) : '';
+        $title = HtmlTagStripper::strip($postTitle ?? '');
 
         // Extract transcript from [section title="Transcript"]...[/section]
         $transcript = $this->extractTranscript(

@@ -563,7 +563,70 @@ it('gives a segment no excerpt when nothing sits between the download link and t
 })->with([
     'whitespace only' => ['<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> <img src="i.jpg"> [accordion][/accordion]'],
     'no download link' => ['<h3>One</h3>[audio mp3="x"][/audio] Some text [accordion][/accordion]'],
+    'no accordion' => ['<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> Some text'],
 ]);
+
+it('leaves no audio asset context behind once a segment is imported', function (): void {
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+
+    postAudioRun(
+        postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)),
+        '<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a> The excerpt [accordion][/accordion]'
+    );
+
+    expect(data_get($calls, '0.asset_excerpt'))->toBe([postAudioParagraph('The excerpt')])
+        ->and(ProcessingContext::getAudioAssetExcerpt())->toBeNull();
+});
+
+it('reads the intro around the segments as trimmed parts, leaving empty ones out', function (string $content, string $intro): void {
+    $method = new ReflectionMethod(PostAudioProcessor::class, 'extractIntro');
+
+    expect($method->invoke(new PostAudioProcessor, $content))->toBe($intro);
+})->with([
+    'text before the first h3' => ["  Lead\n<h3>One</h3>[accordion][/accordion]", 'Lead'],
+    'nothing around the segments' => ['<h3>One</h3>[accordion][/accordion]', ''],
+    'text after the last accordion' => ['<h3>One</h3>[accordion][/accordion]  Tail  ', 'Tail'],
+    'only whitespace after the last accordion' => ['<h3>One</h3>[accordion][/accordion]   ', ''],
+    'text on both sides' => ['Lead<h3>One</h3>[accordion][/accordion]Tail', "Lead\n\nTail"],
+    'text after a download link' => ['<h3>One</h3><a>Download this episode</a>  Tail  ', 'Tail'],
+    'an h3 with neither an accordion nor a link' => ['<h3>One</h3>Tail', ''],
+]);
+
+it('titles a segment with the text of its h3', function (): void {
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+
+    postAudioRun(
+        postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)),
+        '<h3 class="x">The <em>first</em> one</h3>[audio mp3="x"][/audio][accordion][/accordion]'
+    );
+
+    expect(data_get($calls, '0.asset_title'))->toBe('The first one');
+});
+
+it('trims the segment intro text beside the text before the audio', function (string $content): void {
+    $result = postAudioRun(postAudioProcessor(postAudioRecordingProcessor(new ArrayObject), postAudioAccordion(new ArrayObject)), $content);
+
+    expect($result['intro'] ?? null)->toBe([postAudioParagraph('Before'), postAudioParagraph('The rest')]);
+})->with([
+    'before an accordion' => ['Before[audio mp3="x"][/audio]<a>Download this episode</a>   The rest [accordion][/accordion]'],
+    'with no accordion' => ['Before[audio mp3="x"][/audio]<a>Download this episode</a>   The rest '],
+]);
+
+it('keeps block comments in intro text, so a block in it reaches its processor', function (): void {
+    $block = '<!-- wp:shortcode -->[subpage-list]<!-- /wp:shortcode -->';
+    /** @var ArrayObject<int, array<string, mixed>> $calls */
+    $calls = new ArrayObject;
+
+    $result = postAudioRun(
+        postAudioProcessor(postAudioRecordingProcessor($calls), postAudioAccordion(new ArrayObject)),
+        $block.'<h3>One</h3>[audio mp3="x"][/audio]<a>Download this episode</a>'.$block.'[accordion][/accordion]'
+    );
+
+    expect($result['intro'] ?? null)->toBe([postAudioParagraph('[subpage-list]')])
+        ->and(data_get($calls, '0.asset_excerpt'))->toBe([postAudioParagraph('[subpage-list]')]);
+});
 
 it('returns nothing when the only audio shortcode sits inside an image tag the second image pass removes', function (): void {
     /** @var AudioShortcodeProcessor&MockInterface $audio */
