@@ -57,10 +57,6 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         string $site,
         ?string $pageSlug
     ): bool {
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            return false;
-        }
-
         return self::matchesOpeningShortcodeComment($node);
     }
 
@@ -122,14 +118,12 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     'type' => $debugNode::class,
                     'nodeType' => $debugNode->nodeType,
                     'content_preview' => \substr(
-                        $debugNode->nodeValue ?? $debugNode->textContent ?? '',
+                        $debugNode->textContent,
                         0,
                         100
                     ),
                     'is_empty_after_trim' => $debugNode instanceof DOMText
-                        ? \trim(
-                            self::extractNodeValueString($debugNode->nodeValue)
-                        ) === ''
+                        ? \trim($debugNode->data) === ''
                         : null,
                 ];
 
@@ -207,29 +201,14 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         if (\count($shortcodes) === 1) {
             // Get the single shortcode from the list
             $single = $shortcodes[0];
-
-            // Guard against malformed shortcode payloads before accessing keys
-            if (! \is_array($single)) {
-                $single = [];
-            }
-
-            // Extract shortcode name for handler lookup
-            $name = self::extractShortcodeName($single);
+            $name = $single['name'];
+            $original = $single['original'];
 
             // Check if a handler is registered for this shortcode
             if (isset($this->shortcodeProcessor->getHandlers()[$name])) {
-                // Use the single shortcode for page_builder processing
-                $shortcode = $single;
-
-                // Clear id so handler does not treat as block-scoped
-                $shortcode['id'] = '';
-
-                // Clear link so handler does not treat as block-scoped
-                $shortcode['link'] = '';
-
                 // Process shortcode for page_builder; may return replicator set or null
                 $pageBuilderBlock = $this->shortcodeProcessor->process(
-                    $shortcode,
+                    $single,
                     $site,
                     $assetImporter,
                     $output,
@@ -243,7 +222,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 $hasPageBuilderSet = isset($pageBuilderBlock['type']);
 
                 // What the block holds besides the shortcode has to be kept (#180)
-                $isAlone = self::isAloneInBlock($single, $shortcodeContent);
+                $isAlone = self::isAloneInBlock($original, $shortcodeContent);
 
                 // ---
                 // Return the html with a skip count over the whole block, so the
@@ -279,8 +258,6 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                         $pageSlug
                     );
 
-                    $original = self::extractShortcodeOriginal($single);
-
                     $result = [
                         'html' => $isAlone
                             ? $tiptapHtmlForBard
@@ -306,19 +283,13 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         // Initialize processed content with original content
         $processedContent = $shortcodeContent;
 
-        // Initialize flag to track if any shortcodes were processed
-        $hasProcessedShortcode = false;
+        // Initialize flag to track if any shortcode was dropped
+        $droppedShortcode = false;
 
         // Process each shortcode and replace with Tiptap HTML
         foreach ($shortcodes as $shortcode) {
-            // Skip malformed shortcode payloads to avoid invalid offset access.
-            if (! \is_array($shortcode)) {
-                continue;
-            }
-
-            // Extract common fields with strict scalar guards.
-            $shortcodeName = self::extractShortcodeName($shortcode);
-            $shortcodeOriginal = self::extractShortcodeOriginal($shortcode);
+            $shortcodeName = $shortcode['name'];
+            $shortcodeOriginal = $shortcode['original'];
 
             // Check if a handler is registered for this shortcode
             if (isset($this->shortcodeProcessor->getHandlers()[$shortcodeName])) {
@@ -341,7 +312,6 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                         $tiptapHtml,
                         $processedContent
                     );
-                    $hasProcessedShortcode = true;
                 } else {
                     // Enhance log context with entry information
                     $logData = LogContextHelper::enhanceWithEntryContext(
@@ -374,7 +344,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                     '',
                     $processedContent
                 );
-                $hasProcessedShortcode = true;
+                $droppedShortcode = true;
             }
         }
 
@@ -384,41 +354,29 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         // fully-dropped block contributes nothing rather than an empty paragraph. This is
         // scoped to runs that actually dropped a shortcode and only affects the emptiness
         // decision — the returned value is always the unmodified content. See issue wordpress-importer-archive#317.
-        $remainingContent = $hasProcessedShortcode
+        $remainingContent = $droppedShortcode
+            // The pattern is a valid literal, so preg_replace() cannot return null here
+            // @pest-mutate-ignore: RemoveStringCast
             ? (string) \preg_replace(
                 '~<p\b[^>]*>(?:\s|&nbsp;|&#160;|&#xA0;)*</p>~i',
                 '',
                 $processedContent
             )
             : $processedContent;
-        // Check if we processed any shortcodes and meaningful content remains
-        if ($hasProcessedShortcode
-        && \trim($remainingContent) !== '') {
-            // Return processed content when shortcodes were successfully converted
-            return $processedContent;
-        }
 
-        // Check if we processed any shortcodes and meaningful content remains
-        if (! $hasProcessedShortcode
-        && \trim($processedContent) !== '') {
-            // Check if content exists but no shortcodes were processed
-            // Return original content if no shortcodes were processed but content exists
+        // Return the content when anything meaningful remains
+        if (\trim($remainingContent) !== '') {
             return $processedContent;
         }
 
         // ---
-        // We recognized and handled shortcode(s), but they intentionally produced no
-        // output (e.g. a block whose only content was a dropped [subpage-list]).
-        // Return an empty string, not null: callers treat an empty string as
-        // "handled, nothing to add" and drop it silently, whereas null is logged by
-        // TextProcessor::processForBard as a block-processor failure. See issue wordpress-importer-archive#317.
+        // A dropped shortcode intentionally produced no output (e.g. a block whose
+        // only content was a [subpage-list]). Return an empty string, not null:
+        // callers treat an empty string as "handled, nothing to add" and drop it
+        // silently, whereas null is logged by TextProcessor::processForBard as a
+        // block-processor failure. See issue wordpress-importer-archive#317.
         // ---
-        if ($hasProcessedShortcode) {
-            return '';
-        }
-
-        // Return null only if content is truly empty
-        return null;
+        return $droppedShortcode ? '' : null;
     }
 
     /**
@@ -427,16 +385,16 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
      * A wrapper around the shortcode is not content of its own, so a `<p>` or `<div>`
      * holding only the shortcode counts as alone.
      *
-     * @param  array<int|string, mixed>  $shortcode  The extracted shortcode
+     * @param  string  $original  The shortcode's original text
      * @param  string  $content  The block's content
      * @return bool True when no text is left of the content without the shortcode
      */
     private static function isAloneInBlock(
-        array $shortcode,
+        string $original,
         string $content
     ): bool {
         $around = \str_replace(
-            self::extractShortcodeOriginal($shortcode),
+            $original,
             '',
             $content
         );
@@ -460,9 +418,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
 
         return \preg_match(
             '/^wp:shortcode\s*$/',
-            \trim(
-                self::extractNodeValueString($node->nodeValue)
-            )
+            \trim($node->data)
         ) === 1;
     }
 
@@ -490,10 +446,12 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
             // A text node keeps its own whitespace, which can separate it from an
             // element beside it
             if ($currentNode instanceof DOMText) {
-                $shortcodeContent .= self::extractNodeValueString($currentNode->nodeValue);
+                $shortcodeContent .= $currentNode->data;
             } elseif ($currentNode instanceof DOMElement) {
                 $ownerDocument = $currentNode->ownerDocument;
 
+                // An element always belongs to a document; the check narrows the type
+                // @pest-mutate-ignore: InstanceOfToTrue
                 if ($ownerDocument instanceof DOMDocument) {
                     $nodeContent = $ownerDocument->saveHTML($currentNode);
 
@@ -559,49 +517,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
 
         return \preg_match(
             '/^\/wp:shortcode\s*$/',
-            \trim(
-                self::extractNodeValueString($node->nodeValue)
-            )
+            \trim($node->data)
         ) === 1;
-    }
-
-    /**
-     * Extract a safe string from a node value.
-     *
-     * @param  ?string  $nodeValue  Raw node value from DOM node
-     * @return string Node value or empty string when absent
-     */
-    private static function extractNodeValueString(
-        ?string $nodeValue
-    ): string {
-        return $nodeValue ?? '';
-    }
-
-    /**
-     * Extract shortcode name as a safe scalar string.
-     *
-     * @param  array<int|string, mixed>  $shortcode  Shortcode payload
-     * @return string Shortcode name or empty string when invalid
-     */
-    private static function extractShortcodeName(
-        array $shortcode
-    ): string {
-        $name = $shortcode['name'] ?? '';
-
-        return \is_string($name) ? $name : '';
-    }
-
-    /**
-     * Extract original shortcode text as a safe scalar string.
-     *
-     * @param  array<int|string, mixed>  $shortcode  Shortcode payload
-     * @return string Original shortcode text or empty string when invalid
-     */
-    private static function extractShortcodeOriginal(
-        array $shortcode
-    ): string {
-        $original = $shortcode['original'] ?? '';
-
-        return \is_string($original) ? $original : '';
     }
 }

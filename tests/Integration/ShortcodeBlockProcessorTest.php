@@ -89,6 +89,14 @@ it('canProcess returns true for a wp:shortcode comment', function (): void {
     expect($result)->toBeTrue();
 });
 
+it('canProcess returns true for a wp:shortcode comment padded as WordPress writes it', function (): void {
+    expect($this->processor->canProcess($this->doc->createComment(' wp:shortcode '), 'test-site', null))->toBeTrue();
+});
+
+it('canProcess returns false for text that reads like the comment', function (): void {
+    expect($this->processor->canProcess($this->doc->createTextNode('wp:shortcode'), 'test-site', null))->toBeFalse();
+});
+
 it('canProcess returns true for a wp:shortcode comment with trailing whitespace', function (): void {
     $comment = $this->doc->createComment('wp:shortcode ');
 
@@ -883,3 +891,140 @@ it('process renders a lone shortcode once, with or without a page builder block'
     'table, a page builder block' => ['[table id=1 /]', 'table'],
     'caption, html alone' => ['[caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption]', 'caption'],
 ]);
+
+/**
+ * Collect every warning logged during a test.
+ *
+ * @return ArrayObject<int, array{message: string, context: array<int|string, mixed>}>
+ */
+function shortcodeBlockCollectWarnings(): ArrayObject
+{
+    // Start from no entry context, which an earlier test in the process can leave set
+    ProcessingContext::clearWordPressPageLink();
+    ProcessingContext::clearEntryData();
+    ProcessingContext::clearFormConfigContext();
+
+    /** @var ArrayObject<int, array{message: string, context: array<int|string, mixed>}> $warnings */
+    $warnings = new ArrayObject;
+    Log::shouldReceive('warning')->andReturnUsing(
+        function (string $message, array $context = []) use ($warnings): void {
+            $warnings->append(['message' => $message, 'context' => $context]);
+        }
+    );
+
+    return $warnings;
+}
+
+it('process warns once with what an empty block holds', function (): void {
+    $warnings = shortcodeBlockCollectWarnings();
+    $note = str_repeat('n', 120);
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --> <!--'.$note.'--><!-- /wp:shortcode --><!-- after --></div>');
+
+    $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
+
+    expect($result)->toBeNull()
+        ->and($warnings->getArrayCopy())->toBe([[
+            'message' => 'ShortcodeBlockProcessor::process: No valid content found in wp:shortcode block',
+            'context' => [
+                'site' => 'default',
+                'pageSlug' => 'test-page',
+                'node_info' => [
+                    ['type' => DOMText::class, 'nodeType' => XML_TEXT_NODE, 'content_preview' => ' ', 'is_empty_after_trim' => true],
+                    ['type' => DOMComment::class, 'nodeType' => XML_COMMENT_NODE, 'content_preview' => str_repeat('n', 100), 'is_empty_after_trim' => null],
+                ],
+                'nodes_checked' => 2,
+            ],
+        ]]);
+});
+
+it('process names no page in the empty block warning without a slug, and checks at most ten nodes', function (): void {
+    $warnings = shortcodeBlockCollectWarnings();
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.str_repeat('<!-- x -->', 11).'</div>');
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBeNull()
+        ->and($warnings[0]['context']['pageSlug'] ?? null)->toBe('none')
+        ->and($warnings[0]['context']['nodes_checked'] ?? null)->toBe(10)
+        ->and($warnings[0]['context']['node_info'] ?? null)->toHaveCount(10);
+});
+
+it('process stops the empty block walk at the end of the siblings', function (): void {
+    $warnings = shortcodeBlockCollectWarnings();
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --></div>');
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBeNull()
+        ->and($warnings[0]['context']['nodes_checked'] ?? null)->toBe(0);
+});
+
+it('process leaves comments inside a block out of its content', function (): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>Lead</p><!-- note --><!-- /wp:shortcode --></div>');
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBe('<p>Lead</p>');
+});
+
+it('process returns the content of a block with no shortcode in it, and of one holding only an empty paragraph', function (string $inner): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBe($inner);
+})->with([
+    'an empty paragraph' => ['<p></p>'],
+    'an unknown shortcode' => ['<p>[not-registered]</p>'],
+]);
+
+it('process returns the empty string when dropped shortcodes leave only whitespace', function (): void {
+    $comment = shortcodeBlockRequireCommentNode(
+        $this->doc,
+        "<div><!-- wp:shortcode --><p>[subpage-list]</p>\n<p>[subpage-list]</p><!-- /wp:shortcode --></div>"
+    );
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBe('');
+});
+
+it('process keeps the paragraphs a dropped shortcode leaves beside other content', function (): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode --><p>[subpage-list]</p><p>Kept</p><!-- /wp:shortcode --></div>');
+
+    expect($this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBe('<p></p><p>Kept</p>');
+});
+
+it('process returns null when a rendered shortcode leaves only whitespace', function (): void {
+    $renderer = new class extends ShortcodeProcessor
+    {
+        /**
+         * Render every shortcode as a space.
+         *
+         * @param  array<int|string, mixed>  $shortcode
+         * @param  array<int|string, mixed>  $attachments
+         * @param  array<int|string, mixed>  $terms
+         */
+        public function toTiptapHtml(
+            array $shortcode,
+            string $site,
+            AssetImporter $assetImporter,
+            OutputInterface $output,
+            array $attachments = [],
+            array $terms = [],
+            ?string $pageSlug = null
+        ): string {
+            return ' ';
+        }
+    };
+
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->[audio mp3="https://example.com/a.mp3"]<!-- /wp:shortcode --></div>');
+
+    expect((new ShortcodeBlockProcessor($renderer))->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBeNull();
+});
+
+it('blockContent trims what surrounds the content', function (): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, "<div><!-- wp:shortcode -->\n  [audio]\n<!-- /wp:shortcode --></div>");
+
+    expect(ShortcodeBlockProcessor::blockContent($comment))->toBe('[audio]');
+});
+
+it('blockSkipCount ends at a closing comment padded as WordPress writes it, not at text reading like one', function (): void {
+    $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->/wp:shortcode<!-- /wp:shortcode --><p>After</p></div>');
+
+    expect(ShortcodeBlockProcessor::blockSkipCount($comment))->toBe(3)
+        ->and(ShortcodeBlockProcessor::blockContent($comment))->toBe('/wp:shortcode');
+});
