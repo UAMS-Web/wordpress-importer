@@ -29,6 +29,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -163,7 +164,10 @@ final class IwpiImporter extends NavigationMenuImporter
     }
 }
 
+// A `continue` mutant of a `break` in this class's switches only compiles with a
+// warning; fail on it whichever test file loads the class first
 beforeEach(function (): void {
+    CompilesCleanly::assert(ImportWordPress::class);
     Site::setSites([
         'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
         'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],
