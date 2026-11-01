@@ -265,16 +265,9 @@ class TablePressShortcodeProcessor implements ShortcodeProcessorInterface
             $pageSlug
         );
 
-        $values = [];
-
-        if (
-            isset($set['attrs'])
-            && is_array($set['attrs'])
-            && isset($set['attrs']['values'])
-            && is_array($set['attrs']['values'])
-        ) {
-            $values = $set['attrs']['values'];
-        }
+        $attrs = $set['attrs'] ?? null;
+        $setValues = is_array($attrs) ? ($attrs['values'] ?? null) : null;
+        $values = is_array($setValues) ? $setValues : [];
 
         $tableId = self::tableIdFromAttributes($attributes);
         $align = $values['align'] ?? 'aligncenter';
