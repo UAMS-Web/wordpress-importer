@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
@@ -46,14 +47,45 @@ afterEach(function (): void {
  */
 function captionProcessor(?array $set, ArrayObject $calls = new ArrayObject): CaptionShortcodeProcessor
 {
-    /** @var ImageProcessor&MockInterface $imageProcessor */
-    $imageProcessor = Mockery::mock(ImageProcessor::class);
-    $imageProcessor->shouldReceive('processImage')->andReturnUsing(function (mixed ...$arguments) use ($calls, $set): ?array {
-        /** @var list<mixed> $arguments */
-        $calls->append($arguments);
+    $imageProcessor = new class($set, $calls) extends ImageProcessor
+    {
+        /**
+         * Keep the set to return and the list that receives each call.
+         *
+         * @param  ?array<int|string, mixed>  $set  The set to return
+         * @param  ArrayObject<int, list<mixed>>  $calls  Receives each call's arguments
+         */
+        public function __construct(private readonly ?array $set, private readonly ArrayObject $calls)
+        {
+            parent::__construct();
+        }
 
-        return $set;
-    });
+        /**
+         * Record the call and return the set.
+         *
+         * @param  string  $html  The image HTML
+         * @param  string  $site  The site handle
+         * @param  AssetImporter  $assetImporter  The asset importer
+         * @param  OutputInterface  $output  Console output
+         * @param  array<int|string, mixed>  $attachments  The attachments
+         * @param  ?string  $pageSlug  The page slug
+         * @param  ?array<int|string, mixed>  $blockAttributes  The block attributes
+         * @return ?array<int|string, mixed> The set
+         */
+        public function processImage(
+            string $html,
+            string $site,
+            AssetImporter $assetImporter,
+            OutputInterface $output,
+            array $attachments = [],
+            ?string $pageSlug = null,
+            ?array $blockAttributes = null
+        ): ?array {
+            $this->calls->append([$html, $site, $assetImporter, $output, $attachments, $pageSlug, $blockAttributes]);
+
+            return $this->set;
+        }
+    };
 
     return new CaptionShortcodeProcessor($imageProcessor);
 }
