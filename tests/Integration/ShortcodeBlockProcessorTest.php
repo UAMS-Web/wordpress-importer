@@ -345,8 +345,7 @@ it('PeopleShortcodeProcessor normalizes attribute values to lowercase in parse()
         'default',
         $this->assetImporter,
         shortcodeBlockOutput(),
-        [],
-        null
+        []
     );
 
     $attrs = shortcodeBlockNormalizeStringKeyedArray($result['attrs'] ?? null);
@@ -368,8 +367,7 @@ it('PeopleShortcodeProcessor normalizes attribute values in toPageBuilderBlock()
             'default',
             $this->assetImporter,
             shortcodeBlockOutput(),
-            [],
-            null
+            []
         )
     );
 
@@ -389,8 +387,7 @@ it('PeopleShortcodeProcessor trims attribute values before processing', function
             'default',
             $this->assetImporter,
             shortcodeBlockOutput(),
-            [],
-            null
+            []
         )
     );
 
@@ -1013,7 +1010,7 @@ it('process returns null when a rendered shortcode leaves only whitespace', func
 
     $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->[audio mp3="https://example.com/a.mp3"]<!-- /wp:shortcode --></div>');
 
-    expect((new ShortcodeBlockProcessor($renderer))->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBeNull();
+    expect(new ShortcodeBlockProcessor($renderer)->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput()))->toBeNull();
 });
 
 it('blockContent trims what surrounds the content', function (): void {

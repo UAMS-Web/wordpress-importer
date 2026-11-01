@@ -53,8 +53,8 @@ function groupOpeningNode(string $html): DOMNode
  */
 function processGroup(string $html, array $attributes = []): array|string|null
 {
-    $assetImporter = (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
-    (new ReflectionProperty(AssetImporter::class, 'baseBlogUrl'))->setValue($assetImporter, 'https://example.test');
+    $assetImporter = new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
+    new ReflectionProperty(AssetImporter::class, 'baseBlogUrl')->setValue($assetImporter, 'https://example.test');
 
     return (new WpGroupBlockProcessor)->process(
         groupOpeningNode($html),
@@ -76,10 +76,10 @@ function processGroup(string $html, array $attributes = []): array|string|null
 function groupBardContent(array $attributes, array $bardContent, string $innerContent): array
 {
     $processor = new WpGroupBlockProcessor;
-    (new ReflectionProperty(WpGroupBlockProcessor::class, 'currentAttributes'))->setValue($processor, $attributes);
+    new ReflectionProperty(WpGroupBlockProcessor::class, 'currentAttributes')->setValue($processor, $attributes);
 
     /** @var array<int|string, mixed> $result */
-    $result = (new ReflectionMethod(WpGroupBlockProcessor::class, 'processBardContent'))
+    $result = new ReflectionMethod(WpGroupBlockProcessor::class, 'processBardContent')
         ->invoke($processor, $bardContent, $innerContent, new DOMComment(' wp:group '));
 
     return $result;
@@ -176,7 +176,7 @@ it('reads a closing comment with no padding', function (): void {
         ->and($result['skipCount'] ?? null)->toBe(3);
 });
 
-it('leaves another block\'s comments out of the depth count', function (): void {
+it("leaves another block's comments out of the depth count", function (): void {
     $result = processGroup('<!-- wp:group --><!-- wp:groupie --><!-- /wp:groupie --><p>In</p><!-- /wp:group --><p>after</p>');
 
     expect($result['html'] ?? null)->toBe('<!-- wp:groupie --><!-- /wp:groupie --><p>In</p>')

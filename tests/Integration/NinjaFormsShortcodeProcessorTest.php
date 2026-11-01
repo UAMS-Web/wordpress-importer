@@ -29,7 +29,7 @@ uses(StatamicTestCase::class);
  */
 function setNinjaShortcodeHandles(string $property, array $handles): void
 {
-    (new ReflectionProperty(NinjaFormsShortcodeProcessor::class, $property))->setValue(null, $handles);
+    new ReflectionProperty(NinjaFormsShortcodeProcessor::class, $property)->setValue(null, $handles);
 }
 
 /**
@@ -55,7 +55,7 @@ function parseNinjaShortcode(array $attributes): array
     return (new NinjaFormsShortcodeProcessor)->parse(
         $attributes,
         'default',
-        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor(),
         new BufferedOutput,
         [],
         'contact'
@@ -92,7 +92,7 @@ it('emits a form set with an import note naming the Ninja Forms form ID', functi
         ->and(NinjaFormsShortcodeProcessor::getFormIds())->toBe(['5']);
 });
 
-it('uses the created Ninja Forms handle, not another plugin\'s handle for the same ID', function (): void {
+it("uses the created Ninja Forms handle, not another plugin's handle for the same ID", function (): void {
     setNinjaShortcodeHandles('createdGravityFormsHandles', ['5' => 'gravity_handle']);
     setNinjaShortcodeHandles('createdFormidableFormsHandles', ['5' => 'formidable_handle']);
 

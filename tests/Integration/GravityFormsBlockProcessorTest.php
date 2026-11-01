@@ -36,7 +36,7 @@ uses(StatamicTestCase::class);
  */
 function setGravityBlockHandles(array $handles): void
 {
-    (new ReflectionProperty(GravityFormsBlockProcessor::class, 'createdGravityFormsHandles'))->setValue(null, $handles);
+    new ReflectionProperty(GravityFormsBlockProcessor::class, 'createdGravityFormsHandles')->setValue(null, $handles);
 }
 
 /**
@@ -54,7 +54,7 @@ function processGravityBlock(array $attributes, ?string $pageSlug = null): ?arra
         $node,
         $attributes,
         'default',
-        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor(),
         new BufferedOutput,
         [],
         [],
@@ -189,7 +189,7 @@ it('escapes attribute names in the set markup', function (): void {
         (new DOMDocument)->createComment(' wp:gravityforms/form {"formId":"5"} /'),
         ['formId' => '5'],
         'default',
-        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor(),
         new BufferedOutput,
         [],
         []

@@ -361,13 +361,7 @@ trait UnwrappingBlockProcessorTrait
             PREG_SPLIT_NO_EMPTY
         );
 
-        foreach ($classes ?: [] as $classValue) {
-            if (\str_starts_with($classValue, $this->getWrapperClassPrefix())) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($classes ?: [], fn (string $classValue): bool => \str_starts_with($classValue, $this->getWrapperClassPrefix()));
     }
 
     /**

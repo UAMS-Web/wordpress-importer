@@ -77,8 +77,8 @@ function postAudioExpects(LegacyMockInterface|MockInterface $mock, string $metho
  */
 function postAudioImporter(): AssetImporter
 {
-    $importer = (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor();
-    (new ReflectionProperty(AssetImporter::class, 'baseBlogUrl'))->setValue($importer, 'https://example.test');
+    $importer = new ReflectionClass(AssetImporter::class)->newInstanceWithoutConstructor();
+    new ReflectionProperty(AssetImporter::class, 'baseBlogUrl')->setValue($importer, 'https://example.test');
 
     return $importer;
 }
@@ -100,7 +100,7 @@ function postAudioProcessor(
 
     foreach (['audioProcessor' => $audio, 'accordionProcessor' => $accordion, 'shortcodeProcessor' => $shortcodes] as $property => $value) {
         if ($value !== null) {
-            (new ReflectionProperty(PostAudioProcessor::class, $property))->setValue($processor, $value);
+            new ReflectionProperty(PostAudioProcessor::class, $property)->setValue($processor, $value);
         }
     }
 
