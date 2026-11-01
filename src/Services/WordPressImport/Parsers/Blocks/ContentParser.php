@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks;
 
 use DOMElement;
 use Illuminate\Support\Facades\Log;
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\VideoSetType;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\VideoSetType;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * Parses WordPress ACF uams-content blocks into Statamic page_builder replicator

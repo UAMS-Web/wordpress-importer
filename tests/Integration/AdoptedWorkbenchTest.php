@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Statamic\Contracts\Forms\Form;
 use Statamic\Facades\Form as FormFacade;
-use UAMSWeb\WordPressImporter\Tests\Support\AdoptedWorkbenchCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\AdoptedWorkbenchCase;
 
 uses(AdoptedWorkbenchCase::class);
 

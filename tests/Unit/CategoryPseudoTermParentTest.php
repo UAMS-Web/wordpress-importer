@@ -24,7 +24,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/CategoryPseudoTermParentTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 
 /**
  * Build a `<wp:category>` element in the shape a real WXR export writes.

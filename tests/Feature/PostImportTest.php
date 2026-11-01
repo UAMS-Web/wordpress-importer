@@ -13,17 +13,17 @@ use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Stache;
 use Statamic\Facades\Term;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
@@ -163,7 +163,7 @@ afterEach(function (): void {
  *   - Content processing and Bard conversion
  *   - SEO metadata handling
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/PostImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/PostImportTest.php
  */
 it('creates a post entry with the expected slug and original WordPress URL', function (): void {
     // Create XML parameters for standard post entry

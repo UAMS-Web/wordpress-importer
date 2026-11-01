@@ -32,31 +32,31 @@ use Statamic\Structures\Tree;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\KbPageSubstitutions;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Extractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Prompter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Validator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\FakeAssetImporter;
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\KbPageSubstitutions;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Extractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Prompter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\FakeAssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -719,6 +719,37 @@ describe('a whole import', function (): void {
             ->toContain('Knowledge base tree structure saved.'.PHP_EOL)
             ->toContain('MinervaKB import complete!'.PHP_EOL)
             ->not->toContain('Note:');
+    });
+
+    it('files a topic that is its own parent under the knowledge base, and reports it', function (): void {
+        $warnings = kbEntryWarnings();
+
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'loop', ['parent' => 'loop'])]));
+
+        expect(kbEntryTree())->toBe([['kb' => ['loop']]])
+            ->and(ImportWarningManager::getWarnings('content', 'kb_topic_parent_cycles'))->toBe([['term_id' => '5', 'parent_term_id' => '5', 'site' => 'default']])
+            ->and($warnings->getArrayCopy())->toContain([
+                'KbEntryCreator::processTopics: kbtopic term 5 names parent term 5 in a parent cycle, so it is filed under the knowledge base',
+                ['term_id' => '5', 'parent_term_id' => '5', 'site' => 'default'],
+            ]);
+    });
+
+    it('creates both topics that name each other as parent, and reports the cycle', function (): void {
+        kbEntryRun(kbEntryExport([kbEntryTopic('5', 'first', ['parent' => 'second']), kbEntryTopic('6', 'second', ['parent' => 'first'])]));
+
+        expect(kbEntryTree())->toBe([['kb' => [['second' => ['first']]]]])
+            ->and(ImportWarningManager::getWarnings('content', 'kb_topic_parent_cycles'))->toBe([['term_id' => '6', 'parent_term_id' => '5', 'site' => 'default']]);
+    });
+
+    it('reports no cycle for a parent created before its second child', function (): void {
+        kbEntryRun(kbEntryExport([
+            kbEntryTopic('5', 'one', ['parent' => 'root']),
+            kbEntryTopic('6', 'root'),
+            kbEntryTopic('7', 'two', ['parent' => 'root']),
+        ]));
+
+        expect(kbEntryTree())->toBe([['kb' => [['root' => ['one', 'two']]]]])
+            ->and(ImportWarningManager::getWarnings('content', 'kb_topic_parent_cycles'))->toBe([]);
     });
 });
 

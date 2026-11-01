@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\MigrationApiFormLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\MigrationApiFormLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\text;

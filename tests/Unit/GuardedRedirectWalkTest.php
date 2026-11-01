@@ -24,10 +24,10 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\RequestInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\GuardedFetchRefusal;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\GuardedRedirectWalk;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
-use UAMSWeb\WordPressImporter\Tests\LaravelHttpTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedFetchRefusal;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedRedirectWalk;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
+use UAMSWeb\Aether\WordPressImporter\Tests\LaravelHttpTestCase;
 
 uses(LaravelHttpTestCase::class);
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Feature;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Feature;
 
 use Tests\TestCase;
 

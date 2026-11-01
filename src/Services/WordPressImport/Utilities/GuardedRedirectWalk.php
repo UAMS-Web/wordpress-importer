@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use Closure;
 use GuzzleHttp\Psr7\Uri;

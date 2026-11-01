@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing;
 
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 
 /**
  * Registry of knowledge base mounts to apply after all content is imported.

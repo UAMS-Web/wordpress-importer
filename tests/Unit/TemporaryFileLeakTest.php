@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 /**
  * Pins that a temporary file created for a test leaves nothing behind (wordpress-importer-archive#783).

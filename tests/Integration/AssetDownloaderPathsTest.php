@@ -33,9 +33,9 @@ use Statamic\Facades\AssetContainer as AssetContainerFacade;
 use Statamic\Facades\Glide;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

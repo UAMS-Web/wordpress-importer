@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities;
 
 use Closure;
 use Illuminate\Console\Command;
@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Log;
 use Statamic\Forms\Form;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 
 /**
  * Shared functionality for form plugin coordinators.

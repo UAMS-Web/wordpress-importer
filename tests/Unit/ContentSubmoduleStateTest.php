@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\Assert;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleChange;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleState;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleChange;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleState;
 
 /**
  * Run a git command, returning its exit status and trimmed stdout.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
 /**
  * Reads a migration API key from the first line of an open stream.

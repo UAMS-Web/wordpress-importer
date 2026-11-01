@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap;
 
 use Exception;
 use Tiptap\Core\DOMParser;
 use Tiptap\Core\Schema;
 use Tiptap\Editor as BaseEditor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
 
 /**
  * Custom Tiptap Editor extension for WordPress content import.

@@ -13,8 +13,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/FeaturedImageCreditResolverTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FeaturedImageCreditResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FeaturedImageCreditResolver;
 
 /**
  * Build a WXR attachment `<item>` carrying the given postmeta fragments.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Structures;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures;
 
 use Illuminate\Support\Facades\File as IlluminateFileFacade;
 use Illuminate\Support\Facades\Log;
@@ -13,10 +13,10 @@ use Statamic\Stache\Repositories\CollectionTreeRepository;
 use Statamic\Structures\CollectionStructure;
 use Statamic\Yaml\Yaml;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
 
 /**
  * Builds and saves the nested tree structure for Statamic collections.

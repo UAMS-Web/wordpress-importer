@@ -9,9 +9,9 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/GenericAndShortcodeSetRendererTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Shortcode;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Shortcode;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
 /**
  * A set node whose attrs carry the given values.

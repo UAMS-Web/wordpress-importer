@@ -20,35 +20,35 @@ use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -722,7 +722,6 @@ it('imports pages into the pages collection, building their tree, then runs the 
             'assets.baseBlogUrl',
             'types.select',
             'sites.isEnabled',
-            'entries.hasShowPeople',
             'entries.entryOverwrite',
             'taxonomyOverwrite.select',
             'entries.taxonomyOverwrite',
@@ -1176,22 +1175,22 @@ it('warns that only region validation is missing for provider blocks', function 
         ->and($output)->not->toContain('LocationType');
 });
 
-it('needs people groups for people and showcases, and for pages showing people', function (string $type, string $collection, bool $showPeople, bool $asked): void {
+it('needs people groups for people and showcases, and not for pages showing people', function (string $type, string $collection, bool $asked): void {
     iwriCollection($collection);
     [$command, $buffer, $stands] = iwriCommand();
-    $stands['entries']->showPeople = $showPeople;
+    $stands['entries']->showPeople = true;
     $stands['siteManager']->missingDestinations = ['people_groups'];
 
     [$status, $output] = iwriRun($command, $buffer, [iwriPart($this, [$type])]);
 
     expect($status)->toBe($asked ? 1 : 0)
-        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked);
+        ->and(str_contains($output, "Skipping import of '{$type}' as 'people_groups' is not enabled for 'default'."))->toBe($asked)
+        ->and(IwriLog::of('entries.hasShowPeople'))->toBe([]);
 })->with([
-    'people' => ['uamspeople', 'people', false, true],
-    'a showcase' => ['tshowcase', 'people', false, true],
-    'pages showing people' => ['page', 'pages', true, true],
-    'pages showing nobody' => ['page', 'pages', false, false],
-    'posts' => ['post', 'posts', true, false],
+    'people' => ['uamspeople', 'people', true],
+    'a showcase' => ['tshowcase', 'people', true],
+    'pages' => ['page', 'pages', false],
+    'posts' => ['post', 'posts', false],
 ]);
 
 it('needs classified categories for classifieds', function (): void {

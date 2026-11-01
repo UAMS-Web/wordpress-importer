@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
 
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginUserInteractionHandlerContract;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\UserInteractionHandlerTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Selector as NinjaFormsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator as NinjaFormsValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginUserInteractionHandlerContract;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\UserInteractionHandlerTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Selector as NinjaFormsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator as NinjaFormsValidator;
 
 /**
  * Handles user interaction for Ninja Forms operations.

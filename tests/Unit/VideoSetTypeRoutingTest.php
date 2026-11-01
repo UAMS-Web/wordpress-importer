@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\VideoSetType;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\VideoSetType;
 
 /**
  * Tests the video URL → Bard set routing (issue wordpress-importer-archive#298).

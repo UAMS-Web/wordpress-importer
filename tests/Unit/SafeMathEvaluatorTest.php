@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/SafeMathEvaluatorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SafeMathEvaluator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SafeMathEvaluator;
 
 it('evaluates the four operators with correct precedence', function (string $expression, float $expected): void {
     expect(SafeMathEvaluator::evaluate($expression))->toBe($expected);

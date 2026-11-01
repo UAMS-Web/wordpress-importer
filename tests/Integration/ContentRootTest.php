@@ -7,9 +7,9 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Stache\Stores\Store;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

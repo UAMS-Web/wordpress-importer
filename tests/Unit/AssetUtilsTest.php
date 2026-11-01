@@ -17,9 +17,9 @@ declare(strict_types=1);
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
-use UAMSWeb\WordPressImporter\Tests\LaravelHttpTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
+use UAMSWeb\Aether\WordPressImporter\Tests\LaravelHttpTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(LaravelHttpTestCase::class);
 

@@ -15,7 +15,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/Issue370RegressionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\StackedParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\StackedParser;
 
 it('reports whether every stacked section lacks an image', function (array $normalizedData, bool $expected): void {
     expect(StackedParser::allItemsHaveNoImages($normalizedData))->toBe($expected);

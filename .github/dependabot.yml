@@ -1,8 +1,5 @@
 # Weekly version updates (wordpress-importer-archive#1324). Security updates are enabled at the
 # organization level and do not depend on this file.
-#
-# composer resolves the private uams-web/wordpress-wxr-cleanup through the
-# organization-level Dependabot access grant, so no registry is declared here.
 version: 2
 updates:
   - package-ecosystem: composer

@@ -7,7 +7,7 @@ use PHPUnit\Framework\Assert;
 use Statamic\Events\AssetDeleted;
 use Statamic\Listeners\UpdateAssetReferences;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
 
 uses(TestCase::class);
 
@@ -35,7 +35,7 @@ uses(TestCase::class);
  * false failure) when the harness cannot exercise removal. The contract tests
  * (return value, exception propagation) always run.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/AssetReferenceUpdatesTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/AssetReferenceUpdatesTest.php
  */
 it('registers the UpdateAssetReferences listener by default', function (): void {
     // Contract: Statamic ships with the UpdateAssetReferences listener bound, so

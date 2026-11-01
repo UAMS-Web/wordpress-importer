@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies;
 
 use Illuminate\Support\Str;
 use Statamic\Entries\Entry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Resolves WordPress category slugs to `post_categories` collection-entry ids.

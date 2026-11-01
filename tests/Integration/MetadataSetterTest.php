@@ -20,8 +20,8 @@ use Statamic\Contracts\Assets\Asset as AssetContract;
 use Statamic\Facades\Asset;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Fields\Blueprint;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

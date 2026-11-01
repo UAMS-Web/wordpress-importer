@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserRegistrationFeed;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserRegistrationFeed;
 
 /*
  * The feed rows below are the shape the migration API actually serves, taken from that

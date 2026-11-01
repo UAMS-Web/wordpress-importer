@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Assets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
 use Exception;
 use getID3;
@@ -18,10 +18,10 @@ use Statamic\Facades\AssetContainer as AssetContainerFacade;
 use Statamic\Facades\Glide;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\GuardedFetchRefusal;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\GuardedRedirectWalk;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedFetchRefusal;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedRedirectWalk;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 
 /**
  * Handles downloading and storing assets from URLs into Statamic containers.

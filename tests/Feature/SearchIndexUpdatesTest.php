@@ -6,7 +6,7 @@ use Illuminate\Events\Dispatcher;
 use Statamic\Events\TermSaved;
 use Statamic\Search\UpdateItemIndexes;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
 
 uses(TestCase::class);
 
@@ -32,7 +32,7 @@ uses(TestCase::class);
  * restore directly in `tests/Integration/SearchIndexUpdatesScopeTest.php`. The
  * contract tests (return value, exception propagation) always run.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/SearchIndexUpdatesTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/SearchIndexUpdatesTest.php
  */
 it('registers the UpdateItemIndexes listener on TermSaved by default', function (): void {
     // Statamic should register the UpdateItemIndexes listener on TermSaved by default.

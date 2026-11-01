@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AudioSeriesConfigTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
 
 /**
  * Read every value a configuration reports, keyed by its getter.

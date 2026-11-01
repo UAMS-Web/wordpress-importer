@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 
 /**
  * Pins the script-stripping invariant the WordPress import relies on (wordpress-importer-archive#492).

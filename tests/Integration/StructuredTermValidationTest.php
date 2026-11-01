@@ -6,14 +6,14 @@ use Illuminate\Support\Facades\File as LaravelFileFacade;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\StructuredTermImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\PeopleGroupValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\StructuredTermImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\PeopleGroupValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests that the term-validation pass resolves a structured handle against its

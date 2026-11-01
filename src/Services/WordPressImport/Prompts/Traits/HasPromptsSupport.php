@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits;
 
 /**
  * Trait providing Laravel Prompts support detection functionality.

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Assets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
 use Illuminate\Support\Facades\Log;
 use Statamic\Assets\Asset as StatamicAsset;
 use Statamic\Facades\Asset;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 
 /**
  * Sets metadata (alt text, caption, exempt_from_alt, original_wordpress_url, focus, creator)

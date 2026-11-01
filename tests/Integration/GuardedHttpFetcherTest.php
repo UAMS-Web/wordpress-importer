@@ -21,9 +21,9 @@ use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\GuardedHttpFetcher;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\GuardedHttpFetcher;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

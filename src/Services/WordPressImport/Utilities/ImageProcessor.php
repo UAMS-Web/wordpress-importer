@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AssetImporterProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\BardSetBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\CaptionExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\HtmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\ImageProcessingStepInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AssetImporterProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\BardSetBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\CaptionExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\HtmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\ImageProcessingStepInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
 
 /**
  * Coordinates image processing into Statamic Bard image sets.

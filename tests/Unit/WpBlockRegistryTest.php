@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/WpBlockRegistryTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
 
 beforeEach(fn () => WpBlockRegistry::clear());
 

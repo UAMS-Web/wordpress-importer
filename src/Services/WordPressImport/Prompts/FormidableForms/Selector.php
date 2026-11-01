@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Validator as FormidableFormsValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Validator as FormidableFormsValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
 
 /**
  * Handles user interaction for Formidable Forms export file selection.

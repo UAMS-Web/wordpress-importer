@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks;
 
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 
 /**
  * Parses WordPress wp:rss blocks into Statamic page_builder replicator sets.

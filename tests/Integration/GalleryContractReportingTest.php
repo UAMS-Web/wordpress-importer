@@ -15,9 +15,9 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/GalleryContractReportingTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * It sits in the Integration band because the assembly step generates a Statamic

@@ -14,25 +14,25 @@ declare(strict_types=1);
  * `assets_meta` table `AssetImporter` writes through. Blueprint saving alone would no
  * longer bind it.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/GravityFormsBlueprintImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/GravityFormsBlueprintImportTest.php
  */
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Statamic\Sites\Site;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\ContentDetector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormBlueprintCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormConfigurationManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormCreationCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormIdExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserInteractionHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Selector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\ContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormBlueprintCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormConfigurationManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormCreationCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserInteractionHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Selector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 /**
  * A Gravity Forms loader with no migration API source, i.e. the file path (wordpress-importer-archive#809).
@@ -133,7 +133,7 @@ afterEach(function (): void {
  *
  * TODO: Make separate tests for the <field_options> attributes.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/GravityFormsBlueprintImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/GravityFormsBlueprintImportTest.php
  */
 it('instantiates the Gravity Forms coordinator', function (): void {
     // One store for the whole graph, as the container provides (wordpress-importer-archive#1103)

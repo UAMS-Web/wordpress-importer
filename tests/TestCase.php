@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests;
+namespace UAMSWeb\Aether\WordPressImporter\Tests;
 
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
 

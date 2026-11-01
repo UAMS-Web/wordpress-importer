@@ -18,8 +18,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/GravityFormsSubfieldInputsGuardTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormBlueprintCreator;
-use UAMSWeb\WordPressImporter\Tests\LaravelHttpTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormBlueprintCreator;
+use UAMSWeb\Aether\WordPressImporter\Tests\LaravelHttpTestCase;
 
 uses(LaravelHttpTestCase::class);
 

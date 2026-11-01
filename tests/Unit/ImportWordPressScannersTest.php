@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 
 /**
  * Tests the `ImportWordPress` command's content scanners: the scans that name the pages

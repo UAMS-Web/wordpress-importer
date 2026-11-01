@@ -16,13 +16,13 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\ContentDetector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FormIdExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\UserInteractionHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Selector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\ContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\UserInteractionHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Selector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms\Validator;
 
 beforeEach(function (): void {
     $this->detector = $this::createStub(ContentDetector::class);

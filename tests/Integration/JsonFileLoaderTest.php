@@ -16,8 +16,8 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Assert;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\JsonFileLoader;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\JsonFileLoader;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

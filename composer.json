@@ -1,5 +1,5 @@
 {
-    "name": "uams-web/wordpress-importer",
+    "name": "uams-web/aether-wordpress-importer",
     "description": "WordPress XML export importer for Statamic",
     "keywords": [
         "statamic",
@@ -10,7 +10,7 @@
         "importer",
         "uams"
     ],
-    "homepage": "https://github.com/UAMS-Web/wordpress-importer",
+    "homepage": "https://github.com/UAMS-Web/aether-wordpress-importer",
     "license": "MIT",
     "authors": [
         {
@@ -22,17 +22,17 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/UAMS-Web/wordpress-importer/issues",
-        "source": "https://github.com/UAMS-Web/wordpress-importer"
+        "issues": "https://github.com/UAMS-Web/aether-wordpress-importer/issues",
+        "source": "https://github.com/UAMS-Web/aether-wordpress-importer"
     },
     "autoload": {
         "psr-4": {
-            "UAMSWeb\\WordPressImporter\\": "src/"
+            "UAMSWeb\\Aether\\WordPressImporter\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "UAMSWeb\\WordPressImporter\\Tests\\": "tests/"
+            "UAMSWeb\\Aether\\WordPressImporter\\Tests\\": "tests/"
         }
     },
     "extra": {
@@ -42,7 +42,7 @@
         },
         "laravel": {
             "providers": [
-                "UAMSWeb\\WordPressImporter\\ServiceProvider"
+                "UAMSWeb\\Aether\\WordPressImporter\\ServiceProvider"
             ]
         }
     },
@@ -51,7 +51,7 @@
         "james-heinrich/getid3": "^1.9",
         "laravel/prompts": "^0.3",
         "statamic/cms": "6.37.0",
-        "uams-web/wordpress-wxr-cleanup": "^1.0"
+        "uams-web/aether-wordpress-importer-cleanup": "^2.0"
     },
     "require-dev": {
         "cweagans/composer-patches": "^2.0",
@@ -98,11 +98,5 @@
         "test:pint": "pint --test"
     },
     "minimum-stability": "dev",
-    "prefer-stable": true,
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/UAMS-Web/wordpress-wxr-cleanup.git"
-        }
-    ]
+    "prefer-stable": true
 }
