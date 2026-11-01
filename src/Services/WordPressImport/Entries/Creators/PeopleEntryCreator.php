@@ -841,7 +841,7 @@ class PeopleEntryCreator extends BaseEntryCreator
                     $portraitPath = FileProcessor::importFileFromAttachmentWithDisabledUploadHandling(
                         $value,
                         $attachments,
-                        '', // Empty site for portraits container root
+                        $site,
                         $assetImporter,
                         $output,
                         'portraits',
