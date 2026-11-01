@@ -349,19 +349,11 @@ trait UnwrappingBlockProcessorTrait
     private function isWrapperElement(
         DOMElement $element
     ): bool {
-        if ($element->nodeName !== $this->getWrapperElementName()) {
-            return false;
-        }
-
-        // Split the class attribute into individual class values
-        $classes = \preg_split(
-            '/\s+/',
-            $element->getAttribute('class'),
-            -1,
-            PREG_SPLIT_NO_EMPTY
-        );
-
-        return array_any($classes ?: [], fn (string $classValue): bool => \str_starts_with($classValue, $this->getWrapperClassPrefix()));
+        return $element->nodeName === $this->getWrapperElementName()
+            && \preg_match(
+                '/(?:^|\s)'.\preg_quote($this->getWrapperClassPrefix(), '/').'/',
+                $element->getAttribute('class')
+            ) === 1;
     }
 
     /**

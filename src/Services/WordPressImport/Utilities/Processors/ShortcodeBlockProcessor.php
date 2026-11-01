@@ -157,10 +157,7 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
         }
 
         // Process shortcodes within the block
-        $shortcodes = $this->shortcodeProcessor->extract(
-            $shortcodeContent,
-            $output
-        );
+        $shortcodes = $this->shortcodeProcessor->extractShortcodes($shortcodeContent);
 
         // Check if no shortcodes were extracted from content
         if (

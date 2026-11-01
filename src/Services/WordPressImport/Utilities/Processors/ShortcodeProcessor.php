@@ -189,7 +189,7 @@ class ShortcodeProcessor
      *
      * @param  string  $content  The raw text containing shortcodes
      * @param  OutputInterface  $output  Console output for logging errors
-     * @return list<array{name: string, attributes: array<string, string|true>, content: string, original: string}> Registered and dropped shortcodes only (e.g., [['name' => 'show-people', 'attributes' => [...], 'content' => '', 'original' => '[...]']])
+     * @return array<int|string, mixed> Registered and dropped shortcodes only (e.g., [['name' => 'show-people', 'attributes' => [...], 'content' => '', 'original' => '[...]']])
      */
     public function extract(
         string $content,
@@ -204,7 +204,7 @@ class ShortcodeProcessor
      * @param  string  $content  The raw text containing shortcodes
      * @return list<array{name: string, attributes: array<string, string|true>, content: string, original: string}> Registered and dropped shortcodes only
      */
-    private function extractShortcodes(
+    public function extractShortcodes(
         string $content
     ): array {
         $shortcodes = [];
