@@ -24,8 +24,15 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FieldMapper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
+
+// A `continue` mutant of a `break` in this class's switches only compiles with a
+// warning; fail on it whichever test file loads the class first
+beforeEach(function (): void {
+    CompilesCleanly::assert(FieldMapper::class);
+});
 
 /**
  * Map the given postmeta and return the data it produced and the keys it reported.
