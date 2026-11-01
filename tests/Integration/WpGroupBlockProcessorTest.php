@@ -124,6 +124,8 @@ it('accepts only a wp:group comment', function (string $html, bool $expected): v
     'closing comment' => ['<!-- /wp:group -->', false],
     'another block with the same prefix' => ['<!-- wp:groupie -->', false],
     'element, not comment' => ['<p>wp:group</p>', false],
+    'text, not comment' => ['wp:group', false],
+    'comment with no padding' => ['<!--wp:group-->', true],
 ]);
 
 it('unwraps the group div and returns its content as Bard and as HTML', function (): void {
@@ -156,6 +158,62 @@ it('keeps a nested group block for TextProcessor to unwrap in turn', function ()
     ]])
         ->and($result['html'] ?? null)->toBe('<!-- wp:group --><p>In</p><!-- /wp:group -->')
         ->and($result['skipCount'] ?? null)->toBe(3);
+});
+
+it('counts a nested block beside the wrapper, and keeps its comments', function (): void {
+    $result = processGroup(
+        '<!-- wp:group --><!-- wp:group {"align":"wide"} --><p>In</p><!-- /wp:group --><!-- /wp:group --><p>after</p>'
+    );
+
+    expect($result['html'] ?? null)->toBe('<!-- wp:group {"align":"wide"} --><p>In</p><!-- /wp:group -->')
+        ->and($result['skipCount'] ?? null)->toBe(5);
+});
+
+it('reads a closing comment with no padding', function (): void {
+    $result = processGroup('<!-- wp:group --><p>In</p><!--/wp:group--><p>after</p>');
+
+    expect($result['html'] ?? null)->toBe('<p>In</p>')
+        ->and($result['skipCount'] ?? null)->toBe(3);
+});
+
+it('leaves another block\'s comments out of the depth count', function (): void {
+    $result = processGroup('<!-- wp:group --><!-- wp:groupie --><!-- /wp:groupie --><p>In</p><!-- /wp:group --><p>after</p>');
+
+    expect($result['html'] ?? null)->toBe('<!-- wp:groupie --><!-- /wp:groupie --><p>In</p>')
+        ->and($result['skipCount'] ?? null)->toBe(5);
+});
+
+it('counts to the last sibling when the block never closes', function (): void {
+    $result = processGroup('<!-- wp:group --><p>One</p><p>Two</p>');
+
+    expect($result['html'] ?? null)->toBe('<p>One</p><p>Two</p>')
+        ->and($result['skipCount'] ?? null)->toBe(3);
+});
+
+it('keeps a text node with its own whitespace, and drops one of only whitespace', function (): void {
+    $result = processGroup('<!-- wp:group --> Lead <p>In</p>  <!-- /wp:group -->');
+
+    expect($result['html'] ?? null)->toBe(' Lead <p>In</p>');
+});
+
+it('unwraps only an element of the wrapper name with a class beginning with the prefix', function (string $wrapper, string $html): void {
+    expect(processGroup('<!-- wp:group -->'.$wrapper.'<!-- /wp:group -->')['html'] ?? null)->toBe($html);
+})->with([
+    'the prefix as the second class' => ['<div class="extra wp-block-group"><p>In</p></div>', '<p>In</p>'],
+    'a padded class attribute' => ['<div class="  wp-block-group  "><p>In</p></div>', '<p>In</p>'],
+    'a longer class with the prefix' => ['<div class="wp-block-group__inner-container"><p>In</p></div>', '<p>In</p>'],
+    'the prefix at the end of a class' => ['<div class="my-wp-block-group"><p>In</p></div>', '<div class="my-wp-block-group"><p>In</p></div>'],
+    'another element' => ['<section class="wp-block-group"><p>In</p></section>', '<section class="wp-block-group"><p>In</p></section>'],
+    'no class' => ['<div><p>In</p></div>', '<div><p>In</p></div>'],
+    'an empty class' => ['<div class=""><p>In</p></div>', '<div class=""><p>In</p></div>'],
+]);
+
+it('reads each kind of child in a wrapper', function (): void {
+    $result = processGroup(
+        '<!-- wp:group --><div class="wp-block-group"> Lead <!-- note -->  <div class="wp-block-group"><p>In</p></div></div><!-- /wp:group -->'
+    );
+
+    expect($result['html'] ?? null)->toBe(' Lead <!-- note --><p>In</p>');
 });
 
 it('returns null for a group with no content', function (): void {

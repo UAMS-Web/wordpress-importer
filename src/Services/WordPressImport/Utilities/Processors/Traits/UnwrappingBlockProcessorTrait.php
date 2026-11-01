@@ -96,38 +96,39 @@ trait UnwrappingBlockProcessorTrait
         string $site,
         ?string $pageSlug
     ): bool {
-        // Check if node is a comment node (only comment nodes contain block definitions)
-        if ($node->nodeType !== XML_COMMENT_NODE) {
-            // Return false for non-comment nodes
-            return false;
-        }
-
-        // Get block name for pattern matching
-        $blockName = $this->getBlockName();
-
-        // Check if comment matches block pattern
-        return \preg_match(
-            '/^wp:'.\preg_quote($blockName, '/').'\s*({.+?})?\s*$/s',
-            $this->trimmedCommentText($node)
-        ) === 1;
+        return $this->isOpeningBlockComment($node);
     }
 
     /**
-     * Get trimmed text from a DOM comment node.
+     * Whether a node is an opening comment of this processor's block.
      *
-     * @param  DOMNode  $node  The comment node
-     * @return string Trimmed comment text, or empty string when unavailable
+     * @param  DOMNode  $node  The node to check
+     * @return bool True for a `wp:<block>` comment, with or without attributes
      */
-    private function trimmedCommentText(
+    private function isOpeningBlockComment(
         DOMNode $node
-    ): string {
-        if (! ($node instanceof DOMComment)) {
-            return '';
-        }
+    ): bool {
+        return $node instanceof DOMComment
+            && \preg_match(
+                '/^wp:'.\preg_quote($this->getBlockName(), '/').'\s*({.+?})?\s*$/s',
+                \trim($node->data)
+            ) === 1;
+    }
 
-        $value = $node->nodeValue;
-
-        return \is_string($value) ? \trim($value) : '';
+    /**
+     * Whether a node is a closing comment of this processor's block.
+     *
+     * @param  DOMNode  $node  The node to check
+     * @return bool True for a `/wp:<block>` comment
+     */
+    private function isClosingBlockComment(
+        DOMNode $node
+    ): bool {
+        return $node instanceof DOMComment
+            && \preg_match(
+                '/^\/wp:'.\preg_quote($this->getBlockName(), '/').'\s*$/',
+                \trim($node->data)
+            ) === 1;
     }
 
     /**
@@ -254,84 +255,29 @@ trait UnwrappingBlockProcessorTrait
         // Initialize depth to 1 for the current block
         $depth = 1;
 
-        // Get block name for pattern matching
-        $blockName = $this->getBlockName();
-        $escapedBlockName = \preg_quote($blockName, '/');
-
-        // Traverse nodes until we find the matching closing comment.
-        // The loop breaks as soon as $depth reaches 0, so $depth is always > 0 here.
+        // Traverse nodes until we find the matching closing comment
         while ($currentNode instanceof DOMNode) {
-            // Check if this is a closing block comment
-            if ($currentNode instanceof DOMComment
-            && \preg_match(
-                '/^\/wp:'.$escapedBlockName.'\s*$/',
-                $this->trimmedCommentText($currentNode)
-            ) === 1) {
+            if ($this->isClosingBlockComment($currentNode)) {
                 // Decrement depth when finding closing comment
                 $depth--;
+
                 // Check if the depth is zero, meaning the matching closing comment is found
                 if ($depth === 0) {
                     // Exit the loop as the block has been fully traversed
                     break;
                 }
-
-                // ---
-                // Append closing comment for nested blocks so they can be processed
-                // recursively by TextProcessor::processForBard().
-                // ---
-                $content .= "<!--{$currentNode->nodeValue}-->";
-                // Move to the next node and continue
-                $currentNode = $currentNode->nextSibling;
-
-                continue;
-            }
-
-            // Check if this is a closing block comment
-            if ($currentNode instanceof DOMComment
-            && \preg_match(
-                '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
-                $this->trimmedCommentText($currentNode)
-            ) === 1) {
-                // Check if this is an opening block comment (nested block)
+            } elseif ($this->isOpeningBlockComment($currentNode)) {
                 // Increment depth for nested blocks
                 $depth++;
-                // ---
-                // Preserve nested block comments so they can be processed recursively by
-                // TextProcessor::processForBard(). This allows nested wp:group blocks to be
-                // processed through WpGroupBlockProcessor instead of being unwrapped.
-                // Append the opening block comment and let normal traversal handle the content.
-                // ---
-                $content .= "<!--{$currentNode->nodeValue}-->";
-                // Move to the next node to continue normal traversal
-                $currentNode = $currentNode->nextSibling;
-
-                // Continue to next iteration to process content normally
-                continue;
             }
 
             // ---
-            // Add node content to inner content. We are always still inside the block
-            // here ($depth > 0), because the loop breaks as soon as $depth reaches 0.
+            // A nested block's comments stay in the content, so they can be processed
+            // recursively by TextProcessor::processForBard(). This allows nested wp:group
+            // blocks to be processed through WpGroupBlockProcessor instead of being
+            // unwrapped.
             // ---
-
-            // Check if node is a text node
-            if ($currentNode instanceof DOMText) {
-                // Trim whitespace from the text node's value
-                $nodeValue = $currentNode->nodeValue;
-                $text = \is_string($nodeValue) ? \trim($nodeValue) : '';
-
-                // Check if the trimmed text is not empty
-                if ($text !== '') {
-                    // Append the text node's value to the content
-                    $content .= $currentNode->nodeValue;
-                }
-            } elseif ($currentNode instanceof DOMElement) { // Check if node is an element
-                // Extract content from element, skipping wrapper elements
-                $content .= $this->extractContentFromElement($currentNode);
-            } elseif ($currentNode instanceof DOMComment) { // Check if node is a comment
-                // Append the comment node's HTML representation to the content
-                $content .= "<!--{$currentNode->nodeValue}-->";
-            }
+            $content .= $this->nodeContent($currentNode);
 
             // Move to the next sibling node
             $currentNode = $currentNode->nextSibling;
@@ -339,6 +285,30 @@ trait UnwrappingBlockProcessorTrait
 
         // Return the extracted content
         return $content;
+    }
+
+    /**
+     * Reads one node of a block's content.
+     *
+     * @param  DOMNode  $node  The node to read
+     * @return string The node's content; nothing for a text node of only whitespace
+     */
+    private function nodeContent(
+        DOMNode $node
+    ): string {
+        if ($node instanceof DOMText) {
+            return \trim($node->data) === '' ? '' : $node->data;
+        }
+
+        if ($node instanceof DOMElement) {
+            return $this->extractContentFromElement($node);
+        }
+
+        if ($node instanceof DOMComment) {
+            return "<!--{$node->data}-->";
+        }
+
+        return '';
     }
 
     /**
@@ -353,92 +323,51 @@ trait UnwrappingBlockProcessorTrait
     protected function extractContentFromElement(
         DOMElement $element
     ): string {
-        // Initialize content string for accumulating extracted content
+        // Include non-wrapper elements as-is
+        if (! $this->isWrapperElement($element)) {
+            // A rendered element is a string; the cast covers the declared false and null
+            // @pest-mutate-ignore: RemoveStringCast
+            return (string) $element->ownerDocument?->saveHTML($element);
+        }
+
+        // Extract the wrapper's children instead of including the element itself
         $content = '';
 
-        // ---
-        // Check if this is a wrapper element
-        // ---
-
-        // Get class attribute value from the element
-        $class = $element->getAttribute('class');
-
-        // Initialize flag to track if element is a wrapper
-        $isWrapper = false;
-
-        // Get wrapper element name and class prefix
-        $wrapperElementName = $this->getWrapperElementName();
-        $wrapperClassPrefix = $this->getWrapperClassPrefix();
-
-        // Check if element matches wrapper criteria
-        if ($element->nodeName === $wrapperElementName && $class !== '') {
-            // Split class attribute into individual class values
-            $classes = \preg_split(
-                '/\s+/',
-                \trim($class)
-            );
-
-            if (! \is_array($classes)) {
-                $classes = [];
-            }
-
-            // ---
-            // Check if any class value begins with the wrapper class prefix
-            // ---
-
-            // Loop through each class value to check for wrapper class prefix
-            foreach ($classes as $classValue) {
-                // Check if class value begins with wrapper class prefix
-                if (
-                    str_starts_with($classValue, $wrapperClassPrefix)
-                ) {
-                    // Mark element as wrapper when matching class is found
-                    $isWrapper = true;
-
-                    // Exit loop early since we found a match
-                    break;
-                }
-            }
+        foreach ($element->childNodes as $child) {
+            $content .= $this->nodeContent($child);
         }
 
-        // Check if element is a wrapper that should be skipped
-        if ($isWrapper) {
-            // ---
-            // Extract inner content of wrapper element instead of including the element itself
-            // ---
-
-            // Loop through all child nodes of the wrapper element
-            foreach ($element->childNodes as $child) {
-                // Check if child node is a text node
-                if ($child instanceof DOMText) {
-                    // Trim whitespace from text content
-                    $childValue = $child->nodeValue;
-                    $text = \is_string($childValue) ? \trim($childValue) : '';
-
-                    // Check if text content is not empty after trimming
-                    if ($text !== '') {
-                        // Append text content to extracted content
-                        $content .= $child->nodeValue;
-                    }
-                } elseif ($child instanceof DOMElement) { // Check if child node is an element node
-                    // Recursively extract content from child elements
-                    $content .= $this->extractContentFromElement($child);
-                } elseif ($child instanceof DOMComment) { // Check if child node is a comment node
-                    // Append comment to extracted content preserving comment syntax
-                    $content .= "<!--{$child->nodeValue}-->";
-                }
-            }
-        } else { // Otherwise
-            // Include non-wrapper elements as-is
-            $ownerDocument = $element->ownerDocument;
-
-            if ($ownerDocument instanceof \DOMDocument) {
-                $content .= $ownerDocument->saveHTML($element);
-            }
-        }
-
-        // Return extracted content string
         return $content;
+    }
+
+    /**
+     * Whether an element is the block's own wrapper.
+     *
+     * @param  DOMElement  $element  The element to check
+     * @return bool True when the element name matches and a class begins with the wrapper prefix
+     */
+    private function isWrapperElement(
+        DOMElement $element
+    ): bool {
+        if ($element->nodeName !== $this->getWrapperElementName()) {
+            return false;
+        }
+
+        // Split the class attribute into individual class values
+        $classes = \preg_split(
+            '/\s+/',
+            $element->getAttribute('class'),
+            -1,
+            PREG_SPLIT_NO_EMPTY
+        );
+
+        foreach ($classes ?: [] as $classValue) {
+            if (\str_starts_with($classValue, $this->getWrapperClassPrefix())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -462,43 +391,21 @@ trait UnwrappingBlockProcessorTrait
         // Initialize depth to 1 for the current block
         $depth = 1;
 
-        // Get block name for pattern matching
-        $blockName = $this->getBlockName();
-        $escapedBlockName = \preg_quote($blockName, '/');
-
-        // Traverse nodes until we find the matching closing comment.
-        // The loop breaks as soon as $depth reaches 0, so $depth is always > 0 here.
+        // Traverse nodes until we find the matching closing comment
         while ($currentNode instanceof DOMNode) {
             // Increment count for each node traversed
             $count++;
 
-            // Check if this is a closing block comment
-            if (
-                $currentNode instanceof DOMComment
-                && \preg_match(
-                    '/^\/wp:'.$escapedBlockName.'\s*$/',
-                    $this->trimmedCommentText($currentNode)
-                ) === 1
-            ) {
+            if ($this->isClosingBlockComment($currentNode)) {
                 // Decrement depth when finding closing comment
                 $depth--;
-
-                // ---
-                // Break if we've found the matching closing comment
-                // ---
 
                 // Check if the depth is zero, meaning the matching closing comment is found
                 if ($depth === 0) {
                     // Exit the loop as the block has been fully traversed
                     break;
                 }
-            } elseif (
-                $currentNode instanceof DOMComment
-                && \preg_match(
-                    '/^wp:'.$escapedBlockName.'\s*({.+?})?\s*$/s',
-                    $this->trimmedCommentText($currentNode)
-                ) === 1
-            ) { // Check if this is an opening block comment (nested block)
+            } elseif ($this->isOpeningBlockComment($currentNode)) {
                 // Increment depth for nested blocks
                 $depth++;
             }
