@@ -6,7 +6,9 @@ namespace UAMSWeb\WordPressImporter\Console\Commands;
 
 use App\Services\BardContentSanitizer;
 use Illuminate\Console\Command;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File as LaravelFile;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -431,6 +433,12 @@ class ImportWordPress extends Command
      * Bounds the dataless-entry sweep to files this run produced (wordpress-importer-archive#1160).
      */
     private float $runStartedAt = 0.0;
+
+    /**
+     * Whether this command is running an import, so a command that finishes inside it
+     * hands Laravel Prompts back (#228).
+     */
+    private bool $importing = false;
 
     /**
      * Remove entry files this run materialized with no data in them, and report them.
@@ -1148,10 +1156,42 @@ class ImportWordPress extends Command
      * Protected so a test can stand in for the import itself while it covers what
      * leads to it.
      *
+     * Every Laravel command points the static Laravel Prompts configuration at itself when
+     * it runs, and `Artisan::call()` does not point it back. A command called that way
+     * inside the import, as a host app's `EntrySaved` listener can do through a synchronous
+     * queue, leaves every later question drawn into that command's buffered output while
+     * this one waits on the keyboard (#228). So each command that finishes during the
+     * import hands Prompts back.
+     *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
      * @return int Exit code (0 for success, 1 for failure)
      */
     protected function runImportForParts(
+        array $parts
+    ): int {
+        // Hand Prompts back after each nested command, and only while this import runs
+        Event::listen(CommandFinished::class, function (): void {
+            if ($this->importing) {
+                $this->configurePrompts($this->input);
+            }
+        });
+
+        $this->importing = true;
+
+        try {
+            return $this->importParts($parts);
+        } finally {
+            $this->importing = false;
+        }
+    }
+
+    /**
+     * Import an already-resolved part-set.
+     *
+     * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
+     * @return int Exit code (0 for success, 1 for failure)
+     */
+    private function importParts(
         array $parts
     ): int {
         // Resolve the non-interactive policy for unsupported-content gates
