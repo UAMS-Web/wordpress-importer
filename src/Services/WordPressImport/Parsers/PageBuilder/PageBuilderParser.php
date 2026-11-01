@@ -584,6 +584,11 @@ class PageBuilderParser
 
                     // Append the direct set to ordered page_builder sets
                     self::$orderedSets[] = $nonAcfResult['directSet'];
+
+                    // Start the content after the set with what follows its shortcode
+                    if (isset($nonAcfResult['htmlAfterSet'])) {
+                        self::$nonAcfAccumulator[] = ['html' => $nonAcfResult['htmlAfterSet']];
+                    }
                 }
 
                 // ---

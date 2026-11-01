@@ -156,7 +156,7 @@ class NonAcfBlockParser
      * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement items for post ID mapping
      * @param  array<int|string, mixed>  $unaddressedBlocks  List of unaddressed block types
      * @param  ?string  $pageSlug  The page slug (optional)
-     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>} Result with processed flag, skip count, and optional direct set
+     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string} Result with processed flag, skip count, and optional direct set
      */
     public function parseNode(
         DOMNode $node,
@@ -316,18 +316,25 @@ class NonAcfBlockParser
                     // Use skip count from shortcode processor result
                     $skipCount = $this->resolveSkipCount($result);
 
-                    // The set stands alone, so what surrounded its shortcode goes to
-                    // the content that follows it (#180)
-                    if (isset($result['surrounding_html'])) {
-                        $accumulator[] = ['html' => $result['surrounding_html']];
+                    // The set stands alone, so what comes before its shortcode joins
+                    // the content ahead of it (#180)
+                    if (isset($result['html_before'])) {
+                        $accumulator[] = ['html' => $result['html_before']];
                     }
 
                     // Return result with direct set for PageBuilderParser
-                    return [
+                    $directResult = [
                         'processed' => true,
                         'skipCount' => $skipCount,
                         'directSet' => $result['page_builder_set'],
                     ];
+
+                    // What comes after the shortcode can only follow the set
+                    if (isset($result['html_after'])) {
+                        $directResult['htmlAfterSet'] = $result['html_after'];
+                    }
+
+                    return $directResult;
                 }
 
                 // Check if shortcode processing was successful and add to accumulator

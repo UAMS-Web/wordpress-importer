@@ -273,7 +273,7 @@ class PbFakeNonAcf extends NonAcfBlockParser
     /**
      * The parseNode() result for each node label.
      *
-     * @var array<string, array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>}>
+     * @var array<string, array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string}>
      */
     public array $results = [];
 
@@ -302,7 +302,7 @@ class PbFakeNonAcf extends NonAcfBlockParser
      * @param  array<int|string, mixed>  $terms
      * @param  array<int|string, mixed>  $items
      * @param  array<int|string, mixed>  $unaddressedBlocks
-     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>}
+     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string}
      */
     public function parseNode(
         DOMNode $node,
@@ -559,6 +559,19 @@ it('puts a direct set after the non-ACF content ahead of it', function (): void 
         ['type' => 'text', 'html' => 'A'],
         pbSet('direct'),
         ['type' => 'text', 'html' => 'B'],
+    ]);
+});
+
+it('puts what follows a direct set\'s shortcode after the set', function (): void {
+    $fakes = pbParser();
+    $fakes['nonAcf']->results['c:wp:shortcode'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct'), 'htmlAfterSet' => 'tail'];
+
+    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><!-- wp:shortcode --><p>B</p>'));
+
+    expect($run['content'])->toBe([
+        ['type' => 'text', 'html' => 'A'],
+        pbSet('direct'),
+        ['type' => 'text', 'html' => 'tail|B'],
     ]);
 });
 

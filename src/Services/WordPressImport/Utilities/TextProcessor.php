@@ -612,10 +612,18 @@ class TextProcessor
             $shortcodeOnlyInner = $bareFormShortcodeMatch[1];
         }
 
-        // Check if the post is shortcode-only content that should bypass full DOM traversal
+        // ---
+        // Check if the post is shortcode-only content that should bypass full DOM
+        // traversal. A link or an image beside a shortcode needs that traversal, which
+        // is what processes links and reports images.
+        // ---
         if (
             $shortcodeOnlyInner !== null
             && $shortcodeOnlyInner !== ''
+            && ! ShortcodeBlockProcessor::holdsContentBesideShortcodes(
+                $shortcodeProcessor->extract($shortcodeOnlyInner, $output),
+                $shortcodeOnlyInner
+            )
         ) {
             // Process the shortcode string into Tiptap HTML
             $shortcodeOnlyHtml = $shortcodeProcessor->processShortcodesInContent(
@@ -640,14 +648,6 @@ class TextProcessor
                     $shortcodeOnlyParsed !== []
                     && $shortcodeOnlyParsed[0] !== null
                 ) {
-                    // This route never reaches ShortcodeBlockProcessor, so report here
-                    ShortcodeBlockProcessor::reportImageBesideShortcodes(
-                        $shortcodeProcessor->extract($shortcodeOnlyInner, $output),
-                        $shortcodeOnlyInner,
-                        $site,
-                        $pageSlug
-                    );
-
                     // Return the parsed Bard content, without the empty paragraphs a
                     // flattened accordion leaves where it closes and reopens one
                     return \array_values(self::withoutEmptyParagraphs($shortcodeOnlyParsed));

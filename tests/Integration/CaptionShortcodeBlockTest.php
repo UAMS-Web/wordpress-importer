@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\NonAcfBlockParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\PageBuilderParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
@@ -61,6 +62,10 @@ function nonAcfCaptionSets(string $html, AssetImporter $assetImporter): array
 
         if (isset($result['directSet'])) {
             $directSets[] = $result['directSet'];
+        }
+
+        if (isset($result['htmlAfterSet'])) {
+            $accumulator[] = ['html' => $result['htmlAfterSet']];
         }
 
         $index += \max(0, $result['skipCount'] - 1);
@@ -209,6 +214,7 @@ it('reports no image that a shortcode holds, or a block without one', function (
 })->with([
     'an image in a caption' => ['<!-- wp:shortcode -->[caption id="attachment_1"]<img src="https://example.com/a.jpg" /> Text[/caption]<!-- /wp:shortcode -->'],
     'no image' => ['<!-- wp:shortcode -->Lead [show-people ids="1"]<!-- /wp:shortcode -->'],
+    'an image the block keeps, its shortcodes converting to nothing' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[caption][/caption] [caption][/caption]<!-- /wp:shortcode -->'],
     'an image in a block with no shortcode' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg"><!-- /wp:shortcode -->'],
 ]);
 
@@ -250,6 +256,48 @@ it('keeps the page builder set of a shortcode, and the text around it, on the pa
     'a show-people' => ['[show-people ids="1"]', 'uamsweb_block_show-people'],
     'a blogroll, which has no Bard set' => ['[blogroll category="x"]', 'uamsweb_block_news'],
 ]);
+
+it('keeps the text on each side of a shortcode on its side of the set, through the page builder parser', function (): void {
+    $doc = new DOMDocument;
+    $doc->loadHTML('<html><body><p>Intro</p><!-- wp:shortcode -->Lead [show-people ids="1"] tail<!-- /wp:shortcode --><p>Outro</p></body></html>', LIBXML_NOERROR);
+    $body = $doc->getElementsByTagName('body')->item(0);
+
+    if (! $body instanceof DOMElement) {
+        throw new RuntimeException('The test HTML has no body.');
+    }
+
+    $assetImporter = $this::createStub(AssetImporter::class);
+    $parser = new PageBuilderParser;
+    $parser->resetStaticVariables();
+    $nodes = $body->childNodes;
+    $content = [];
+
+    // Walk the nodes as the importer does, honoring each skip count
+    for ($index = 0; $index < $nodes->length; $index++) {
+        $node = $nodes->item($index);
+
+        if (! $node instanceof DOMNode) {
+            continue;
+        }
+
+        $result = $parser->parseNode($node, $index, $nodes, $content, 'default', $assetImporter, new NullOutput);
+        $skipCount = $result['skipCount'] ?? 0;
+        $index += \is_int($skipCount) ? \max(0, $skipCount - 1) : 0;
+    }
+
+    $parser->forceFinalization($content, 'default', $assetImporter, new NullOutput);
+    $parser->resetStaticVariables();
+
+    // A set reads as its type, and content as the text of its nodes
+    $summary = [];
+
+    foreach ($content as $set) {
+        $body = shortcodeBlockBody($set);
+        $summary = [...$summary, ...($body === [] ? [Arr::get($set, 'type')] : shortcodeBlockNodeSummary($body))];
+    }
+
+    expect($summary)->toBe(['Intro', 'Lead', 'uamsweb_block_show-people', 'tail', 'Outro']);
+});
 
 it('keeps the node right after a lone shortcode block', function (string $shortcode): void {
     $html = '<!-- wp:shortcode -->'.$shortcode.'<!-- /wp:shortcode --><p>After</p>';

@@ -503,6 +503,16 @@ it('removes the hrefs of gallery links, and only those, after an earlier, longer
     );
 });
 
+it('runs a link beside a shortcode through the link processor in a post of one block', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->extracted = [['name' => 'held', 'original' => '[held]']];
+
+    textProcessorForBard('<!-- wp:shortcode --><a href="/beside">B</a> [held]<!-- /wp:shortcode -->');
+
+    expect($fakes['link']->calls)->toHaveCount(1)
+        ->and($fakes['link']->calls[0]['html'] ?? null)->toContain('href="/beside"');
+});
+
 it('removes the hrefs of links in a gallery ahead of a shortcode block, and in a shortcode in the block', function (): void {
     $fakes = textProcessorForBardFakes();
     $fakes['shortcode']->extracted = [['name' => 'held', 'original' => '[held]<a href="/in-shortcode">I</a>[/held]']];
