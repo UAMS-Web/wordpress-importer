@@ -294,13 +294,14 @@ function baseEntryItem(string $inner): SimpleXMLElement
 }
 
 /**
- * Save an entry into `things`.
+ * Save an entry into a collection, `things` unless named.
  *
  * @param  string  $id  The id
  * @param  string  $slug  The slug
  * @param  string  $site  The site
+ * @param  string  $collection  The collection
  */
-function baseEntryMake(string $id, string $slug, string $site = 'default'): Entry
+function baseEntryMake(string $id, string $slug, string $site = 'default', string $collection = 'things'): Entry
 {
     $entry = EntryFacade::make();
 
@@ -308,7 +309,7 @@ function baseEntryMake(string $id, string $slug, string $site = 'default'): Entr
         throw new RuntimeException('Could not make an entry.');
     }
 
-    $entry->collection('things');
+    $entry->collection($collection);
     $entry->locale($site);
     $entry->slug($slug);
     $entry->id($id);
@@ -704,39 +705,121 @@ describe('saving an entry', function (): void {
             ->and($output->fetch())->toContain("Created entry 'thing'");
     });
 
-    it('saves an additional entry beside one that exists, under its first numbered slug and its own id', function (): void {
-        // ---
-        // Pins today's behavior, which #340 records: Statamic stores the slug without
-        // its dot, so the search for a free slug never finds the stored one and every
-        // copy takes `.1`, and the copy keeps the id generated for this run rather
-        // than the one the search made.
-        // ---
+    it('saves an additional entry under a slug of its own, leaving the entry on the slug next to it alone', function (): void {
         baseEntryCollection();
         baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
-        baseEntryMake('other-1', 'thing.1');
+        baseEntryMake('other-1', 'thing1');
         $creator = baseEntryProbe();
         $creator->setEntryOverwriteBehavior('Create an additional file');
         $output = new BufferedOutput;
 
         $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'id' => 'thing-7-BBBBBBBBBBBBBBBB'], $output);
 
-        expect($result instanceof Entry ? [$result->id(), $result->slug()] : null)->toBe(['thing-7-BBBBBBBBBBBBBBBB', 'thing1'])
+        expect($result instanceof Entry ? [$result->id(), $result->slug()] : null)->toBe(['thing-7-BBBBBBBBBBBBBBBB', 'thing_copy-1'])
             ->and($result instanceof Entry ? baseEntryData($result) : null)->toBe(['title' => 'New'])
-            ->and(baseEntrySlugs())->toBe(['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'other-1' => 'thing1', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing1'])
-            ->and($output->fetch())->toBe("  - Created entry 'thing.1' in Statamic for the 'default' site in the 'things' collection.".PHP_EOL);
+            ->and(baseEntrySlugs())->toBe(['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'other-1' => 'thing1', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing_copy-1'])
+            ->and($output->fetch())->toBe("  - Created entry 'thing_copy-1' in Statamic for the 'default' site in the 'things' collection.".PHP_EOL);
     });
 
-    it('numbers an additional entry from the slug, dropping a number it already carries', function (): void {
+    it('gives each additional entry a slug of its own, counting the slug Statamic stores', function (string $slug, string $stored): void {
         baseEntryCollection();
-        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing.4');
+        baseEntryMake("$stored-7-AAAAAAAAAAAAAAAA", $slug);
         $creator = baseEntryProbe();
         $creator->setEntryOverwriteBehavior('Create an additional file');
-        $output = new BufferedOutput;
 
-        $creator->call('saveEntry', 'things', 'default', 'thing.4', ['title' => 'New', 'id' => 'thing-7-BBBBBBBBBBBBBBBB'], $output);
+        foreach (['BBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCC'] as $random) {
+            $creator->call('saveEntry', 'things', 'default', $slug, ['title' => 'New', 'id' => "$stored-7-$random"], new BufferedOutput);
+        }
 
-        expect($output->fetch())->toContain("Created entry 'thing.1'");
+        expect(baseEntrySlugs())->toBe([
+            "$stored-7-AAAAAAAAAAAAAAAA" => $stored,
+            "$stored-7-BBBBBBBBBBBBBBBB" => "{$stored}_copy-1",
+            "$stored-7-CCCCCCCCCCCCCCCC" => "{$stored}_copy-2",
+        ]);
+    })->with([
+        'a plain slug' => ['thing', 'thing'],
+        'a slug that loses a dot' => ['thing.4', 'thing4'],
+        'a slug Statamic spells in the site language' => ['thüng', 'thung'],
+    ]);
+
+    it('counts the slug a site in another language stores', function (): void {
+        Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'], 'other' => ['name' => 'Other', 'locale' => 'de_DE', 'url' => '/de/']]);
+        baseEntryCollection();
+        baseEntryMake('thueng-7-AAAAAAAAAAAAAAAA', 'thüng', 'other');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        foreach (['BBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCC'] as $random) {
+            $creator->call('saveEntry', 'things', 'other', 'thüng', ['title' => 'New', 'id' => "thueng-7-$random"], new BufferedOutput);
+        }
+
+        expect(baseEntrySlugs())->toBe([
+            'thueng-7-AAAAAAAAAAAAAAAA' => 'thueng',
+            'thueng-7-BBBBBBBBBBBBBBBB' => 'thueng_copy-1',
+            'thueng-7-CCCCCCCCCCCCCCCC' => 'thueng_copy-2',
+        ]);
     });
+
+    it('writes the slug of an additional entry into data that carries one', function (): void {
+        baseEntryCollection();
+        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'slug' => 'thing', 'id' => 'thing-7-BBBBBBBBBBBBBBBB'], new BufferedOutput);
+
+        expect($result instanceof Entry ? baseEntryData($result) : null)->toBe(['title' => 'New', 'slug' => 'thing_copy-1']);
+    });
+
+    it('takes the entry on the slug itself over an additional copy of it, whichever comes first', function (string $behavior, array $expected): void {
+        baseEntryCollection();
+        baseEntryMake('thing-7-BBBBBBBBBBBBBBBB', 'thing_copy-1');
+        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior($behavior);
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'id' => 'thing-7-CCCCCCCCCCCCCCCC'], new BufferedOutput);
+
+        expect($result instanceof Entry ? $result->id() : null)->toBe('thing-7-AAAAAAAAAAAAAAAA')
+            ->and(baseEntrySlugs())->toBe($expected);
+    })->with([
+        'overwrite' => ['Overwrite matching files', ['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing_copy-1']],
+        'skip' => ['Skip matching files', ['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing_copy-1']],
+    ]);
+
+    it('counts only the copies in the same collection and site', function (): void {
+        baseEntryCollection();
+        $others = CollectionFacade::make('others');
+        $others->sites(['default']);
+        $others->save();
+        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
+        baseEntryMake('other-site', 'thing_copy-1', 'other');
+        baseEntryMake('other-collection', 'thing_copy-1', collection: 'others');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'id' => 'thing-7-BBBBBBBBBBBBBBBB'], new BufferedOutput);
+
+        expect($result instanceof Entry ? $result->slug() : null)->toBe('thing_copy-1');
+    });
+
+    it('gives an additional entry an id of its own when the entry it copies holds the id', function (array $data, string $id): void {
+        baseEntryCollection();
+        baseEntryMake($id, 'thing');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', $data, new BufferedOutput);
+        $copyId = $result instanceof Entry ? $result->id() : null;
+
+        expect($copyId)->toBeString()->not->toBe($id)->toStartWith('thing_copy-1-')
+            ->and($result instanceof Entry ? \array_key_exists('id', baseEntryData($result)) : null)->toBeFalse()
+            ->and(baseEntrySlugs())->toHaveCount(2)->toHaveKey($id, 'thing');
+    })->with([
+        'the slug as its id' => [['title' => 'New'], 'thing'],
+        'the same generated id' => [['title' => 'New', 'id' => 'thing-7-AAAAAAAAAAAAAAAA'], 'thing-7-AAAAAAAAAAAAAAAA'],
+    ]);
+
     it('dates an entry in a dated collection from its date, its post date, or now', function (?string $date, ?string $postDate, ?string $expected, bool $warned): void {
         baseEntryCollection(['date'], dated: true);
         $warnings = baseEntryWarnings();
