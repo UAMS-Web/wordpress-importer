@@ -32,7 +32,7 @@ const ASSIGN_AUTHOR_PR = '4242';
 /**
  * Repository every behavior case uses.
  */
-const ASSIGN_AUTHOR_REPO = 'UAMS-Web/wordpress-importer';
+const ASSIGN_AUTHOR_REPO = 'UAMS-Web/aether-wordpress-importer';
 
 /**
  * The parsed workflow.
@@ -340,5 +340,5 @@ it('asks for the first page of closing references by owner, name and integer num
     expect($run['calls'][0] ?? '')
         ->toContain('query($owner: String!, $name: String!, $number: Int!)')
         ->toContain('pullRequest(number: $number) { closingIssuesReferences(first: 100) { totalCount nodes { number repository { nameWithOwner } } } }')
-        ->toContain('-F owner=UAMS-Web -F name=wordpress-importer -F number=4242');
+        ->toContain('-F owner=UAMS-Web -F name=aether-wordpress-importer -F number=4242');
 });

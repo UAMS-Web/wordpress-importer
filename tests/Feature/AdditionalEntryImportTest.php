@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Testing\PendingCommand;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as EntryFacade;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
@@ -17,7 +17,7 @@ uses(WordPressImportTestCase::class);
  * the import command saves a copy into the host app's `pages` collection, whose
  * structure and routes a copy has to survive.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/AdditionalEntryImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/AdditionalEntryImportTest.php
  */
 
 /**

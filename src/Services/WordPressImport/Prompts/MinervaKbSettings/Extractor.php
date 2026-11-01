@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings;
 
 use Closure;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
 
 /**
  * Extracts and maps MinervaKB settings to Statamic field values.

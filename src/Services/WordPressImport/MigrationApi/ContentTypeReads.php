@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
 /**
  * What a run scoped to one content type reads, and which passes it runs afterwards (#109).

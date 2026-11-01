@@ -8,13 +8,13 @@ use Statamic\Facades\GlobalSet;
 use Statamic\Globals\Variables;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
@@ -114,7 +114,7 @@ afterEach(function (): void {
  *    `target_type: 'url'` + `target_url: <raw>`, with `use_regex: true`
  *    preserved.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/RedirectRuleImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/RedirectRuleImportTest.php
  */
 it('writes one row per resolveTarget branch to the redirects global', function (): void {
     // Seed the page entry the fixture's resolvable target maps to. Slug prefix

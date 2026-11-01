@@ -2,20 +2,20 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use SimpleXMLElement;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Handles interactive prompts for navigation menu selection during WordPress

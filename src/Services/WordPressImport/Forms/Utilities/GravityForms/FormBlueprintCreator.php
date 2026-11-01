@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormBlueprintCreatorTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormBlueprintCreatorTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 
 /**
  * Creates basic blueprints for imported Gravity Forms.

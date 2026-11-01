@@ -22,8 +22,8 @@ use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Site;
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 

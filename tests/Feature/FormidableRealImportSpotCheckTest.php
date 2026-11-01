@@ -9,19 +9,19 @@ use Statamic\Forms\Form;
 use Statamic\Sites\Site;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\ContentDetector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormBlueprintCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormCreationCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormidableFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormIdExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\UserInteractionHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Selector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Validator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableXmlFileLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\ContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormBlueprintCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormCreationCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormidableFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\UserInteractionHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Selector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableXmlFileLoader;
 
 uses(TestCase::class);
 
@@ -69,7 +69,7 @@ afterEach(function (): void {
  * skips itself when the export is unavailable, keeping CI green on runners that do
  * not have the wordpress-importer-exports corpus checked out.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/FormidableRealImportSpotCheckTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/FormidableRealImportSpotCheckTest.php
  */
 it('persists an email config matching the audit reproducer from a real export', function (): void {
     // The production loader extracts the email view from a real export and the

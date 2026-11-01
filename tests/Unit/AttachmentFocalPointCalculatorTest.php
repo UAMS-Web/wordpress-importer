@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AttachmentFocalPointCalculatorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AttachmentFocalPointCalculator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AttachmentFocalPointCalculator;
 
 /**
  * Load a minimal WXR attachment `<item>` with namespace prefixes registered.

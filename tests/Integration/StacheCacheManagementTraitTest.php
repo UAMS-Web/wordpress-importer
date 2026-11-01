@@ -11,8 +11,8 @@ declare(strict_types=1);
  */
 
 use Statamic\Facades\Stache as StacheFacade;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\StacheCacheManagementTrait;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

@@ -20,8 +20,8 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PreformattedBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PreformattedBlockProcessor;
 
 /**
  * Parse an HTML fragment and return its opening node: the first child of the

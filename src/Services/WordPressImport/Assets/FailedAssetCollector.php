@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Assets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
 /**
  * Collects and manages failed asset download URLs for reporting at the end of

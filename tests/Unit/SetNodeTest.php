@@ -14,11 +14,11 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/SetNodeTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\PullQuote;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Table;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\GenericSetRenderer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\PullQuote;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets\Table;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
 // The parse rule is built once per process and cached, so coverage of the lines
 // that build it goes to whichever test built it first. Building it afresh for

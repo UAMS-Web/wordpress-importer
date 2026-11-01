@@ -2,9 +2,9 @@ blank_issues_enabled: true
 contact_links:
   # uams-claude-skills:begin security-contact-link
   - name: "Report a security vulnerability"
-    url: "https://github.com/UAMS-Web/wordpress-importer/security/advisories/new"
+    url: "https://github.com/UAMS-Web/aether-wordpress-importer/security/advisories/new"
     about: "Report a vulnerability privately. Do not open a public issue for one: anyone can read it, and editing it later does not remove the text."
   # uams-claude-skills:end security-contact-link
   - name: House style for issues
-    url: https://github.com/UAMS-Web/wordpress-importer/blob/main/.claude/skills/writing-issues/SKILL.md
+    url: https://github.com/UAMS-Web/aether-wordpress-importer/blob/main/.claude/skills/writing-issues/SKILL.md
     about: The source of truth for issue titles, sections, acceptance criteria, labels, and project-board triage. The templates here are only its skeletons.

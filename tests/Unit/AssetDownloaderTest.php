@@ -27,8 +27,8 @@ use Statamic\Assets\AssetContainer as StatamicAssetContainer;
 use Statamic\Facades\Asset as AssetFacade;
 use Statamic\Facades\AssetContainer as AssetContainerFacade;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
-use UAMSWeb\WordPressImporter\Tests\LaravelHttpTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
+use UAMSWeb\Aether\WordPressImporter\Tests\LaravelHttpTestCase;
 
 uses(LaravelHttpTestCase::class);
 

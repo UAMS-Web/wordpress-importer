@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
 
 /**
  * A source of WXR export parts the importer can stream.

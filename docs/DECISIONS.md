@@ -1,6 +1,6 @@
 # Decisions
 
-The durable, terse cross-ticket decision log for `UAMS-Web/wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, newest at the bottom of its section. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
+The durable, terse cross-ticket decision log for `UAMS-Web/aether-wordpress-importer`. When a design fork is resolved (see the [`design-decision-forks`](../.claude/rules/design-decision-forks.md) rule), record **what** was decided, **why**, and the **rejected alternatives** here — one entry per decision, newest at the bottom of its section. The GitHub tracker remains the system of record for a single ticket's status; this file is the index a future agent reads to avoid relitigating a settled call.
 
 ## Versioning and releases
 
@@ -27,7 +27,7 @@ Flip `hitl` → `afk` in the *same change* that records a fork's resolution. An 
 
 ## Test base-class selection
 
-Every test extends one of **three** base classes, chosen by whether it needs the booted host app: `Tests\TestCase` (full host Statamic app), `LaravelHttpTestCase` (minimal Laravel — HTTP client only), or the bare package `UAMSWeb\WordPressImporter\Tests\TestCase` (pure `PHPUnit\Framework\TestCase`). Never "fix" a PHPStan error by downgrading a host-bound test's base class — that trades a static nit for a silent runtime break. The rule and its rationale live in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (refs `wordpress-importer-archive#366`, `wordpress-importer-archive#359`).
+Every test extends one of **three** base classes, chosen by whether it needs the booted host app: `Tests\TestCase` (full host Statamic app), `LaravelHttpTestCase` (minimal Laravel — HTTP client only), or the bare package `UAMSWeb\Aether\WordPressImporter\Tests\TestCase` (pure `PHPUnit\Framework\TestCase`). Never "fix" a PHPStan error by downgrading a host-bound test's base class — that trades a static nit for a silent runtime break. The rule and its rationale live in [`tests/CLAUDE.md`](../tests/CLAUDE.md) (refs `wordpress-importer-archive#366`, `wordpress-importer-archive#359`).
 
 ## Test framework and boot model — Pest, with testbench for the light Statamic band
 
@@ -1500,3 +1500,13 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: running a subset on Windows.** The timings that would justify narrowing it did not exist yet. Narrowing is a later decision.
 
 **Not changed: whether the local chain gates a merge.**
+
+## The mapper reads no id for a blockquote or an image (#149)
+
+**Decided 2026-11-01, on #149.** The attribute mapper copies an element's `id` onto a `bulletList` node and does not read one for a `blockquote` or an `image`, although the host app's Bard attribute config accepts an `id` on both.
+
+**Why.** `BardParser` has its `Blockquote` and `Image` nodes commented out, so an import never holds either node. Measured through `TextProcessor::processForBard()`: a bare `<blockquote>` comes out as a paragraph, and an `<img>` with no asset to resolve comes out as no node.
+
+**Rejected: reading the ids anyway.** It is code no import can reach. For an image it would also be wrong the day the node is registered: signatures hash the element's text, an image has none, so every image in a body would share one signature and take the last image's id.
+
+**Not decided here: what a `wp:quote` or an image with a real asset keeps of an `id`.** That is #374.

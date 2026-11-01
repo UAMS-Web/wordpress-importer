@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
 
 /**
  * Tests for PostCategoryEntryResolver::splitSlugs().

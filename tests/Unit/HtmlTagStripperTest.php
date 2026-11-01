@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/HtmlTagStripperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
 
 it('decodes entities before it removes tags', function (): void {
     // Encoded markup becomes real markup, which is then stripped like any other

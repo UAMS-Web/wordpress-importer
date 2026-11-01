@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Assets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Orchestrates the import of assets from WordPress into Statamic containers.

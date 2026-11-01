@@ -9,12 +9,12 @@ use Statamic\Facades\Site;
 use Statamic\Testing\AddonTestCase;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\NewsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlogrollShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\NewsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlogrollShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 

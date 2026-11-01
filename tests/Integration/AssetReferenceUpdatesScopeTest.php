@@ -24,8 +24,8 @@ use Illuminate\Support\Facades\Event;
 use Statamic\Events\AssetDeleted;
 use Statamic\Events\AssetReplaced;
 use Statamic\Events\AssetSaved;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Content referencing a form the supplied export lacks is reported (issue wordpress-importer-archive#658).

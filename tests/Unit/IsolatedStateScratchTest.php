@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\IsolatedStateScratch;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\IsolatedStateScratch;
 
 /**
  * Pins which snapshot directories are safe to reclaim (wordpress-importer-archive#739).

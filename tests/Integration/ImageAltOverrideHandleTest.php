@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /*
  * The handle an imported image set carries its alt text override under (#141).

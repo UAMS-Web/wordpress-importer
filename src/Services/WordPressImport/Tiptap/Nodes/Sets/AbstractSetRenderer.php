@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 
 /**
  * Base class for rendering Statamic Bard sets to HTML for Tiptap processing.

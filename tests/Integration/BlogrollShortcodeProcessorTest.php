@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlogrollShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlogrollShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests for how BlogrollShortcodeProcessor reads each `[blogroll]` attribute.

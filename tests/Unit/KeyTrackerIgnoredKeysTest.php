@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/KeyTrackerIgnoredKeysTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KeyTracker;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KeyTracker;
 
 /**
  * Build a WordPress page <item> carrying the given postmeta keys.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
 
 /**
  * The progress lines every import loop writes (#103).

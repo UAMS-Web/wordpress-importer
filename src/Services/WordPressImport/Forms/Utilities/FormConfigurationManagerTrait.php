@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Statamic\Forms\Form;
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 
 /**
  * Shared functionality for form configuration managers.

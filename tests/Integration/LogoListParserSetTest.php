@@ -5,11 +5,11 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Pins the parts of `LogoListParser::parse()` that

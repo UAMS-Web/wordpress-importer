@@ -27,20 +27,20 @@ use Statamic\Fields\Blueprint;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -752,6 +752,32 @@ describe('saving a table', function (): void {
             @\unlink($kept);
         }
     });
+
+    it('keeps the file of a table whose export ID holds a hyphen, and deletes its old slug file', function (string $behavior): void {
+        $export = tablePressExport([['id' => '801', 'meta' => tablePressMeta(['_tablepress_export_table_id' => 'my-table'])]]);
+        tablePressRun($export);
+        $canonical = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table');
+        $stale = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table-801');
+        @\mkdir(\dirname($stale), 0777, true);
+        \file_put_contents($canonical, "---\ntitle: canonical\n---\n");
+        \file_put_contents($stale, "---\ntitle: stale\n---\n");
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior($behavior);
+
+        try {
+            tablePressRun($export, $creator);
+
+            expect(\file_exists($canonical))->toBeTrue()
+                ->and(\file_exists($stale))->toBeFalse();
+        } finally {
+            @\unlink($canonical);
+            @\unlink($stale);
+        }
+    })->with([
+        'skip' => ['Skip matching files'],
+        'additional' => ['Create an additional file'],
+        'overwrite' => ['Overwrite matching files'],
+    ]);
 });
 
 describe('dating a table', function (): void {

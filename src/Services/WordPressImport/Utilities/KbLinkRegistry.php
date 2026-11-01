@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 /**
  * Registry for mapping WordPress kbtopic taxonomy term slugs and kb post slugs

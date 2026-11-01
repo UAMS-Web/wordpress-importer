@@ -20,11 +20,11 @@ use Statamic\Assets\Asset as StatamicAsset;
 use Statamic\Facades\Asset as AssetFacade;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSiteDecision;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSiteDecision;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
 

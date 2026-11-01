@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\Assert;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
-use UAMSWeb\WordPressImporter\Tests\Support\AdoptedStacheDirectoryCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\AdoptedStacheDirectoryCase;
 
 uses(AdoptedStacheDirectoryCase::class, PreventsSavingStacheItemsToDisk::class);
 

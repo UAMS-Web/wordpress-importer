@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Contracts;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Contracts;
 
 use Illuminate\Console\Command;
 

@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ExcerptResolverTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ExcerptResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ExcerptResolver;
 
 it('prefers the author excerpt over both SEO descriptions', function (): void {
     expect(ExcerptResolver::resolve('Author summary.', 'Titles desc.', 'Meta desc.'))

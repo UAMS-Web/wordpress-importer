@@ -13,8 +13,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/LogContextHelperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 beforeEach(function (): void {
     ProcessingContext::clearFormConfigContext();

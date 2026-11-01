@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
 
 /**
  * Processes WordPress [audio] shortcodes and returns audio data.

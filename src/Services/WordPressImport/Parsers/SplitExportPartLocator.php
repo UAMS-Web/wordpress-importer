@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers;
 
 /**
  * Discovers the sibling parts of a split WordPress export from any one part path.

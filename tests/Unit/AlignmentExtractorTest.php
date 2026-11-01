@@ -11,8 +11,8 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
 
 /**
  * An element with an optional class, owned by a fresh document.

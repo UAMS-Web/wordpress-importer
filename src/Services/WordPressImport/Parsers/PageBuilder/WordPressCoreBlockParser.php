@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
 use DOMNode;
 use DOMNodeList;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\RssBlockParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\RssBlockParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 
 /**
  * Parses WordPress core blocks into Statamic page_builder replicator sets.

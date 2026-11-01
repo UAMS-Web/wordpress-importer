@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\AttachmentReferenceCollector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\AttachmentReferenceCollector;
 
 /**
  * Every shape a scoped run's items can reach an attachment through (wordpress-importer-archive#1175).

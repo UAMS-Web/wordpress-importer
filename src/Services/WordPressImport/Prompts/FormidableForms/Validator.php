@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\FormidableForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
 
 /**
  * Validates Formidable Forms export file content.

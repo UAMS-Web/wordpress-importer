@@ -24,10 +24,10 @@ declare(strict_types=1);
  * Consequence: this file does NOT run in package CI. See `tests/CLAUDE.md` and
  * the `host-app-tests` skill.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/GeneratePageItemPostIdTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/GeneratePageItemPostIdTest.php
  */
 
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 

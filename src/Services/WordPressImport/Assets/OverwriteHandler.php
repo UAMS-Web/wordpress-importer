@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Assets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets;
 
 use Statamic\Contracts\Assets\Asset;
 use Statamic\Facades\Asset as AssetFacade;

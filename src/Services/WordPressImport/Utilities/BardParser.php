@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use Tiptap\Marks\Bold;
 use Tiptap\Marks\Code;
@@ -26,17 +26,17 @@ use Tiptap\Nodes\OrderedList;
 use Tiptap\Nodes\Paragraph;
 use Tiptap\Nodes\Text;
 // use Tiptap\Nodes\Image;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
 // use Tiptap\Nodes\Mention;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
 // use Tiptap\Nodes\Table;
 // use Tiptap\Nodes\TableCell;
 // use Tiptap\Nodes\TableHeader;
 // use Tiptap\Nodes\TableRow;
 // use Tiptap\Nodes\TaskItem;
 // use Tiptap\Nodes\TaskList;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
 
 /**
  * Utility class for parsing HTML content into Statamic Bard format using Tiptap.

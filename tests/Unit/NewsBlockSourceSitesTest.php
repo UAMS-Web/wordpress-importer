@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\NewsBlockSourceSites;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\NewsBlockSourceSites;
 
 /**
  * Tests for NewsBlockSourceSites.

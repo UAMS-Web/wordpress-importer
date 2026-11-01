@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers;
 
 use Exception;
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 use XMLReader;
 
 /**

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
 
 /**
  * Tests that the import command exposes a way to name one content type (wordpress-importer-archive#706).

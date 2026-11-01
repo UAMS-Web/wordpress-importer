@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators;
 
 use Carbon\Carbon;
 use DateTime;
@@ -20,36 +20,36 @@ use Statamic\Sites\Site;
 use Statamic\Structures\CollectionStructure;
 use Statamic\Structures\Tree;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\KbPageSubstitutions;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\KnowledgeBase\ArticleEngagementSeeder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryFieldUpdater;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FeaturedImageCreditResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FieldDefaultHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredKnowledgeBaseMounts;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\KbPageSubstitutions;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\KnowledgeBase\ArticleEngagementSeeder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryFieldUpdater;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryFinder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FeaturedImageCreditResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FieldDefaultHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\RestrictionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Processes MinervaKB articles from WordPress XML export into Statamic

@@ -11,17 +11,17 @@ use Statamic\Facades\Term as TermFacade;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AudioPostAssetMetadata;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests `AudioSeriesManager`: series detection, the series term, the import of a series'
@@ -32,7 +32,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  * in-memory term and asset. Statamic's facades return those stand-ins.
  *
  * The file cache is written under a different key from the one it is read under, so a repeated
- * import never finds it, which UAMS-Web/wordpress-importer#259 tracks. The cases below seed the
+ * import never finds it, which UAMS-Web/aether-wordpress-importer#259 tracks. The cases below seed the
  * key the read side asks for, and assert the write separately, so each side is pinned as it is.
  *
  * @command  php vendor/bin/pest tests/Integration/AudioSeriesManagerTest.php

@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/XpathHelperStringLiteralTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 it('builds a literal that selects exactly the node whose text equals the value', function (string $value): void {
     // Build a document whose <v> nodes include the target value and a decoy.

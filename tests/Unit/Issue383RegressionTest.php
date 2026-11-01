@@ -20,8 +20,8 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
 
 it('sets the alt override from the img alt regardless of the attachment id type', function (array $context, ?string $expectedOverride): void {
     $processor = new AltTextProcessor;

@@ -18,9 +18,9 @@ declare(strict_types=1);
 
 use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\DatalessEntrySweeper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DatalessEntrySweeper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 
 it('calls an entry dataless only when nothing but inert keys remain', function (array $frontMatter, bool $expected): void {
     expect(DatalessEntrySweeper::isDataless($frontMatter))->toBe($expected);

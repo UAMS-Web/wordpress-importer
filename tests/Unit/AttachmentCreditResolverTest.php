@@ -11,8 +11,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AttachmentCreditResolverTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AttachmentCreditResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AttachmentCreditResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Load a minimal WXR attachment `<item>` with namespace prefixes registered.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 
 /**
  * Base class for form plugin content detectors.

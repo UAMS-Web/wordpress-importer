@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Console\OutputStyle;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
 
 /**
  * Tests the `ImportWordPress` command's mappings and its pure helpers: the content type and

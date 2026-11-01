@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
 
 /**
  * Resolves a WordPress `(taxonomy, term_id)` pair to where it landed in Statamic.

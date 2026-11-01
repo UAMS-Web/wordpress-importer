@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/BardParserWrapRootTextTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 
 $text = static fn (string $value): array => ['type' => 'text', 'text' => $value];
 $set = ['type' => 'set', 'attrs' => ['values' => ['type' => 'people']]];

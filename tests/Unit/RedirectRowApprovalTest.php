@@ -21,7 +21,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/RedirectRowApprovalTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
 
 beforeEach(function (): void {
     $this->creator = new RedirectRuleGlobalCreator;

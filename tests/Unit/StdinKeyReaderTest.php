@@ -13,8 +13,8 @@ declare(strict_types=1);
  * pipe and no boot.
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\StdinKeyReader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\StdinKeyReader;
 
 /**
  * Open an in-memory stream holding the given bytes, rewound ready to read.

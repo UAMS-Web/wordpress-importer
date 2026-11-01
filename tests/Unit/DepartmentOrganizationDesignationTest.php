@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignation;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationOutcome;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignation;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationOutcome;
 
 /**
  * A `DepartmentOrganizationDesignation` leaves its site designated only when the outcome is a

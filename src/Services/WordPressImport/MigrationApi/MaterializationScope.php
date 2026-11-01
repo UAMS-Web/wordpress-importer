@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 
 /**
  * What the current run's materialized export covers, for readers that look items up in it.

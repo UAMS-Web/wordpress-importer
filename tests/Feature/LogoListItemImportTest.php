@@ -6,8 +6,8 @@ use Statamic\Entries\Collection;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\Stache;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
@@ -85,7 +85,7 @@ afterEach(function (): void {
  * in the WordPress exports configuration and the actual LogoListItemEntryCreator
  * class has not been implemented yet.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/LogoListItemImportTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/LogoListItemImportTest.php
  */
 it('points logos_item_categories at a collection entry, not a taxonomy term', function (): void {
     // `UAMS-Web/uams-statamic-archive#1863` converted `logos_item_categories` into a

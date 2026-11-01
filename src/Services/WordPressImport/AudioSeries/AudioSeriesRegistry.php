@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries;
 
 /**
  * Registry for audio series configurations.

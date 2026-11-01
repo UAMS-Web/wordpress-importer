@@ -20,39 +20,39 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader as MinervaKbSettingsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\ReusableBlocks\ReusableBlockCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader as MinervaKbSettingsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\ReusableBlocks\ReusableBlockCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 /**
  * Order-independent Pest coverage for `statamic:import:wordpress` (issue wordpress-importer-archive#461).
@@ -116,7 +116,7 @@ use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
  *   `TreeBuilder` branches. Real branch coverage belongs on `TreeBuilder`, not on
  *   the command — filed as a follow-up.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/ImportWordPressCommandTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/ImportWordPressCommandTest.php
  */
 uses(WordPressImportTestCase::class);
 

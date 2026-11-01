@@ -7,10 +7,10 @@ use Statamic\Facades\Asset;
 use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Fields\Blueprint;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetDownloader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests that the two asset-metadata sinks stamp the attachment-page URL and stop

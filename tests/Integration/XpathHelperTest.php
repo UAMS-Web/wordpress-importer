@@ -22,8 +22,8 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tiptap\Editor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

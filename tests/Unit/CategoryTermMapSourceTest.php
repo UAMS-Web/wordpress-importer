@@ -20,7 +20,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/CategoryTermMapSourceTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
 
 /**
  * Convert a `<wp:category>` element the way `BaseEntryCreator` does, without
