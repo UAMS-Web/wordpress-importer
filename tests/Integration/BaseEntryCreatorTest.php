@@ -742,6 +742,51 @@ describe('saving an entry', function (): void {
         'a slug Statamic spells in the site language' => ['thüng', 'thung'],
     ]);
 
+    it('counts the slug a site in another language stores', function (): void {
+        Site::setSites(['default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'], 'other' => ['name' => 'Other', 'locale' => 'de_DE', 'url' => '/de/']]);
+        baseEntryCollection();
+        baseEntryMake('thueng-7-AAAAAAAAAAAAAAAA', 'thüng', 'other');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        foreach (['BBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCC'] as $random) {
+            $creator->call('saveEntry', 'things', 'other', 'thüng', ['title' => 'New', 'id' => "thueng-7-$random"], new BufferedOutput);
+        }
+
+        expect(baseEntrySlugs())->toBe([
+            'thueng-7-AAAAAAAAAAAAAAAA' => 'thueng',
+            'thueng-7-BBBBBBBBBBBBBBBB' => 'thueng_copy-1',
+            'thueng-7-CCCCCCCCCCCCCCCC' => 'thueng_copy-2',
+        ]);
+    });
+
+    it('writes the slug of an additional entry into data that carries one', function (): void {
+        baseEntryCollection();
+        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior('Create an additional file');
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'slug' => 'thing', 'id' => 'thing-7-BBBBBBBBBBBBBBBB'], new BufferedOutput);
+
+        expect($result instanceof Entry ? baseEntryData($result) : null)->toBe(['title' => 'New', 'slug' => 'thing_copy-1']);
+    });
+
+    it('takes the entry on the slug itself over an additional copy of it, whichever comes first', function (string $behavior, array $expected): void {
+        baseEntryCollection();
+        baseEntryMake('thing-7-BBBBBBBBBBBBBBBB', 'thing_copy-1');
+        baseEntryMake('thing-7-AAAAAAAAAAAAAAAA', 'thing');
+        $creator = baseEntryProbe();
+        $creator->setEntryOverwriteBehavior($behavior);
+
+        $result = $creator->call('saveEntry', 'things', 'default', 'thing', ['title' => 'New', 'id' => 'thing-7-CCCCCCCCCCCCCCCC'], new BufferedOutput);
+
+        expect($result instanceof Entry ? $result->id() : null)->toBe('thing-7-AAAAAAAAAAAAAAAA')
+            ->and(baseEntrySlugs())->toBe($expected);
+    })->with([
+        'overwrite' => ['Overwrite matching files', ['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing_copy-1']],
+        'skip' => ['Skip matching files', ['thing-7-AAAAAAAAAAAAAAAA' => 'thing', 'thing-7-BBBBBBBBBBBBBBBB' => 'thing_copy-1']],
+    ]);
+
     it('counts only the copies in the same collection and site', function (): void {
         baseEntryCollection();
         $others = CollectionFacade::make('others');

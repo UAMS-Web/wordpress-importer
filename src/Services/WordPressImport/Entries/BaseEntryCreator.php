@@ -774,6 +774,11 @@ abstract class BaseEntryCreator
                         $entrySlug
                     );
 
+                    // Post and people data carry the slug as a field of its own
+                    if (isset($data['slug'])) {
+                        $data['slug'] = $entrySlug;
+                    }
+
                     // ---
                     // The entry drops `id` from its data below, so `id()` is the only id
                     // it has. One the matched entry holds would save over that entry.
@@ -945,6 +950,24 @@ abstract class BaseEntryCreator
     }
 
     /**
+     * Read a slug as Statamic stores it, slugged in its site's language.
+     *
+     * @param  string  $entrySlug  The slug
+     * @param  string  $site  The site handle
+     * @return string The stored slug
+     */
+    private function storedEntrySlug(string $entrySlug, string $site): string
+    {
+        $siteModel = SiteFacade::get($site);
+
+        return self::mixedToStringValue(Str::slug(
+            $entrySlug,
+            '-',
+            $siteModel instanceof Site ? $siteModel->lang() : null
+        ));
+    }
+
+    /**
      * Find the slug for an additional copy of an entry.
      *
      * The search runs on the slug Statamic stores: a dot would not survive it, so a
@@ -961,13 +984,7 @@ abstract class BaseEntryCreator
         string $site,
         string $entrySlug
     ): string {
-        // Statamic slugs an entry's slug in its site's language when it reads it back
-        $siteModel = SiteFacade::get($site);
-        $storedSlug = self::mixedToStringValue(Str::slug(
-            $entrySlug,
-            '-',
-            $siteModel instanceof Site ? $siteModel->lang() : null
-        ));
+        $storedSlug = $this->storedEntrySlug($entrySlug, $site);
         $counter = 1;
 
         do {
@@ -1085,7 +1102,7 @@ abstract class BaseEntryCreator
         // ---
         $matchingEntries = $matchingEntryQuery->get();
         // @pest-mutate-ignore: InstanceOfToTrue
-        $matchingEntry = $matchingEntries instanceof Collection ? $matchingEntries->first(
+        $sameEntries = $matchingEntries instanceof Collection ? $matchingEntries->filter(
             static function (mixed $entry) use ($wpPostId, $baseSlug): bool {
                 // A query for entries returns entries; this only narrows the type
                 // @pest-mutate-ignore: InstanceOfToTrue, RemoveEarlyReturn, FalseToTrue
@@ -1134,6 +1151,15 @@ abstract class BaseEntryCreator
                     );
             }
         ) : null;
+
+        // ---
+        // An additional copy carries the post ID of the entry it copies, so the entry
+        // on the slug itself goes first, or a later run would take the copy for it
+        // ---
+        $storedSlug = $this->storedEntrySlug($entrySlug, $site);
+        $matchingEntry = $sameEntries?->first(
+            static fn (mixed $entry): bool => $entry instanceof Entry && $entry->slug() === $storedSlug
+        ) ?? $sameEntries?->first();
 
         // ---
         // Return the found existing entry or null if none exists. A collection's
