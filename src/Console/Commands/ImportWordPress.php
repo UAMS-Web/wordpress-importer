@@ -6,10 +6,13 @@ namespace UAMSWeb\WordPressImporter\Console\Commands;
 
 use App\Services\BardContentSanitizer;
 use Illuminate\Console\Command;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File as LaravelFile;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use RuntimeException;
 use Statamic\Entries\Collection as StatamicCollection;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Collection;
@@ -69,6 +72,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Peop
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\VerificationWorkspace;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
@@ -147,7 +151,8 @@ class ImportWordPress extends Command
         {--key-from-stdin : Read that network\'s migration API key from the first line of standard input rather than asking for it, so an API-sourced run needs no terminal. Requires --network}
         {--unsupported-content=abort : Non-interactive policy for content containing unsupported blocks (Classic, Freeform, Details) or KB entries without topics: abort|skip|import}
         {--content-type= : The single content type to import, for an unattended run. Without it a non-interactive run imports the first supported type and reports the rest as untouched, exiting non-zero}
-        {--minerva-generation= : The MinervaKB generation this site runs, v1 or v2, when --source=api, as read from the network plugins page. Needed only where the migration API serves no plugin header naming the generation and both generations\' settings rows are served, which is otherwise refused. A declaration the header contradicts is refused}';
+        {--minerva-generation= : The MinervaKB generation this site runs, v1 or v2, when --source=api, as read from the network plugins page. Needed only where the migration API serves no plugin header naming the generation and both generations\' settings rows are served, which is otherwise refused. A declaration the header contradicts is refused}
+        {--verify : Run the whole import against a temporary copy of the content and assets, print the same counts, and leave the application\'s own directories unchanged}';
 
     /**
      * The console command description.
@@ -433,6 +438,12 @@ class ImportWordPress extends Command
     private float $runStartedAt = 0.0;
 
     /**
+     * Whether this command is running an import, so a command that finishes inside it
+     * hands Laravel Prompts back (#228).
+     */
+    private bool $importing = false;
+
+    /**
      * Remove entry files this run materialized with no data in them, and report them.
      *
      * **The defect this answers wrote into a site the run never named** — 37 `knowledge_bases`
@@ -510,11 +521,54 @@ class ImportWordPress extends Command
         // run produced. Anything older predates it and is not this run's to delete (wordpress-importer-archive#1160).
         $this->runStartedAt = \microtime(true);
 
-        return AssetReferenceUpdates::withDisabled(
+        $run = fn (): int => AssetReferenceUpdates::withDisabled(
             fn (): int => SearchIndexUpdates::withDisabled(
                 fn (): int => $this->runImport()
             )
         );
+
+        return $this->isVerificationRun() ? $this->runInWorkspace($run) : $run();
+    }
+
+    /**
+     * Whether this run leaves the application's own directories unchanged (#254).
+     */
+    private function isVerificationRun(): bool
+    {
+        return $this->option('verify') === true;
+    }
+
+    /**
+     * Run the import against a temporary copy of what it writes, removing the copy however
+     * the run ends (#254).
+     *
+     * @param  callable(): int  $run  The import
+     * @return int The import's exit code, or 1 when the workspace cannot be set up
+     */
+    private function runInWorkspace(callable $run): int
+    {
+        try {
+            $workspace = VerificationWorkspace::enter();
+        } catch (RuntimeException $runtimeException) {
+            $this->error("The verification run was refused: {$runtimeException->getMessage()} Nothing was imported.");
+
+            return 1;
+        }
+
+        // The copies are newer than the old stamp, and the sweep bounds itself by it
+        $this->runStartedAt = \microtime(true);
+
+        $this->info("Verification run: writing to a temporary copy. This application's content and assets will not change.");
+
+        try {
+            return $run();
+        } finally {
+            if ($workspace->leave()) {
+                $this->info('Verification run: the temporary copy was removed.');
+            } else {
+                $this->warn("Verification run: the temporary copy at '{$workspace->root()}' could not be removed. Delete it by hand.");
+            }
+        }
     }
 
     /**
@@ -1148,10 +1202,42 @@ class ImportWordPress extends Command
      * Protected so a test can stand in for the import itself while it covers what
      * leads to it.
      *
+     * Every Laravel command points the static Laravel Prompts configuration at itself when
+     * it runs, and `Artisan::call()` does not point it back. A command called that way
+     * inside the import, as a host app's `EntrySaved` listener can do through a synchronous
+     * queue, leaves every later question drawn into that command's buffered output while
+     * this one waits on the keyboard (#228). So each command that finishes during the
+     * import hands Prompts back.
+     *
      * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
      * @return int Exit code (0 for success, 1 for failure)
      */
     protected function runImportForParts(
+        array $parts
+    ): int {
+        // Hand Prompts back after each nested command, and only while this import runs
+        Event::listen(CommandFinished::class, function (): void {
+            if ($this->importing) {
+                $this->configurePrompts($this->input);
+            }
+        });
+
+        $this->importing = true;
+
+        try {
+            return $this->importParts($parts);
+        } finally {
+            $this->importing = false;
+        }
+    }
+
+    /**
+     * Import an already-resolved part-set.
+     *
+     * @param  list<string>  $parts  Ordered part paths (one entry for a single-file export)
+     * @return int Exit code (0 for success, 1 for failure)
+     */
+    private function importParts(
         array $parts
     ): int {
         // Resolve the non-interactive policy for unsupported-content gates
@@ -2429,11 +2515,14 @@ class ImportWordPress extends Command
         // Clear form creation cache
         $this->formPluginCoordinator->clearAllCaches();
 
-        // Clear Laravel cache
-        Artisan::call('cache:clear');
+        // A verification run's cache is its own, and is dropped with the workspace
+        if (! $this->isVerificationRun()) {
+            // Clear Laravel cache
+            Artisan::call('cache:clear');
 
-        // Confirm to user that cache was cleared
-        $this->info('Laravel cache cleared.');
+            // Confirm to user that cache was cleared
+            $this->info('Laravel cache cleared.');
+        }
 
         // Sanitize Bard content (YAML separators and unquoted nbsp text) in all
         // entries so YAML is formatted properly when the import is completed. The pass
@@ -2448,10 +2537,15 @@ class ImportWordPress extends Command
         // Rebuild search indexes once now that all content is imported. Live
         // search-index updates were disabled for the run (see handle()), so this
         // single pass replaces the hundreds of per-save full rebuilds that would
-        // otherwise have dominated the import. A run whose imported types none declare
-        // the pass wrote nothing for reader-facing search, but its redirect domain entries
-        // belong in the Control Panel's own index, so only that one is rebuilt (#229).
-        if (ContentTypeReads::runsPass(ContentTypeReads::PASS_SEARCH_INDEX, $importedContentTypes)) {
+        // otherwise have dominated the import. A verification run skips it: search
+        // indexes live outside the workspace, so a rebuild would fill the host's real
+        // indexes with content that is about to be deleted (#254). A run whose imported
+        // types none declare the pass wrote nothing for reader-facing search, but its
+        // redirect domain entries belong in the Control Panel's own index, so only that
+        // one is rebuilt (#229).
+        if ($this->isVerificationRun()) {
+            $this->info('Skipping search index rebuild - a verification run leaves the indexes as they are.');
+        } elseif (ContentTypeReads::runsPass(ContentTypeReads::PASS_SEARCH_INDEX, $importedContentTypes)) {
             SearchIndexUpdates::reindexAll($this->output);
         } else {
             $this->info('Rebuilding only the Control Panel search index - no imported content type declares the full rebuild.');

@@ -466,6 +466,11 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
 
         $output->writeln("<info>Redirect domain {$host}: {$created} created, {$updated} updated, {$disabled} disabled, {$skipped} unpublished skipped, {$shadowed} shadowed.</info>");
 
+        // What the domain holds after the run, so a check needs no look at the content tree (#254)
+        $stored = \count($this->importedDomainEntries($host));
+
+        $output->writeln("<info>Redirect domain {$host}: {$stored} stored with a wordpress_post_id.</info>");
+
         if ($unsupportedResponses > 0) {
             $output->writeln("  - <comment>{$unsupportedResponses} rule(s) for {$host} use a response code the redirect domains blueprint does not offer; it was kept as WordPress served it.</comment>");
         }

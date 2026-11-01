@@ -109,6 +109,10 @@ jobs:
 
       # OPcache + JIT roughly halve a cold PHP test run; harmless for the small
       # standalone suite but keeps parity with the host app's tuned runner.
+      #
+      # The Windows leg keeps OPcache and turns the JIT off: under `opcache.jit=tracing`
+      # PHP 8.4 segfaults partway through this suite on Windows, at a different test each
+      # time and with or without a change under test (#254).
       - name: Set up PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
@@ -116,7 +120,7 @@ jobs:
           extensions: intl, mbstring, dom, fileinfo, simplexml, xml, gd, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
-          ini-values: opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing
+          ini-values: ${{ matrix.os == 'windows-latest' && 'opcache.enable_cli=1, opcache.jit=off' || 'opcache.enable_cli=1, opcache.jit_buffer_size=64M, opcache.jit=tracing' }}
 
       # All dependencies are public (statamic/cms included), so the default
       # GITHUB_TOKEN only serves to lift api.github.com's anonymous rate limit
