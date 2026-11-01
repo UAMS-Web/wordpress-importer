@@ -255,3 +255,33 @@ it('keeps the whole text of a caption holding a quote, and leaves no stray text'
     'with WpAutoP' => true,
     'without WpAutoP' => false,
 ]);
+
+it('stores a caption as written, whether or not WpAutoP runs', function (string $image, string $text, string $expected): void {
+    $html = "Intro\n\n[caption id=\"attachment_1\" align=\"alignleft\" width=\"300\"]".$image.' '.$text."[/caption]\n\nOutro";
+
+    // Bare text stays a text node without WpAutoP, so only the set's place is the same
+    foreach ([[true, ['Intro', 'set', 'Outro']], [false, ['text', 'set', 'text']]] as [$useWpAutoP, $summary]) {
+        $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
+
+        expect(shortcodeBlockNodeSummary($nodes))->toBe($summary)
+            ->and(Arr::get($nodes, '1.attrs.values.caption'))->toBe($expected);
+    }
+})->with([
+    'a bare image' => ['<img src="https://example.com/a.jpg" />', 'Melissa Evans', 'Melissa Evans'],
+    'a bare image, with a quote in its text' => ['<img src="https://example.com/a.jpg" />', 'Melissa "Mimi" Evans', 'Melissa "Mimi" Evans'],
+    'a bare image, with a quote in its alt' => ['<img class="size-medium" src="https://example.com/a.jpg" alt="Melissa &quot;Mimi&quot; Evans" width="300" height="200" />', 'Melissa Evans', 'Melissa Evans'],
+    'a linked image, with a quote in its alt' => ['<a href="https://example.com/a.jpg"><img class="size-medium" src="https://example.com/a.jpg" alt="Melissa &quot;Mimi&quot; Evans" width="300" height="200" /></a>', 'Melissa Evans', 'Melissa Evans'],
+    'a bare image, with a paragraph tag of its own' => ['<img src="https://example.com/a.jpg" />', '<p class="note">Melissa Evans</p>', 'Melissa Evans'],
+    'a bare image, with a tag that starts like a paragraph tag' => ['<img src="https://example.com/a.jpg" />', 'Melissa <picture></picture>Evans', 'Melissa <picture></picture>Evans'],
+    'a linked image' => ['<a href="https://example.com/a.jpg"><img src="https://example.com/a.jpg" /></a>', 'Melissa Evans', 'Melissa Evans'],
+    'a bare image, with markup in the caption' => [
+        '<img src="https://example.com/a.jpg" />',
+        'Melissa <em>Evans</em> at <a href="https://example.com/b">the park</a>',
+        'Melissa <em>Evans</em> at <a href="https://example.com/b">the park</a>',
+    ],
+    'a linked image, with markup in the caption' => [
+        '<a href="https://example.com/a.jpg"><img src="https://example.com/a.jpg" /></a>',
+        'Melissa <em>Evans</em>',
+        'Melissa <em>Evans</em>',
+    ],
+]);
