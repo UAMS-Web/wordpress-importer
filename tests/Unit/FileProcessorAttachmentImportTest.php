@@ -187,7 +187,7 @@ it('hands the importer the same-site policy it is given', function (): void {
         ->with(
             'https://uams.edu/a.pdf',
             'default',
-            $this->anything(),
+            $this::anything(),
             'files',
             SameSitePolicy::ALWAYS_IMPORT,
             null,
