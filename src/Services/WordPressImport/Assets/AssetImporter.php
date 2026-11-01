@@ -243,7 +243,7 @@ class AssetImporter
      * @param  ?string  $pageUrl  The page URL for context (optional)
      * @param  string  $container  The target container (e.g., 'images', 'portraits')
      * @param  bool  $hasFallbackUrl  Whether a fallback URL is available if this import fails
-     * @return ?string The imported image path or null if failed
+     * @return ?string The imported image path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importImage(
         string $attachmentId,
@@ -499,7 +499,7 @@ class AssetImporter
      * Applies the same-site policy to an asset and reports one it leaves out.
      *
      * A skipped asset is absent from whatever carried it, so it goes in the end-of-run
-     * warning summary the way a failed download does.
+     * warning summary.
      *
      * @param  string  $url  The asset URL
      * @param  SameSitePolicy  $policy  The policy to apply
@@ -557,7 +557,7 @@ class AssetImporter
      * @param  SameSitePolicy  $sameSitePolicy  Policy for handling different-site assets
      * @param  ?string  $pageUrl  The page URL for context (optional)
      * @param  string  $container  The target container (e.g., 'images', 'portraits')
-     * @return ?string The imported thumbnail path or null if failed
+     * @return ?string The imported thumbnail path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importThumbnail(
         string $thumbnailId,
@@ -797,7 +797,7 @@ class AssetImporter
      * @param  ?string  $title  Optional title for the file asset
      * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra fields merged into file metadata
      * @param  ?string  $attachmentPageUrl  The WordPress attachment-page URL for migration redirects
-     * @return ?string The imported file path or null if failed
+     * @return ?string The imported file path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importFile(
         string $url,

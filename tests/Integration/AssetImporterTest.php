@@ -22,6 +22,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -688,6 +689,30 @@ describe('importing a file', function (): void {
             ->and($importer->importThumbnail('6', assetImporterTestAttachments(), 'news', new BufferedOutput, SameSitePolicy::SKIP_DIFFERENT_SITE))->toBe('news/b.jpg')
             ->and($importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput))->toBe('news/a.pdf')
             ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([]);
+    });
+
+    it('skips an attachment on another site through the helper the entry creators call', function (): void {
+        // The host's import tests leave the importer's base unset, which reads every
+        // URL as same-site, so this route is only exercised here
+        $handler = new AssetImporterTestHandler(['news/p.jpg']);
+
+        $path = FileProcessor::importFileFromAttachmentWithDisabledUploadHandling(
+            '5',
+            assetImporterTestAttachments(),
+            'news',
+            new AssetImporterTestImporter($handler, 'https://example.org'),
+            new BufferedOutput,
+            'images',
+            'featured image',
+            'a test',
+            'https://example.org/page/'
+        );
+
+        expect($path)->toBeNull()
+            ->and($handler->files)->toBe([])
+            ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([
+                ['url' => 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg', 'container' => 'images', 'site' => 'news', 'page_url' => 'https://example.org/page/'],
+            ]);
     });
 
     it('reports each asset the skip policy leaves out, and none it links', function (): void {

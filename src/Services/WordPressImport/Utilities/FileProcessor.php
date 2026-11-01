@@ -163,7 +163,7 @@ class FileProcessor
      * @param  string  $description  Description of the file for logging (optional)
      * @param  string  $context  Context information for logging (e.g., class::method)
      * @param  ?string  $pageUrl  The page URL for context (optional)
-     * @return ?string The imported file path or original URL, or null if import failed
+     * @return ?string The imported file path or original URL, or null if import failed or the policy skipped it
      */
     public static function importFileFromAttachmentWithDisabledUploadHandling(
         string $attachmentId,
