@@ -182,7 +182,7 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             $captionMatch === 1
             && \trim($matches[1]) !== ''
         ) {
-            $captionText = \trim($matches[1]);
+            $captionText = $this->unwrapParagraphs($matches[1]);
         }
 
         $blockAttributes = [];
@@ -374,6 +374,29 @@ class CaptionShortcodeProcessor implements ShortcodeProcessorInterface
             $setType,
             '' // Empty content to prevent duplicate caption text
         );
+    }
+
+    /**
+     * Removes the paragraphs WpAutoP puts around a caption's text.
+     *
+     * WpAutoP treats an <img> as a block, so it closes the paragraph before a bare
+     * image in a [caption] and opens one for the text after it (#330). A linked
+     * image reaches the same point with none. Any other markup in the caption stays.
+     *
+     * @param  string  $caption  The caption's HTML
+     * @return string The caption with no paragraph tags or surrounding space
+     */
+    private function unwrapParagraphs(
+        string $caption
+    ): string {
+        // Remove the tags, leaving the caption as it is if the pattern fails
+        $caption = \preg_replace(
+            '#</?p(?:\s[^>]*)?>#i',
+            '',
+            $caption
+        ) ?? $caption;
+
+        return \trim($caption);
     }
 
     /**
