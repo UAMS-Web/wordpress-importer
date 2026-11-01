@@ -33,7 +33,7 @@ class ShortcodeProcessor
      * add_shortcode() accepts in a name, so a shortcode written with no attributes
      * ends at its own bracket instead of running on to the next one in the text.
      */
-    private const string SHORTCODE_PATTERN = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]|\[(?!\/\1\]))*?)\[\/\1\])?/s';
+    private const string SHORTCODE_PATTERN = '/\[([^\s\]\/]+)\s*([^\]]*?)\](?:((?:[^\[]++|\[(?!\/\1\]))*+)\[\/\1\])?/s';
 
     /**
      * The characters of an attribute name: PCRE's \w without the u flag, and "-".
@@ -893,7 +893,9 @@ class ShortcodeProcessor
      * HTML that closes the surrounding paragraph before it, or opens a new one
      * after it (a flattened accordion does both), also takes the whitespace and
      * line breaks wpautop left on that side of the shortcode. Left in place, a break would
-     * end the closed paragraph, or start the new one, as a blank line.
+     * end the closed paragraph, or start the new one, as a blank line. The shortcode
+     * is matched as a string, since a pattern holding one over about 32 KB will not
+     * compile.
      *
      * @param  string  $content  The content holding the shortcode
      * @param  string  $original  The shortcode's original text
@@ -905,16 +907,32 @@ class ShortcodeProcessor
         string $original,
         string $html
     ): string {
-        // Take the breaks on the side where the HTML closes or opens a paragraph
-        $before = \str_starts_with($html, '</p>') ? '(?:\s|<br\s*\/?>)*' : '';
-        $after = \str_ends_with($html, '<p>') ? '(?:\s|<br\s*\/?>)*' : '';
+        // An empty shortcode marks no place in the content
+        if ($original === '') {
+            return $content;
+        }
 
-        // With neither this is a plain replacement; a failed pattern falls back to one
-        return \preg_replace_callback(
-            '/'.$before.\preg_quote($original, '/').$after.'/',
-            static fn (): string => $html,
-            $content
-        ) ?? \str_replace($original, $html, $content);
+        $parts = \explode($original, $content);
+        $last = \count($parts) - 1;
+
+        $closesParagraph = \str_starts_with($html, '</p>');
+        $opensParagraph = \str_ends_with($html, '<p>');
+
+        // Take the breaks on the side where the HTML closes or opens a paragraph; a
+        // failed pattern keeps them
+        foreach ($parts as $index => $part) {
+            if ($closesParagraph && $index < $last) {
+                $part = \preg_replace('/(?:\s|<br\s*\/?>)+\z/', '', $part) ?? $part;
+            }
+
+            if ($opensParagraph && $index > 0) {
+                $part = \preg_replace('/^(?:\s|<br\s*\/?>)+/', '', $part) ?? $part;
+            }
+
+            $parts[$index] = $part;
+        }
+
+        return \implode($html, $parts);
     }
 
     /**
