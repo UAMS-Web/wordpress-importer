@@ -22,6 +22,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\MetadataSetter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\OverwriteHandler;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -457,14 +458,13 @@ describe('importing an image', function (): void {
     ]);
 
     it('applies the same-site policy to an image on another site', function (SameSitePolicy $policy, ?string $expected): void {
-        // The skip policy imports anyway (#232)
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
         expect((new AssetImporterTestImporter($handler, 'https://example.org'))->importImage('5', 'news', assetImporterTestAttachments(), new BufferedOutput, $policy))->toBe($expected)
             ->and($handler->images)->toHaveCount($expected === 'news/p.jpg' ? 1 : 0);
     })->with([
         'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg'],
-        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, 'news/p.jpg'],
+        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, null],
         'import' => [SameSitePolicy::ALWAYS_IMPORT, 'news/p.jpg'],
     ]);
 });
@@ -577,9 +577,11 @@ describe('importing a thumbnail', function (): void {
     it('applies the same-site policy to a thumbnail on another site', function (SameSitePolicy $policy, ?string $expected): void {
         $handler = new AssetImporterTestHandler(['news/p.jpg']);
 
-        expect((new AssetImporterTestImporter($handler, 'https://example.org'))->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput, $policy))->toBe($expected);
+        expect((new AssetImporterTestImporter($handler, 'https://example.org'))->importThumbnail('5', assetImporterTestAttachments(), 'news', new BufferedOutput, $policy))->toBe($expected)
+            ->and($handler->images)->toHaveCount($expected === 'news/p.jpg' ? 1 : 0);
     })->with([
         'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg'],
+        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, null],
         'import' => [SameSitePolicy::ALWAYS_IMPORT, 'news/p.jpg'],
     ]);
 });
@@ -663,9 +665,7 @@ describe('importing a file', function (): void {
             ->and($handler->files)->toBe([]);
     });
 
-    it('imports a file on another site even under the skip policy, which is its default', function (SameSitePolicy $policy, ?string $expected): void {
-        // Characterization of #232: the policy check returns null both to skip
-        // and to carry on, and the importer carries on
+    it('applies the same-site policy to a file on another site, skipping by default', function (SameSitePolicy $policy, ?string $expected): void {
         $handler = new AssetImporterTestHandler(['news/a.pdf']);
         $importer = new AssetImporterTestImporter($handler, 'https://example.org');
 
@@ -673,12 +673,60 @@ describe('importing a file', function (): void {
             ? $importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput)
             : $importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput, sameSitePolicy: $policy);
 
-        expect($result)->toBe($expected);
+        expect($result)->toBe($expected)
+            ->and($handler->files)->toHaveCount($expected === 'news/a.pdf' ? 1 : 0);
     })->with([
-        'the default, skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, 'news/a.pdf'],
+        'the default, skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, null],
         'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://uams.edu/a.pdf'],
         'import' => [SameSitePolicy::ALWAYS_IMPORT, 'news/a.pdf'],
     ]);
+
+    it('imports a same-site asset of every kind under the skip policy', function (): void {
+        $handler = new AssetImporterTestHandler(['news/a.jpg', 'news/b.jpg', 'news/a.pdf']);
+        $importer = new AssetImporterTestImporter($handler, 'https://uams.edu');
+
+        expect($importer->importImage('5', 'news', assetImporterTestAttachments(), new BufferedOutput, SameSitePolicy::SKIP_DIFFERENT_SITE))->toBe('news/a.jpg')
+            ->and($importer->importThumbnail('6', assetImporterTestAttachments(), 'news', new BufferedOutput, SameSitePolicy::SKIP_DIFFERENT_SITE))->toBe('news/b.jpg')
+            ->and($importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput))->toBe('news/a.pdf')
+            ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([]);
+    });
+
+    it('skips an attachment on another site through the helper the entry creators call', function (): void {
+        // The host's import tests leave the importer's base unset, which reads every
+        // URL as same-site, so this route is only exercised here
+        $handler = new AssetImporterTestHandler(['news/p.jpg']);
+
+        $path = FileProcessor::importFileFromAttachmentWithDisabledUploadHandling(
+            '5',
+            assetImporterTestAttachments(),
+            'news',
+            new AssetImporterTestImporter($handler, 'https://example.org'),
+            new BufferedOutput,
+            'images',
+            'featured image',
+            'a test',
+            'https://example.org/page/'
+        );
+
+        expect($path)->toBeNull()
+            ->and($handler->files)->toBe([])
+            ->and(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([
+                ['url' => 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg', 'container' => 'images', 'site' => 'news', 'page_url' => 'https://example.org/page/'],
+            ]);
+    });
+
+    it('reports each asset the skip policy leaves out, and none it links', function (): void {
+        $importer = new AssetImporterTestImporter(new AssetImporterTestHandler, 'https://example.org');
+
+        $importer->importFile('https://uams.edu/a.pdf', 'news', new BufferedOutput, 'files', SameSitePolicy::SKIP_DIFFERENT_SITE, 'https://example.org/page/');
+        $importer->importImage('5', 'news', assetImporterTestAttachments(), new BufferedOutput, SameSitePolicy::SKIP_DIFFERENT_SITE);
+        $importer->importFile('https://uams.edu/b.pdf', 'news', new BufferedOutput, sameSitePolicy: SameSitePolicy::LINK_DIFFERENT_SITE);
+
+        expect(ImportWarningManager::getWarnings('assets', 'skipped_different_site_assets'))->toBe([
+            ['url' => 'https://uams.edu/a.pdf', 'container' => 'files', 'site' => 'news', 'page_url' => 'https://example.org/page/'],
+            ['url' => 'https://uams.edu/wp-content/uploads/2020/01/Photo.jpg', 'container' => 'images', 'site' => 'news', 'page_url' => null],
+        ]);
+    });
 
     it('records a failed sized image under both its URLs, warns, and does not try either again', function (?string $result): void {
         $warnings = assetImporterTestWarnings();

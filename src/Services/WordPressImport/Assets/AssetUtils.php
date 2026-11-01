@@ -457,21 +457,20 @@ class AssetUtils
      * Applies same-site policy to determine if an asset should be imported.
      *
      * Centralizes the logic for handling assets from different sites based on
-     * the specified policy. Returns the value to return early if the policy
-     * says not to import, or null to continue with the import process.
+     * the specified policy.
      *
      * @param  string  $url  The asset URL to check
      * @param  SameSitePolicy  $policy  The policy to apply for different-site assets
      * @param  OutputInterface  $output  Console output for logging
      * @param  ?string  $baseBlogUrl  The base blog URL for same-site comparison
-     * @return ?string The value to return early, or null to continue with import
+     * @return SameSiteDecision Whether to import, and what to return if not
      */
     public static function applySameSitePolicy(
         string $url,
         SameSitePolicy $policy,
         OutputInterface $output,
         ?string $baseBlogUrl
-    ): ?string {
+    ): SameSiteDecision {
         // Check if asset is on the same site
         $isSameSite = self::isUrlOnSameSite(
             $url,
@@ -484,35 +483,35 @@ class AssetUtils
 
         // Check if asset is on the same site
         if ($isSameSite) {
-            // Return null to continue with the import process
-            return null;
+            // Continue with the import process
+            return SameSiteDecision::import();
         }
 
         // Apply policy for different-site assets
         switch ($policy) {
-            // Skip downloading and return null to indicate no import
+            // Skip downloading and leave nothing in the asset's place
             case SameSitePolicy::SKIP_DIFFERENT_SITE:
                 // Log that we're skipping the download
-                $output->writeln('  - <comment>Asset not on same site detected. Skipping download.</comment>');
+                $output->writeln("  - <comment>Asset not on same site detected. Skipping download of '$url'.</comment>");
 
-                // Return null to indicate no import was attempted
-                return null;
+                // Say that no import is to be attempted
+                return SameSiteDecision::skip();
 
                 // Skip downloading but return original URL for direct linking
             case SameSitePolicy::LINK_DIFFERENT_SITE:
                 // Log that we're linking directly to the original URL
                 $output->writeln("  - <comment>Asset not on same site detected. Linking directly to '$url'.</comment>");
 
-                // Return the original URL for direct linking
-                return $url;
+                // Keep the original URL for direct linking
+                return SameSiteDecision::link($url);
 
                 // Always attempt to download regardless of site
             case SameSitePolicy::ALWAYS_IMPORT:
                 // Log that we're importing from a different site
                 $output->writeln("  - <comment>Asset not on same site detected. Importing directly from '$url'.</comment>");
 
-                // Return null to continue with the import process
-                return null;
+                // Continue with the import process
+                return SameSiteDecision::import();
         }
     }
 
