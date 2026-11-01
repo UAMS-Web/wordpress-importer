@@ -1388,6 +1388,15 @@ const CLAIM_UNPROVISIONED = 4;
 /** `claim` found every slot held: the caller prompts rather than evicting one. */
 const CLAIM_EXHAUSTED = 3;
 
+/** git refused a claim on a slot nobody holds: the caller reads the reason, the slots may be free. */
+const CLAIM_FAILED = 5;
+
+/** How many times a claim git refused is tried before its slot counts as failed. */
+const CLAIM_ATTEMPTS = 3;
+
+/** The wait between those tries, in milliseconds, for a ref lock held for a moment to clear. */
+const CLAIM_RETRY_WAIT = 100;
+
 /**
  * Who a claim is recorded against when the caller does not say.
  *
@@ -1430,14 +1439,15 @@ function readClaim(repoRoot, slot) {
 /**
  * Attempt to claim a slot, atomically.
  *
- * Returns false when another claimant got there first, which is an ordinary outcome rather than an
- * error — so this does not throw the way `run` does.
+ * A refusal is not an error here, because another claimant getting there first is an ordinary
+ * outcome, so this does not throw the way `run` does. It keeps git's reason: `claimSlot` decides
+ * whether the refusal was that, or a failure that says nothing about who holds the slot.
  *
  * @param  string  repoRoot
  * @param  string  slot
  * @param  string  owner
  * @param  string  at
- * @return ?string  the claim object written, or null when another claimant got there first
+ * @return {{oid: ?string, reason: string}}  the claim object written, or null and git's reason
  */
 function tryClaim(repoRoot, slot, owner, at) {
     // Hash the record from stdin. A scratch file named for the slot was shared by every
@@ -1448,19 +1458,80 @@ function tryClaim(repoRoot, slot, owner, at) {
         'git',
         ['-C', repoRoot, 'hash-object', '-w', '--stdin'],
         repoRoot,
-        ['pipe', 'pipe', 'ignore'],
+        ['pipe', 'pipe', 'pipe'],
         null,
         claimRecord(owner, at),
     );
     const oid = hashed.status === 0 && typeof hashed.stdout === 'string' ? hashed.stdout.trim() : null;
 
+    if (!oid) {
+        return { oid: null, reason: refusalReason(hashed) };
+    }
+
     // The create-only update. git refuses under the ref lock when the name already exists, so
     // exactly one of two concurrent claimants succeeds however their reads interleaved.
     // Returns the object written, so a claim that has to be rolled back can name exactly what it
     // wrote rather than whatever the ref holds by then (wordpress-importer-archive#1201).
-    return oid && spawn('git', ['-C', repoRoot, 'update-ref', claimRefName(slot), oid, NO_SUCH_REF], repoRoot, 'ignore').status === 0
-        ? oid
-        : null;
+    const updated = spawn(
+        'git',
+        ['-C', repoRoot, 'update-ref', claimRefName(slot), oid, NO_SUCH_REF],
+        repoRoot,
+        ['ignore', 'ignore', 'pipe'],
+    );
+
+    return updated.status === 0 ? { oid, reason: '' } : { oid: null, reason: refusalReason(updated) };
+}
+
+/**
+ * What a failed child process said, on one line.
+ *
+ * @param  object  result  a `spawnSync` result
+ * @return string
+ */
+function refusalReason(result) {
+    const said = typeof result.stderr === 'string' ? result.stderr.trim().split('\n')[0] : '';
+
+    return said || result.error?.message || `git exited ${result.status}`;
+}
+
+/**
+ * Claim a slot, telling a slot another claimant took from one git would not write.
+ *
+ * Both come back from `update-ref` as a failure, and only the claim ref separates them. Reading
+ * every failure as a lost race made a free slot report as held, so `claim` could exit
+ * `CLAIM_EXHAUSTED` with a slot still free (#204). A refusal with no claim behind it is retried,
+ * because a ref lock can be held for a moment, and then reported with git's reason.
+ *
+ * @param  string  repoRoot
+ * @param  string  slot
+ * @param  string  owner
+ * @param  string  at
+ * @param  function  attemptClaim  makes one attempt, in the shape `tryClaim` returns
+ * @return {{oid: ?string, failure: ?string}}  the claim object, or why git would not write one;
+ *                                             both are null when another claimant got there first
+ */
+export function claimSlot(repoRoot, slot, owner, at, attemptClaim = tryClaim) {
+    let reason = '';
+
+    for (let attempt = 1; attempt <= CLAIM_ATTEMPTS; attempt++) {
+        const tried = attemptClaim(repoRoot, slot, owner, at);
+
+        if (tried.oid) {
+            return { oid: tried.oid, failure: null };
+        }
+
+        if (capture('git', ['-C', repoRoot, 'rev-parse', '--verify', '--quiet', claimRefName(slot)], repoRoot)) {
+            return { oid: null, failure: null };
+        }
+
+        reason = tried.reason;
+
+        if (attempt < CLAIM_ATTEMPTS) {
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, CLAIM_RETRY_WAIT);
+        }
+    }
+
+    return { oid: null, failure: reason };
 }
 
 /**
@@ -1520,7 +1591,8 @@ function claimOf(tree, repoRoot) {
  * Prints the slot on the first line and the derived session label on the second, so a caller reads
  * two fields without parsing prose. Exits `CLAIM_UNPROVISIONED` and `CLAIM_EXHAUSTED` distinctly,
  * because those are the two cases where a human has to be asked and the caller must tell them apart
- * without matching on text.
+ * without matching on text. `CLAIM_FAILED` is the third: git would not write a claim on a free slot,
+ * so stderr says why, and neither of the other two answers is true.
  *
  * @param  string  repoRoot
  * @param  array   argv
@@ -1555,12 +1627,18 @@ function commandClaim(repoRoot, argv) {
         return CLAIM_UNPROVISIONED;
     }
 
+    const failures = [];
+
     for (const { slot, tree } of provisioned) {
         if (readClaim(repoRoot, slot) || slotOccupancy(tree) !== 'free') {
             continue;
         }
 
-        const claimed = tryClaim(repoRoot, slot, owner, at);
+        const { oid: claimed, failure } = claimSlot(repoRoot, slot, owner, at);
+
+        if (failure !== null) {
+            failures.push(`${slot}: ${failure}`);
+        }
 
         if (!claimed) {
             continue;
@@ -1589,6 +1667,13 @@ function commandClaim(repoRoot, argv) {
         process.stdout.write(`${slot}\n${basename(tree.path)}-${owner}\n`);
 
         return 0;
+    }
+
+    // A slot git would not write is not a held slot, so this is not the exhausted case
+    if (failures.length > 0) {
+        process.stderr.write(`Could not claim a free slot, so none is held by this claim.\n${failures.join('\n')}\n`);
+
+        return CLAIM_FAILED;
     }
 
     process.stderr.write('Every provisioned slot is held — take an ephemeral worktree rather than evicting one.\n');
