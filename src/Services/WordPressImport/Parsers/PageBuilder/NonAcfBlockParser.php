@@ -529,7 +529,7 @@ class NonAcfBlockParser
         );
 
         // Parse with Tiptap into Bard format
-        $bardContent = BardParser::wrapRootText($this->bardParser->parse($processedHtml));
+        $bardContent = $this->bardParser->parse($processedHtml);
 
         // Check if the Bard content is empty after parsing
         if ($bardContent === []) {

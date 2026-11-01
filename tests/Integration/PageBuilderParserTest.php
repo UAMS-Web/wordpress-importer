@@ -549,6 +549,19 @@ it('keeps the sets of the nodes in their order, with the non-ACF content around 
         ->and(array_column($fakes['nonAcf']->calls, 1))->toBe(['p:A', [['html' => 'A']], 'p:B', [['html' => 'B']]]);
 });
 
+it('puts a direct set after the non-ACF content ahead of it', function (): void {
+    $fakes = pbParser();
+    $fakes['nonAcf']->results['c:wp:shortcode'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct')];
+
+    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><!-- wp:shortcode --><p>B</p>'));
+
+    expect($run['content'])->toBe([
+        ['type' => 'text', 'html' => 'A'],
+        pbSet('direct'),
+        ['type' => 'text', 'html' => 'B'],
+    ]);
+});
+
 it('finalizes at an ACF block whose skip count reaches the end of the nodes', function (): void {
     $fakes = pbParser();
     $fakes['acf']->results['c:wp:acf/x'] = pbHandled(pbSet('acf'), 2);
@@ -807,16 +820,6 @@ it('passes a comment that is not a wp:block on to the other parsers', function (
     'a wp:block followed by more text' => ['<!-- wp:block {"ref":1} more -->'],
     'an element' => ['<p>wp:block {"ref":1}</p>'],
 ]);
-
-it('adds the set a non-ACF node made directly, before the non-ACF content that is still accumulating', function (): void {
-    $fakes = pbParser();
-    $fakes['nonAcf']->pushes['p:D'] = [];
-    $fakes['nonAcf']->results['p:D'] = ['processed' => true, 'skipCount' => 1, 'directSet' => pbSet('direct')];
-
-    $run = pbParseAll($fakes['parser'], pbNodes('<p>A</p><p>D</p>'));
-
-    expect($run['content'])->toBe([pbSet('direct'), ['type' => 'text', 'html' => 'A']]);
-});
 
 it('lifts the ACF blocks out of the HTML a non-ACF node added, after the content accumulated before them', function (string $tail): void {
     $fakes = pbParser();

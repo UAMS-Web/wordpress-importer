@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\NullOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\NonAcfBlockParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
@@ -150,6 +152,65 @@ function shortcodeBlockBody(mixed $content): array
 
     return \is_array($body) ? $body : [];
 }
+
+it('keeps text beside a caption in paragraphs outside a shortcode block', function (bool $useWpAutoP): void {
+    $html = 'Lead [caption id="attachment_1"]<img src="https://example.com/a.jpg" /> Melissa[/caption] tail';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
+
+    expect(shortcodeBlockNodeSummary($nodes))->toBe(['Lead', 'set', 'tail']);
+})->with([
+    'with WpAutoP' => true,
+    'without WpAutoP' => false,
+]);
+
+it('keeps the href of a link beside a shortcode, and drops none around it', function (): void {
+    $html = '<p>Intro</p><!-- wp:shortcode --><a href="https://example.com/more">More</a> [show-people ids="1"]<!-- /wp:shortcode --><p>Outro</p>';
+
+    $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+
+    expect(Arr::get($nodes, '1.content.0.marks.0.attrs.href'))->toBe('https://example.com/more')
+        ->and(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'More', 'set', 'Outro']);
+});
+
+it('reports an image beside a shortcode, naming the site and the post', function (string $html): void {
+    ImportWarningManager::clearWarnings();
+    ProcessingContext::setWordPressPageLink('https://example.com/the-page');
+
+    try {
+        TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, pageSlug: 'the-page');
+        $warnings = ImportWarningManager::getWarnings('content', 'images_beside_shortcodes');
+    } finally {
+        ImportWarningManager::clearWarnings();
+        ProcessingContext::clearWordPressPageLink();
+    }
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0] ?? [])->toMatchArray([
+            'site' => 'default',
+            'page_slug' => 'the-page',
+            'page_link' => 'https://example.com/the-page',
+            'content_snippet' => '<img src="https://example.com/a.jpg">',
+        ]);
+})->with([
+    'a post of one block' => ['<!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"]<!-- /wp:shortcode -->'],
+    'a lone shortcode with a set' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"]<!-- /wp:shortcode -->'],
+    'two shortcodes' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg">[show-people ids="1"] [show-people ids="2"]<!-- /wp:shortcode -->'],
+]);
+
+it('reports no image that a shortcode holds, or a block without one', function (string $html): void {
+    ImportWarningManager::clearWarnings();
+
+    TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, false);
+    $warnings = ImportWarningManager::getWarnings('content', 'images_beside_shortcodes');
+    ImportWarningManager::clearWarnings();
+
+    expect($warnings)->toBe([]);
+})->with([
+    'an image in a caption' => ['<!-- wp:shortcode -->[caption id="attachment_1"]<img src="https://example.com/a.jpg" /> Text[/caption]<!-- /wp:shortcode -->'],
+    'no image' => ['<!-- wp:shortcode -->Lead [show-people ids="1"]<!-- /wp:shortcode -->'],
+    'an image in a block with no shortcode' => ['<p>Intro</p><!-- wp:shortcode --><img src="https://example.com/a.jpg"><!-- /wp:shortcode -->'],
+]);
 
 it('keeps the text around a shortcode in its block, on the Bard route', function (string $shortcode): void {
     $html = '<p>Intro</p><!-- wp:shortcode -->Lead '.$shortcode.' tail<!-- /wp:shortcode --><p>Outro</p>';

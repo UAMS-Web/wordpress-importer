@@ -12,7 +12,9 @@ use DOMText;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Processes WordPress wp:shortcode blocks into Tiptap-compatible HTML for
@@ -195,6 +197,14 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
                 $logData['context']
             );
         }
+
+        // Neither route can keep an image beside a shortcode, so report it
+        self::reportImageBesideShortcodes(
+            $shortcodes,
+            $shortcodeContent,
+            $site,
+            $pageSlug
+        );
 
         // ---
         // When the block holds exactly one registered shortcode, try process(...,
@@ -419,6 +429,59 @@ class ShortcodeBlockProcessor implements BlockProcessorInterface
 
         // Return null only if content is truly empty
         return null;
+    }
+
+    /**
+     * Records an image a block holds beside its shortcodes for the run summary.
+     *
+     * Every route parses a shortcode block's HTML directly, and BardParser has no
+     * image node, so the image is not imported. An image inside a shortcode, as in a
+     * [caption], belongs to that shortcode and is not reported.
+     *
+     * @param  array<int|string, mixed>  $shortcodes  The shortcodes extracted from the block
+     * @param  string  $content  The block's content
+     * @param  string  $site  The Statamic site handle
+     * @param  ?string  $pageSlug  The slug of the page being processed
+     */
+    public static function reportImageBesideShortcodes(
+        array $shortcodes,
+        string $content,
+        string $site,
+        ?string $pageSlug
+    ): void {
+        // Content with no shortcode stays with the route's own nodes
+        if ($shortcodes === []) {
+            return;
+        }
+
+        // Take the shortcodes out, leaving what surrounds them
+        foreach ($shortcodes as $shortcode) {
+            if (\is_array($shortcode)) {
+                $content = \str_replace(
+                    self::extractShortcodeOriginal($shortcode),
+                    '',
+                    $content
+                );
+            }
+        }
+
+        if (\preg_match('/<img\b[^>]*>/i', $content, $image) !== 1) {
+            return;
+        }
+
+        ImportWarningManager::addWarning(
+            'content',
+            'images_beside_shortcodes',
+            [
+                'site' => $site,
+                'page_slug' => $pageSlug ?? '',
+                'page_link' => ProcessingContext::getWordPressPageLink() ?? '',
+                'content_snippet' => \mb_substr($image[0], 0, 100)
+                    .(\mb_strlen($image[0]) > 100 ? '...' : ''),
+                'reason' => 'An image beside a shortcode in a wp:shortcode block '
+                    .'was not imported.',
+            ]
+        );
     }
 
     /**

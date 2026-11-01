@@ -574,6 +574,14 @@ class PageBuilderParser
 
                 // Check if non-ACF parser returned a direct page_builder set
                 if (isset($nonAcfResult['directSet'])) {
+                    // Finalize the content ahead of the set, so the set lands after it
+                    $this->finalizeNonAcfContentIfNeeded(
+                        $content,
+                        $site,
+                        $assetImporter,
+                        $output
+                    );
+
                     // Append the direct set to ordered page_builder sets
                     self::$orderedSets[] = $nonAcfResult['directSet'];
                 }
