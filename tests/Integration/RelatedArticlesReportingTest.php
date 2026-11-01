@@ -71,8 +71,8 @@ it('reports a resolved reference as processed rather than failed', function (): 
 
     // Seed the pass exactly as `getRelatedArticles()` and the article loop would
     $creator = new RelatedArticlesProbeCreator(
-        $this->createMock(EntryCreator::class),
-        $this->createMock(MinervaKbSettingsSelector::class)
+        $this::createStub(EntryCreator::class),
+        $this::createStub(MinervaKbSettingsSelector::class)
     );
     $creator->seedDeferred(
         [$referrerId => ['wp_post_ids' => ['13'], 'slug' => 'sample-article-12', 'date' => null]],
@@ -110,8 +110,8 @@ it('reports progress through the deferred related articles (#182)', function ():
     $output = new BufferedOutput;
 
     $creator = new RelatedArticlesProbeCreator(
-        $this->createMock(EntryCreator::class),
-        $this->createMock(MinervaKbSettingsSelector::class)
+        $this::createStub(EntryCreator::class),
+        $this::createStub(MinervaKbSettingsSelector::class)
     );
     $creator->seedDeferred(
         [
@@ -137,8 +137,8 @@ it('reports a reference whose target is absent from the export', function (): vo
     $output = new BufferedOutput;
 
     $creator = new RelatedArticlesProbeCreator(
-        $this->createMock(EntryCreator::class),
-        $this->createMock(MinervaKbSettingsSelector::class)
+        $this::createStub(EntryCreator::class),
+        $this::createStub(MinervaKbSettingsSelector::class)
     );
     $creator->seedDeferred(
         [$referrerId => ['wp_post_ids' => ['999'], 'slug' => 'sample-article-12', 'date' => null]],
@@ -188,8 +188,8 @@ it('reports a save halted by a listener as not processed', function (): void {
     $output = new BufferedOutput;
 
     $creator = new RelatedArticlesProbeCreator(
-        $this->createMock(EntryCreator::class),
-        $this->createMock(MinervaKbSettingsSelector::class)
+        $this::createStub(EntryCreator::class),
+        $this::createStub(MinervaKbSettingsSelector::class)
     );
     $creator->seedDeferred(
         [$referrerId => ['wp_post_ids' => ['13'], 'slug' => 'sample-article-12', 'date' => null]],

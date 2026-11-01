@@ -131,7 +131,7 @@ it('translates {fields_table} to the Statamic all_fields tag', function (): void
     $config = importNinjaFormsEmailBody(
         // Exactly what the T-Shirt Reservation export carries.
         'Your T-Shirt(s) will be available to purchase at the event.<br><br>{fields_table}',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $message = $config['message'] ?? null;
@@ -146,7 +146,7 @@ it('translates {fields_table} to the Statamic all_fields tag', function (): void
 
 it('translates a bare {fields_table} body, which four production actions carry', function (): void {
     // Several production email actions have exactly this as their entire body.
-    $config = importNinjaFormsEmailBody('{fields_table}', $this->createMock(AssetImporter::class));
+    $config = importNinjaFormsEmailBody('{fields_table}', $this::createStub(AssetImporter::class));
 
     expect($config['message'] ?? null)->toBe('{{ all_fields }}');
 });
@@ -154,7 +154,7 @@ it('translates a bare {fields_table} body, which four production actions carry',
 it('still translates the {wp:…} system tags alongside it', function (): void {
     $config = importNinjaFormsEmailBody(
         'Site: {wp:site_title} at {wp:site_url}.<br>{fields_table}',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $message = $config['message'] ?? null;
@@ -170,7 +170,7 @@ it('still translates the {wp:…} system tags alongside it', function (): void {
 it('still resolves {field:…} references to their blueprint handles', function (): void {
     $config = importNinjaFormsEmailBody(
         'Reply to {field:email_1642172432990}.<br>{fields_table}',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $message = $config['message'] ?? null;
@@ -187,7 +187,7 @@ it('leaves an unknown token alone rather than mangling it', function (): void {
     // a visible unresolved token in the CP is a better failure than a silently wrong value.
     $config = importNinjaFormsEmailBody(
         'Ref {system:not_a_real_tag}.<br>{fields_table}',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $message = $config['message'] ?? null;

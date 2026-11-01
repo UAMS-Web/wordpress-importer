@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * The cross-plugin FormPluginCoordinator: detection, form creation and the entry rewrite (#98).
  *
- * The three plugin coordinators are mocks, so each test decides what a plugin detects,
+ * The three plugin coordinators are test doubles, so each test decides what a plugin detects,
  * supplies and creates. The block processors' static form-ID caches and the coordinator's
  * static handle caches are seeded through reflection and cleared after every test. The entry
  * rewrite runs against real entries; `PreventsSavingStacheItemsToDisk` points the Stache at a
@@ -233,12 +233,12 @@ function fpcoUnresolvedWarnings(): array
 }
 
 beforeEach(function (): void {
-    $this->gravity = $this->createMock(GravityFormsCoordinator::class);
-    $this->formidable = $this->createMock(FormidableFormsCoordinator::class);
-    $this->ninja = $this->createMock(NinjaFormsCoordinator::class);
+    $this->gravity = $this::createStub(GravityFormsCoordinator::class);
+    $this->formidable = $this::createStub(FormidableFormsCoordinator::class);
+    $this->ninja = $this::createStub(NinjaFormsCoordinator::class);
     $this->coordinator = new FormPluginCoordinator($this->gravity, $this->formidable, $this->ninja);
     $this->output = new BufferedOutput;
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
     ImportWarningManager::clearWarnings();
 });
 
@@ -255,19 +255,24 @@ afterEach(function (): void {
 });
 
 it('runs detection for each plugin with content and reports whether any loaded data', function (bool $gravity, bool $formidable, bool $ninja, bool $expected): void {
-    $parser = $this->createMock(XmlParser::class);
-    $input = new ArrayInput([]);
-    $command = $this->createMock(Command::class);
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $formidableCoordinator = $this->createMock(FormidableFormsCoordinator::class);
+    $ninjaCoordinator = $this->createMock(NinjaFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $formidableCoordinator, $ninjaCoordinator);
 
-    $this->gravity->method('hasGravityFormsContent')->willReturn(true);
-    $this->gravity->expects($this->once())->method('handleGravityFormsDetection')->with($parser, $input, $this->output, $command)->willReturn($gravity);
-    $this->gravity->method('getGravityFormsFormIdsWithPages')->willReturn([3 => ['a']]);
-    $this->formidable->method('hasFormidableFormsContent')->willReturn(true);
-    $this->formidable->expects($this->once())->method('handleFormidableFormsDetection')->willReturn($formidable);
-    $this->formidable->method('getFormidableFormsFormIdsWithPages')->willReturn([4 => ['b']]);
-    $this->ninja->method('hasNinjaFormsContent')->willReturn(true);
-    $this->ninja->expects($this->once())->method('handleNinjaFormsDetection')->willReturn($ninja);
-    $this->ninja->method('getNinjaFormsFormIdsWithPages')->willReturn([5 => ['c']]);
+    $parser = $this::createStub(XmlParser::class);
+    $input = new ArrayInput([]);
+    $command = $this::createStub(Command::class);
+
+    $gravityCoordinator->method('hasGravityFormsContent')->willReturn(true);
+    $gravityCoordinator->expects($this->once())->method('handleGravityFormsDetection')->with($parser, $input, $this->output, $command)->willReturn($gravity);
+    $gravityCoordinator->method('getGravityFormsFormIdsWithPages')->willReturn([3 => ['a']]);
+    $formidableCoordinator->method('hasFormidableFormsContent')->willReturn(true);
+    $formidableCoordinator->expects($this->once())->method('handleFormidableFormsDetection')->willReturn($formidable);
+    $formidableCoordinator->method('getFormidableFormsFormIdsWithPages')->willReturn([4 => ['b']]);
+    $ninjaCoordinator->method('hasNinjaFormsContent')->willReturn(true);
+    $ninjaCoordinator->expects($this->once())->method('handleNinjaFormsDetection')->willReturn($ninja);
+    $ninjaCoordinator->method('getNinjaFormsFormIdsWithPages')->willReturn([5 => ['c']]);
 
     expect($this->coordinator->handleFormPluginDetection($parser, $input, $this->output, $command))->toBe($expected)
         ->and(fpcoReferenced($this->coordinator))
@@ -280,27 +285,37 @@ it('runs detection for each plugin with content and reports whether any loaded d
 ]);
 
 it('skips detection for a plugin whose content is absent', function (): void {
-    $parser = $this->createMock(XmlParser::class);
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $formidableCoordinator = $this->createMock(FormidableFormsCoordinator::class);
+    $ninjaCoordinator = $this->createMock(NinjaFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $formidableCoordinator, $ninjaCoordinator);
 
-    $this->gravity->method('hasGravityFormsContent')->willReturn(false);
-    $this->gravity->expects($this->never())->method('handleGravityFormsDetection');
-    $this->formidable->method('hasFormidableFormsContent')->willReturn(false);
-    $this->formidable->expects($this->never())->method('handleFormidableFormsDetection');
-    $this->ninja->method('hasNinjaFormsContent')->willReturn(false);
-    $this->ninja->expects($this->never())->method('handleNinjaFormsDetection');
+    $parser = $this::createStub(XmlParser::class);
 
-    expect($this->coordinator->handleFormPluginDetection($parser, new ArrayInput([]), $this->output, $this->createMock(Command::class)))->toBeFalse()
+    $gravityCoordinator->method('hasGravityFormsContent')->willReturn(false);
+    $gravityCoordinator->expects($this->never())->method('handleGravityFormsDetection');
+    $formidableCoordinator->method('hasFormidableFormsContent')->willReturn(false);
+    $formidableCoordinator->expects($this->never())->method('handleFormidableFormsDetection');
+    $ninjaCoordinator->method('hasNinjaFormsContent')->willReturn(false);
+    $ninjaCoordinator->expects($this->never())->method('handleNinjaFormsDetection');
+
+    expect($this->coordinator->handleFormPluginDetection($parser, new ArrayInput([]), $this->output, $this::createStub(Command::class)))->toBeFalse()
         ->and(fpcoReferenced($this->coordinator))->toBe([]);
 });
 
 it('clears every plugin\'s data and every created-handle cache', function (): void {
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $formidableCoordinator = $this->createMock(FormidableFormsCoordinator::class);
+    $ninjaCoordinator = $this->createMock(NinjaFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $formidableCoordinator, $ninjaCoordinator);
+
     fpcoHandles('createdGravityFormsHandles', ['1' => 'a']);
     fpcoHandles('createdFormidableFormsHandles', ['2' => 'b']);
     fpcoHandles('createdNinjaFormsHandles', ['3' => 'c']);
 
-    $this->gravity->expects($this->once())->method('clearGravityFormsData');
-    $this->formidable->expects($this->once())->method('clearFormidableFormsData');
-    $this->ninja->expects($this->once())->method('clearNinjaFormsData');
+    $gravityCoordinator->expects($this->once())->method('clearGravityFormsData');
+    $formidableCoordinator->expects($this->once())->method('clearFormidableFormsData');
+    $ninjaCoordinator->expects($this->once())->method('clearNinjaFormsData');
 
     $this->coordinator->clearAllCaches();
 
@@ -308,6 +323,11 @@ it('clears every plugin\'s data and every created-handle cache', function (): vo
 });
 
 it('creates each referenced form the supplied export contains, and caches its handle', function (): void {
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $formidableCoordinator = $this->createMock(FormidableFormsCoordinator::class);
+    $ninjaCoordinator = $this->createMock(NinjaFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $formidableCoordinator, $ninjaCoordinator);
+
     Site::setSites(['default' => ['name' => 'Main Site', 'url' => '/', 'locale' => 'en_US']]);
 
     // Each plugin has a form only a shortcode references (5, 3 and 9), one both reference, and
@@ -319,11 +339,11 @@ it('creates each referenced form the supplied export contains, and caches its ha
     fpcoSeedFormIds(NinjaFormsShortcodeProcessor::class, ['9', '2', '6']);
     fpcoSeedFormIds(NinjaFormsBlockProcessor::class, ['6', '70']);
 
-    $this->gravity->method('getGravityFormsData')->willReturn(['not a form', ['id' => '7'], ['id' => 8], ['title' => 'no id'], ['id' => '5']]);
-    $this->formidable->method('getFormidableFormsData')->willReturn([['id' => 3], ['id' => 4]]);
-    $this->ninja->method('getNinjaFormsData')->willReturn([2 => ['id' => 2], 6 => ['id' => 6.0], 9 => ['id' => '9']]);
+    $gravityCoordinator->method('getGravityFormsData')->willReturn(['not a form', ['id' => '7'], ['id' => 8], ['title' => 'no id'], ['id' => '5']]);
+    $formidableCoordinator->method('getFormidableFormsData')->willReturn([['id' => 3], ['id' => 4]]);
+    $ninjaCoordinator->method('getNinjaFormsData')->willReturn([2 => ['id' => 2], 6 => ['id' => 6.0], 9 => ['id' => '9']]);
 
-    $this->gravity->expects($this->exactly(3))->method('createGravityFormsFormIfNeeded')
+    $gravityCoordinator->expects($this->exactly(3))->method('createGravityFormsFormIfNeeded')
         ->willReturnCallback(fn (int $id, string $name, string $site, AssetImporter $importer): ?Form => match (true) {
             $name !== 'Main Site' || $site !== 'default' || $importer !== $this->assetImporter => throw new LogicException('Unexpected arguments.'),
             $id === 7 => fpcoForm('gravity_seven'),
@@ -332,9 +352,9 @@ it('creates each referenced form the supplied export contains, and caches its ha
         });
     // Forms 5, 3 and 9 are created without a handle, so nothing is cached or reported for them,
     // and the forms after them are still processed.
-    $this->formidable->expects($this->exactly(2))->method('createFormidableFormsFormIfNeeded')
+    $formidableCoordinator->expects($this->exactly(2))->method('createFormidableFormsFormIfNeeded')
         ->willReturnCallback(static fn (int $id): Form => fpcoForm($id === 3 ? null : 'formidable_four'));
-    $this->ninja->expects($this->exactly(3))->method('createNinjaFormsFormIfNeeded')
+    $ninjaCoordinator->expects($this->exactly(3))->method('createNinjaFormsFormIfNeeded')
         ->willReturnCallback(static fn (int $id): Form => fpcoForm($id === 9 ? null : "ninja_{$id}"));
 
     $this->coordinator->processFormImports('default', $this->output, $this->assetImporter);
@@ -362,17 +382,22 @@ it('creates each referenced form the supplied export contains, and caches its ha
 });
 
 it('creates every referenced form when no export was supplied to filter against', function (): void {
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $formidableCoordinator = $this->createMock(FormidableFormsCoordinator::class);
+    $ninjaCoordinator = $this->createMock(NinjaFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $formidableCoordinator, $ninjaCoordinator);
+
     fpcoSeedFormIds(GravityFormsBlockProcessor::class, ['7']);
     fpcoSeedFormIds(FormidableFormsBlockProcessor::class, ['3']);
     fpcoSeedFormIds(NinjaFormsBlockProcessor::class, ['2']);
 
-    $this->gravity->method('getGravityFormsData')->willReturn(null);
-    $this->formidable->method('getFormidableFormsData')->willReturn([]);
-    $this->ninja->method('getNinjaFormsData')->willReturn(null);
+    $gravityCoordinator->method('getGravityFormsData')->willReturn(null);
+    $formidableCoordinator->method('getFormidableFormsData')->willReturn([]);
+    $ninjaCoordinator->method('getNinjaFormsData')->willReturn(null);
 
-    $this->gravity->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7)->willReturn(null);
-    $this->formidable->expects($this->once())->method('createFormidableFormsFormIfNeeded')->with(3)->willReturn(null);
-    $this->ninja->expects($this->once())->method('createNinjaFormsFormIfNeeded')->with(2)->willReturn(null);
+    $gravityCoordinator->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7)->willReturn(null);
+    $formidableCoordinator->expects($this->once())->method('createFormidableFormsFormIfNeeded')->with(3)->willReturn(null);
+    $ninjaCoordinator->expects($this->once())->method('createNinjaFormsFormIfNeeded')->with(2)->willReturn(null);
 
     $this->coordinator->processFormImports('a_site_that_does_not_exist', $this->output, $this->assetImporter);
 
@@ -380,18 +405,24 @@ it('creates every referenced form when no export was supplied to filter against'
 });
 
 it('names the site by its handle when Statamic has no such site', function (): void {
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $this->formidable, $this->ninja);
+
     fpcoSeedFormIds(GravityFormsBlockProcessor::class, ['7']);
-    $this->gravity->method('getGravityFormsData')->willReturn(null);
-    $this->gravity->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7, 'a_site_that_does_not_exist', 'a_site_that_does_not_exist')->willReturn(null);
+    $gravityCoordinator->method('getGravityFormsData')->willReturn(null);
+    $gravityCoordinator->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7, 'a_site_that_does_not_exist', 'a_site_that_does_not_exist')->willReturn(null);
 
     $this->coordinator->processFormImports('a_site_that_does_not_exist', $this->output, $this->assetImporter);
 });
 
 it('names the site by its handle when the site\'s name is empty', function (): void {
+    $gravityCoordinator = $this->createMock(GravityFormsCoordinator::class);
+    $this->coordinator = new FormPluginCoordinator($gravityCoordinator, $this->formidable, $this->ninja);
+
     Site::setSites(['default' => ['name' => '', 'url' => '/', 'locale' => 'en_US']]);
     fpcoSeedFormIds(GravityFormsBlockProcessor::class, ['7']);
-    $this->gravity->method('getGravityFormsData')->willReturn(null);
-    $this->gravity->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7, 'default', 'default')->willReturn(null);
+    $gravityCoordinator->method('getGravityFormsData')->willReturn(null);
+    $gravityCoordinator->expects($this->once())->method('createGravityFormsFormIfNeeded')->with(7, 'default', 'default')->willReturn(null);
 
     $this->coordinator->processFormImports('default', $this->output, $this->assetImporter);
 });

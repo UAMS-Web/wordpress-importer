@@ -46,7 +46,7 @@ beforeEach(function (): void {
     $collection->save();
 
     $this->parser = new NewsParser;
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
     $this->output = new NullOutput;
 
     NewsArticleResolver::clearCache();

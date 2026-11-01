@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Integration/FieldMapperTest.php
  */
 
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
@@ -42,10 +42,10 @@ function fieldMapperRun(
     string $postType = 'page',
     array $attachments = []
 ): array {
-    $importer = (new ReflectionMethod($test, 'createMock'))->invoke($test, AssetImporter::class);
+    $importer = (new ReflectionMethod($test, 'createStub'))->invoke(null, AssetImporter::class);
 
-    if (! $importer instanceof AssetImporter || ! $importer instanceof MockObject) {
-        throw new RuntimeException('Could not mock the asset importer.');
+    if (! $importer instanceof AssetImporter || ! $importer instanceof Stub) {
+        throw new RuntimeException('Could not stub the asset importer.');
     }
 
     $importer->method('getUploadImages')->willReturn(true);

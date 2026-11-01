@@ -46,7 +46,7 @@ beforeEach(function (): void {
 
     $this->parser = new NewsParser;
     $this->blogroll = new BlogrollShortcodeProcessor;
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
     $this->output = new NullOutput;
 
     PostCategoryEntryResolver::clear();

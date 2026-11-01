@@ -195,7 +195,7 @@ it('creates a Statamic form and blueprint for a referenced Ninja Forms ID', func
         $node,
         ['formID' => 2],
         'default',
-        $this->createMock(AssetImporter::class),
+        $this::createStub(AssetImporter::class),
         new BufferedOutput
     );
 
@@ -206,7 +206,7 @@ it('creates a Statamic form and blueprint for a referenced Ninja Forms ID', func
     app(FormPluginCoordinator::class)->processFormImports(
         'default',
         $output,
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $written = $output->fetch();
@@ -250,7 +250,7 @@ it('configures email notifications, with recipients, for an imported Ninja Forms
         2,
         'Default',
         'default',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($form)->toBeInstanceOf(Form::class);
@@ -294,7 +294,7 @@ it('reports nothing to import when no Ninja Forms IDs are referenced', function 
     app(FormPluginCoordinator::class)->processFormImports(
         'default',
         $output,
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     // The negative control for the tests above: with no referenced IDs the pass returns

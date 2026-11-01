@@ -149,7 +149,7 @@ afterEach(function (): void {
 });
 
 it('carries the gateway and amount source from an active payment action', function (): void {
-    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
     expect($carried)->toBeArray()
         ->and($carried['plugin'] ?? null)->toBe('Ninja Forms')
@@ -161,7 +161,7 @@ it('carries the gateway and amount source from an active payment action', functi
 });
 
 it('carries the per-option price table, which the choice-list mapper drops', function (): void {
-    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
     $table = $carried['price_table'] ?? null;
 
@@ -182,7 +182,7 @@ it('flags a field-map reference that resolves to nothing', function (): void {
     // leaves an unresolvable tag in an action setting LITERAL rather than empty.
     $carried = importNinjaPaymentConfig(
         ninjaPaymentAction('1', '{field:address_1623683683568}, {field:creditcardzip_1623684352579}'),
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $map = $carried['observed_field_map'] ?? null;
@@ -202,7 +202,7 @@ it('flags a field-map reference that resolves to nothing', function (): void {
 });
 
 it('records a fully-resolving row as having no unresolved references', function (): void {
-    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
     $map = $carried['observed_field_map'] ?? null;
 
@@ -216,7 +216,7 @@ it('records a fully-resolving row as having no unresolved references', function 
 });
 
 it('skips blank map rows, as Ninja itself does', function (): void {
-    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
     $map = $carried['observed_field_map'] ?? null;
 
@@ -227,7 +227,7 @@ it('skips blank map rows, as Ninja itself does', function (): void {
 it('carries nothing for an inactive payment action — the Love Lights shape', function (): void {
     // Love Lights' copy is switched off and names a gateway whose plugin is not even
     // installed on its subsite. Recording it would invent a payment form.
-    $carried = importNinjaPaymentConfig(ninjaPaymentAction('0'), $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(ninjaPaymentAction('0'), $this::createStub(AssetImporter::class));
 
     expect($carried)->toBeNull();
 });
@@ -235,13 +235,13 @@ it('carries nothing for an inactive payment action — the Love Lights shape', f
 it('carries nothing for a form with no payment action at all', function (): void {
     // The negative control: the overwhelming majority of forms must be untouched, and an
     // empty payment record on every imported form would be its own defect.
-    $carried = importNinjaPaymentConfig(null, $this->createMock(AssetImporter::class));
+    $carried = importNinjaPaymentConfig(null, $this::createStub(AssetImporter::class));
 
     expect($carried)->toBeNull();
 });
 
 it('leaves the confirmation and email import undisturbed', function (): void {
-    importNinjaPaymentConfig(ninjaPaymentAction(), $this->createMock(AssetImporter::class));
+    importNinjaPaymentConfig(ninjaPaymentAction(), $this::createStub(AssetImporter::class));
 
     $form = FormFacade::find(NINJA_PAYMENT_HANDLE);
 

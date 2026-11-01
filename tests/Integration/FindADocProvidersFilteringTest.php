@@ -77,7 +77,7 @@ it('enables filtering on an imported Find-a-Doc Providers block', function (): v
     // A typed PHPUnit mock satisfies the AssetImporter parameter. The more-link
     // passes through LinkProcessor, which asks the importer for the source blog URL
     // to tell internal links from external ones.
-    $assetImporter = $this->createMock(AssetImporter::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
     $assetImporter->method('getBaseBlogUrl')->willReturn('https://uamshealth.com/');
 
     $set = parseFadProvidersFixtureBlock($assetImporter);
