@@ -903,6 +903,12 @@ describe('the defaults and the description', function (): void {
     })->with([
         'bold text' => ['<p>Plain <strong>bold</strong></p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Plain bold']]]]],
         'a double-encoded quote' => ['<p>Say &AMP;quot;hi&AMP;quot;</p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Say "hi"']]]]],
+        'bare text, the usual excerpt' => ['A plain caption.', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A plain caption.']]]]],
+        'bare text opening with a mark' => ['<strong>Bold</strong> tail', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Bold tail']]]]],
+        'bare text after a paragraph' => ['<p>First</p> tail', [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'tail']]],
+        ]],
         'only a comment' => ['<!-- note -->', null],
         'only whitespace' => [" \n ", null],
         'only a title' => ['<title>Head only</title>', null],

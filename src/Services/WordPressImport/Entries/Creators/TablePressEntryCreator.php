@@ -23,6 +23,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
@@ -354,10 +355,18 @@ class TablePressEntryCreator extends BaseEntryCreator
                     $document = null;
                 }
 
-                $description = \is_array($document) ? ($document['content'] ?? null) : null;
+                $content = \is_array($document) ? ($document['content'] ?? null) : null;
+
+                // ---
+                // A Bard document's root holds blocks, and a TablePress excerpt is
+                // normally bare text. Whether the parser wraps that text depends on
+                // the libxml2 PHP is built with: 2.11 adds a paragraph and 2.15 does
+                // not, so the wrap is done here to store one shape on every build (#288).
+                // ---
+                $description = \is_array($content) ? BardParser::wrapRootText($content) : [];
 
                 // Store the description only when it converted to some content
-                if (\is_array($description) && $description !== []) {
+                if ($description !== []) {
                     $data['description'] = $description;
                 }
             }
