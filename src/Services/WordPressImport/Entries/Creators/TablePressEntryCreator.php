@@ -590,6 +590,13 @@ class TablePressEntryCreator extends BaseEntryCreator
                 'TablePressEntryCreator::createEntries'
             );
 
+            // Remove any file left at the old slug format
+            $this->deleteOldSlugFile(
+                $site,
+                $tableExportId,
+                $postId
+            );
+
             // Save the entry with the generated data
             $entry = $this->saveEntry(
                 $collectionHandle,
@@ -620,14 +627,42 @@ class TablePressEntryCreator extends BaseEntryCreator
     }
 
     /**
+     * Deletes a file left at the old slug format, to prevent a duplicate.
+     *
+     * The old slug is {site}_tablepress-{tableExportId}-{postId}. A TablePress ID
+     * can hold a hyphen, so the caller passes both IDs rather than this reading
+     * them back out of a slug or entry ID (#286).
+     *
+     * @param  string  $site  The site handle
+     * @param  string  $tableExportId  The table's TablePress export ID
+     * @param  string  $postId  The table's WordPress post ID
+     */
+    private function deleteOldSlugFile(
+        string $site,
+        string $tableExportId,
+        string $postId
+    ): void {
+        // Resolve on the tree this run writes to, not the live submodule
+        $oldSlugPath = ContentRoot::collectionEntry(
+            'tables',
+            $site,
+            "{$site}_tablepress-{$tableExportId}-{$postId}"
+        );
+
+        // Delete the file if one is there
+        if (LaravelFileFacade::exists($oldSlugPath)) {
+            LaravelFileFacade::delete($oldSlugPath);
+        }
+    }
+
+    /**
      * Saves a Statamic entry with overwrite behavior handling.
      *
      * Checks for existing entries with matching IDs or slugs and applies the
      * configured overwrite behavior: overwrite, skip, or create additional entries
-     * with modified slugs. Deletes any entries with incorrect slugs
-     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Determines the published
-     * status from status_and_visibility if $published is null, defaulting to true
-     * for TablePress entries when the field is absent, as tables are typically
+     * with modified slugs. Determines the published status from
+     * status_and_visibility if $published is null, defaulting to true for
+     * TablePress entries when the field is absent, as tables are typically
      * published.
      *
      * Checks the collection configuration to determine if dates are enabled
@@ -704,32 +739,6 @@ class TablePressEntryCreator extends BaseEntryCreator
         }
 
         $entry->published($published);
-
-        // Extract export ID and post ID from entry ID
-        $parts = \explode(
-            '_tablepress-',
-            $entryId
-        );
-        if (\count($parts) === 2) {
-            // Handle new 3-part ID format: {site}_tablepress-{exportId}-{postId}-{random}
-            $remainingParts = \explode(
-                '-',
-                $parts[1]
-            );
-            $exportId = $remainingParts[0];
-            $postId = $remainingParts[1];
-            $incorrectSlug = "{$site}_tablepress-{$exportId}-{$postId}";
-            // Resolve on the tree this run writes to, not the live submodule
-            $incorrectPath = ContentRoot::collectionEntry(
-                'tables',
-                $site,
-                $incorrectSlug
-            );
-            // Delete any incorrect slug file
-            if (LaravelFileFacade::exists($incorrectPath)) {
-                LaravelFileFacade::delete($incorrectPath);
-            }
-        }
 
         // ---
         // Check for existing entry with matching ID or slug. Statamic keeps entry ids
