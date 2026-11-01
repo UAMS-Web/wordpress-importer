@@ -72,7 +72,7 @@ class GalleryShortcodeProcessor implements ShortcodeProcessorInterface
             // Keep the numeric IDs, which drops an empty value too
             $imageIds = \array_filter(
                 $imageIds,
-                fn ($id): bool => \is_numeric($id)
+                \is_numeric(...)
             );
         }
 
