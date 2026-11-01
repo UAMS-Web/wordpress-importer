@@ -4086,44 +4086,30 @@ class ImportWordPress extends Command
             switch ($designation->outcome) {
                 case DepartmentOrganizationOutcome::Designated:
                     $this->info("Designated site '$site' as a news hub for '{$designation->organizationSlug}'.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::AlreadyDesignated:
                     $this->info("Site '$site' is already designated as a news hub for '{$designation->organizationSlug}'.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DeliberatelyUnmapped:
                     // A recorded rejection is a decision, not a gap - nothing to report
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::NotRecorded:
                     $this->info("No department_organization designation is recorded for site '$site' - its news page will render as a plain listing.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DanglingReference:
                     $this->warn("Site '$site' is designated for organization '{$designation->organizationSlug}', which does not exist - designation not applied.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::GlobalMissing:
                     $this->warn('uams_multisite_settings Global not found - skipping department_organization designation');
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::SiteUnavailable:
                     $this->warn("uams_multisite_settings Global not available for site '$site' - skipping department_organization designation");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
 

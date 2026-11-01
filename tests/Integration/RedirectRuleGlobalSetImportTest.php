@@ -24,6 +24,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcesso
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
 use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 /**
@@ -42,7 +43,10 @@ use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
  */
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
+// A `continue` mutant of a `break` in this class's switches only compiles with a
+// warning; fail on it whichever test file loads the class first
 beforeEach(function (): void {
+    CompilesCleanly::assert(RedirectRuleGlobalCreator::class);
     config(['statamic.search.indexes' => []]);
 
     // Multisite has to be on for a collection whose first site is not the default
