@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\Assert;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
-use UAMSWeb\WordPressImporter\Tests\Support\ExportsCorpus;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TaxonomyDispositions;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ExportsCorpus;
 
 /**
  * Tests the taxonomy disposition table and the term destination registry (issue wordpress-importer-archive#13).

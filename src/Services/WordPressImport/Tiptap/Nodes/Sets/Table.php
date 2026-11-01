@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Sets;
 
 /**
  * Utility class for rendering Statamic uamsweb_set_table Bard sets.

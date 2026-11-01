@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes;
 
 use DOMNode;
 use Tiptap\Nodes\ListItem as BaseListItem;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
 
 /**
  * Custom Tiptap ListItem node extension for WordPress content import.

@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TermLookupHelperTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TermLookupHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermLookupHelper;
 
 /**
  * A term map keyed by term id, as the importer builds it.

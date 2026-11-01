@@ -20,7 +20,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/Issue374RegressionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FieldtypeMapping;
 
 it('suppresses a numeric-zero rangeMax so no max attribute is emitted', function (int|string $rangeMax): void {
     $result = FieldtypeMapping::mapFieldAttributes([

@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TablePressTableOptionsMappingTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
 
 beforeEach(function (): void {
     $this->creator = new TablePressEntryCreator;

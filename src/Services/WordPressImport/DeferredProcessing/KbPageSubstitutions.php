@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing;
 
 /**
  * WordPress kb_page ids the knowledge base root took the place of.

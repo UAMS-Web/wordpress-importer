@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\ExportsCorpus;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ExportsCorpus;
 
 /**
  * Tests where the corpus tests look for the private export corpus (wordpress-importer-archive#1426).

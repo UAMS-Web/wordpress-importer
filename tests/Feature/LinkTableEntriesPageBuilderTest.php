@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 uses(TestCase::class);
 
@@ -36,7 +36,7 @@ afterEach(function (): void {
  * unlinked, and any genuine warning must name the entry actually being linked rather
  * than the stale last-set ProcessingContext page link.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/LinkTableEntriesPageBuilderTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/LinkTableEntriesPageBuilderTest.php
  */
 it('does not warn about unlinked table ids for a self-contained page builder table block', function (): void {
     // Spy on the log so we can assert the unlinked-IDs warning never fires.

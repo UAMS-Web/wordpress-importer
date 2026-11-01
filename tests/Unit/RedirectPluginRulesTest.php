@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\RedirectPluginRules;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\RedirectPluginRules;
 
 /**
  * Tests for converting Redirection and Pretty Links rules into `redirect_rule` items (wordpress-importer-archive#1307).

@@ -13,8 +13,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ProcessingContextTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\AudioSeries\AudioSeriesConfig;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Every value's setter, getter and clearer, with a sample value and a second one.

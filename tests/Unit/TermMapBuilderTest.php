@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TermMapBuilderTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
 
 /**
  * A `<wp:term>` element; a null field is left out of the element entirely.

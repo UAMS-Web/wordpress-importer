@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Contracts\FileLoaderInterface;
 
 /**
  * Loads and parses JSON export files for form plugins.

@@ -11,7 +11,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/WxrSanitizerBoundariesTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizer;
 
 it('keeps a comment literal through more than one `]]>`', function (): void {
     // Ending the comment at its first `]]>` would leave the second to be escaped as text

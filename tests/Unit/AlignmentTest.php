@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AlignmentTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
 
 it('maps each alignment for an image set and for any other set', function (string $align, string $forImage, string $forOther): void {
     expect(Alignment::translate($align, true))->toBe($forImage)

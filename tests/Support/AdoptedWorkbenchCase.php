@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Tests\Support;
+namespace UAMSWeb\Aether\WordPressImporter\Tests\Support;
 
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * A case that plants form and blueprint YAML in this process's workbench before the

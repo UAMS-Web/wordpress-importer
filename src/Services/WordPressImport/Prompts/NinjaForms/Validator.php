@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NinjaForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
 
 /**
  * Validates Ninja Forms export file structure.

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\ContentSource;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\EmptyContentSourceException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\ContentSource;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\EmptyContentSourceException;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
 
 /**
  * Pins the guard that replaced six independent silent short-circuits (issue wordpress-importer-archive#662).

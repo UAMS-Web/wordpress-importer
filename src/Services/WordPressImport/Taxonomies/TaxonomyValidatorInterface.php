@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies;
 
 use Symfony\Component\Console\Output\OutputInterface;
 

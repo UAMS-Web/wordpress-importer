@@ -17,7 +17,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/GutenbergBlockDetectionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
 
 /**
  * Build an ImportWordPress instance without invoking its constructor.

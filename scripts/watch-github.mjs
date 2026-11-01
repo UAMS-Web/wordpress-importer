@@ -48,8 +48,8 @@
  * Usage:
  *   node scripts/watch-github.mjs
  *   node scripts/watch-github.mjs --interval 30 --emit-existing
- *   node scripts/watch-github.mjs --issues --repos UAMS-Web/wordpress-importer
- *   node scripts/watch-github.mjs --no-prs --issue-repos UAMS-Web/wordpress-importer
+ *   node scripts/watch-github.mjs --issues --repos UAMS-Web/aether-wordpress-importer
+ *   node scripts/watch-github.mjs --no-prs --issue-repos UAMS-Web/aether-wordpress-importer
  */
 
 import { execFile } from 'node:child_process';
@@ -75,10 +75,10 @@ let execGh = execFileAsync;
  * bury the importer's own events. Add it explicitly when a cross-repo
  * blocker is what you are tracking:
  *
- *   node scripts/watch-github.mjs --no-prs --issue-repos UAMS-Web/wordpress-importer,UAMS-Web/uams-statamic
+ *   node scripts/watch-github.mjs --no-prs --issue-repos UAMS-Web/aether-wordpress-importer,UAMS-Web/uams-statamic
  */
 const DEFAULT_REPOS = [
-    'UAMS-Web/wordpress-importer',
+    'UAMS-Web/aether-wordpress-importer',
     'UAMS-Web/wordpress-importer-exports',
 ];
 

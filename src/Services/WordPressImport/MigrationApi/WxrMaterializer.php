@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi;
 
 use SimpleXMLElement;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
-use UamsWeb\WxrCleanup\Transform;
+use UAMSWeb\Aether\WordPressImporter\Cleanup\Transform;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 use XMLWriter;
 
 /**
@@ -1418,7 +1418,7 @@ class WxrMaterializer
     /**
      * Run the WXR cleaner's default pipeline over every written part, in place.
      *
-     * Exports are cleaned by `uams-web/wordpress-wxr-cleanup`'s CLI before they are imported.
+     * Exports are cleaned by `uams-web/aether-wordpress-importer-cleanup`'s CLI before they are imported.
      * Content read from the migration API never passed through it, so the same post imported
      * differently depending on its source (wordpress-importer-archive#1303). Running the cleaner's own
      * `Transform::withDefaultRules()` on each part applies the same rules, in the same order, to

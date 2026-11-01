@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormWarningFormatter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormWarningFormatter;
 
 /**
  * Run one formatter method and return what it printed.

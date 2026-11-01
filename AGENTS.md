@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents working in `UAMS-Web/wordpress-importer`.
+Guidance for coding agents working in `UAMS-Web/aether-wordpress-importer`.
 
 **This file is the single source of agent instructions for the repository (wordpress-importer-archive#1223).** Cursor reads `AGENTS.md` directly. Claude Code reads it through [`CLAUDE.md`](CLAUDE.md), which is an `@AGENTS.md` import and nothing else of substance. Edit this file, never `CLAUDE.md`, so the two agents cannot drift apart.
 
@@ -50,7 +50,7 @@ Pre-commit guard: if `.githooks/pre-commit` exists, run `git config core.hooksPa
 
 ## What this repo is
 
-A **Composer package** — a Statamic addon that imports WordPress WXR exports into Statamic. It is **not** an application. There is no `.env`, no `artisan`, no served URL, no front end, no database of its own. Code is autoloaded as `UAMSWeb\WordPressImporter\` from `src/`, and the addon registers `UAMSWeb\WordPressImporter\ServiceProvider` plus one console command, `statamic:import:wordpress`.
+A **Composer package** — a Statamic addon that imports WordPress WXR exports into Statamic. It is **not** an application. There is no `.env`, no `artisan`, no served URL, no front end, no database of its own. Code is autoloaded as `UAMSWeb\Aether\WordPressImporter\` from `src/`, and the addon registers `UAMSWeb\Aether\WordPressImporter\ServiceProvider` plus one console command, `statamic:import:wordpress`.
 
 It is consumed by the sibling **`UAMS-Web/uams-statamic`** app, which pins it by a tagged caret range — not `dev-main`. That pin is why releases here are load-bearing; see **Releases** below.
 

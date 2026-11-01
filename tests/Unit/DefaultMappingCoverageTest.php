@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
 
 /**
  * The command ends the run for a content type with no default mapping, so every content type

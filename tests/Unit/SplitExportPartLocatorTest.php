@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/SplitExportPartLocatorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
 
 beforeEach(function (): void {
     // Create an isolated scratch directory for this test's part fixtures

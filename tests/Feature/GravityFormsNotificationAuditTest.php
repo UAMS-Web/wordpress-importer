@@ -9,8 +9,8 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormConfigurationManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormConfigurationManager;
 
 // Shared formAuditGravityFormsFixturesDir() resolver — the committed corpus by
 // default, overridable host-side. See that file's header for the full contract.
@@ -53,7 +53,7 @@ uses(TestCase::class)->group('serial');
  * on that basis (uams-statamic-archive#1725). It creates and deletes
  * throwaway Statamic forms, so it stays in the host suite's `serial` group.
  *
- * @command  php artisan test --compact vendor/uams-web/wordpress-importer/tests/Feature/GravityFormsNotificationAuditTest.php
+ * @command  php artisan test --compact vendor/uams-web/aether-wordpress-importer/tests/Feature/GravityFormsNotificationAuditTest.php
  */
 
 /**

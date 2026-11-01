@@ -24,8 +24,8 @@ use Statamic\Facades\Blueprint;
 use Statamic\Fields\Field;
 use Statamic\Fields\FieldRepository;
 use Statamic\Fields\FieldsetRepository;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FieldDefaultHelper;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FieldDefaultHelper;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 

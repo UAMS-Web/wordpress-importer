@@ -16,7 +16,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/KeyTrackerAddressedKeysTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KeyTracker;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KeyTracker;
 
 /**
  * The keys listed in one of the fixture files, one per line.

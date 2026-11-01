@@ -13,8 +13,8 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Stache\Repositories\CollectionTreeRepository;
 use Statamic\Structures\CollectionStructure;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Covers `TreeBuilder::buildAndSaveTree()`'s refusal branches and its happy path
@@ -41,7 +41,7 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
  *
  *     vendor/bin/pest tests/Integration/TreeBuilderBranchTest.php --mutate \
  *       --path=src/Services/WordPressImport/Structures \
- *       --class="UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder" \
+ *       --class="UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder" \
  *       --covered-only
  *
  * Every mutant inside `buildAndSaveTree()` itself is killed except three, and all

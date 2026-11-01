@@ -6,11 +6,11 @@ use Illuminate\Support\Facades\File as LaravelFileFacade;
 use PHPUnit\Framework\Assert;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\PeopleGroupValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\PeopleGroupValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
 
 /**
  * Asserts that the term-validation pass does not report the host's OWN
@@ -36,7 +36,7 @@ use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugPro
  * disturb the `content/` submodule. What it reads is whatever the host checkout
  * already holds, so it skips rather than passing vacuously when that is empty.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/StructuredTermValidationAgainstHostContentTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/StructuredTermValidationAgainstHostContentTest.php
  */
 uses(TestCase::class);
 

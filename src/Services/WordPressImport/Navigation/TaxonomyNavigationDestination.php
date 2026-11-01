@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation;
 
 /**
  * The outcome of resolving a WordPress taxonomy navigation item.

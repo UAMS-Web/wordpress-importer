@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FieldtypeMappingTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FieldtypeMappingTrait;
 
 /**
  * Provides mapping from Formidable Forms field types to Statamic fieldtypes.

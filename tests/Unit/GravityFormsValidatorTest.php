@@ -11,8 +11,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/GravityFormsValidatorTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\BaseFormPluginValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator;
 
 it('names its plugin', function (): void {
     expect((new ReflectionProperty(BaseFormPluginValidator::class, 'pluginName'))->getValue(new Validator))->toBe('GravityForms');

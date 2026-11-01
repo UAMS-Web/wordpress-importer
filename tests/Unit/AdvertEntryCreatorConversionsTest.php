@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\AdvertEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\AdvertEntryCreator;
 
 /**
  * Pins the three value conversions `AdvertEntryCreator` applies to a WP Adverts listing (wordpress-importer-archive#774).

@@ -19,8 +19,8 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/PostCategoryEntryReferenceTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PostEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
 
 beforeEach(function (): void {
     TermDestinationRegistry::clear();

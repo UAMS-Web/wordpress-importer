@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ListItemNodeTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
 
 /**
  * A plain object with the given properties, as tiptap-php hands nodes around.

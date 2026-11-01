@@ -21,7 +21,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/PeopleVideoHandleMappingTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\PeopleEntryCreator;
 
 const YOUTUBE_URL = 'https://www.youtube.com/watch?v=bcK3RsG2ATg';
 const VIMEO_URL = 'https://vimeo.com/123456789';

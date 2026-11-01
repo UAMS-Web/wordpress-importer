@@ -100,11 +100,11 @@ describe('parseArgs', () => {
     })
 
     it('accepts --no-prs alongside --issue-repos, which implies --issues', () => {
-        const options = parseArgs(['--no-prs', '--issue-repos', 'UAMS-Web/wordpress-importer'])
+        const options = parseArgs(['--no-prs', '--issue-repos', 'UAMS-Web/aether-wordpress-importer'])
 
         assert.equal(options.prs, false)
         assert.equal(options.issues, true)
-        assert.deepEqual(options.issueRepos, ['UAMS-Web/wordpress-importer'])
+        assert.deepEqual(options.issueRepos, ['UAMS-Web/aether-wordpress-importer'])
     })
 
     it('resolves each feed to the repositories it will poll', () => {
@@ -159,7 +159,7 @@ describe('feed selection', () => {
     it('never requests the pulls endpoint when run issues-only', async () => {
         const { requests, exec } = recordRequests()
 
-        await main(['--once', '--no-prs', '--issue-repos', 'UAMS-Web/wordpress-importer'], { exec })
+        await main(['--once', '--no-prs', '--issue-repos', 'UAMS-Web/aether-wordpress-importer'], { exec })
 
         // The seed pass only sets the issue watermark, so a correct issues-only run asks nothing.
         assert.deepEqual(requests, [])
@@ -191,8 +191,8 @@ describe('feed selection', () => {
 
         await main([
             '--once',
-            '--repos', 'UAMS-Web/wordpress-importer,UAMS-Web/uams-statamic',
-            '--issue-repos', 'UAMS-Web/wordpress-importer',
+            '--repos', 'UAMS-Web/aether-wordpress-importer,UAMS-Web/uams-statamic',
+            '--issue-repos', 'UAMS-Web/aether-wordpress-importer',
         ], { exec })
 
         requests.length = 0
@@ -221,7 +221,7 @@ describe('watchingEvent', () => {
     })
 
     it('names an issues-only watcher, with no open-PR count to report', async () => {
-        await seed(['--no-prs', '--issue-repos', 'UAMS-Web/wordpress-importer'])
+        await seed(['--no-prs', '--issue-repos', 'UAMS-Web/aether-wordpress-importer'])
 
         assert.deepEqual(watchingEvent(30), {
             subject: 'PRs off, issues on 1 repo',
@@ -232,7 +232,7 @@ describe('watchingEvent', () => {
 
     // The single-repo watcher is common enough that `1 repos` reads as a bug in the watcher itself.
     it('pluralizes a one-repo feed as `repo` and a many-repo feed as `repos`', async () => {
-        await seed(['--repos', 'UAMS-Web/wordpress-importer,UAMS-Web/uams-statamic', '--issue-repos', 'UAMS-Web/wordpress-importer'])
+        await seed(['--repos', 'UAMS-Web/aether-wordpress-importer,UAMS-Web/uams-statamic', '--issue-repos', 'UAMS-Web/aether-wordpress-importer'])
 
         assert.equal(watchingEvent(60).subject, 'PRs on 2 repos, issues on 1 repo')
         assert.equal(

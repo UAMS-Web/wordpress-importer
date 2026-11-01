@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
 use DOMComment;
 use DOMElement;
@@ -11,29 +11,29 @@ use DOMNode;
 use DOMNodeList;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\ActionBarParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CallOutParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\ContentParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CounterListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CtaParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LinkListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LiveWhaleParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\NewsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\OverlayParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SectionParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SideBySideParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\StackedParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\ActionBarParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CallOutParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\ContentParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CounterListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\CtaParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\GalleryParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LinkListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LiveWhaleParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\NewsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\OverlayParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SectionParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SideBySideParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\StackedParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
 
 /**
  * Parses WordPress ACF blocks into Statamic page_builder replicator sets.
