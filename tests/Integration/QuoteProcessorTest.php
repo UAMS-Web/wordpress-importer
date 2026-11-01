@@ -24,7 +24,7 @@ beforeEach(function (): void {
     $this->processor = new QuoteProcessor;
 
     // Create mock AssetImporter since we don't need real asset processing
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 
     // Create DOMDocument for HTML manipulation in tests
     $this->doc = new DOMDocument;

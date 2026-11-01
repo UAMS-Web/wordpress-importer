@@ -438,7 +438,7 @@ function fcmWarnings(): ArrayObject
 beforeEach(function (): void {
     $this->probe = new FcmTraitProbe;
     $this->mapped = new FcmTraitMappedProbe;
-    $this->importer = $this->createMock(AssetImporter::class);
+    $this->importer = $this::createStub(AssetImporter::class);
 });
 
 afterEach(function (): void {

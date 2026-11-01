@@ -380,7 +380,7 @@ it('forwards the attachment page URL from the image overwrite handler to the sin
 
     // Typed PHPUnit mocks satisfy the parameter types without a Mockery-specific
     // expectation API, matching the convention in the sibling Integration tests.
-    $downloader = $this->createMock(AssetDownloader::class);
+    $downloader = $this::createStub(AssetDownloader::class);
     $downloader->method('download')->willReturn('site/photo.jpg');
 
     $metadataSetter = $this->createMock(MetadataSetter::class);

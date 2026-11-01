@@ -135,7 +135,7 @@ it('leaves a root link to a redirect domain unmodified', function (string $wordP
         $wordPressUrl,
         'default',
         redirectDomainAssetImporter(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)->toBe($wordPressUrl);
@@ -165,7 +165,7 @@ it('leaves a root link to a redirect domain unmodified in page-body HTML', funct
         $html,
         'default',
         redirectDomainAssetImporter(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)
@@ -186,7 +186,7 @@ it('still rewrites a same-site link, so the cases above are not vacuous', functi
         REDIRECT_TEST_BASE.'/kb/an-article/',
         'default',
         redirectDomainAssetImporter(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)->toBe('statamic://entry::4242');

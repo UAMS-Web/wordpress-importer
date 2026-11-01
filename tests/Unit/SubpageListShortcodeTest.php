@@ -38,7 +38,7 @@ beforeEach(function (): void {
     ImportWarningManager::clearWarnings();
 
     $this->processor = new ShortcodeProcessor;
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 });
 
 afterEach(function (): void {

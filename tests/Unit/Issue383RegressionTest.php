@@ -29,8 +29,8 @@ it('sets the alt override from the img alt regardless of the attachment id type'
     $result = $processor->process(
         $context,
         'default',
-        $this->createMock(AssetImporter::class),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(AssetImporter::class),
+        $this::createStub(OutputInterface::class),
         [],
         null
     );

@@ -114,7 +114,7 @@ function ncmEmail(array $overrides = []): array
 }
 
 it('hands the asset importer to the plugin hook only when it is one', function (): void {
-    $importer = $this->createMock(AssetImporter::class);
+    $importer = $this::createStub(AssetImporter::class);
     $export = ['fields' => [], 'actions' => [ncmEmail()]];
 
     $withImporter = new NinjaConfigurationRecorder;

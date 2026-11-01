@@ -9,7 +9,7 @@ declare(strict_types=1);
  * FormCreator, configures its email notifications, and caches the result for the rest of the
  * import. The Feature suite exercises that through real imports, which the gate never runs, so
  * these tests drive the coordinators directly with FormCreator and the configuration manager
- * replaced by mocks. Statamic is booted only for the `Form` objects and the `Log` facade.
+ * replaced by test doubles. Statamic is booted only for the `Form` objects and the `Log` facade.
  *
  * @command  php vendor/bin/pest tests/Integration/FormCreationCoordinatorTest.php
  */
@@ -35,9 +35,9 @@ use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 uses(StatamicTestCase::class);
 
 beforeEach(function (): void {
-    $this->dataManager = $this->createMock(BaseDataManager::class);
-    $this->creator = $this->createMock(FormCreator::class);
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->dataManager = $this::createStub(BaseDataManager::class);
+    $this->creator = $this::createStub(FormCreator::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 });
 
 afterEach(function (): void {
@@ -82,7 +82,7 @@ function fccCoordinator(
         default => throw new LogicException("No configuration manager for {$plugin}."),
     };
 
-    // FormCreator is built inside the constructor, so a mock is swapped in afterwards.
+    // FormCreator is built inside the constructor, so a double is swapped in afterwards.
     if ($creator instanceof FormCreator) {
         (new ReflectionProperty($coordinator, 'formCreator'))->setValue($coordinator, $creator);
     }
@@ -152,13 +152,15 @@ function fccNames(string $plugin): array
 dataset('form plugins', ['formidable', 'gravity', 'ninja']);
 
 it('creates the form from the matching export, configures its email and caches it', function (string $plugin): void {
+    $creator = $this->createMock(FormCreator::class);
+
     $configuration = $this->createMock(fccConfigurationClass($plugin));
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $configuration, $this->creator);
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $configuration, $creator);
     ['data' => $data, 'form' => $form] = fccExport($plugin);
     $statamicForm = FormFacade::make('contact_us');
 
     // The whole export is passed as the last argument, so a nested form can reach its siblings.
-    $this->creator->expects($this->once())->method('createForm')->with($form, 'Main Site', 'default', fccNames($plugin)['name'], null, $data)->willReturn($statamicForm);
+    $creator->expects($this->once())->method('createForm')->with($form, 'Main Site', 'default', fccNames($plugin)['name'], null, $data)->willReturn($statamicForm);
     $configuration->expects($this->once())->method('configureFormEmailSettings')->with($statamicForm, $form, 'default', $this->assetImporter);
 
     expect(fccCreate($coordinator, 7, $data, $this->assetImporter))->toBe($statamicForm)
@@ -180,13 +182,15 @@ it('creates the form from the matching export, configures its email and caches i
 })->with('form plugins');
 
 it('logs a warning and creates nothing when the form is not in the export', function (string $plugin, int $formId): void {
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)), $this->creator);
+    $creator = $this->createMock(FormCreator::class);
+
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $this::createStub(fccConfigurationClass($plugin)), $creator);
     ['data' => $data] = fccExport($plugin);
     $names = fccNames($plugin);
     $log = Log::spy();
     ProcessingContext::setWordPressPageLink('https://www.uams.edu/contact/');
 
-    $this->creator->expects($this->never())->method('createForm');
+    $creator->expects($this->never())->method('createForm');
 
     expect(fccCreate($coordinator, $formId, $data, $this->assetImporter))->toBeNull()
         ->and($coordinator->getCreatedFormsCount())->toBe(0);
@@ -205,31 +209,37 @@ it('logs a warning and creates nothing when the form is not in the export', func
 ]);
 
 it('treats an empty Ninja Forms export as not found', function (): void {
-    $coordinator = fccCoordinator('ninja', $this->dataManager, $this->createMock(NinjaFormConfigurationManager::class), $this->creator);
+    $creator = $this->createMock(FormCreator::class);
+
+    $coordinator = fccCoordinator('ninja', $this->dataManager, $this::createStub(NinjaFormConfigurationManager::class), $creator);
     Log::spy();
 
-    $this->creator->expects($this->never())->method('createForm');
+    $creator->expects($this->never())->method('createForm');
 
     expect(fccCreate($coordinator, 7, [7 => []], $this->assetImporter))->toBeNull()
         ->and(fccCreate($coordinator, 8, [8 => 'not an export'], $this->assetImporter))->toBeNull();
 });
 
 it('does not match a Gravity Forms or Formidable Forms form whose id is not numeric', function (string $plugin): void {
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)), $this->creator);
+    $creator = $this->createMock(FormCreator::class);
+
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $this::createStub(fccConfigurationClass($plugin)), $creator);
     Log::spy();
 
     // (int) 'abc' is 0, so without the numeric check this form would answer a request for 0.
-    $this->creator->expects($this->never())->method('createForm');
+    $creator->expects($this->never())->method('createForm');
 
     expect(fccCreate($coordinator, 0, [['id' => 'abc', 'title' => 'Not numeric']], $this->assetImporter))->toBeNull();
 })->with(['formidable', 'gravity']);
 
 it('neither configures nor caches a form FormCreator could not create', function (string $plugin): void {
+    $creator = $this->createMock(FormCreator::class);
+
     $configuration = $this->createMock(fccConfigurationClass($plugin));
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $configuration, $this->creator);
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $configuration, $creator);
     ['data' => $data] = fccExport($plugin);
 
-    $this->creator->expects($this->exactly(2))->method('createForm')->willReturn(null);
+    $creator->expects($this->exactly(2))->method('createForm')->willReturn(null);
     $configuration->expects($this->never())->method('configureFormEmailSettings');
 
     expect(fccCreate($coordinator, 7, $data, $this->assetImporter))->toBeNull()
@@ -239,7 +249,7 @@ it('neither configures nor caches a form FormCreator could not create', function
 })->with('form plugins');
 
 it('reports no handle for a cached form that has none', function (string $plugin): void {
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)), $this->creator);
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $this::createStub(fccConfigurationClass($plugin)), $this->creator);
     ['data' => $data] = fccExport($plugin);
 
     $this->creator->method('createForm')->willReturn(FormFacade::make());
@@ -264,14 +274,14 @@ it('passes the page data mapping on to the configuration manager', function (str
 
 it('accepts only its own plugin coordinator, and hands it to FormCreator', function (string $plugin): void {
     // Built without a coordinator; the FormCreator its constructor made is the one read back.
-    $coordinator = fccCoordinator($plugin, $this->dataManager, $this->createMock(fccConfigurationClass($plugin)));
+    $coordinator = fccCoordinator($plugin, $this->dataManager, $this::createStub(fccConfigurationClass($plugin)));
     $creator = (new ReflectionProperty($coordinator, 'formCreator'))->getValue($coordinator);
     $own = match ($plugin) {
-        'formidable' => $this->createMock(FormidableFormsCoordinator::class),
-        'gravity' => $this->createMock(GravityFormsCoordinator::class),
-        default => $this->createMock(NinjaFormsCoordinator::class),
+        'formidable' => $this::createStub(FormidableFormsCoordinator::class),
+        'gravity' => $this::createStub(GravityFormsCoordinator::class),
+        default => $this::createStub(NinjaFormsCoordinator::class),
     };
-    $other = $plugin === 'gravity' ? $this->createMock(FormidableFormsCoordinator::class) : $this->createMock(GravityFormsCoordinator::class);
+    $other = $plugin === 'gravity' ? $this::createStub(FormidableFormsCoordinator::class) : $this::createStub(GravityFormsCoordinator::class);
 
     if (! $creator instanceof FormCreator) {
         throw new LogicException('The constructor built no FormCreator.');
@@ -290,9 +300,9 @@ it('accepts only its own plugin coordinator, and hands it to FormCreator', funct
 
 it('starts with the coordinator it was constructed with', function (string $plugin): void {
     $coordinator = match ($plugin) {
-        'formidable' => new FormidableFormCreationCoordinator($this->dataManager, $this->createMock(FormidableFormConfigurationManager::class), $own = $this->createMock(FormidableFormsCoordinator::class)),
-        'gravity' => new GravityFormCreationCoordinator($this->dataManager, $this->createMock(GravityFormConfigurationManager::class), $own = $this->createMock(GravityFormsCoordinator::class)),
-        default => new NinjaFormCreationCoordinator($this->dataManager, $this->createMock(NinjaFormConfigurationManager::class), $own = $this->createMock(NinjaFormsCoordinator::class)),
+        'formidable' => new FormidableFormCreationCoordinator($this->dataManager, $this::createStub(FormidableFormConfigurationManager::class), $own = $this::createStub(FormidableFormsCoordinator::class)),
+        'gravity' => new GravityFormCreationCoordinator($this->dataManager, $this::createStub(GravityFormConfigurationManager::class), $own = $this::createStub(GravityFormsCoordinator::class)),
+        default => new NinjaFormCreationCoordinator($this->dataManager, $this::createStub(NinjaFormConfigurationManager::class), $own = $this::createStub(NinjaFormsCoordinator::class)),
     };
 
     // The constructor gives the same coordinator to the FormCreator it builds.

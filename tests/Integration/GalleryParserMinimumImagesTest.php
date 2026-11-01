@@ -95,9 +95,9 @@ it('keeps a gallery that imports exactly one valid image', function (): void {
 it('drops a gallery that imports zero valid images and still warns', function (): void {
     $logSpy = Log::spy();
 
-    // A typed PHPUnit mock (AssetImporter&MockObject) satisfies the AssetImporter
+    // A typed PHPUnit stub (AssetImporter&Stub) satisfies the AssetImporter
     // parameter without any Mockery-specific expectation API.
-    $assetImporter = $this->createMock(AssetImporter::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
     $assetImporter->method('getUploadImages')->willReturn(true);
 
     // Import fails for every id, so no valid image survives.

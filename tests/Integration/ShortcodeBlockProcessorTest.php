@@ -68,7 +68,7 @@ beforeEach(function (): void {
     $this->processor = new ShortcodeBlockProcessor;
 
     // Mock AssetImporter since no real asset processing is exercised
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 
     // DOMDocument for building test HTML structures
     $this->doc = new DOMDocument;
