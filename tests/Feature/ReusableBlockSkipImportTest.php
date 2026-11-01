@@ -5,19 +5,21 @@ declare(strict_types=1);
 use Illuminate\Testing\PendingCommand;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as EntryFacade;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
 use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
 /**
- * Proves a reference to a reusable block that "Skip matching files" skipped
- * resolves through a real import (#245).
+ * Proves a page's reference to a reusable block resolves on a "Skip matching files"
+ * run through a real import (#245).
  *
  * A page refers to a block before the block is imported, so the reference is
  * deferred and resolved through `DeferredProcessingCoordinator`, against
- * `WpBlockRegistry`. Only the import command runs that whole chain, and it needs
- * the host app's content model. The registration itself is pinned in the
- * standalone suite by `ReusableBlockEntryCreatorTest`.
+ * `WpBlockRegistry`. The block itself is saved, not skipped: `wp_block` is not a
+ * content type the command offers, and `ReusableBlockCoordinator`'s creator keeps
+ * its default of overwriting, so this passes with or without the skip branch's
+ * registration, which `ReusableBlockEntryCreatorTest` pins.
  *
  * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/ReusableBlockSkipImportTest.php
  */
@@ -118,7 +120,7 @@ function skipImportReusableSets(Entry $page): array
     return $sets;
 }
 
-it('points a new page at a block that was skipped as already imported', function (): void {
+it('points a new page at a block on a run that skips matching files', function (): void {
     $block = skipImportItem('wp_block', 94501, 'zz-skip-block', '<!-- wp:paragraph --><p>Reused.</p><!-- /wp:paragraph -->');
     $reference = '<!-- wp:paragraph --><p>Page.</p><!-- /wp:paragraph --><!-- wp:block {"ref":94501} /-->';
     $first = $this->createTemporaryXmlFile($this->buildXmlContent([$block, skipImportItem('page', 94502, 'zz-skip-first', $reference)]));
@@ -130,6 +132,9 @@ it('points a new page at a block that was skipped as already imported', function
 
         expect($existing)->toBeInstanceOf(Entry::class);
 
+        // A new run starts with an empty registry, and this one shares the process
+        WpBlockRegistry::clear();
+
         skipImportRun($this, $second, 'Skip matching files');
         $page = skipImportEntry('pages', 'zz-skip-second');
 
@@ -137,7 +142,7 @@ it('points a new page at a block that was skipped as already imported', function
 
         if ($page instanceof Entry && $existing instanceof Entry) {
             expect(skipImportReusableSets($page))->toHaveCount(1)
-                ->and(skipImportReusableSets($page)[0] ?? null)->toMatchArray(['content' => [$existing->id()]]);
+                ->and(skipImportReusableSets($page)[0] ?? null)->toMatchArray(['content' => $existing->id()]);
         }
     } finally {
         foreach ([['pages', 'zz-skip-first'], ['pages', 'zz-skip-second'], ['reusable_content', 'zz-skip-block']] as [$collection, $slug]) {
