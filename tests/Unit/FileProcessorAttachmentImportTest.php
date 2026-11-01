@@ -18,6 +18,7 @@ declare(strict_types=1);
 use PHPUnit\Framework\MockObject\Stub;
 use Symfony\Component\Console\Output\BufferedOutput;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 
 /**
@@ -128,11 +129,13 @@ it('hands the importer the file url, title, metadata and attachment page', funct
     expect($run['result'])->toBe('files/imported.pdf')
         ->and($run['calls'])->toHaveCount(1);
 
-    [$url, $site, , $container, , $pageUrl, $title, $metadata, $attachmentPage] = $run['calls'][0];
+    [$url, $site, , $container, $policy, $pageUrl, $title, $metadata, $attachmentPage] = $run['calls'][0];
 
     expect($url)->toBe('https://example.uams.edu/wp-content/uploads/annual.pdf')
         ->and($site)->toBe('default')
         ->and($container)->toBe('files')
+        // An attachment on another site is skipped
+        ->and($policy)->toBe(SameSitePolicy::SKIP_DIFFERENT_SITE)
         ->and($pageUrl)->toBeNull()
         ->and($title)->toBe('Annual Report')
         ->and($metadata)->toBe(['creator' => 'UAMS Communications'])
@@ -174,6 +177,34 @@ it('falls back to the attachment link when the export carries no file url', func
 
     expect($run['calls'])->toHaveCount(1)
         ->and($run['calls'][0][0])->toBe('https://example.uams.edu/files/annual.pdf');
+});
+
+it('hands the importer the same-site policy it is given', function (): void {
+    $importer = $this->createMock(AssetImporter::class);
+    $importer->method('getUploadFiles')->willReturn(true);
+    $importer->expects($this->once())
+        ->method('importFile')
+        ->with(
+            'https://uams.edu/a.pdf',
+            'default',
+            $this::anything(),
+            'files',
+            SameSitePolicy::ALWAYS_IMPORT,
+            null,
+            null,
+            null,
+            null
+        )
+        ->willReturn('files/a.pdf');
+
+    expect(FileProcessor::importFileWithDisabledUploadHandling(
+        'https://uams.edu/a.pdf',
+        'default',
+        $importer,
+        new BufferedOutput,
+        'files',
+        sameSitePolicy: SameSitePolicy::ALWAYS_IMPORT
+    ))->toBe('files/a.pdf');
 });
 
 it('imports nothing for a blank file url', function (bool $uploadFiles): void {

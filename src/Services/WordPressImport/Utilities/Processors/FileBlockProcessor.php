@@ -9,6 +9,7 @@ use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor as FileProcessorUtility;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
@@ -108,7 +109,14 @@ class FileBlockProcessor implements BlockProcessorInterface
             return null;
         }
 
+        // ---
         // Import file with disabled upload handling using utility method
+        //
+        // The block is dropped when no path comes back, and an author can point one at
+        // a file on a sibling site, so a file on another site is imported. Linking it
+        // instead would leave a URL that stops working when WordPress is retired. 41 of
+        // the corpus's 1,341 `wp:file` blocks point off their own site (#232).
+        // ---
         $importedPath = FileProcessorUtility::importFileWithDisabledUploadHandling(
             $fileUrl,
             $site,
@@ -116,7 +124,8 @@ class FileBlockProcessor implements BlockProcessorInterface
             $output,
             'files',
             'wp:file block',
-            'FileBlockProcessor::process'
+            'FileBlockProcessor::process',
+            sameSitePolicy: SameSitePolicy::ALWAYS_IMPORT
         );
 
         // Check if import was successful

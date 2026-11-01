@@ -21,6 +21,7 @@ use Statamic\Facades\Asset as AssetFacade;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSiteDecision;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
@@ -227,19 +228,22 @@ describe('applying the same-site policy', function (): void {
     it('imports a same-site asset whatever the policy, saying nothing', function (SameSitePolicy $policy): void {
         $output = new BufferedOutput;
 
-        expect(AssetUtils::applySameSitePolicy('https://uams.edu/news/a.jpg', $policy, $output, 'https://uams.edu/news'))->toBeNull()
+        expect(AssetUtils::applySameSitePolicy('https://uams.edu/news/a.jpg', $policy, $output, 'https://uams.edu/news'))->toEqual(SameSiteDecision::import())
             ->and($output->fetch())->toBe('');
     })->with(SameSitePolicy::cases());
 
-    it('applies the policy to an asset on another site', function (SameSitePolicy $policy, ?string $expected, string $message): void {
+    it('applies the policy to an asset on another site', function (SameSitePolicy $policy, bool $import, ?string $earlyResult, string $message): void {
         $output = new BufferedOutput;
 
-        expect(AssetUtils::applySameSitePolicy('https://example.org/a.jpg', $policy, $output, 'https://uams.edu/news'))->toBe($expected)
+        $decision = AssetUtils::applySameSitePolicy('https://example.org/a.jpg', $policy, $output, 'https://uams.edu/news');
+
+        expect($decision->import)->toBe($import)
+            ->and($decision->earlyResult)->toBe($earlyResult)
             ->and($output->fetch())->toBe($message.PHP_EOL);
     })->with([
-        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, null, '  - Asset not on same site detected. Skipping download.'],
-        'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, 'https://example.org/a.jpg', "  - Asset not on same site detected. Linking directly to 'https://example.org/a.jpg'."],
-        'import' => [SameSitePolicy::ALWAYS_IMPORT, null, "  - Asset not on same site detected. Importing directly from 'https://example.org/a.jpg'."],
+        'skip' => [SameSitePolicy::SKIP_DIFFERENT_SITE, false, null, "  - Asset not on same site detected. Skipping download of 'https://example.org/a.jpg'."],
+        'link' => [SameSitePolicy::LINK_DIFFERENT_SITE, false, 'https://example.org/a.jpg', "  - Asset not on same site detected. Linking directly to 'https://example.org/a.jpg'."],
+        'import' => [SameSitePolicy::ALWAYS_IMPORT, true, null, "  - Asset not on same site detected. Importing directly from 'https://example.org/a.jpg'."],
     ]);
 });
 
