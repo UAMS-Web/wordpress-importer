@@ -19,7 +19,10 @@ declare(strict_types=1);
  */
 
 use Statamic\Fieldtypes\Bard\LinkMark;
+use Symfony\Component\Console\Output\BufferedOutput;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
 use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardTexstyleAttributeMapper;
+use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
@@ -175,7 +178,7 @@ it('copies an element id onto the matching node', function (array $node, string 
 })->with([
     'heading' => [texstyleNode('heading', ['level' => 3], [texstyleText('Hi')]), '<h3 id="top">Hi</h3>', ['level' => 3, 'clearboth' => null, 'id' => 'top']],
     'paragraph' => [texstyleNode('paragraph', [], [texstyleText('Hi')]), '<p id="intro">Hi</p>', ['id' => 'intro']],
-    'unordered list, under the name the mapper uses' => [texstyleNode('unorderedList', [], []), '<ul id="u"></ul>', ['id' => 'u']],
+    'bullet list' => [texstyleNode('bulletList', [], []), '<ul id="u"></ul>', ['id' => 'u']],
     'ordered list' => [texstyleNode('orderedList', [], []), '<ol id="o"></ol>', ['start' => null, 'reversed' => null, 'list_style' => null, 'id' => 'o']],
     'code block' => [texstyleNode('codeBlock', [], [texstyleText('x = 1')]), '<pre id="code">x = 1</pre>', ['id' => 'code']],
     'horizontal rule' => [texstyleNode('horizontalRule', []), '<hr id="rule">', ['clearboth' => null, 'id' => 'rule']],
@@ -183,12 +186,19 @@ it('copies an element id onto the matching node', function (array $node, string 
     'an empty id' => [texstyleNode('paragraph', [], [texstyleText('Hi')]), '<p id="">Hi</p>', ['id' => null]],
 ]);
 
-it('drops the id of a bullet list, a blockquote and an image', function (array $node, string $html, array $attrs): void {
-    // Characterization of #149: Bard names an unordered list `bulletList`, which the
-    // mapper does not know, and it reads no id from a blockquote or an image
+it('copies the id of a list through to its Bard node', function (): void {
+    $nodes = TextProcessor::processForBard('<ul id="u"><li id="l">A</li></ul>', 'default', new AssetImporter, new BufferedOutput);
+    $list = $nodes[0] ?? null;
+    $item = is_array($list) && is_array($list['content'] ?? null) ? ($list['content'][0] ?? null) : null;
+
+    expect(is_array($list) ? [$list['type'] ?? null, $list['attrs'] ?? null] : null)->toBe(['bulletList', ['id' => 'u']])
+        ->and(is_array($item) ? $item['attrs'] ?? null : null)->toBe(['id' => 'l']);
+});
+
+it('reads no id for a blockquote or an image, which BardParser never produces', function (array $node, string $html, array $attrs): void {
+    // Recorded on #149: the keys are configured, and the mapper stays silent on them
     expect(texstyleAttrs($node, $html))->toBe($attrs);
 })->with([
-    'bullet list' => [texstyleNode('bulletList', [], []), '<ul id="u"></ul>', []],
     'blockquote' => [texstyleNode('blockquote', [], [texstyleText('Q')]), '<blockquote id="q">Q</blockquote>', ['id' => null]],
     'image' => [texstyleNode('image', ['src' => 'a.jpg']), '<img id="i" src="a.jpg">', ['src' => 'a.jpg', 'id' => null]],
 ]);
@@ -247,7 +257,7 @@ it('reads an ordered list start, reversed and list style', function (string $htm
 ]);
 
 it('reads nothing an ordered list carries from an unordered one', function (): void {
-    $list = texstyleNode('unorderedList', [], [texstyleNode('listItem', [], [texstyleText('One')])]);
+    $list = texstyleNode('bulletList', [], [texstyleNode('listItem', [], [texstyleText('One')])]);
 
     expect(texstyleAttrs($list, '<ul start="3" reversed class="clear upper-roman"><li>One</li></ul>'))->toBe(['id' => null]);
 });

@@ -16,6 +16,10 @@ use Illuminate\Support\Str;
  * Extracts HTML attributes (class, style, id, start, reversed) from DOM elements
  * and maps them to corresponding Bard Texstyle attributes (clearboth, id, start,
  * reversed, list_style) for applicable Bard node types.
+ *
+ * Bard Texstyle also accepts an id on `blockquote` and `image`, and this reads
+ * neither: `BardParser` does not register those nodes, so an import never holds
+ * one (#149).
  */
 class BardTexstyleAttributeMapper
 {
@@ -1357,7 +1361,7 @@ class BardTexstyleAttributeMapper
         // without a level matches no element either way.
         $tagMap = [
             'paragraph' => 'p',
-            'unorderedList' => 'ul',
+            'bulletList' => 'ul',
             'orderedList' => 'ol',
             'codeBlock' => 'pre',
             'horizontalRule' => 'hr',
@@ -1453,8 +1457,11 @@ class BardTexstyleAttributeMapper
     private static function getApplicableAttributes(
         string $nodeType
     ): array {
-        // Convert Bard node type (camelCase) to config key (snake_case)
-        $configKey = Str::snake($nodeType);
+        // Convert Bard node type (camelCase) to config key (snake_case). Bard's
+        // `bulletList` is the one type Bard Texstyle configures under another name.
+        $configKey = $nodeType === 'bulletList'
+            ? 'unordered_list'
+            : Str::snake($nodeType);
 
         // Get attributes from config file
         $attributes = \config('statamic.bard_texstyle.attributes', []);
