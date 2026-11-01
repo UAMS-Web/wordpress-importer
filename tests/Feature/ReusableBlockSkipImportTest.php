@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Illuminate\Testing\PendingCommand;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as EntryFacade;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpBlockRegistry;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 uses(WordPressImportTestCase::class);
 
