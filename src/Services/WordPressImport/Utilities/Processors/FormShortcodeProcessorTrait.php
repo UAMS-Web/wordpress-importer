@@ -46,7 +46,7 @@ trait FormShortcodeProcessorTrait
         string $pluginName,
         ?string $pageSlug
     ): array {
-        // Extract id attribute, treat empty string as null
+        // Extract id attribute; everything downstream reads an empty one as absent
         $formId = $this->formIdFromAttributes($attributes);
 
         // Track form ID for import and linking
@@ -155,19 +155,12 @@ trait FormShortcodeProcessorTrait
      * Normalize a shortcode id attribute to int, string, or null.
      *
      * @param  array<int|string, mixed>  $attributes  Parsed shortcode attributes
-     * @return int|string|null Form ID when present and scalar, otherwise null
+     * @return int|string|null Form ID when it is an int, a string or a numeric float, otherwise null
      */
     private function formIdFromAttributes(
         array $attributes
     ): int|string|null {
-        if (
-            ! isset($attributes['id'])
-            || $attributes['id'] === ''
-        ) {
-            return null;
-        }
-
-        $formId = $attributes['id'];
+        $formId = $attributes['id'] ?? null;
 
         if (\is_int($formId) || \is_string($formId)) {
             return $formId;

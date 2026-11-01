@@ -95,7 +95,6 @@ trait FormBlockProcessorTrait
                 $processorName,
                 $pluginName,
                 $site,
-                $formId,
                 $attributes,
                 $pageSlug
             );
@@ -159,31 +158,16 @@ trait FormBlockProcessorTrait
     }
 
     /**
-     * Normalize a form block formId attribute to int, string, or null.
+     * Normalize a form block formId attribute to its string form, or null.
      *
      * @param  array<int|string, mixed>  $attributes  Block attributes from the form block comment
-     * @return int|string|null Form ID when present and numeric, otherwise null
+     * @return ?string Form ID when present and numeric, otherwise null
      */
     private function formIdFromBlockAttributes(
         array $attributes
-    ): int|string|null {
-        if (
-            ! isset($attributes['formId'])
-            || $attributes['formId'] === ''
-        ) {
-            return null;
-        }
+    ): ?string {
+        $formId = $attributes['formId'] ?? null;
 
-        $formId = $attributes['formId'];
-
-        if (! \is_numeric($formId)) {
-            return null;
-        }
-
-        if (\is_int($formId) || \is_string($formId)) {
-            return $formId;
-        }
-
-        return (string) $formId;
+        return \is_numeric($formId) ? (string) $formId : null;
     }
 }

@@ -170,6 +170,34 @@ it('escapes form handles in the set markup', function (): void {
     );
 });
 
+it('escapes attribute names in the set markup', function (): void {
+    $processor = new class extends GravityFormsBlockProcessor
+    {
+        /**
+         * Add a value whose key needs escaping.
+         *
+         * @param  array<int|string, mixed>  $values  The values array to modify
+         * @param  array<int|string, mixed>  $attributes  The block attributes
+         */
+        public function handleTitleAndDescription(array &$values, array $attributes): void
+        {
+            $values['a"b'] = 'x';
+        }
+    };
+
+    $result = $processor->process(
+        (new DOMDocument)->createComment(' wp:gravityforms/form {"formId":"5"} /'),
+        ['formId' => '5'],
+        'default',
+        (new ReflectionClass(AssetImporter::class))->newInstanceWithoutConstructor(),
+        new BufferedOutput,
+        [],
+        []
+    );
+
+    expect($result['html'] ?? null)->toContain('data-set-attr-a&quot;b="x"');
+});
+
 it('accepts a numeric float form ID and tracks its string form', function (): void {
     $result = processGravityBlock(['formId' => 7.0, 'title' => false, 'description' => false]);
 

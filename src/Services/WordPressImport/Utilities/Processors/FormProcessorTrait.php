@@ -97,7 +97,6 @@ trait FormProcessorTrait
      * @param  string  $processorName  The processor class name for logging
      * @param  string  $pluginName  The plugin name for logging
      * @param  string  $site  The site handle
-     * @param  string|int|null  $formId  The form ID
      * @param  array<int|string, mixed>  $attributes  The attributes array
      * @param  ?string  $pageSlug  The page slug (optional)
      */
@@ -105,7 +104,6 @@ trait FormProcessorTrait
         string $processorName,
         string $pluginName,
         string $site,
-        string|int|null $formId,
         array $attributes,
         ?string $pageSlug = null
     ): void {
@@ -114,7 +112,7 @@ trait FormProcessorTrait
             [
                 'site' => $site,
                 'pageSlug' => $pageSlug ?? 'none',
-                'form_id' => $formId ?? 'none',
+                'form_id' => 'none',
                 'attributes' => $attributes,
             ]
         );
@@ -181,6 +179,8 @@ trait FormProcessorTrait
             return null;
         }
 
+        // PHP normalizes an array key anyway, so the cast only states the key type
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
         // Check the appropriate static cache based on plugin name
         if ($pluginName === 'Gravity Forms') {
@@ -232,6 +232,8 @@ trait FormProcessorTrait
         string $formHandle,
         string $pluginName
     ): void {
+        // PHP normalizes an array key anyway, so the cast only states the key type
+        // @pest-mutate-ignore: RemoveStringCast
         $formIdString = (string) $formId;
 
         if ($pluginName === 'Gravity Forms') {

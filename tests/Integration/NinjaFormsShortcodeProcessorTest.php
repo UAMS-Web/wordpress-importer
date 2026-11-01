@@ -125,6 +125,39 @@ it('notes a missing form ID without tracking one', function (array $attributes):
     'empty id' => [['id' => '']],
 ]);
 
+it('ignores a handle cached under an empty ID when the shortcode names none', function (array $attributes): void {
+    setNinjaShortcodeHandles('createdNinjaFormsHandles', ['' => 'stray']);
+
+    expect(ninjaSetAttr(parseNinjaShortcode($attributes), 'values'))->toBe([
+        'type' => 'form',
+        'import_wordpress_notes' => 'Ninja Forms form ID not specified',
+    ]);
+})->with([
+    'no id' => [[]],
+    'empty id' => [['id' => '']],
+]);
+
+it('keeps a form ID that is not numeric, and the string form of a float', function (mixed $id, string $expected): void {
+    $set = parseNinjaShortcode(['id' => $id]);
+
+    expect(ninjaSetAttr($set, 'values'))->toBe([
+        'type' => 'form',
+        'import_wordpress_notes' => "Ninja Forms form ID {$expected}",
+    ])
+        ->and(NinjaFormsShortcodeProcessor::getFormIds())->toBe([$expected]);
+})->with([
+    'a slug' => ['contact-us', 'contact-us'],
+    'a float' => [7.5, '7.5'],
+]);
+
+it('drops an ID that is neither an int, a string nor a float', function (): void {
+    expect(ninjaSetAttr(parseNinjaShortcode(['id' => true]), 'values'))->toBe([
+        'type' => 'form',
+        'import_wordpress_notes' => 'Ninja Forms form ID not specified',
+    ])
+        ->and(NinjaFormsShortcodeProcessor::getFormIds())->toBe([]);
+});
+
 it('gives each set its own row ID', function (): void {
     $first = parseNinjaShortcode(['id' => '1']);
     $second = parseNinjaShortcode(['id' => '1']);
