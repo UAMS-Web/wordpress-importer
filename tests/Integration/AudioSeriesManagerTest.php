@@ -354,6 +354,8 @@ function audioSeriesManagerConfig(bool $useSiteDirectory = false): AudioSeriesCo
  * @param  string  $url  The file URL
  * @param  ?string  $segmentTitle  The segment title
  * @param  ?AudioSeriesConfig  $config  The series
+ * @param  string  $postId  The post id
+ * @param  string  $postTitle  The post title
  * @return ?string The imported path
  */
 function audioSeriesManagerImport(
@@ -361,7 +363,9 @@ function audioSeriesManagerImport(
     BufferedOutput $output,
     string $url = 'https://x.test/a.mp3',
     ?string $segmentTitle = null,
-    ?AudioSeriesConfig $config = null
+    ?AudioSeriesConfig $config = null,
+    string $postId = '7',
+    string $postTitle = '<b>Episode</b> One'
 ): ?string {
     return AudioSeriesManager::importAudioSeriesFile(
         $url,
@@ -370,8 +374,8 @@ function audioSeriesManagerImport(
         $importer,
         $config ?? audioSeriesManagerConfig(),
         '2024-01-02 10:00:00',
-        '7',
-        '<b>Episode</b> One',
+        $postId,
+        $postTitle,
         $segmentTitle
     );
 }
@@ -591,14 +595,49 @@ it('answers from the key the cache is read under, without importing', function (
     expect(audioSeriesManagerImport($importer, new BufferedOutput, segmentTitle: $segmentTitle))->toBe('cached/path.mp3')
         ->and($importer->handler->imports)->toBe([]);
 })->with([
-    'no segment' => [null, 'https://x.test/a.mp3|null|7|Episode One'],
-    'an empty segment' => ['', 'https://x.test/a.mp3|null|7|Episode One'],
-    'a segment, tags stripped' => ['<i>Part</i> 2', 'https://x.test/a.mp3|Part 2|7|Episode One'],
+    'no segment' => [null, 'https://x.test/a.mp3|null|7|Episode One:files'],
+    'an empty segment' => ['', 'https://x.test/a.mp3|null|7|Episode One:files'],
+    'a segment, tags stripped' => ['<i>Part</i> 2', 'https://x.test/a.mp3|Part 2|7|Episode One:files'],
 ]);
+
+it('imports a file once for a repeated call, and answers both calls with its path', function (): void {
+    $importer = new AudioSeriesManagerImporter(new AudioSeriesManagerRecordingHandler);
+    $output = new BufferedOutput;
+
+    expect(audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 2'))->toBe('imported/path.mp3')
+        ->and(audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 2'))->toBe('imported/path.mp3')
+        ->and($importer->handler->imports)->toHaveCount(1);
+});
+
+it('imports again for a call that differs in one part of the key', function (string $part): void {
+    $importer = new AudioSeriesManagerImporter(new AudioSeriesManagerRecordingHandler);
+    $output = new BufferedOutput;
+
+    audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 2');
+
+    match ($part) {
+        'url' => audioSeriesManagerImport($importer, $output, url: 'https://x.test/b.mp3', segmentTitle: 'Part 2'),
+        'segment title' => audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 3'),
+        'post id' => audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 2', postId: '8'),
+        default => audioSeriesManagerImport($importer, $output, segmentTitle: 'Part 2', postTitle: 'Episode Two'),
+    };
+
+    expect($importer->handler->imports)->toHaveCount(2);
+})->with(['url', 'segment title', 'post id', 'post title']);
+
+it('tries a failed import again on the next call', function (?string $answer): void {
+    $importer = new AudioSeriesManagerImporter(new AudioSeriesManagerRecordingHandler($answer));
+    $output = new BufferedOutput;
+
+    audioSeriesManagerImport($importer, $output);
+    audioSeriesManagerImport($importer, $output);
+
+    expect($importer->handler->imports)->toHaveCount(2);
+})->with(['null' => [null], 'an empty path' => ['']]);
 
 it('answers nothing for a cached value that is not a path', function (): void {
     $importer = new AudioSeriesManagerImporter(new AudioSeriesManagerRecordingHandler);
-    AudioSeriesManagerImporter::seed('https://x.test/a.mp3|null|7|Episode One', ['not', 'a', 'path']);
+    AudioSeriesManagerImporter::seed('https://x.test/a.mp3|null|7|Episode One:files', ['not', 'a', 'path']);
 
     expect(audioSeriesManagerImport($importer, new BufferedOutput))->toBeNull()
         ->and($importer->handler->imports)->toBe([]);

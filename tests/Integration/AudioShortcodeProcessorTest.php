@@ -294,7 +294,7 @@ it('imports through the series manager into the series container when the post c
     $importer = Mockery::mock(AssetImporter::class);
     audioShortcodeExpects($importer, 'getUploadFiles')->andReturnTrue();
     audioShortcodeExpects($importer, 'getBaseBlogUrl')->andReturnNull();
-    audioShortcodeExpects($importer, 'getFileCache')->andReturn([$url.'|Part A|42|Title' => 'cached.mp3']);
+    audioShortcodeExpects($importer, 'getFileCacheEntry')->with($url.'|Part A|42|Title')->andReturn('cached.mp3');
     $importer->shouldNotReceive('importFile');
     $written = audioShortcodeAsset('podcasts::cached.mp3');
 

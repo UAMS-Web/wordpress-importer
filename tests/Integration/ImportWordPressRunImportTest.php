@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use App\Services\BardContentSanitizer;
 use Illuminate\Console\Command;
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\OutputStyle;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Prompts\Prompt;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\GlobalSet;
 use Statamic\Facades\Site;
@@ -1362,6 +1365,7 @@ function iwriInteractive(ImportWordPress $command, array $parts, string $answers
         {
             $this->import->setInput($this->input);
             $this->import->setOutput($this->output);
+            (new ReflectionProperty(Command::class, 'components'))->setValue($this->import, $this->components);
             $status = (new ReflectionMethod(ImportWordPress::class, 'runImportForParts'))->invoke($this->import, $this->parts);
             $this->status = is_int($status) ? $status : -1;
 
@@ -1370,6 +1374,7 @@ function iwriInteractive(ImportWordPress $command, array $parts, string $answers
     };
 
     $runner->setLaravel(app());
+    $command->setLaravel(app());
     $runner->run($input, $buffer);
 
     return [$runner->status, str_replace(PHP_EOL, "\n", $buffer->fetch())];
@@ -1600,6 +1605,49 @@ it('asks each overwrite question, and whether to import more, when it can', func
     'Laravel Prompts' => [true, 'How should existing table entries with matching IDs be handled?'],
     'Symfony questions' => [false, "How should existing entries in the 'tables' collection with matching IDs be handled?"],
 ]);
+
+it('shows the next question after a command runs inside the import', function (bool $prompts): void {
+    iwriCollection('pages');
+    [$command] = iwriCommand();
+    $command->prompts = $prompts;
+
+    // A host listener on a synchronous queue runs its command while an entry saves,
+    // and a question drawn into that command's buffer would wait on the test's STDIN, so
+    // the test fails here rather than blocking there
+    IwriEntries::$onCreate = static function () use ($command): void {
+        Artisan::call('env');
+
+        // A test run leaves the console events off, so this says what a host app's run does
+        event(new CommandFinished('env', new ArrayInput([]), new LfBufferedOutput, 0));
+
+        expect((new ReflectionMethod(Prompt::class, 'output'))->invoke(null))
+            ->toBe((new ReflectionProperty(Command::class, 'output'))->getValue($command));
+    };
+
+    [$status, $output] = iwriInteractive($command, [iwriPart($this, [['type' => 'page']])], "\n\n\n\n");
+
+    expect($status)->toBe(0)
+        ->and($output)->toContain('Would you like to import more content?');
+})->with([
+    'Laravel Prompts' => [true],
+    'Symfony questions' => [false],
+]);
+
+it('leaves Laravel Prompts alone once the import has ended', function (): void {
+    iwriCollection('pages');
+    [$command] = iwriCommand();
+
+    iwriInteractive($command, [iwriPart($this, [['type' => 'page']])], "\n\n\n\n");
+
+    // Later commands in the process own their prompts, as this one's output shows
+    $later = new LfBufferedOutput;
+    Prompt::setOutput($later);
+    event(new CommandFinished('later', new ArrayInput([]), $later, 0));
+
+    $output = new ReflectionMethod(Prompt::class, 'output');
+
+    expect($output->invoke(null))->toBe($later);
+});
 
 it('takes the first option of each overwrite question when its answer is the default', function (): void {
     iwriCollection('pages');
