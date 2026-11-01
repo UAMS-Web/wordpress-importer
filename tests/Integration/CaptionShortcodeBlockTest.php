@@ -260,8 +260,8 @@ it('stores a caption as written, whether or not WpAutoP runs', function (string 
     $html = "Intro\n\n[caption id=\"attachment_1\" align=\"alignleft\" width=\"300\"]".$image.' '.$text."[/caption]\n\nOutro";
 
     // Bare text stays a text node without WpAutoP, so only the set's place is the same
-    foreach ([true => ['Intro', 'set', 'Outro'], false => ['text', 'set', 'text']] as $useWpAutoP => $summary) {
-        $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, (bool) $useWpAutoP);
+    foreach ([[true, ['Intro', 'set', 'Outro']], [false, ['text', 'set', 'text']]] as [$useWpAutoP, $summary]) {
+        $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
 
         expect(shortcodeBlockNodeSummary($nodes))->toBe($summary)
             ->and(Arr::get($nodes, '1.attrs.values.caption'))->toBe($expected);
