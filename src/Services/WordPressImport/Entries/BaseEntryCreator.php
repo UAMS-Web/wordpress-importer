@@ -1353,8 +1353,9 @@ abstract class BaseEntryCreator
 
                         // Loop until we find a unique slug
                         do {
-                            // Append counter to create unique slug
-                            $newSlug = "{$siteSpecificSlug}.{$counter}";
+                            // Append counter to create unique slug, in a form Statamic's
+                            // slug setter keeps, so a later run finds it (#193)
+                            $newSlug = "{$siteSpecificSlug}-{$counter}";
 
                             // Update cache key with new slug
                             $newCacheKey = "{$statamicTaxonomyHandle}::{$newSlug}";
