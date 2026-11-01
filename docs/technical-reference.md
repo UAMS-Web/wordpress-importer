@@ -1339,17 +1339,14 @@ The `src/Services/WordPressImport/Utilities` directory contains classes that pro
 
 ### SlugGenerator
 
-- **Purpose**: Generates unique slugs with hierarchical conflict resolution for entries.
+- **Purpose**: Generates the slug and ID for an entry.
 - **File Path**: `src/Services/WordPressImport/Utilities/SlugGenerator.php`
 - **Key Functionality**:
   - Consolidates slug generation logic from various entry creators.
-  - Provides hierarchical slug conflict resolution by checking if slugs conflict at the same parent level.
-  - **Uses `.` as separator for slug conflicts** (e.g., `about-us.1`, `about-us.2`) to match Statamic's default behavior.
-  - Eliminates the need for post-import renaming since generated slugs are already in the correct format.
-  - Handles both structured collections (with hierarchy) and flat taxonomies appropriately.
+  - Uses the base slug if there is one, otherwise a slug from the title, otherwise `item-{postId}`.
+  - Adds no suffix to a slug. Statamic resolves a file path conflict in the filename (`test.1.md`) and keeps the slug, and `BaseEntryCreator::saveEntry()` names an additional copy `{slug}_copy-{n}`.
 - **Methods**:
-  - `generateSlugAndId()`: Generates unique slugs and IDs for entries with hierarchical conflict checking.
-  - `generateTableSlugAndId()`: Generates unique slugs and IDs for table entries with specific format requirements.
+  - `generateSlugAndId()`: Returns the slug and an ID in the form `{slug}-{postId}-{random}`.
 
 ### AcfFieldNormalizer
 

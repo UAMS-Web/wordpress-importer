@@ -21,7 +21,9 @@ use Statamic\Facades\Site as SiteFacade;
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Facades\Taxonomy as TaxonomyFacade;
 use Statamic\Facades\Term as TermFacade;
+use Statamic\Sites\Site;
 use Statamic\Stache\Query\EntryQueryBuilder;
+use Statamic\Support\Str;
 use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Term;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -683,8 +685,8 @@ abstract class BaseEntryCreator
      * Handles entry saving based on the configured overwrite behavior:
      *   - "Overwrite": Deletes existing entry and saves new one.
      *   - "Skip": Skips saving if entry exists.
-     *   - "Create an additional file": Generates a new slug/ID and saves as a new
-     *     entry.
+     *   - "Create an additional file": Saves a new entry under `{slug}_copy-{n}`, with
+     *     a new ID if the existing entry holds the one given.
      *
      * Determines the published status from status_and_visibility if $published is
      * null, defaulting to false for drafts or pending entries.
@@ -723,7 +725,6 @@ abstract class BaseEntryCreator
         }
 
         $entryId = $entryIdValue;
-        $originalSlug = $entrySlug;
 
         // Determine published status if not explicitly set
         if ($published === null) {
@@ -767,17 +768,19 @@ abstract class BaseEntryCreator
 
                     // Handle case where additional entries should be created with unique slugs
                 case 'Create an additional file':
+                    $entrySlug = $this->additionalEntrySlug(
+                        $collectionHandle,
+                        $site,
+                        $entrySlug
+                    );
+
                     // ---
-                    // Number the copy `{slug}.1`, dropping a number the slug already
-                    // carries. This is all the path does until #340 is fixed: Statamic
-                    // stores a slug without its dot, so no stored slug matches a numbered
-                    // one and every copy takes `.1`, and the copy keeps the ID set above.
+                    // The entry drops `id` from its data below, so `id()` is the only id
+                    // it has. One the matched entry holds would save over that entry.
                     // ---
-                    $entrySlug = \preg_replace(
-                        '/\.\d+$/',
-                        '',
-                        $originalSlug
-                    ).'.1';
+                    if ($existingEntry->id() === $entryId) {
+                        $entryId = $entrySlug.'-'.Str::uuid();
+                    }
 
                     // Exit switch statement after handling additional file creation
                     break;
@@ -939,6 +942,54 @@ abstract class BaseEntryCreator
         );
 
         return $entry;
+    }
+
+    /**
+     * Find the slug for an additional copy of an entry.
+     *
+     * The search runs on the slug Statamic stores: a dot would not survive it, so a
+     * copy of `12` named `12.1` would land on `121`. An underscore survives it, and
+     * WordPress slugs do not read as a copy of another.
+     *
+     * @param  string  $collectionHandle  The collection handle
+     * @param  string  $site  The site handle
+     * @param  string  $entrySlug  The slug of the entry being copied
+     * @return string The first free `{slug}_copy-{n}`
+     */
+    private function additionalEntrySlug(
+        string $collectionHandle,
+        string $site,
+        string $entrySlug
+    ): string {
+        // Statamic slugs an entry's slug in its site's language when it reads it back
+        $siteModel = SiteFacade::get($site);
+        $storedSlug = self::mixedToStringValue(Str::slug(
+            $entrySlug,
+            '-',
+            $siteModel instanceof Site ? $siteModel->lang() : null
+        ));
+        $counter = 1;
+
+        do {
+            $copySlug = "{$storedSlug}_copy-$counter";
+            $counter++;
+
+            $query = $this->newEntryQuery();
+            $query->where(
+                'collection',
+                $collectionHandle
+            );
+            $query->where(
+                'site',
+                $site
+            );
+            $query->where(
+                'slug',
+                $copySlug
+            );
+        } while ($query->first() !== null);
+
+        return $copySlug;
     }
 
     /**
