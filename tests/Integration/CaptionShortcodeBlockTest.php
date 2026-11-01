@@ -293,7 +293,7 @@ it('keeps the text on each side of a shortcode on its side of the set, through t
 
     foreach ($content as $set) {
         $body = shortcodeBlockBody($set);
-        $summary = [...$summary, ...($body === [] ? [Arr::get($set, 'type')] : shortcodeBlockNodeSummary($body))];
+        $summary = [...$summary, ...($body === [] ? [data_get($set, 'type')] : shortcodeBlockNodeSummary($body))];
     }
 
     expect($summary)->toBe(['Intro', 'Lead', 'uamsweb_block_show-people', 'tail', 'Outro']);
@@ -368,11 +368,10 @@ it('keeps the whole text of a caption holding a quote, and leaves no stray text'
 it('stores a caption as written, whether or not WpAutoP runs', function (string $image, string $text, string $expected): void {
     $html = "Intro\n\n[caption id=\"attachment_1\" align=\"alignleft\" width=\"300\"]".$image.' '.$text."[/caption]\n\nOutro";
 
-    // Bare text stays a text node without WpAutoP, so only the set's place is the same
-    foreach ([[true, ['Intro', 'set', 'Outro']], [false, ['text', 'set', 'text']]] as [$useWpAutoP, $summary]) {
+    foreach ([true, false] as $useWpAutoP) {
         $nodes = TextProcessor::processForBard($html, 'default', $this::createStub(AssetImporter::class), new NullOutput, $useWpAutoP);
 
-        expect(shortcodeBlockNodeSummary($nodes))->toBe($summary)
+        expect(shortcodeBlockNodeSummary($nodes))->toBe(['Intro', 'set', 'Outro'])
             ->and(Arr::get($nodes, '1.attrs.values.caption'))->toBe($expected);
     }
 })->with([

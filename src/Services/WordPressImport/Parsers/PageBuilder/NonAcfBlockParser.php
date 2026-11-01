@@ -318,7 +318,7 @@ class NonAcfBlockParser
 
                     // The set stands alone, so what comes before its shortcode joins
                     // the content ahead of it (#180)
-                    if (isset($result['html_before'])) {
+                    if (\is_string($result['html_before'] ?? null)) {
                         $accumulator[] = ['html' => $result['html_before']];
                     }
 
@@ -330,7 +330,7 @@ class NonAcfBlockParser
                     ];
 
                     // What comes after the shortcode can only follow the set
-                    if (isset($result['html_after'])) {
+                    if (\is_string($result['html_after'] ?? null)) {
                         $directResult['htmlAfterSet'] = $result['html_after'];
                     }
 
