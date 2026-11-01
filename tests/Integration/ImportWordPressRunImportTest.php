@@ -1618,7 +1618,7 @@ it('shows the next question after a command runs inside the import', function (b
         Artisan::call('env');
 
         // A test run leaves the console events off, so this says what a host app's run does
-        event(new CommandFinished('env', new ArrayInput([]), new BufferedOutput, 0));
+        event(new CommandFinished('env', new ArrayInput([]), new LfBufferedOutput, 0));
 
         expect((new ReflectionMethod(Prompt::class, 'output'))->invoke(null))
             ->toBe((new ReflectionProperty(Command::class, 'output'))->getValue($command));
@@ -1640,7 +1640,7 @@ it('leaves Laravel Prompts alone once the import has ended', function (): void {
     iwriInteractive($command, [iwriPart($this, [['type' => 'page']])], "\n\n\n\n");
 
     // Later commands in the process own their prompts, as this one's output shows
-    $later = new BufferedOutput;
+    $later = new LfBufferedOutput;
     Prompt::setOutput($later);
     event(new CommandFinished('later', new ArrayInput([]), $later, 0));
 
