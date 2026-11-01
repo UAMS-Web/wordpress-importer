@@ -1500,3 +1500,13 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: running a subset on Windows.** The timings that would justify narrowing it did not exist yet. Narrowing is a later decision.
 
 **Not changed: whether the local chain gates a merge.**
+
+## The mapper reads no id for a blockquote or an image (#149)
+
+**Decided 2026-11-01, on #149.** The attribute mapper copies an element's `id` onto a `bulletList` node and does not read one for a `blockquote` or an `image`, although the host app's Bard attribute config accepts an `id` on both.
+
+**Why.** `BardParser` has its `Blockquote` and `Image` nodes commented out, so an import never holds either node. Measured through `TextProcessor::processForBard()`: a bare `<blockquote>` comes out as a paragraph, and an `<img>` with no asset to resolve comes out as no node.
+
+**Rejected: reading the ids anyway.** It is code no import can reach. For an image it would also be wrong the day the node is registered: signatures hash the element's text, an image has none, so every image in a body would share one signature and take the last image's id.
+
+**Not decided here: what a `wp:quote` or an image with a real asset keeps of an `id`.** That is #374.
