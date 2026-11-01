@@ -243,7 +243,7 @@ class AssetImporter
      * @param  ?string  $pageUrl  The page URL for context (optional)
      * @param  string  $container  The target container (e.g., 'images', 'portraits')
      * @param  bool  $hasFallbackUrl  Whether a fallback URL is available if this import fails
-     * @return ?string The imported image path or null if failed
+     * @return ?string The imported image path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importImage(
         string $attachmentId,
@@ -402,17 +402,19 @@ class AssetImporter
         }
 
         // Apply same-site policy
-        $earlyReturn = AssetUtils::applySameSitePolicy(
+        $decision = $this->decideSameSite(
             $url,
             $sameSitePolicy,
             $output,
-            $this->baseBlogUrl
+            $site,
+            $container,
+            $pageUrl
         );
 
         // Check if policy says not to import
-        if ($earlyReturn !== null) {
+        if (! $decision->import) {
             // Return early
-            return $earlyReturn;
+            return $decision->earlyResult;
         }
 
         // Generate unique filename from URL
@@ -494,6 +496,53 @@ class AssetImporter
     }
 
     /**
+     * Applies the same-site policy to an asset and reports one it leaves out.
+     *
+     * A skipped asset is absent from whatever carried it, so it goes in the end-of-run
+     * warning summary.
+     *
+     * @param  string  $url  The asset URL
+     * @param  SameSitePolicy  $policy  The policy to apply
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  string  $site  The Statamic site handle
+     * @param  string  $container  The target container
+     * @param  ?string  $pageUrl  The page URL for context
+     * @return SameSiteDecision Whether to import, and what to return if not
+     */
+    private function decideSameSite(
+        string $url,
+        SameSitePolicy $policy,
+        OutputInterface $output,
+        string $site,
+        string $container,
+        ?string $pageUrl
+    ): SameSiteDecision {
+        // Ask the policy what to do with this URL
+        $decision = AssetUtils::applySameSitePolicy(
+            $url,
+            $policy,
+            $output,
+            $this->baseBlogUrl
+        );
+
+        // Record an asset left out with nothing in its place
+        if (! $decision->import && $decision->earlyResult === null) {
+            ImportWarningManager::addWarning(
+                'assets',
+                'skipped_different_site_assets',
+                [
+                    'url' => $url,
+                    'container' => $container,
+                    'site' => $site,
+                    'page_url' => $pageUrl,
+                ]
+            );
+        }
+
+        return $decision;
+    }
+
+    /**
      * Imports a thumbnail image attachment from WordPress into a Statamic container.
      *
      * Downloads and imports a thumbnail image attachment using its WordPress
@@ -508,7 +557,7 @@ class AssetImporter
      * @param  SameSitePolicy  $sameSitePolicy  Policy for handling different-site assets
      * @param  ?string  $pageUrl  The page URL for context (optional)
      * @param  string  $container  The target container (e.g., 'images', 'portraits')
-     * @return ?string The imported thumbnail path or null if failed
+     * @return ?string The imported thumbnail path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importThumbnail(
         string $thumbnailId,
@@ -642,17 +691,19 @@ class AssetImporter
             }
 
             // Apply same-site policy
-            $earlyReturn = AssetUtils::applySameSitePolicy(
+            $decision = $this->decideSameSite(
                 $url,
                 $sameSitePolicy,
                 $output,
-                $this->baseBlogUrl
+                $site,
+                $container,
+                $pageUrl
             );
 
             // Check if policy says not to import
-            if ($earlyReturn !== null) {
+            if (! $decision->import) {
                 // Return early
-                return $earlyReturn;
+                return $decision->earlyResult;
             }
 
             // Generate unique filename from URL
@@ -746,7 +797,7 @@ class AssetImporter
      * @param  ?string  $title  Optional title for the file asset
      * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra fields merged into file metadata
      * @param  ?string  $attachmentPageUrl  The WordPress attachment-page URL for migration redirects
-     * @return ?string The imported file path or null if failed
+     * @return ?string The imported file path, the original URL if the policy links it, or null if failed or skipped
      */
     public function importFile(
         string $url,
@@ -793,17 +844,19 @@ class AssetImporter
         }
 
         // Apply same-site policy
-        $earlyReturn = AssetUtils::applySameSitePolicy(
+        $decision = $this->decideSameSite(
             $url,
             $sameSitePolicy,
             $output,
-            $this->baseBlogUrl
+            $site,
+            $container,
+            $pageUrl
         );
 
         // Check if policy says not to import
-        if ($earlyReturn !== null) {
+        if (! $decision->import) {
             // Return early
-            return $earlyReturn;
+            return $decision->earlyResult;
         }
 
         // ---

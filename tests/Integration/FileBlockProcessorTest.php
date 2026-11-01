@@ -120,7 +120,7 @@ function fileBlockImportingImporter(?string $path, string $url, BufferedOutput $
     fileBlockExpects($importer, 'getUploadFiles')->andReturnTrue();
     fileBlockExpects($importer, 'importFile')
         ->once()
-        ->with($url, 'default', $output, 'files', SameSitePolicy::SKIP_DIFFERENT_SITE, null, null, null, null)
+        ->with($url, 'default', $output, 'files', SameSitePolicy::ALWAYS_IMPORT, null, null, null, null)
         ->andReturn($path);
 
     return $importer;

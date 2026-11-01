@@ -551,8 +551,8 @@ class AdvertEntryCreator extends BaseEntryCreator
     /**
      * Import a listing's featured image and gallery into the entry data.
      *
-     * An image whose attachment is missing from the export, or that fails to
-     * import, is left out; the rest keep their order.
+     * An image whose attachment is missing from the export, that fails to import,
+     * or that is on another site is left out; the rest keep their order.
      *
      * @param  SimpleXMLElement  $advert  The listing's `<item>` element
      * @param  array<int|string, mixed>  &$data  The entry data to populate
