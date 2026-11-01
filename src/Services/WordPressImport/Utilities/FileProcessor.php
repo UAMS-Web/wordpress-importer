@@ -47,7 +47,8 @@ class FileProcessor
      * @param  ?string  $title  Optional title for the file asset
      * @param  ?array<int|string, mixed>  $additionalFileMetadata  Extra asset fields merged after URL and title
      * @param  ?string  $attachmentPageUrl  The WordPress attachment-page URL for migration redirects
-     * @return ?string The imported file path or original URL, or null if import failed
+     * @param  SameSitePolicy  $sameSitePolicy  Policy for a file on another site
+     * @return ?string The imported file path or original URL, or null if import failed or the policy skipped it
      */
     public static function importFileWithDisabledUploadHandling(
         string $fileUrl,
@@ -60,7 +61,8 @@ class FileProcessor
         ?string $pageUrl = null,
         ?string $title = null,
         ?array $additionalFileMetadata = null,
-        ?string $attachmentPageUrl = null
+        ?string $attachmentPageUrl = null,
+        SameSitePolicy $sameSitePolicy = SameSitePolicy::SKIP_DIFFERENT_SITE
     ): ?string {
         // Check if file URL is empty
         if ($fileUrl === '') {
@@ -87,7 +89,7 @@ class FileProcessor
             $site,
             $output,
             $container,
-            SameSitePolicy::SKIP_DIFFERENT_SITE,
+            $sameSitePolicy,
             $pageUrl,
             $title,
             $additionalFileMetadata,

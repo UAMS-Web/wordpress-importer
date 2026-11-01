@@ -402,17 +402,19 @@ class AssetImporter
         }
 
         // Apply same-site policy
-        $earlyReturn = AssetUtils::applySameSitePolicy(
+        $decision = $this->decideSameSite(
             $url,
             $sameSitePolicy,
             $output,
-            $this->baseBlogUrl
+            $site,
+            $container,
+            $pageUrl
         );
 
         // Check if policy says not to import
-        if ($earlyReturn !== null) {
+        if (! $decision->import) {
             // Return early
-            return $earlyReturn;
+            return $decision->earlyResult;
         }
 
         // Generate unique filename from URL
@@ -491,6 +493,53 @@ class AssetImporter
 
         // Return the imported image path or null if failed
         return $importedPath;
+    }
+
+    /**
+     * Applies the same-site policy to an asset and reports one it leaves out.
+     *
+     * A skipped asset is absent from whatever carried it, so it goes in the end-of-run
+     * warning summary the way a failed download does.
+     *
+     * @param  string  $url  The asset URL
+     * @param  SameSitePolicy  $policy  The policy to apply
+     * @param  OutputInterface  $output  Console output for logging
+     * @param  string  $site  The Statamic site handle
+     * @param  string  $container  The target container
+     * @param  ?string  $pageUrl  The page URL for context
+     * @return SameSiteDecision Whether to import, and what to return if not
+     */
+    private function decideSameSite(
+        string $url,
+        SameSitePolicy $policy,
+        OutputInterface $output,
+        string $site,
+        string $container,
+        ?string $pageUrl
+    ): SameSiteDecision {
+        // Ask the policy what to do with this URL
+        $decision = AssetUtils::applySameSitePolicy(
+            $url,
+            $policy,
+            $output,
+            $this->baseBlogUrl
+        );
+
+        // Record an asset left out with nothing in its place
+        if (! $decision->import && $decision->earlyResult === null) {
+            ImportWarningManager::addWarning(
+                'assets',
+                'skipped_different_site_assets',
+                [
+                    'url' => $url,
+                    'container' => $container,
+                    'site' => $site,
+                    'page_url' => $pageUrl,
+                ]
+            );
+        }
+
+        return $decision;
     }
 
     /**
@@ -642,17 +691,19 @@ class AssetImporter
             }
 
             // Apply same-site policy
-            $earlyReturn = AssetUtils::applySameSitePolicy(
+            $decision = $this->decideSameSite(
                 $url,
                 $sameSitePolicy,
                 $output,
-                $this->baseBlogUrl
+                $site,
+                $container,
+                $pageUrl
             );
 
             // Check if policy says not to import
-            if ($earlyReturn !== null) {
+            if (! $decision->import) {
                 // Return early
-                return $earlyReturn;
+                return $decision->earlyResult;
             }
 
             // Generate unique filename from URL
@@ -793,17 +844,19 @@ class AssetImporter
         }
 
         // Apply same-site policy
-        $earlyReturn = AssetUtils::applySameSitePolicy(
+        $decision = $this->decideSameSite(
             $url,
             $sameSitePolicy,
             $output,
-            $this->baseBlogUrl
+            $site,
+            $container,
+            $pageUrl
         );
 
         // Check if policy says not to import
-        if ($earlyReturn !== null) {
+        if (! $decision->import) {
             // Return early
-            return $earlyReturn;
+            return $decision->earlyResult;
         }
 
         // ---
