@@ -216,7 +216,7 @@ describe('watchingEvent', () => {
         assert.deepEqual(watchingEvent(60), {
             subject: 'PRs on 2 repos, issues off',
             transition: 'every 60s',
-            detail: 'open PRs at start — wordpress-importer:0, wordpress-importer-exports:0',
+            detail: 'open PRs at start — aether-wordpress-importer:0, wordpress-importer-exports:0',
         })
     })
 
@@ -226,7 +226,7 @@ describe('watchingEvent', () => {
         assert.deepEqual(watchingEvent(30), {
             subject: 'PRs off, issues on 1 repo',
             transition: 'every 30s',
-            detail: 'issues on wordpress-importer',
+            detail: 'issues on aether-wordpress-importer',
         })
     })
 
@@ -237,7 +237,7 @@ describe('watchingEvent', () => {
         assert.equal(watchingEvent(60).subject, 'PRs on 2 repos, issues on 1 repo')
         assert.equal(
             watchingEvent(60).detail,
-            'open PRs at start — wordpress-importer:0, uams-statamic:0; issues on wordpress-importer',
+            'open PRs at start — aether-wordpress-importer:0, uams-statamic:0; issues on aether-wordpress-importer',
         )
     })
 })
