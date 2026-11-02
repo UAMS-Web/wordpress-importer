@@ -85,6 +85,9 @@ final class ReusableBlockCoordinatorTestCreator extends ReusableBlockEntryCreato
     /** @var list<array{site: string, collection: string, items: list<string>, paths: list<string>, base: string}> */
     public array $created = [];
 
+    /** @var list<string> */
+    public array $behaviors = [];
+
     /**
      * @param  array<array-key, list<string>>  $references  The block ids each block references
      */
@@ -101,6 +104,7 @@ final class ReusableBlockCoordinatorTestCreator extends ReusableBlockEntryCreato
         ?array $minervaKbSettings = null
     ): array {
         $items = [];
+        $this->behaviors[] = $this->entryOverwriteBehavior;
 
         foreach ($xmlParser->getItems('wp_block') as $item) {
             $items[] = XpathHelper::getStringValue($item, 'wp:post_id');
@@ -218,6 +222,26 @@ it('enables the collection and its structure, imports each referenced block once
         ])
         ->and($coordinator->waits)->toBe(2)
         ->and(WpBlockBlockProcessor::getWpBlockPostIds())->toBe([]);
+});
+
+it('hands every block the entry overwrite behavior chosen for the run', function (): void {
+    $coordinator = reusableBlockCoordinator(reusableBlockParser(['1', '2']));
+    $coordinator->setEntryOverwriteBehavior('Skip matching files');
+    WpBlockBlockProcessor::addWpBlockPostId('1');
+    WpBlockBlockProcessor::addWpBlockPostId('2');
+
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
+
+    expect($coordinator->creator->behaviors)->toBe(['Skip matching files', 'Skip matching files']);
+});
+
+it('overwrites matching blocks when the run chose nothing', function (): void {
+    $coordinator = reusableBlockCoordinator(reusableBlockParser(['1']));
+    WpBlockBlockProcessor::addWpBlockPostId('1');
+
+    $coordinator->processReusableBlockImports('default', new LfBufferedOutput);
+
+    expect($coordinator->creator->behaviors)->toBe(['Overwrite matching files']);
 });
 
 it('imports the blocks the imported blocks reference, each once, until none is new', function (): void {
