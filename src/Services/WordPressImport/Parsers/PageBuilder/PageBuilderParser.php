@@ -291,8 +291,10 @@ class PageBuilderParser
                 $output
             );
 
-            // Decode the JSON attributes in the comment, which canProcess() found there
-            $attributes = \preg_match('/{.+?}/s', $node->textContent, $matches) === 1
+            // Decode the JSON attributes in the comment, which canProcess() found there.
+            // The match runs to the last closing brace, since a lazy one stops inside a
+            // nested object.
+            $attributes = \preg_match('/{.+}/s', $node->textContent, $matches) === 1
                 ? \json_decode($matches[0], true)
                 : null;
 

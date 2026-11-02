@@ -763,6 +763,20 @@ it('makes a reusable content set for a wp:block whose entry is imported, after t
         ->and($content)->toHaveCount(2);
 });
 
+it('reads a wp:block reference beside a nested object', function (): void {
+    $fakes = pbParser();
+    WpBlockRegistry::registerMapping('12', 'entry-9');
+    $content = [];
+
+    pbParse($fakes['parser'], pbNodes('<!-- wp:block {"metadata":{"name":"Footer"},"ref":12} /-->'), 0, $content);
+
+    expect(array_map(pbWithoutId(...), pbForce($fakes['parser'])))->toBe([[
+        'type' => 'uamsweb_block_reusable_content_landing_page',
+        'content' => ['entry-9'],
+        'enabled' => true,
+    ]]);
+});
+
 it('makes a placeholder reusable content set for a wp:block whose entry is not imported yet', function (): void {
     $fakes = pbParser();
     $content = [];
