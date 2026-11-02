@@ -220,6 +220,16 @@ final class EntryCreatorTestReusableBlocks extends ReusableBlockCoordinator
     }
 
     /**
+     * Record the behavior.
+     *
+     * @param  string  $behavior  The entry overwrite behavior
+     */
+    public function setEntryOverwriteBehavior(string $behavior): void
+    {
+        $this->calls[] = "behavior:{$behavior}";
+    }
+
+    /**
      * Record the clearing.
      */
     public function clearWpBlockPostIds(): void
@@ -974,7 +984,7 @@ describe('an import', function (): void {
             ->and($rig->sites->calls)->toBe([['collection', 'default', 'pages', true]])
             ->and($rig->structures->calls)->toBe([['pages', 'default']])
             ->and($rig->trees->calls)->toBe([['site' => 'default', 'type' => 'page', 'collection' => 'pages', 'pages' => $pages, 'url' => 'https://example.test']])
-            ->and($reusable->calls)->toBe(['parser', 'importer', 'clear', 'import:default'])
+            ->and($reusable->calls)->toBe(['parser', 'importer', 'behavior:Skip matching files', 'clear', 'import:default'])
             ->and(\array_column($deferred->calls, 0))->toBe(['converter', 'forms', 'parser', 'importer', 'pages', 'process'])
             ->and($deferred->calls[0][1])->toBe($rig->converter)
             ->and($deferred->calls[1][1])->toBe($forms)
@@ -1043,7 +1053,7 @@ describe('an import', function (): void {
 
         $rig->creator->createEntries('default', 'tablepress_table', 'tables', entryCreatorParser(entryCreatorExport([['type' => 'tablepress_table', 'id' => '801', 'export' => '9']])), new AssetImporter, new BufferedOutput);
 
-        expect($reusable->calls)->toBe(['parser', 'importer', 'clear'])
+        expect($reusable->calls)->toBe(['parser', 'importer', 'behavior:Overwrite matching files', 'clear'])
             ->and($deferred->calls)->toBe([])
             ->and(\array_column($rig->sites->calls, 2))->toBe(['tables']);
     });
