@@ -85,11 +85,14 @@ it('names each page that mixes Gutenberg blocks with Classic content', function 
         ['title' => 'Classic only', 'id' => '10', 'content' => '<p>Classic text</p>'],
         ['title' => 'Empty', 'id' => '11', 'content' => ''],
         ['title' => 'No content', 'id' => '12'],
+        ['title' => 'After a nested block', 'id' => '13', 'content' => '<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->Classic text'],
+        ['title' => 'Nested blocks only', 'id' => '14', 'content' => '<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->'],
     ]);
 
     expect(iwsCall($command, 'scanForClassicBlocks', 'page'))->toBe([
         ['title' => 'R&D "Lab" \'East\'', 'id' => '7', 'link' => 'https://old.test/rd/'],
         ['title' => 'Untitled', 'id' => '8', 'link' => 'https://old.test/untitled/'],
+        ['title' => 'After a nested block', 'id' => '13', 'link' => ''],
     ]);
 });
 
@@ -192,6 +195,11 @@ it('says whether content holds anything outside its Gutenberg blocks', function 
 })->with([
     'blocks and whitespace' => ["  <!-- wp:spacer /-->\n\t<!-- wp:p -->a<!-- /wp:p -->  ", false],
     'text after a block' => ['<!-- wp:p -->a<!-- /wp:p -->tail', true],
+    'text before a nested block' => ['HEAD TEXT<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->', true],
+    'text after a nested block' => ['<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->TAIL TEXT', true],
+    'text after a self-closing block nested in another' => ['<!-- wp:group --><!-- wp:spacer /--><!-- /wp:group -->TAIL TEXT', true],
+    'text after an unclosed comment, before an unreadable one' => ['<!-- wp:p -->Classic text<!-- wp:image {"alt":"<b>"} /-->', true],
+    'only nested blocks' => ['<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- wp:spacer /--><!-- /wp:group -->', false],
     'nothing' => ['', false],
 ]);
 
@@ -211,19 +219,20 @@ it('removes every Gutenberg block, nested or not, and the comments left over', f
 ]);
 
 /**
- * Today's behavior, which #274 records as a defect. A block that holds or overlaps a later one
- * is cut by the length measured on the original content, after the later block is gone, so the
- * cut runs past its end and takes what follows with it. And the pattern that clears self-closing
- * comments the tag pass cannot read runs back to an unclosed opening comment, taking the text
- * between.
+ * A block that holds or overlaps another is cut as one span, so no cut runs past its end into what
+ * follows (#274). The pattern that clears self-closing comments the tag pass cannot read stops at
+ * the end of a comment, so it cannot run back to an unclosed opening comment.
  */
-it('removes the text after a nested or overlapping block with it', function (string $content, string $remaining): void {
+it('keeps the text after a nested or overlapping block', function (string $content, string $remaining): void {
     expect(iwsCall(iwsCommand(), 'removeAllGutenbergBlocks', $content))->toBe($remaining);
 })->with([
-    'a block inside' => ['<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->TAIL TEXT', ''],
-    'a self-closing block inside' => ['<!-- wp:group --><!-- wp:spacer /--><!-- /wp:group -->TAIL TEXT', ''],
-    'blocks closed out of order' => ['a<!-- wp:x --><!-- wp:y -->m<!-- /wp:x -->b<!-- /wp:y -->c', 'a'],
-    'text before an unreadable self-closing comment, after an unclosed one' => ['<!-- wp:p -->Classic text<!-- wp:image {"alt":"<b>"} /-->', ''],
+    'a block inside' => ['<!-- wp:group --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:group -->TAIL TEXT', 'TAIL TEXT'],
+    'a self-closing block inside' => ['<!-- wp:group --><!-- wp:spacer /--><!-- /wp:group -->TAIL TEXT', 'TAIL TEXT'],
+    'two blocks inside, then text' => ['<!-- wp:g --><!-- wp:p -->a<!-- /wp:p --><!-- wp:p -->b<!-- /wp:p --><!-- /wp:g -->TAIL', 'TAIL'],
+    'a nested block, text, and another' => ['<!-- wp:g --><!-- wp:p -->a<!-- /wp:p --><!-- /wp:g -->mid<!-- wp:g --><!-- wp:p -->b<!-- /wp:p --><!-- /wp:g -->end', 'midend'],
+    'blocks side by side' => ['<!-- wp:a -->x<!-- /wp:a --><!-- wp:b -->y<!-- /wp:b -->TAIL', 'TAIL'],
+    'blocks closed out of order' => ['a<!-- wp:x --><!-- wp:y -->m<!-- /wp:x -->b<!-- /wp:y -->c', 'ac'],
+    'text before an unreadable self-closing comment, after an unclosed one' => ['<!-- wp:p -->Classic text<!-- wp:image {"alt":"<b>"} /-->', 'Classic text'],
 ]);
 
 it('finds where each Gutenberg block starts and how long it runs', function (string $content, array $positions): void {

@@ -1510,3 +1510,25 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 **Rejected: reading the ids anyway.** It is code no import can reach. For an image it would also be wrong the day the node is registered: signatures hash the element's text, an image has none, so every image in a body would share one signature and take the last image's id.
 
 **Not decided here: what a `wp:quote` or an image with a real asset keeps of an `id`.** That is #374.
+
+## Remote CI runs Pest as four serial shards (#376)
+
+**Decided 2026-11-02, on #376.** The `pest` job in `ci.yml` is a matrix of four shards on each operating system, each running `--shard=<i>/4` serially on its own runner. `local-ci.json` keeps the whole serial command. `CI` still needs the one `pest` job, whose result covers every leg.
+
+**The measurement.** Each figure is the job's time on one run, so it includes about a minute of setup on Windows.
+
+| Run | Ubuntu Pest | Windows Pest | Whole run |
+| --- | --- | --- | --- |
+| [Serial, `a7f3d728`](https://github.com/UAMS-Web/aether-wordpress-importer/actions/runs/41367135459) | 176s | 464s | 474s |
+| [`--parallel`, merged with `8c666bdf`](https://github.com/UAMS-Web/aether-wordpress-importer/actions/runs/41366581436) | 76s | 201s, failed | not comparable |
+| [Four shards, merged with `a7f3d728`](https://github.com/UAMS-Web/aether-wordpress-importer/actions/runs/41367414381) | 78s, longest shard | 216s, longest shard | 332s |
+
+**Why shards.** Each shard is the serial run the suite already passes, on a `vendor/` of its own, so workers cannot collide.
+
+**Every test still runs once.** On the serial run, Ubuntu reported 3 skipped and 10741 passed, and Windows 26 skipped and 10718 passed. The four shards add up to the same numbers on each operating system. A pull request's run tests the merge with `main`, so the two sides are compared on the same `main`.
+
+**Rejected: `--parallel`.** It was faster where it passed, at 56 seconds of test time on Ubuntu, but it failed on Windows: `rename()` onto a `facade-*.php` file under Testbench's `storage/framework/cache` raised `Access is denied (code: 5)`. All four workers write to that directory, so the likely cause is two of them writing one file, though that was not reproduced. #111 records the same exposure for the search index.
+
+**Rejected: a report job that fails when a test ran in no shard.** Pest assigns every listed class to one shard by its position, so a test can only be lost if a shard is left out of the matrix, and `scripts/ci-local.test.mjs` fails on that.
+
+**Not decided here: balancing the shards.** The Windows shards took 47 to 160 seconds of test time. `pest --update-shards` could balance them, but PHPStan on Windows now sets the wall-clock time at 250 seconds, so balancing would not shorten a pull request.

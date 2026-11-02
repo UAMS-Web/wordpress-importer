@@ -20,4 +20,4 @@ The runner is the shared one, [`.claude/skills/local-ci/local-ci.mjs`](../.claud
 
 ## The two mirrors
 
-`.github/workflows/ci.yml` and `local-ci.json` are hand-maintained mirrors. `.githooks/pre-commit` blocks a commit that stages exactly one of them; for a genuinely one-sided edit, `git commit --no-verify`. [`scripts/ci-local.test.mjs`](../scripts/ci-local.test.mjs) checks the parts that can be compared mechanically: every `ci.yml` job is in `local-ci.json`, and the commands that can match do.
+`.github/workflows/ci.yml` and `local-ci.json` are hand-maintained mirrors. The one intended difference is that `ci.yml` splits the `pest` command into four `--shard` legs per operating system, while `local-ci.json` runs it whole (#376). `.githooks/pre-commit` blocks a commit that stages exactly one of them; for a genuinely one-sided edit, `git commit --no-verify`. [`scripts/ci-local.test.mjs`](../scripts/ci-local.test.mjs) checks the parts that can be compared mechanically: every `ci.yml` job is in `local-ci.json`, and the commands that can match do.
