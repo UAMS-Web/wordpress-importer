@@ -1527,7 +1527,7 @@ So Pretty Links answers before Redirection, and within one plugin the lowest pos
 
 **Every test still runs once.** On the serial run, Ubuntu reported 3 skipped and 10741 passed, and Windows 26 skipped and 10718 passed. The four shards add up to the same numbers on each operating system. A pull request's run tests the merge with `main`, so the two sides are compared on the same `main`.
 
-**Rejected: `--parallel`.** It was faster where it passed, at 56 seconds of test time on Ubuntu, but it failed on Windows: `rename()` of a cached file under Testbench's `storage/framework/cache` raised an `ErrorException` while another worker held it. Workers share that directory, and #111 records the same exposure for the search index.
+**Rejected: `--parallel`.** It was faster where it passed, at 56 seconds of test time on Ubuntu, but it failed on Windows: `rename()` onto a `facade-*.php` file under Testbench's `storage/framework/cache` raised `Access is denied (code: 5)`. All four workers write to that directory, so the likely cause is two of them writing one file, though that was not reproduced. #111 records the same exposure for the search index.
 
 **Rejected: a report job that fails when a test ran in no shard.** Pest assigns every listed class to one shard by its position, so a test can only be lost if a shard is left out of the matrix, and `scripts/ci-local.test.mjs` fails on that.
 
