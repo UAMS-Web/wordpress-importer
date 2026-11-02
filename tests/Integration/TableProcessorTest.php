@@ -255,11 +255,24 @@ it('reads a plain table whatever its sections', function (string $html, array $r
     'a rowspan in the last column' => ['<table><tbody><tr><td>1</td><td rowspan="2">2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '2'], ['3', '']]],
     'a span of both kinds' => ['<table><tbody><tr><td rowspan="2" colspan="2">1</td><td>2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '', '2'], ['', '', '3']]],
     'a rowspan past the last row' => ['<table><tbody><tr><td rowspan="9">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
+    'an empty row a rowspan covers' => ['<table><tbody><tr><td rowspan="2">A</td><td>B</td></tr><tr></tr><tr><td>C</td><td>D</td></tr></tbody></table>', [['A', 'B'], ['C', 'D']]],
+    'a rowspan that ends with its group' => ['<table><tbody><tr><td rowspan="5">a</td><td>b</td></tr></tbody><tbody><tr><td>c</td><td>d</td></tr></tbody></table>', [['a', 'b'], ['c', 'd']]],
+    'a rowspan that does not reach the foot' => ['<table><tbody><tr><td rowspan="5">a</td><td>b</td></tr></tbody><tfoot><tr><td>f</td><td>g</td></tr></tfoot></table>', [['a', 'b'], ['f', 'g']]],
+    'a rowspan of zero, to the end of its group' => ['<table><tbody><tr><td rowspan="0">a</td><td>b</td></tr><tr><td>c</td></tr><tr><td>d</td></tr></tbody><tbody><tr><td>e</td><td>f</td></tr></tbody></table>', [['a', 'b'], ['', 'c'], ['', 'd'], ['e', 'f']]],
+    'rows with no section around a body' => ['<table><tr><td rowspan="2">a</td><td>b</td></tr><tr><td>c</td></tr><tbody><tr><td>d</td><td>e</td></tr></tbody><tr><td>f</td><td>g</td></tr></table>', [['a', 'b'], ['', 'c'], ['d', 'e'], ['f', 'g']]],
     'a span that is not a number' => ['<table><tbody><tr><td colspan="x" rowspan="0">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
 ]);
 
 it('holds a colspan to the most HTML allows', function (): void {
     expect(data_get(renderedTable('<table><tbody><tr><td colspan="99999">1</td></tr></tbody></table>'), 'rows.0'))->toHaveCount(1000);
+});
+
+it('holds a table to the most columns however its spans add up', function (): void {
+    $cells = str_repeat('<td colspan="1000">x</td>', 3);
+
+    expect(data_get(renderedTable("<table><tbody><tr>{$cells}</tr></tbody></table>"), 'rows.0'))->toHaveCount(1000)
+        ->and(data_get(renderedTable('<table><tbody><tr><td colspan="999">x</td><td colspan="5">y</td></tr></tbody></table>'), 'rows.0'))->toHaveCount(1000)
+        ->and(data_get(renderedTable('<table><tbody><tr><td rowspan="2" colspan="999">x</td><td>y</td></tr><tr><td>z</td><td>over</td></tr></tbody></table>'), 'rows.1'))->toHaveCount(1000);
 });
 
 it('marks a first row of header cells as a header row, with or without a thead', function (string $html, string $expected): void {
@@ -268,6 +281,9 @@ it('marks a first row of header cells as a header row, with or without a thead',
     'header cells, no thead' => ['<table><tbody><tr><th>H</th><th>I</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>', 'true'],
     'a thead' => ['<table><thead><tr><td>H</td></tr></thead><tbody><tr><td>1</td></tr></tbody></table>', 'true'],
     'mixed cells' => ['<table><tbody><tr><th>H</th><td>I</td></tr></tbody></table>', 'false'],
+    'an empty thead row' => ['<table><thead><tr></tr></thead><tbody><tr><td>1</td></tr></tbody></table>', 'false'],
+    'header cells after an empty row' => ['<table><tbody><tr></tr><tr><th>H</th></tr></tbody></table>', 'true'],
+    'a later row of header cells' => ['<table><tbody><tr><td>1</td></tr><tr><th>H</th></tr></tbody></table>', 'false'],
     'data cells' => ['<table><tbody><tr><td>1</td></tr></tbody></table>', 'false'],
 ]);
 
@@ -277,7 +293,24 @@ it('reads a plain table caption and footer', function (): void {
         ->toContain(' data-set-attr-last_row_footers="true"');
 });
 
-it('renders nothing for a table with no cells, and marks no footer on an empty one', function (): void {
+it('marks no footer for a tfoot with no cells', function (): void {
+    expect(renderedTable('<table><tbody><tr><td>1</td></tr></tbody><tfoot><tr></tr></tfoot></table>')['html'])
+        ->toContain(' data-set-attr-last_row_footers="false"');
+});
+
+it('tells a table of data from layout, spacing and a converted shortcode', function (string $html, bool $data): void {
+    $table = TextProcessor::loadHtml($html)->getElementsByTagName('table')->item(0);
+
+    expect($table instanceof DOMElement && (new TableProcessor)->isDataTable($table))->toBe($data);
+})->with([
+    'data' => ['<table><tbody><tr><td>1</td></tr></tbody></table>', true],
+    'a nested table' => ['<table><tbody><tr><td>1<table><tbody><tr><td>2</td></tr></tbody></table></td></tr></tbody></table>', false],
+    'a set in a cell' => ['<table><tbody><tr><td>1<div data-set-type="file"></div></td></tr></tbody></table>', false],
+    'blank cells' => ['<table><tbody><tr><td>&nbsp; </td></tr></tbody></table>', false],
+    'an image and no text' => ['<table><tbody><tr><td><img src="a.jpg" alt=""></td></tr></tbody></table>', false],
+]);
+
+it('renders nothing for a table with no cells', function (): void {
     $document = TextProcessor::loadHtml('<table><tfoot><tr></tr></tfoot></table>');
     $table = $document->getElementsByTagName('table')->item(0);
 

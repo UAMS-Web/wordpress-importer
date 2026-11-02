@@ -62,17 +62,17 @@ class TextProcessor
         'p',
         'section',
         'span',
-        'table',
     ];
 
     /**
-     * The parts of a table, which reach the content only from a layout table, so
-     * each is read through whether or not it holds another table (#327).
+     * A table and its parts, which reach this list only when the table does not hold
+     * data, so each is read through whether or not it holds another table (#327).
      *
      * @var list<string>
      */
     private const array TABLE_PART_TAGS = [
         'caption',
+        'table',
         'tbody',
         'td',
         'tfoot',
@@ -1946,10 +1946,10 @@ class TextProcessor
      * Bard has no table node, so a `<table>` left in the accumulated content loses its
      * rows and cells, and a set is valid only at the top of the document. So a table
      * is added as a `table` set, and a plain wrapper around one is read child by child
-     * (#327). A table that holds another table is page layout rather than data, as in
-     * the exports' email newsletters, so it is read the same way, and its links and
-     * lists stay in Bard instead of in one cell's HTML. A table in a list or a quote
-     * stays as it was: its wrapper is structure that a set could not sit inside.
+     * (#327). A table that does not hold data, such as the page layout of the exports'
+     * email newsletters, is read the same way, and its links and lists stay in Bard
+     * instead of in one cell's HTML. A table in a list or a quote stays as it was: its
+     * wrapper is structure that a set could not sit inside.
      *
      * @param  DOMNode  $node  The node to add
      * @param  DOMDocument  $doc  The document the node belongs to
@@ -1967,12 +1967,14 @@ class TextProcessor
         BardParser $bardParser
     ): void {
         // A table of data is added as a set, unless it has no rows to import
+        $tableProcessor = new TableProcessor;
+
         if (
             $node instanceof DOMElement
             && $node->tagName === 'table'
-            && $node->getElementsByTagName('table')->length === 0
+            && $tableProcessor->isDataTable($node)
         ) {
-            $tableSet = (new TableProcessor)->renderSet($node, $figure);
+            $tableSet = $tableProcessor->renderSet($node, $figure);
 
             if ($tableSet !== null) {
                 // Parse the content accumulated ahead of the table first
@@ -2010,16 +2012,21 @@ class TextProcessor
             return;
         }
 
-        // Read the wrapper child by child; the renderer reads a figure's own caption
+        // A figure around a table of data lends the set its caption and classes
+        $tableFigure = $node->tagName === 'figure' && self::holdsDataTable($node)
+            ? $node
+            : null;
+
+        // Read the wrapper child by child, leaving out the caption the set takes
         foreach ($node->childNodes as $child) {
-            if ($node->tagName === 'figure' && $child->nodeName === 'figcaption') {
+            if ($tableFigure instanceof DOMElement && $child->nodeName === 'figcaption') {
                 continue;
             }
 
             self::accumulateContent(
                 $child,
                 $doc,
-                $node->tagName === 'figure' ? $node : null,
+                $tableFigure,
                 $currentContent,
                 $bardContent,
                 $bardParser
@@ -2032,6 +2039,28 @@ class TextProcessor
             $bardContent,
             $bardParser
         );
+    }
+
+    /**
+     * Whether a figure holds a table of data directly.
+     *
+     * @param  DOMElement  $figure  The figure element
+     * @return bool True when one of the figure's children is a table of data
+     */
+    private static function holdsDataTable(
+        DOMElement $figure
+    ): bool {
+        foreach ($figure->childNodes as $child) {
+            if (
+                $child instanceof DOMElement
+                && $child->tagName === 'table'
+                && (new TableProcessor)->isDataTable($child)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

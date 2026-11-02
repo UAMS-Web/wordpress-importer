@@ -23,10 +23,10 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogConte
 class TableProcessor implements BlockProcessorInterface
 {
     /**
-     * The widest span the HTML table model allows a `colspan`, applied to `rowspan`
-     * as well, so a hostile value cannot grow the grid without bound.
+     * The most columns a table is laid out to. It is the widest a single `colspan`
+     * can be in HTML, and it keeps hostile spans from growing a grid out of memory.
      */
-    private const int MAX_SPAN = 1000;
+    private const int MAX_COLUMNS = 1000;
 
     /**
      * Determines if the processor can handle the given DOM node.
@@ -358,9 +358,39 @@ class TableProcessor implements BlockProcessorInterface
     }
 
     /**
+     * Whether a table holds data, so that it belongs in a `table` set.
+     *
+     * A table that holds another table is page layout, a set in a cell could not stay
+     * a set in the cell's HTML, and a table with no text is spacing around images. Each
+     * of those is read as content instead.
+     *
+     * @param  DOMElement  $table  The table element
+     * @return bool True when the table belongs in a set
+     */
+    public function isDataTable(
+        DOMElement $table
+    ): bool {
+        // A nested table makes this one layout
+        if ($table->getElementsByTagName('table')->length > 0) {
+            return false;
+        }
+
+        // A converted shortcode in a cell is a set of its own
+        foreach ($table->getElementsByTagName('*') as $element) {
+            if ($element->hasAttribute('data-set-type')) {
+                return false;
+            }
+        }
+
+        // A non-breaking space is what a blank cell holds
+        return \trim(\str_replace("\u{A0}", ' ', $table->textContent)) !== '';
+    }
+
+    /**
      * Reads a table's rows, in the order the table displays them.
      *
-     * Only the table's own rows are read, so a nested table stays in its cell.
+     * Only the table's own rows are read, so a nested table stays in its cell. Each
+     * row group gets its own grid, since a rowspan ends with its group.
      *
      * @param  DOMElement  $table  The table element
      * @return array{tableData: list<array{cells: list<string>}>, firstRowHeaders: bool, lastRowFooters: bool} The rows, and what the first and last of them are
@@ -368,40 +398,48 @@ class TableProcessor implements BlockProcessorInterface
     private function readRows(
         DOMElement $table
     ): array {
-        // Sort the table's own rows into its sections
-        $head = [];
-        $body = [];
-        $foot = [];
+        // Sort the table's row groups by where they display; rows with no section
+        // in between are one group
+        $groups = ['thead' => [], 'tbody' => [], 'tfoot' => []];
+        $loose = null;
 
         foreach (self::childElements($table, ['thead', 'tbody', 'tfoot', 'tr']) as $section) {
-            $sectionRows = $section->tagName === 'tr'
-                ? [$section]
-                : self::childElements($section, ['tr']);
+            if ($section->tagName === 'tr') {
+                $loose ??= \count($groups['tbody']);
+                $groups['tbody'][$loose][] = $section;
 
-            if ($section->tagName === 'thead') {
-                $head = \array_merge($head, $sectionRows);
-            } elseif ($section->tagName === 'tfoot') {
-                $foot = \array_merge($foot, $sectionRows);
-            } else {
-                $body = \array_merge($body, $sectionRows);
+                continue;
+            }
+
+            $loose = null;
+            $groups[$section->tagName][] = self::childElements($section, ['tr']);
+        }
+
+        // Lay out each kind of row
+        $head = $this->groupsGrid($groups['thead']);
+        $foot = $this->groupsGrid($groups['tfoot']);
+        $grid = \array_merge($head, $this->groupsGrid($groups['tbody']), $foot);
+
+        // A first row of nothing but header cells is a header row without a thead
+        $firstRowHeaders = $head !== [];
+        $displayed = \array_merge($groups['thead'], $groups['tbody'], $groups['tfoot']);
+
+        foreach (\array_merge(...$displayed) as $row) {
+            $cells = self::childElements($row, ['td', 'th']);
+
+            if ($cells !== []) {
+                $firstRowHeaders = $firstRowHeaders || self::childElements($row, ['th']) === $cells;
+
+                break;
             }
         }
 
-        // Lay the rows out on one grid
-        $rows = \array_merge($head, $body, $foot);
-        $grid = $this->cellGrid($rows);
-
-        // A first row of nothing but header cells is a header row without a thead
-        $firstCells = isset($rows[0]) ? self::childElements($rows[0], ['td', 'th']) : [];
-        $firstRowHeaders = $head !== [];
-
-        if ($firstCells !== [] && \array_filter($firstCells, static fn (DOMElement $cell): bool => $cell->tagName !== 'th') === []) {
-            $firstRowHeaders = true;
-        }
+        // Bring every row to the width of the widest
+        $width = $grid === [] ? 0 : \max(\array_map(\count(...), $grid));
 
         return [
             'tableData' => \array_map(
-                static fn (array $cells): array => ['cells' => $cells],
+                static fn (array $cells): array => ['cells' => \array_pad($cells, $width, '')],
                 $grid
             ),
             'firstRowHeaders' => $firstRowHeaders,
@@ -410,14 +448,28 @@ class TableProcessor implements BlockProcessorInterface
     }
 
     /**
-     * Lays rows out on a grid, so each cell stays in its own column.
+     * Lays out each row group, joining their rows.
+     *
+     * @param  array<int, list<DOMElement>>  $groups  The row groups
+     * @return list<list<string>> Each row's cells
+     */
+    private function groupsGrid(
+        array $groups
+    ): array {
+        return \array_merge(
+            ...\array_map($this->cellGrid(...), \array_values($groups))
+        );
+    }
+
+    /**
+     * Lays one row group out on a grid, so each cell stays in its own column.
      *
      * The `table` set has no merged cells, so a cell that spans keeps its content in
      * its first position and leaves the others blank. Without them, every cell after
-     * a span would move into the wrong column. Every row comes out the same width,
-     * and a row with no cells is left out.
+     * a span would move into the wrong column. A row with no cells is left out, though
+     * a rowspan still counts it. A cell past MAX_COLUMNS is dropped.
      *
-     * @param  list<DOMElement>  $rows  The `tr` elements
+     * @param  list<DOMElement>  $rows  The group's `tr` elements
      * @return list<list<string>> Each row's cells
      */
     private function cellGrid(
@@ -429,11 +481,6 @@ class TableProcessor implements BlockProcessorInterface
 
         foreach ($rows as $row) {
             $cells = self::childElements($row, ['td', 'th']);
-
-            if ($cells === []) {
-                continue;
-            }
-
             $line = [];
             $column = 0;
 
@@ -444,18 +491,22 @@ class TableProcessor implements BlockProcessorInterface
                     $column++;
                 }
 
+                // A row is full at the limit
+                if ($column >= self::MAX_COLUMNS) {
+                    break;
+                }
+
                 $line[] = $this->getInnerHTML($cell);
 
                 // Hold the rest of the cell's span
-                $rowspan = self::spanOf($cell, 'rowspan');
-                $colspan = self::spanOf($cell, 'colspan');
+                $rowspan = self::rowspanOf($cell);
+                $colspan = \min(self::colspanOf($cell), self::MAX_COLUMNS - $column);
 
                 for ($offset = 0; $offset < $colspan; $offset++) {
                     $held[$column + $offset] = $rowspan;
                 }
 
                 $line = \array_pad($line, \count($line) + $colspan - 1, '');
-
                 $column += $colspan;
             }
 
@@ -468,30 +519,38 @@ class TableProcessor implements BlockProcessorInterface
                 }
             }
 
-            $grid[] = $line;
+            if ($cells !== []) {
+                $grid[] = $line;
+            }
         }
 
-        // Bring every row to the width of the widest
-        $width = $grid === [] ? 0 : \max(\array_map(\count(...), $grid));
-
-        return \array_map(
-            static fn (array $line): array => \array_pad($line, $width, ''),
-            $grid
-        );
+        return $grid;
     }
 
     /**
-     * Reads a cell's colspan or rowspan, as at least one and no more than HTML allows.
+     * Reads a cell's colspan, as at least one and no more than the grid holds.
      *
      * @param  DOMElement  $cell  The `td` or `th` element
-     * @param  string  $attribute  `colspan` or `rowspan`
      * @return int The span
      */
-    private static function spanOf(
-        DOMElement $cell,
-        string $attribute
+    private static function colspanOf(
+        DOMElement $cell
     ): int {
-        return \max(1, \min(self::MAX_SPAN, (int) $cell->getAttribute($attribute)));
+        return \max(1, \min(self::MAX_COLUMNS, (int) $cell->getAttribute('colspan')));
+    }
+
+    /**
+     * Reads a cell's rowspan, as at least one, where zero means the rest of the group.
+     *
+     * @param  DOMElement  $cell  The `td` or `th` element
+     * @return int The span
+     */
+    private static function rowspanOf(
+        DOMElement $cell
+    ): int {
+        $rowspan = $cell->getAttribute('rowspan');
+
+        return $rowspan === '0' ? PHP_INT_MAX : \max(1, (int) $rowspan);
     }
 
     /**

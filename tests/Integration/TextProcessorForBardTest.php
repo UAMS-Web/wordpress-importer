@@ -23,6 +23,7 @@ use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
@@ -1270,6 +1271,19 @@ it('reads a layout table through, keeping its content in Bard and its data table
         ->and(data_get($content, '2.attrs.values.table_data'))->toBe([['cells' => ['T']]]);
 });
 
+it('keeps a converted shortcode in a table cell as its set', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    // The shortcode is a set in the DOM by the time the table is read, and the nonce
+    // that makes it one must not land in a cell of entry data
+    $set = '<div data-set-type="file" data-set-attr-type="file"'.SetMarkupNonce::attribute().'></div>';
+    $content = textProcessorForBard("<table><tbody><tr><td>A</td><td>{$set}</td></tr></tbody></table>");
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:A', 'set:file'])
+        ->and(json_encode($content))->not->toContain(SetMarkupNonce::value());
+});
+
 it('reads a table figure that no block claims, with its caption and classes', function (): void {
     textProcessorForBardFakes();
     textProcessorForBardWarnings();
@@ -1289,6 +1303,9 @@ it('leaves a table with no rows, and a table in a list, as ordinary content', fu
     expect(array_map(textProcessorForBardSummary(...), textProcessorForBard($html)))->toBe($summary);
 })->with([
     'no rows' => ['<p>A</p><table></table><p>B</p>', ['paragraph:A', 'paragraph:B']],
+    'blank cells' => ['<p>A</p><table><tbody><tr><td>&nbsp;</td></tr></tbody></table><p>B</p>', ['paragraph:A', 'paragraph:B']],
+    'a caption around a layout table' => ['<figure><table><tbody><tr><td>&nbsp;</td></tr></tbody></table><figcaption>C</figcaption></figure>', ['paragraph:C']],
+    'a caption around a wrapped table' => ['<figure><div><table><tbody><tr><td>T</td></tr></tbody></table></div><figcaption>C</figcaption></figure>', ['set:table', 'paragraph:C']],
     'wrappers with no table in them' => ['<span>A</span><span>B</span>', ['paragraph:AB']],
     'in a list' => ['<ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul>', ['bulletList']],
     'a list in a div' => ['<div><ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul></div>', ['bulletList']],
