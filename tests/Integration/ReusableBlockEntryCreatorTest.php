@@ -364,13 +364,13 @@ afterEach(function (): void {
 describe('importing a block', function (): void {
     it('hands the block to the converter and the mapper, then saves it with its page builder content', function (): void {
         $converter = ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => [['type' => 'text', 'text' => 'Set.']]]);
-        $run = reusableBlockRun(reusableBlockExport([['id' => '701', 'slug' => 'banner', 'title' => 'Banner &amp; Bar', 'content' => '<p>Hi</p>', 'thumbnail' => '9001']]), $converter);
+        $run = reusableBlockRun(reusableBlockExport([['id' => '701', 'slug' => 'banner', 'title' => 'Banner &amp; Bar', 'content' => '<!-- wp:acf/hero /-->', 'thumbnail' => '9001']]), $converter);
         $entry = reusableBlockEntry('banner');
 
         expect($run['result'])->toBe([])
             ->and($converter->calls)->toHaveCount(1)
             ->and(\array_diff_key($converter->calls[0] ?? [], ['data' => true, 'entry' => true]))->toBe([
-                'content' => '<p>Hi</p>',
+                'content' => '<!-- wp:acf/hero /-->',
                 'site' => 'default',
                 'title' => 'Banner & Bar',
                 'id' => '701',
@@ -397,23 +397,55 @@ describe('importing a block', function (): void {
             ->and($entry->get('_thumbnail_id'))->toBe('9001')
             ->and($entry->get('updated_at'))->toBe((new DateTime('2025-03-02 10:00:00'))->getTimestamp())
             ->and($entry->published())->toBeTrue()
-            ->and($run['output'])->toContain("Processing reusable content 'banner' with content length: 9".PHP_EOL);
+            ->and($run['output'])->toContain("Processing reusable content 'banner' with content length: 21".PHP_EOL);
     });
 
-    it('treats a block without ACF blocks as a landing page too, so a body with no page builder content is not stored', function (): void {
-        // Characterization of #239: `preg_match() !== false` is true for no match as
-        // well as a match, so the basic-page branch that stores `content` never runs
-        $converter = ReusableBlockTestConverter::returning([
-            'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Body.']]]],
-            'page_builder' => [],
-        ]);
-        reusableBlockRun(reusableBlockExport([['slug' => 'plain']]), $converter);
+    it('saves a block with no page builder content as a basic page, with its body in `content`', function (string $content): void {
+        $body = [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Body.']]]];
+        $converter = ReusableBlockTestConverter::returning(['content' => $body, 'page_builder' => []]);
+        reusableBlockRun(reusableBlockExport([['slug' => 'plain', 'content' => $content]]), $converter);
+        $entry = reusableBlockEntry('plain');
+        $data = $converter->calls[0]['data'] ?? null;
+
+        expect(\is_array($data) ? $data['blueprint'] : null)->toBe('reusable_content_basic_page')
+            ->and(reusableBlockBlueprint($entry))->toBe('reusable_content_basic_page')
+            ->and($entry->get('content'))->toBe($body)
+            ->and($entry->get('page_builder'))->toBeNull();
+    })->with([
+        'classic markup' => ['<p>Body.</p>'],
+        'core blocks' => ['<!-- wp:paragraph --><p>Body.</p><!-- /wp:paragraph -->'],
+    ]);
+
+    it('does not store an empty body on a basic page', function (): void {
+        reusableBlockRun(reusableBlockExport([['slug' => 'plain']]), ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => []]));
         $entry = reusableBlockEntry('plain');
 
-        expect(reusableBlockBlueprint($entry))->toBe('reusable_content_landing_page')
-            ->and($entry->get('content'))->toBeNull()
-            ->and($entry->get('page_builder'))->toBeNull();
+        expect(reusableBlockBlueprint($entry))->toBe('reusable_content_basic_page')
+            ->and($entry->has('content'))->toBeFalse();
     });
+
+    it('does not store a body that is not a list on a basic page', function (): void {
+        reusableBlockRun(reusableBlockExport([['slug' => 'plain']]), ReusableBlockTestConverter::returning(['content' => 'Body.', 'page_builder' => []]));
+
+        expect(reusableBlockEntry('plain')->has('content'))->toBeFalse();
+    });
+
+    it('saves as a landing page any block the processor parses for `page_builder`, so its body is not lost', function (string $content): void {
+        $sets = [['type' => 'text', 'text' => 'Set.']];
+        reusableBlockRun(reusableBlockExport([['slug' => 'built', 'content' => $content]]), ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => $sets]));
+        $entry = reusableBlockEntry('built');
+
+        expect(reusableBlockBlueprint($entry))->toBe('reusable_content_landing_page')
+            ->and($entry->get('page_builder'))->toBe($sets)
+            ->and($entry->has('content'))->toBeFalse();
+    })->with([
+        'an ACF block' => ['<!-- wp:acf/hero /-->'],
+        'an ACF block written as entities' => ['&lt;!-- wp:acf/hero /--&gt;'],
+        'a MinervaKB block' => ['<!-- wp:minervakb/search /-->'],
+        'an RSS block' => ['<!-- wp:rss {"feedURL":"https://example.test/feed"} /-->'],
+        'a LiveWhale widget' => ['<div class="lwcw" data-options="id=20&format=html"></div>'],
+        'a blogroll shortcode' => ['[blogroll category="news"]'],
+    ]);
 
     it('registers each block\'s entry id, against its post id, for blocks that refer to it', function (): void {
         reusableBlockRun(reusableBlockExport([['id' => '701', 'slug' => 'one'], ['id' => '702', 'slug' => 'two']]), ReusableBlockTestConverter::returning(['content' => [], 'page_builder' => []]));

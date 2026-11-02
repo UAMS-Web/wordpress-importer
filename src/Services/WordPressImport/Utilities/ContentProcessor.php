@@ -79,6 +79,23 @@ class ContentProcessor
     }
 
     /**
+     * Whether process() would treat this raw content as page builder content.
+     *
+     * Decodes the content as process() does before testing it, so a caller choosing
+     * a blueprint up front gets the answer process() will act on (#239).
+     *
+     * @param  string  $content  Raw WordPress content from <content:encoded>
+     * @return bool True if process() would parse this content for `page_builder`
+     */
+    public function hasPageBuilderContent(
+        string $content
+    ): bool {
+        return $this->hasAcfBlocksInContent(
+            TextProcessor::decodeEntitiesPreservingComments($content)
+        );
+    }
+
+    /**
      * Checks if the content string contains ACF blocks.
      *
      * Scans the raw HTML content string for wp:acf/*, wp:minervakb/*, or wp:rss block

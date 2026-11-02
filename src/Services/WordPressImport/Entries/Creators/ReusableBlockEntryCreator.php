@@ -181,20 +181,15 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
             // Determine blueprint based on content (similar to PageEntryCreator)
             // ---
 
-            // Check if content contains ACF blocks
-            $hasAcfBlocks = \preg_match(
-                '/<!--\s*wp:acf\//',
-                $contentEncoded
-            );
+            // ---
+            // Ask the processor rather than scanning for ACF blocks here: it sends any
+            // page builder content to `page_builder`, so a block chosen as a basic page
+            // on a narrower test would store neither field (#239).
+            // ---
+            $hasPageBuilderContent = $contentProcessor->hasPageBuilderContent($contentEncoded);
 
-            // ---
-            // `preg_match()` returns 0 or 1 here, never false, so this test and the one
-            // choosing the content below always pick the landing page, and the
-            // basic-page branch never runs (#239). Its mutants are annotated where
-            // they stand rather than the branch being decided here.
-            // ---
-            // @pest-mutate-ignore: FalseToTrue
-            $blueprint = $hasAcfBlocks !== false
+            // Choose the blueprint that holds the field the content will arrive in
+            $blueprint = $hasPageBuilderContent
                 ? 'reusable_content_landing_page'
                 : 'reusable_content_basic_page';
 
@@ -296,9 +291,8 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 $entryId
             );
 
-            // Check if content contains ACF blocks; always true, as above (#239)
-            // @pest-mutate-ignore: FalseToTrue
-            if ($hasAcfBlocks !== false) {
+            // Check if the block holds page builder content
+            if ($hasPageBuilderContent) {
                 // Get page_builder content from parsed content result
                 $pageBuilderContent = $parsedContent['page_builder'];
 
@@ -308,11 +302,8 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                     $data['page_builder'] = $pageBuilderContent;
                 }
             } else { // Otherwise
-                // Resolve processed content as an array for empty-content checks. This
-                // branch never runs (#239), so its mutants cannot be reached
-                // @pest-mutate-ignore: CoalesceRemoveLeft
-                $processedContent = $parsedContent['content'] ?? [];
-                // @pest-mutate-ignore: TernaryNegated
+                // Resolve processed content as an array for empty-content checks
+                $processedContent = $parsedContent['content'];
                 $contentForCheck = \is_array($processedContent) ? $processedContent : [];
 
                 // Check if the processed content is empty
@@ -322,11 +313,10 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 // Assign content to data array only if it's not empty
                 // ---
 
-                // Check if processed content is not empty (unreachable, #239)
-                // @pest-mutate-ignore: IfNegated, RemoveNot, CoalesceRemoveLeft
+                // Check if processed content is not empty
                 if (! $isEmptyContent) {
                     // Assign content to data array for basic_page blueprint
-                    $data['content'] = $parsedContent['content'] ?? [];
+                    $data['content'] = $parsedContent['content'];
                 }
             }
 
@@ -385,7 +375,7 @@ class ReusableBlockEntryCreator extends BaseEntryCreator
                 $postDate,
                 $link,
                 $contentEncoded,
-                $hasAcfBlocks,
+                $hasPageBuilderContent,
                 $blueprint,
                 $data,
                 $entrySlug,

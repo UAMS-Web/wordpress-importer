@@ -72,6 +72,7 @@ afterEach(function (): void {
     foreach ([
         'collections.classifieds.classified',
         'collections.reusable_content.reusable_content',
+        'collections.reusable_content.reusable_content_basic_page',
         'collections.reusable_content.reusable_content_landing_page',
     ] as $handle) {
         $blueprint = BlueprintFacade::find($handle);
@@ -260,7 +261,7 @@ function wpmem1241ReusableSetup(): void
     $collection->sites(['default']);
     $collection->save();
 
-    foreach (['reusable_content', 'reusable_content_landing_page'] as $handle) {
+    foreach (['reusable_content', 'reusable_content_basic_page', 'reusable_content_landing_page'] as $handle) {
         $blueprint = BlueprintFacade::make($handle);
         $blueprint->setNamespace('collections.reusable_content');
         $blueprint->setContents(['fields' => [['handle' => 'title', 'field' => ['type' => 'text']]]]);
