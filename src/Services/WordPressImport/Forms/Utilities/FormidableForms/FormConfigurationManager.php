@@ -2096,6 +2096,17 @@ class FormConfigurationManager
                 $emailConfig = [...$emailConfig, ...$contentMappings];
 
                 // ---
+                // Carry the view's title as the notification's name. The `title` entry
+                // of the action mapping is conditional, so buildEmailConfiguration()
+                // skips it, and this is the copy that is saved. The host app labels a
+                // skipped notification with this name.
+                // ---
+                $viewName = $processedViewData['title'] ?? null;
+                if (\is_string($viewName) && $viewName !== '') {
+                    $emailConfig['name'] = $viewName;
+                }
+
+                // ---
                 // Attach the action's send conditions.
                 //
                 // This is the authoritative email path: what it returns is handed to

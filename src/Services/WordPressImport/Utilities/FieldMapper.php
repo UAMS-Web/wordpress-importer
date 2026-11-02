@@ -173,7 +173,7 @@ class FieldMapper
                     1
                 ) === \substr(
                     $valueString,
-                    7
+                    6
                 ) // Remove '_' from key and 'field_' from value, then compare
             ) {
                 // Track this key as processed to avoid duplicate processing

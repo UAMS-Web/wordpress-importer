@@ -257,15 +257,38 @@ it('clamps a focus outside the image to its edges', function (): void {
         ->and(AttachmentFocalPointCalculator::buildFocusString($dimensions, [['x' => -50.0, 'y' => 2000.0]]))->toBe('0-100-1');
 });
 
-it('reads a focus between infinite coordinates as zero', function (): void {
-    // Characterization: '1e999' and '-1e999' are numeric and read as INF and -INF,
-    // so the center is NAN, which the integer cast turns into 0 (#138)
+it('falls back to the default focus between infinite coordinates', function (): void {
+    // '1e999' and '-1e999' are numeric and read as INF and -INF, which used to center on
+    // NAN and land on the image's edge (#138)
     $points = AttachmentFocalPointCalculator::parseSerializedPointList(serialize([
         ['x' => '1e999', 'y' => '1e999'],
         ['x' => '-1e999', 'y' => '-1e999'],
     ]));
 
-    expect(AttachmentFocalPointCalculator::buildFocusString(['width' => 10, 'height' => 10], $points))->toBe('0-0-1');
+    expect($points)->toBe([])
+        ->and(AttachmentFocalPointCalculator::buildFocusString(['width' => 10, 'height' => 10], $points))
+        ->toBe(AttachmentFocalPointCalculator::DEFAULT_FOCUS);
+});
+
+it('skips a row with a coordinate that is not finite on either axis', function (mixed $x, mixed $y): void {
+    expect(AttachmentFocalPointCalculator::parseSerializedPointList(serialize([['x' => $x, 'y' => $y]])))->toBe([]);
+})->with([
+    'infinite x' => ['1e999', '5'],
+    'infinite y' => ['5', '1e999'],
+    'negative infinite x' => ['-1e999', '5'],
+    'negative infinite y' => ['5', '-1e999'],
+    'float INF' => [INF, 5.0],
+    'float NAN' => [5.0, NAN],
+]);
+
+it('keeps the usable points beside a row that is not finite', function (): void {
+    $points = AttachmentFocalPointCalculator::parseSerializedPointList(serialize([
+        ['x' => '1e999', 'y' => '5'],
+        ['x' => 20, 'y' => 30],
+    ]));
+
+    expect($points)->toBe([['x' => 20.0, 'y' => 30.0]])
+        ->and(AttachmentFocalPointCalculator::buildFocusString(['width' => 100, 'height' => 100], $points))->toBe('20-30-1');
 });
 
 it('rounds a focus to the nearest percent', function (): void {

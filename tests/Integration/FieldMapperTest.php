@@ -162,20 +162,35 @@ it('passes over meta keys that are not strings', function (): void {
 });
 
 it('skips an ACF field reference whose name matches the key it follows', function (): void {
-    // The check compares the key without `_` to the value without its first seven
-    // characters; `field_` is six, so a reference spelled with one extra character
-    // matches, and the theme's real references do not (#148)
-    [$data, $keys] = fieldMapperRun($this, ['_page_subsection' => 'field_Xpage_subsection']);
+    [$data, $keys] = fieldMapperRun($this, ['_page_subsection' => 'field_page_subsection']);
 
     expect($data)->not->toHaveKey('subsection')
         ->and($keys)->toBe(['_page_subsection']);
 });
 
-it('lets the theme\'s ACF reference row overwrite post_hide_author', function (): void {
-    // Characterization of #148: `_post_hide_author` holds `field_post_hide_author`
-    [$data] = fieldMapperRun($this, ['post_hide_author' => '1', '_post_hide_author' => 'field_post_hide_author']);
+it('keeps a direct-mapped value when its ACF reference row follows it', function (): void {
+    [$data, $keys] = fieldMapperRun($this, [
+        'seopress_robots_canonical_meta' => 'https://example.test/page',
+        '_seopress_robots_canonical_meta' => 'field_seopress_robots_canonical_meta',
+    ]);
+
+    expect($data['robots_canonical_meta'] ?? null)->toBe('https://example.test/page')
+        ->and($keys)->toBe(['seopress_robots_canonical_meta', '_seopress_robots_canonical_meta']);
+});
+
+it('does not treat an ACF reference to another field as this field\'s reference', function (): void {
+    // One character off in either direction: the prefix must be removed exactly
+    [$data] = fieldMapperRun($this, ['_post_hide_author' => 'field_Xpost_hide_author']);
 
     expect($data['hide_creator_query'] ?? null)->toBeFalse();
+});
+
+it('keeps post_hide_author when the theme\'s ACF reference row follows it', function (): void {
+    // `_post_hide_author` holds `field_post_hide_author`; the row used to overwrite the value (#148)
+    [$data, $keys] = fieldMapperRun($this, ['post_hide_author' => '1', '_post_hide_author' => 'field_post_hide_author']);
+
+    expect($data['hide_creator_query'] ?? null)->toBeTrue()
+        ->and($keys)->toBe(['post_hide_author', '_post_hide_author']);
 });
 
 it('maps the direct keys, with or without a leading underscore', function (): void {
@@ -394,7 +409,7 @@ it('keeps reading meta after a key that is not a string', function (): void {
 it('keeps reading meta after a hero key and after an ACF reference', function (): void {
     [$data, $keys] = fieldMapperRun($this, [
         'page_hero_hero_0_hero_heading' => 'Hi',
-        '_page_subsection' => 'field_Xpage_subsection',
+        '_page_subsection' => 'field_page_subsection',
         'post_hide_author' => '1',
     ]);
 
@@ -403,17 +418,17 @@ it('keeps reading meta after a hero key and after an ACF reference', function ()
 });
 
 it('skips an ACF reference only when its key starts with an underscore', function (): void {
-    // The value and the name match, so only the missing `_` keeps this row from
-    // being read as a reference
-    [, $keys] = fieldMapperRun($this, ['Xpage_subsection' => 'field_Xpage_subsection']);
+    // The value and the name match once the key loses its first character, so only
+    // the missing `_` keeps this row from being read as a reference
+    [, $keys] = fieldMapperRun($this, ['Xpage_subsection' => 'field_page_subsection']);
 
     expect($keys)->toBe([]);
 });
 
 it('skips an ACF reference only when its value starts with field_', function (): void {
-    // The name matches once seven characters are dropped, so only the prefix keeps
+    // The name matches once six characters are dropped, so only the prefix keeps
     // this row from being read as a reference
-    [, $keys] = fieldMapperRun($this, ['_Xpage_unmapped' => '1234567Xpage_unmapped']);
+    [, $keys] = fieldMapperRun($this, ['_page_unmapped' => '123456page_unmapped']);
 
     expect($keys)->toBe([]);
 });

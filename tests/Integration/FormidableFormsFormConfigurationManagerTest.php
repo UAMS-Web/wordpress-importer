@@ -380,9 +380,9 @@ it('maps each email action view to an email configuration, with its context whil
     $second = ffcmTable($configs[1] ?? null);
 
     expect(\count($configs))->toBe(2)
-        // The action's name is mapped conditionally, which this path does not do, so the
-        // configuration carries none.
-        ->and(\array_key_exists('name', $first))->toBeFalse()
+        // The view's title is the notification's name, and an empty title leaves none
+        ->and($first['name'] ?? null)->toBe('Notify the office')
+        ->and(\array_key_exists('name', $second))->toBeFalse()
         ->and(\array_intersect_key($first, \array_flip(['enabled', 'id', 'to', 'subject', 'from', 'from_name', 'to_type'])))->toBe([
             'enabled' => true,
             'id' => 'notify-office',
@@ -401,6 +401,25 @@ it('maps each email action view to an email configuration, with its context whil
         ])
         ->and(ProcessingContext::getFormConfigContext())->toBeNull();
 });
+
+it('imports an email view with no usable title, with no name', function (array $view): void {
+    $base = ['excerpt' => 'email', 'post_name' => 'untitled', 'status' => 'publish', 'content' => \json_encode(['email_to' => 'a@uams.edu'])];
+
+    $configs = ffcmTable(ffcmCall($this->manager, 'mapNotificationsToEmailConfigurations', [
+        'form_id' => '57',
+        'views' => [[...$base, ...$view]],
+    ], 'default'));
+    $config = ffcmTable($configs[0] ?? null);
+
+    expect(\count($configs))->toBe(1)
+        ->and(\array_key_exists('name', $config))->toBeFalse()
+        ->and($config['id'] ?? null)->toBe('untitled')
+        ->and($config['to'] ?? null)->toBe('a@uams.edu');
+})->with([
+    'absent' => [[]],
+    'empty' => [['title' => '']],
+    'not a string' => [['title' => ['x']]],
+]);
 
 it('maps no email configuration from views it cannot read', function (mixed $views): void {
     expect(ffcmCall($this->manager, 'mapNotificationsToEmailConfigurations', ['views' => $views], 'default'))->toBe([]);
