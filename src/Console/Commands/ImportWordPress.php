@@ -2691,7 +2691,7 @@ class ImportWordPress extends Command
         // ---
         $content = \preg_replace(
             [
-                '/<!--\s*wp:.*?\/\s*-->/s',
+                '/<!--\s*wp:(?:(?!-->).)*?\/\s*-->/s',
                 '/<!--\s*wp:.*?-->/s',
                 '/<!--\s*\/wp:.*?-->/s',
             ],
@@ -2708,7 +2708,9 @@ class ImportWordPress extends Command
      *
      * This method finds all Gutenberg block comment tags, matches opening tags with
      * their corresponding closing tags, and removes the entire block content
-     * including any nested blocks within them.
+     * including any nested blocks within them. Only the outermost spans are cut: a
+     * span lying inside another was measured on content that cutting the other would
+     * change.
      *
      * @param  string  $content  The content to process
      * @return string Content with nested Gutenberg blocks removed
@@ -2720,27 +2722,46 @@ class ImportWordPress extends Command
         // length 0, so cutting it removes nothing.
         $blockPositions = $this->findGutenbergBlockPositions($content);
 
-        // ---
-        // Sort positions by start position (descending) so we can remove from end to
-        // beginning
-        // ---
+        // Sort positions by start position, so each span's outer block comes first
         usort(
             $blockPositions,
-            fn (array $a, array $b): int => $b['start'] - $a['start']
+            fn (array $a, array $b): int => $a['start'] - $b['start']
         );
 
         // ---
-        // Remove blocks from end to beginning to maintain position accuracy
+        // Merge the spans, so a span inside another, or crossing its end where the
+        // tags overlap, is cut as part of it
         // ---
 
-        // Loop through block positions to remove each block
+        // Initialize the merged spans, as start and end, in order
+        $spans = [];
+
+        // Loop through block positions to merge each into the spans
         foreach ($blockPositions as $block) {
-            // Remove block from content using substr_replace
+            $end = $block['start'] + $block['length'];
+            $last = \array_key_last($spans);
+
+            // Spans that touch are cut alike whether merged or apart
+            // @pest-mutate-ignore: GreaterToGreaterOrEqual
+            if ($last === null || $block['start'] > $spans[$last]['end']) {
+                $spans[] = ['start' => $block['start'], 'end' => $end];
+            } else {
+                $spans[$last]['end'] = \max($spans[$last]['end'], $end);
+            }
+        }
+
+        // ---
+        // Remove spans from end to beginning to maintain position accuracy
+        // ---
+
+        // Loop through the spans to remove each one
+        foreach (\array_reverse($spans) as $span) {
+            // Remove span from content using substr_replace
             $content = substr_replace(
                 $content,
                 '',
-                $block['start'],
-                $block['length']
+                $span['start'],
+                $span['end'] - $span['start']
             );
         }
 
