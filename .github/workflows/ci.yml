@@ -153,7 +153,7 @@ jobs:
       # here: a slot's initialized submodule can lag its ref, and this checkout has none.
       # PARITY: mirrored by the `pest` job in local-ci.json.
       - name: Run Pest (Unit + Integration suites)
-        run: vendor/bin/pest --testsuite=Unit,Integration
+        run: vendor/bin/pest --testsuite=Unit,Integration --parallel
 
   pint:
     name: Pint (${{ matrix.os }})
