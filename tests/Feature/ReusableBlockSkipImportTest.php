@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Collection;
 use Illuminate\Testing\PendingCommand;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Entry as EntryFacade;
@@ -128,12 +129,25 @@ function skipImportBlocks(): array
     $blocks = [];
 
     foreach (EntryFacade::whereCollection('reusable_content') as $entry) {
-        if ($entry instanceof Entry && $entry->locale() === 'default' && str_starts_with((string) $entry->slug(), 'zz-skip-block')) {
+        if ($entry instanceof Entry && $entry->locale() === 'default' && is_string($entry->slug()) && str_starts_with($entry->slug(), 'zz-skip-block')) {
             $blocks[] = $entry;
         }
     }
 
     return $blocks;
+}
+
+/**
+ * An entry's data.
+ *
+ * @param  Entry  $entry  The entry
+ * @return array<array-key, mixed> Its values
+ */
+function skipImportData(Entry $entry): array
+{
+    $data = $entry->data();
+
+    return $data instanceof Collection ? $data->all() : [];
 }
 
 /**
@@ -159,7 +173,7 @@ function skipImportTwice(WordPressImportTestCase $test, Closure $export, string 
         expect($existing)->toBeInstanceOf(Entry::class);
 
         // Taken now, since the second run may delete this entry
-        $data = $existing?->data()->all() ?? [];
+        $data = $existing instanceof Entry ? skipImportData($existing) : [];
 
         // A new run starts with an empty registry, and this one shares the process
         WpBlockRegistry::clear();
@@ -188,7 +202,7 @@ it('leaves a block alone and points a new page at it on a run that skips matchin
 
         expect($blocks)->toHaveCount(1)
             ->and($blocks[0]->id())->toBe($existing->id())
-            ->and($blocks[0]->data()->all())->toBe($data)
+            ->and(skipImportData($blocks[0]))->toBe($data)
             ->and(skipImportReusableSets($page))->toHaveCount(1)
             ->and(skipImportReusableSets($page)[0] ?? null)->toMatchArray(['content' => $existing->id()]);
     });
@@ -199,7 +213,7 @@ it('replaces a block and points a new page at the replacement on a run that over
         $blocks = skipImportBlocks();
 
         expect($blocks)->toHaveCount(1)
-            ->and(json_encode($blocks[0]->data()->all()))->toContain('Changed.')
+            ->and(json_encode(skipImportData($blocks[0])))->toContain('Changed.')
             ->and(skipImportReusableSets($page)[0] ?? null)->toMatchArray(['content' => $blocks[0]->id()]);
     });
 });
@@ -211,7 +225,7 @@ it('keeps a block and points a new page at a copy on a run that creates an addit
 
         expect($blocks)->toHaveCount(2)
             ->and($copies)->toHaveCount(1)
-            ->and(json_encode($copies[0]->data()->all()))->toContain('Changed.')
+            ->and(json_encode(skipImportData($copies[0])))->toContain('Changed.')
             ->and(skipImportReusableSets($page)[0] ?? null)->toMatchArray(['content' => $copies[0]->id()]);
     });
 });
