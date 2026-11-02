@@ -183,10 +183,11 @@ class BlockProcessorHelper
         // Initialize empty attributes array
         $attributes = [];
 
-        // Check if comment contains JSON attributes in braces
+        // Check if comment contains JSON attributes in braces. The match runs to the
+        // last closing brace, since a lazy one stops inside a nested object.
         if (
             \preg_match(
-                '/{.+?}/s',
+                '/{.+}/s',
                 $comment,
                 $matches
             ) === 1
