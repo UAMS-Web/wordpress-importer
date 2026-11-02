@@ -96,14 +96,19 @@ jobs:
       - name: Run composer validate
         run: composer validate --no-check-publish --no-check-all
 
+  # Four serial shards on separate runners (#376), not `--parallel`: workers sharing one
+  # `vendor/` race on Testbench's storage, which failed a test on Windows when measured.
+  # Change the shard count here and in `--shard` below together; `scripts/ci-local.test.mjs`
+  # fails on a shard left out of the matrix, because its tests would run nowhere.
   pest:
-    name: Pest (Unit + Integration suites) (${{ matrix.os }})
+    name: Pest shard ${{ matrix.shard }}/4 (Unit + Integration suites) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     if: vars.RUN_REMOTE_CI != 'false'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
 
@@ -151,9 +156,10 @@ jobs:
       # initializes the submodule, so it skips here and needs no extra token. That
       # also means the stale-corpus case scripts/prepare-dependencies.mjs reconciles (wordpress-importer-archive#1139) cannot arise
       # here: a slot's initialized submodule can lag its ref, and this checkout has none.
-      # PARITY: mirrored by the `pest` job in local-ci.json.
+      # PARITY: mirrored by the `pest` job in local-ci.json, which runs the same command
+      # whole. Only `--shard` differs, and the shards together are that run.
       - name: Run Pest (Unit + Integration suites)
-        run: vendor/bin/pest --testsuite=Unit,Integration --parallel
+        run: vendor/bin/pest --testsuite=Unit,Integration --shard=${{ matrix.shard }}/4
 
   pint:
     name: Pint (${{ matrix.os }})

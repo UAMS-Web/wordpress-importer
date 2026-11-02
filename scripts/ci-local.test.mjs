@@ -141,8 +141,22 @@ describe('local-ci.json against ci.yml', () => {
         for (const name of ['validate', 'rector', 'pest', 'node-test', 'python-test']) {
             // A whole line, not a substring: `--testsuite=Unit` is a prefix of ci.yml's
             // `--testsuite=Unit,Integration`, so `includes` would pass a narrowed command.
-            assert.ok(ciLines.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
+            // `--shard` is the one difference a shard's command may carry (#376).
+            const mirrored = ciLines.map((line) => line.replace(/ --shard=\S+$/, ''))
+            assert.ok(mirrored.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
         }
+    })
+
+    // A shard left out of the matrix drops its tests with every check still green, so this
+    // is the failure nothing else would report (#376).
+    it('runs every Pest shard on the matrix', () => {
+        const own = ci.slice(ci.indexOf('\n  pest:\n') + 1).split(/\n {2}[a-z][\w-]*:\n/)[0]
+        const total = Number(/--shard=\$\{\{ matrix\.shard \}\}\/(\d+)$/m.exec(own)?.[1])
+        const shards = (/^ {8}shard: \[([\d, ]+)\]$/m.exec(own)?.[1] ?? '').split(', ').map(Number)
+
+        assert.ok(total >= 2, `read a shard total of ${total}`)
+        assert.deepEqual(shards, Array.from({ length: total }, (_, index) => index + 1))
+        assert.match(own, new RegExp(`^ {4}name: Pest shard \\$\\{\\{ matrix\\.shard \\}\\}/${total} `, 'm'))
     })
 
     describe('the CI aggregate the ruleset requires', () => {

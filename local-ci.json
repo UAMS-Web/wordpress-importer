@@ -32,7 +32,7 @@
     },
     {
       "name": "pest",
-      "run": "vendor/bin/pest --testsuite=Unit,Integration --parallel",
+      "run": "vendor/bin/pest --testsuite=Unit,Integration",
       "always": true
     },
     {
