@@ -2,25 +2,25 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
 use DOMComment;
 use DOMNode;
 use DOMNodeList;
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\FormidableFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FormidableFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
 
 /**
  * Parses WordPress non-ACF blocks into Statamic uamsweb_block_content replicator
@@ -156,7 +156,7 @@ class NonAcfBlockParser
      * @param  array<int|string, mixed>  $items  Array of SimpleXMLElement items for post ID mapping
      * @param  array<int|string, mixed>  $unaddressedBlocks  List of unaddressed block types
      * @param  ?string  $pageSlug  The page slug (optional)
-     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>} Result with processed flag, skip count, and optional direct set
+     * @return array{processed: bool, skipCount: int, directSet?: array<int|string, mixed>, htmlAfterSet?: string} Result with processed flag, skip count, and optional direct set
      */
     public function parseNode(
         DOMNode $node,
@@ -316,18 +316,25 @@ class NonAcfBlockParser
                     // Use skip count from shortcode processor result
                     $skipCount = $this->resolveSkipCount($result);
 
-                    // The set stands alone, so what surrounded its shortcode goes to
-                    // the content that follows it (#180)
-                    if (isset($result['surrounding_html'])) {
-                        $accumulator[] = ['html' => $result['surrounding_html']];
+                    // The set stands alone, so what comes before its shortcode joins
+                    // the content ahead of it (#180)
+                    if (\is_string($result['html_before'] ?? null)) {
+                        $accumulator[] = ['html' => $result['html_before']];
                     }
 
                     // Return result with direct set for PageBuilderParser
-                    return [
+                    $directResult = [
                         'processed' => true,
                         'skipCount' => $skipCount,
                         'directSet' => $result['page_builder_set'],
                     ];
+
+                    // What comes after the shortcode can only follow the set
+                    if (\is_string($result['html_after'] ?? null)) {
+                        $directResult['htmlAfterSet'] = $result['html_after'];
+                    }
+
+                    return $directResult;
                 }
 
                 // Check if shortcode processing was successful and add to accumulator
@@ -529,7 +536,7 @@ class NonAcfBlockParser
         );
 
         // Parse with Tiptap into Bard format
-        $bardContent = BardParser::wrapRootText($this->bardParser->parse($processedHtml));
+        $bardContent = $this->bardParser->parse($processedHtml);
 
         // Check if the Bard content is empty after parsing
         if ($bardContent === []) {

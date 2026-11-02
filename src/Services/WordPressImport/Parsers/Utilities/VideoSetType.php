@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities;
 
 /**
  * Routes a source video URL to the Bard set that hosts it, and canonicalizes the

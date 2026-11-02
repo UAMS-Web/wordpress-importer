@@ -33,20 +33,20 @@ use Statamic\Taxonomies\Term;
 use Statamic\Taxonomies\TermCollection;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\StructuredTermImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\NewsArticleResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\StructuredTermImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\TermDestinationRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\NewsArticleResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class);
 
@@ -818,8 +818,7 @@ describe('the flat term pass', function (): void {
 
         expect(termsSaved())->toBe([
             'probe_tax::default_my-old_term' => 'Old title',
-            // Statamic's slug setter drops the dot of the importer's ".1" (#193)
-            'probe_tax::default_my-old_term1' => 'Default — My Old Term',
+            'probe_tax::default_my-old_term-1' => 'Default — My Old Term',
         ]);
     });
 
@@ -849,11 +848,10 @@ describe('the flat term pass', function (): void {
 
         $probe->call('createTaxonomyTermsFromStoredData', [['original' => 'dup', 'name' => 'First'], ['original' => 'dup', 'name' => 'Second']], 'probe_tax', 'default', new BufferedOutput);
 
-        // Statamic's slug setter drops the dot of the importer's ".1" and ".2" (#193)
         expect(termsSaved())->toBe([
             'probe_tax::default_dup' => 'Old title',
-            'probe_tax::default_dup1' => 'Default — First',
-            'probe_tax::default_dup2' => 'Default — Second',
+            'probe_tax::default_dup-1' => 'Default — First',
+            'probe_tax::default_dup-2' => 'Default — Second',
         ]);
     });
 

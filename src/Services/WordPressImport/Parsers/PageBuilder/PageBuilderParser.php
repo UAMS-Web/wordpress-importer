@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder;
 
 use DOMNode;
 use DOMNodeList;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HeadingDemoter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
 
 /**
  * Orchestrates parsing of WordPress <content:encoded> into Statamic page_builder
@@ -574,8 +574,21 @@ class PageBuilderParser
 
                 // Check if non-ACF parser returned a direct page_builder set
                 if (isset($nonAcfResult['directSet'])) {
+                    // Finalize the content ahead of the set, so the set lands after it
+                    $this->finalizeNonAcfContentIfNeeded(
+                        $content,
+                        $site,
+                        $assetImporter,
+                        $output
+                    );
+
                     // Append the direct set to ordered page_builder sets
                     self::$orderedSets[] = $nonAcfResult['directSet'];
+
+                    // Start the content after the set with what follows its shortcode
+                    if (isset($nonAcfResult['htmlAfterSet'])) {
+                        self::$nonAcfAccumulator[] = ['html' => $nonAcfResult['htmlAfterSet']];
+                    }
                 }
 
                 // ---

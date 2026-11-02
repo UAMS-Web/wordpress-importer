@@ -8,8 +8,8 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
 use Symfony\Component\Yaml\Yaml;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms\FormConfigurationManager;
 
 // Shared formAuditFormidableFixturesDir() resolver — the committed corpus by
 // default, overridable host-side. See the file header for the full contract.
@@ -53,7 +53,7 @@ require_once __DIR__.'/../Support/form-audit-test-support.php';
  * throwaway Statamic forms, so it stays quarantined to the host suite's
  * `serial` group.
  *
- * @command  php artisan test --compact vendor/uams-web/wordpress-importer/tests/Feature/FormidableNotificationAuditTest.php
+ * @command  php artisan test --compact vendor/uams-web/aether-wordpress-importer/tests/Feature/FormidableNotificationAuditTest.php
  */
 uses(TestCase::class)->group('serial');
 

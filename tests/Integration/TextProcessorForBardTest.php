@@ -22,15 +22,15 @@ use Illuminate\Support\Facades\Log;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WpAutoP;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -323,7 +323,7 @@ it('applies neither WpAutoP nor InnerBlocks handling by default', function (): v
 
     // The quote comment reached the block loop, and the text was not split into paragraphs
     expect(textProcessorForBardPath($quote, [0, 'attrs', 'values', 'type']))->toBe('pull_quote')
-        ->and($text)->toBe([['type' => 'text', 'text' => 'OneTwo', 'attrs' => []]]);
+        ->and($text)->toBe([textProcessorForBardParagraph('OneTwo')]);
 });
 
 it('strips block comments from InnerBlocks content before anything reads them', function (): void {
@@ -503,20 +503,30 @@ it('removes the hrefs of gallery links, and only those, after an earlier, longer
     );
 });
 
-it('removes the hrefs of links in a gallery ahead of a shortcode block, and in the block', function (): void {
+it('runs a link beside a shortcode through the link processor in a post of one block', function (): void {
     $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->extracted = [['name' => 'held', 'original' => '[held]']];
 
-    // The two kinds of block are found separately, so they are put in order
-    // before the hrefs are removed from the last one first
+    textProcessorForBard('<!-- wp:shortcode --><a href="/beside">B</a> [held]<!-- /wp:shortcode -->');
+
+    expect($fakes['link']->calls)->toHaveCount(1)
+        ->and($fakes['link']->calls[0]['html'] ?? null)->toContain('href="/beside"');
+});
+
+it('removes the hrefs of links in a gallery ahead of a shortcode block, and in a shortcode in the block', function (): void {
+    $fakes = textProcessorForBardFakes();
+    $fakes['shortcode']->extracted = [['name' => 'held', 'original' => '[held]<a href="/in-shortcode">I</a>[/held]']];
+
+    // The shortcode block is found after the gallery's hrefs go, which moves it
     textProcessorForBard(
         '<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a href="/one-long-target.jpg"><img src="a.jpg"></a></figure><!-- /wp:gallery -->'
-        .'<!-- wp:shortcode --><a href="/in-block">B</a><!-- /wp:shortcode -->'
+        .'<!-- wp:shortcode --><a href="/beside">B</a>[held]<a href="/in-shortcode">I</a>[/held]<!-- /wp:shortcode -->'
         .'<p><a href="/after">A</a></p>'
     );
 
     expect($fakes['link']->calls[0]['html'] ?? null)->toBe(
         '<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a ><img src="a.jpg"></a></figure><!-- /wp:gallery -->'
-        .'<!-- wp:shortcode --><a >B</a><!-- /wp:shortcode -->'
+        .'<!-- wp:shortcode --><a href="/beside">B</a>[held]<a >I</a>[/held]<!-- /wp:shortcode -->'
         .'<p><a href="/after">A</a></p>'
     );
 });
@@ -576,7 +586,7 @@ it('reads a caption whose content is not a string as having no image', function 
     expect($fakes['shortcode']->converted)->toBe([]);
 });
 
-it('strips link targets inside gallery and shortcode blocks before the link processor reads them', function (): void {
+it('strips link targets inside a gallery before the link processor reads them, and leaves a shortcode block with no shortcode alone', function (): void {
     $fakes = textProcessorForBardFakes();
 
     textProcessorForBard(
@@ -587,7 +597,7 @@ it('strips link targets inside gallery and shortcode blocks before the link proc
 
     expect($fakes['link']->calls[0]['html'] ?? null)->toBe(
         '<!-- wp:gallery {"ids":[1]} --><figure class="wp-block-gallery"><a ><img src="g.jpg"></a></figure><!-- /wp:gallery -->'
-        .'<!-- wp:shortcode -->[unknown_thing]<a class="c"  title="t">S</a><!-- /wp:shortcode -->'
+        .'<!-- wp:shortcode -->[unknown_thing]<a class="c" href=\'/s\' title="t">S</a><!-- /wp:shortcode -->'
         .'<p><a href="/k">K</a></p>'
     );
 });
@@ -688,7 +698,7 @@ it('keeps a later node whose markup matches a node a block skipped', function ()
     // read as content (#152)
     $content = textProcessorForBard('<!-- wp:spacer --><div class="wp-block-spacer">X</div><!-- /wp:spacer --><div class="wp-block-spacer">X</div><p>End</p>');
 
-    expect($content)->toBe([['type' => 'text', 'text' => 'X', 'attrs' => []], textProcessorForBardParagraph('End')]);
+    expect($content)->toBe([textProcessorForBardParagraph('X'), textProcessorForBardParagraph('End')]);
 });
 
 it('keeps the text on either side of a spacer apart', function (): void {
@@ -698,8 +708,8 @@ it('keeps the text on either side of a spacer apart', function (): void {
     $content = textProcessorForBard('lead<!-- wp:spacer --><div class="wp-block-spacer"></div><!-- /wp:spacer -->tail');
 
     expect($content)->toBe([
-        ['type' => 'text', 'text' => 'lead', 'attrs' => []],
-        ['type' => 'text', 'text' => 'tail', 'attrs' => []],
+        textProcessorForBardParagraph('lead'),
+        textProcessorForBardParagraph('tail'),
     ]);
 });
 
@@ -869,8 +879,8 @@ it('marks the raw shortcode text inside a shortcode block as processed, and only
     $content = textProcessorForBard("<!-- wp:shortcode -->\n[unknown_thing]\n<!-- /wp:shortcode -->\n[unknown_thing]\n<p>Q</p>");
 
     expect($content)->toBe([
-        ['type' => 'text', 'text' => '[unknown_thing]', 'attrs' => []],
-        ['type' => 'text', 'text' => '[unknown_thing]', 'attrs' => []],
+        textProcessorForBardParagraph('[unknown_thing]'),
+        textProcessorForBardParagraph('[unknown_thing]'),
         textProcessorForBardParagraph('Q'),
     ]);
 });
@@ -929,7 +939,7 @@ it('matches already-processed nodes by exact HTML, so text that only compares eq
 
     $content = TextProcessor::processForBard('01', 'default', app(AssetImporter::class), new BufferedOutput, preProcessedNodes: [$one]);
 
-    expect($content)->toBe([['type' => 'text', 'text' => '01', 'attrs' => []]]);
+    expect($content)->toBe([textProcessorForBardParagraph('01')]);
 });
 
 it('reads a bare form shortcode without the whitespace a stripped control character left', function (): void {
@@ -1102,7 +1112,7 @@ it('keeps whitespace between images to join the text after it', function (): voi
     $content = textProcessorForBard("<img src=\"a.jpg\">\n<img src=\"b.jpg\"> c");
 
     // Parsed with the newline before it, the leading space of " c" is dropped
-    expect($content)->toBe([textProcessorForBardImage('a.jpg'), textProcessorForBardImage('b.jpg'), ['type' => 'text', 'text' => 'c', 'attrs' => []]]);
+    expect($content)->toBe([textProcessorForBardImage('a.jpg'), textProcessorForBardImage('b.jpg'), textProcessorForBardParagraph('c')]);
 });
 
 it('strips the link targets of a later block after an earlier block shortened the content', function (): void {
@@ -1230,7 +1240,7 @@ it('adds a shortcode block\'s content once, whether its processor converts it or
 })->with([
     'an element and no shortcode' => ['<p>[unknown_thing]</p>', ['paragraph:[unknown_thing]']],
     'two elements and no shortcode' => ['<p>a</p><p>b</p>', ['paragraph:a', 'paragraph:b']],
-    'text and no shortcode' => ['[unknown_thing]', ['text']],
+    'text and no shortcode' => ['[unknown_thing]', ['paragraph:[unknown_thing]']],
     'a converted shortcode after text in an element' => ['<p>Hi [ninja_form id=3]</p>', ['paragraph:Hi', 'set:form']],
     'two converted shortcodes in two elements' => ['<p>[table id=1 /]</p><p>[table id=2 /]</p>', ['set:table', 'set:table']],
     'a dropped shortcode beside text, which leaves one element' => ['<p>Text [subpage-list]</p>', ['paragraph:Text']],
@@ -1252,7 +1262,7 @@ it('imports an image in a shortcode block whose processor converts nothing, once
     // image into a set; the Bard parser makes no image set from the string (#156)
     $content = textProcessorForBard('<p>Lead</p><!-- wp:shortcode -->[callout]Text<img src="c.jpg">[/callout]<!-- /wp:shortcode --><p>End</p>');
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'text', 'set:image', 'text', 'paragraph:End'])
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:Lead', 'paragraph:[callout]Text', 'set:image', 'paragraph:[/callout]', 'paragraph:End'])
         ->and(array_column($fakes['image']->calls, 'html'))->toBe(['<img src="c.jpg">']);
 });
 

@@ -9,12 +9,12 @@ use Mockery\ExpectationInterface;
 use Mockery\LegacyMockInterface;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests for FileBlockProcessor, which turns a `wp:file` block into a Bard `file` set.
@@ -120,7 +120,7 @@ function fileBlockImportingImporter(?string $path, string $url, BufferedOutput $
     fileBlockExpects($importer, 'getUploadFiles')->andReturnTrue();
     fileBlockExpects($importer, 'importFile')
         ->once()
-        ->with($url, 'default', $output, 'files', SameSitePolicy::SKIP_DIFFERENT_SITE, null, null, null, null)
+        ->with($url, 'default', $output, 'files', SameSitePolicy::ALWAYS_IMPORT, null, null, null, null)
         ->andReturn($path);
 
     return $importer;

@@ -6,10 +6,10 @@ use Statamic\Facades\Blueprint as BlueprintFacade;
 use Statamic\Facades\Form as FormFacade;
 use Statamic\Fields\Blueprint;
 use Statamic\Forms\Form;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Non-email Ninja Forms actions survive the import (issue wordpress-importer-archive#651).
@@ -109,7 +109,7 @@ it('carries an active success message onto the Statamic confirmation attributes'
             'label' => 'Thank You',
             'message' => '<p>Thank you for reserving a T-Shirt.</p>',
         ],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -126,7 +126,7 @@ it('carries an active redirect, which is the whole of Love Lights post-submit be
             'label' => 'Redirect',
             'redirect_url' => 'https://uamshealth.com/…/pay-for-love-lights/',
         ],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -139,7 +139,7 @@ it('lets an active redirect supersede an active message, as Ninja does', functio
     $form = importNinjaFormsWithActions([
         ['type' => 'successmessage', 'active' => '1', 'label' => 'Thanks', 'message' => '<p>Thanks.</p>'],
         ['type' => 'redirect', 'active' => '1', 'label' => 'Redirect', 'redirect_url' => 'https://example.edu/done'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -154,7 +154,7 @@ it('ignores an inactive action — the Love Lights shape exactly', function (): 
     $form = importNinjaFormsWithActions([
         ['type' => 'successmessage', 'active' => '0', 'label' => 'Thanks', 'message' => '<p>Thanks.</p>'],
         ['type' => 'redirect', 'active' => '1', 'label' => 'Redirect', 'redirect_url' => 'https://example.edu/pay'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -167,7 +167,7 @@ it('writes no confirmation at all when every candidate action is inactive', func
     // that have no active post-submit behaviour.
     $form = importNinjaFormsWithActions([
         ['type' => 'successmessage', 'active' => '0', 'label' => 'Thanks', 'message' => '<p>Thanks.</p>'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -179,7 +179,7 @@ it('writes no confirmation at all when every candidate action is inactive', func
 it('maps an inactive save action to submission storage being off', function (): void {
     $form = importNinjaFormsWithActions([
         ['type' => 'save', 'active' => '0', 'label' => 'Record Submission'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class)
         ->and($form?->store())->toBeFalse();
@@ -188,7 +188,7 @@ it('maps an inactive save action to submission storage being off', function (): 
 it('maps an active save action to submission storage being on', function (): void {
     $form = importNinjaFormsWithActions([
         ['type' => 'save', 'active' => '1', 'label' => 'Record Submission'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class)
         ->and($form?->store())->toBeTrue();
@@ -199,7 +199,7 @@ it('leaves storage at the Statamic default when the export has no save action', 
     // discarding submissions on a form whose export simply predates the action.
     $form = importNinjaFormsWithActions([
         ['type' => 'successmessage', 'active' => '1', 'label' => 'Thanks', 'message' => '<p>Thanks.</p>'],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class)
         ->and($form?->store())->toBeTrue();
@@ -214,7 +214,7 @@ it('still imports email actions exactly as before', function (): void {
             'email_message' => '{fields_table}', 'from_name' => '', 'from_address' => '',
             'cc' => '', 'bcc' => '', 'reply_to' => '',
         ],
-    ], $this->createMock(AssetImporter::class));
+    ], $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 

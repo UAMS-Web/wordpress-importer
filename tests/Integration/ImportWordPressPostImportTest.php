@@ -21,14 +21,15 @@ use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -163,7 +164,10 @@ final class IwpiImporter extends NavigationMenuImporter
     }
 }
 
+// A `continue` mutant of a `break` in this class's switches only compiles with a
+// warning; fail on it whichever test file loads the class first
 beforeEach(function (): void {
+    CompilesCleanly::assert(ImportWordPress::class);
     Site::setSites([
         'default' => ['name' => 'Default', 'locale' => 'en_US', 'url' => '/'],
         'other' => ['name' => 'Other', 'locale' => 'en_US', 'url' => '/other/'],

@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Content referencing a form the supplied export lacks is reported (issue wordpress-importer-archive#658).
@@ -46,7 +46,7 @@ function seedReferencedFormPages(FormPluginCoordinator $coordinator, array $refe
 /**
  * Run the import pass and return everything written to the console.
  *
- * Takes the asset importer rather than the test case: `createMock()` is protected, so a
+ * Takes the asset importer rather than the test case: `createStub()` is protected, so a
  * plain function cannot call it on a passed-in test instance.
  */
 function runFormImportsCapturingOutput(
@@ -82,7 +82,7 @@ it('reports a referenced form the supplied export does not contain, naming the p
         ['id' => '7', 'title' => 'Contact', 'fields' => []],
     ]);
 
-    $written = runFormImportsCapturingOutput($coordinator, $this->createMock(AssetImporter::class));
+    $written = runFormImportsCapturingOutput($coordinator, $this::createStub(AssetImporter::class));
 
     expect($written)->toContain('1 referenced Gravity Forms form(s) are not in the supplied export')
         ->and($written)->toContain('form 12')
@@ -104,7 +104,7 @@ it('says nothing when every reference is satisfied', function (): void {
 
     // Bounding the change: the normal case gains no output at all. A warning that fires on
     // a healthy import is a warning operators learn to skip.
-    expect(runFormImportsCapturingOutput($coordinator, $this->createMock(AssetImporter::class)))
+    expect(runFormImportsCapturingOutput($coordinator, $this::createStub(AssetImporter::class)))
         ->not->toContain('not in the supplied export');
 });
 
@@ -120,7 +120,7 @@ it('reports every unsatisfied reference when the export contains none of them', 
         ['id' => '99', 'title' => 'Something Else', 'fields' => []],
     ]);
 
-    $written = runFormImportsCapturingOutput($coordinator, $this->createMock(AssetImporter::class));
+    $written = runFormImportsCapturingOutput($coordinator, $this::createStub(AssetImporter::class));
 
     expect($written)->toContain('2 referenced Gravity Forms form(s) are not in the supplied export')
         ->and($written)->toContain('form 31')
@@ -136,7 +136,7 @@ it('says nothing when no export was supplied at all', function (): void {
     // line per reference would be noise rather than information.
     app(GravityFormsCoordinator::class)->clearGravityFormsData();
 
-    expect(runFormImportsCapturingOutput($coordinator, $this->createMock(AssetImporter::class)))
+    expect(runFormImportsCapturingOutput($coordinator, $this::createStub(AssetImporter::class)))
         ->not->toContain('not in the supplied export');
 });
 
@@ -151,6 +151,6 @@ it('says nothing when the content referenced no forms', function (): void {
         ['id' => '7', 'title' => 'Contact', 'fields' => []],
     ]);
 
-    expect(runFormImportsCapturingOutput($coordinator, $this->createMock(AssetImporter::class)))
+    expect(runFormImportsCapturingOutput($coordinator, $this::createStub(AssetImporter::class)))
         ->not->toContain('not in the supplied export');
 });

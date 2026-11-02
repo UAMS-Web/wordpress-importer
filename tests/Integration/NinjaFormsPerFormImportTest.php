@@ -7,10 +7,10 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Fields\Blueprint;
 use Statamic\Fields\Field;
 use Statamic\Forms\Form;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 require_once __DIR__.'/../Support/form-audit-test-support.php';
 
@@ -162,7 +162,7 @@ it('imports the waiver form, preserving the repeater that wraps its body', funct
     $form = importNinjaFormsFixture([
         'waiver-with-repeater.nff',
         'ninja-forms-export_cancer-uams-edu_cure_03_waiver-and-photo-release-agreement.nff',
-    ], 3, $this->createMock(AssetImporter::class));
+    ], 3, $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -201,7 +201,7 @@ it('imports the choice-heavy form with real options rather than the settingModel
     $form = importNinjaFormsFixture([
         'choices-and-calc.nff',
         'ninja-forms-export_cancer-uams-edu_get-involved_02_miracle-stars.nff',
-    ], 2, $this->createMock(AssetImporter::class));
+    ], 2, $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -263,7 +263,7 @@ it('imports the notification form with its email actions configured and recipien
     $form = importNinjaFormsFixture([
         'numbers-and-notifications.nff',
         'ninja-forms-export_cancer-uams-edu_cure_01_t-shirt-reservation.nff',
-    ], 1, $this->createMock(AssetImporter::class));
+    ], 1, $this::createStub(AssetImporter::class));
 
     expect($form)->toBeInstanceOf(Form::class);
 
@@ -309,7 +309,7 @@ it('creates no form when the export carries no title', function (): void {
         99,
         'Default',
         'default',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($form)->toBeNull();

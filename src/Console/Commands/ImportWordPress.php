@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Console\Commands;
+namespace UAMSWeb\Aether\WordPressImporter\Console\Commands;
 
 use App\Services\BardContentSanitizer;
 use Illuminate\Console\Command;
@@ -22,59 +22,59 @@ use Statamic\Facades\Stache;
 use Statamic\Globals\GlobalSet as StatamicGlobalSet;
 use Statamic\Globals\Variables as StatamicVariables;
 use Statamic\Stache\Query\EntryQueryBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationOutcome;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\Client as MigrationApiClient;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\StdinKeyReader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader as MinervaKbSettingsLoader;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\ReusableBlocks\ReusableBlockCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\LogosItemCategoriesValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\DatalessEntrySweeper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\VerificationWorkspace;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\FailedAssetCollector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\DeferredProcessing\DeferredProcessingCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationDesignator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationMap;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\DepartmentOrganizationOutcome;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\GlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\Client as MigrationApiClient;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\ContentTypeReads;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MigrationApiException;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\StdinKeyReader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\WxrMaterializer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation\NavigationMenuImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocLocationsParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\LogoListParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\FormidableFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\NinjaFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Loader as MinervaKbSettingsLoader;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\NavigationMenuSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\TaxonomyOverwriteBehaviorSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\ReusableBlocks\ReusableBlockCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Structures\TreeBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\BaseTaxonomyValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\Validators\LogosItemCategoriesValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AssetReferenceUpdates;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\CollectionStructureManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\DatalessEntrySweeper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningDisplayService;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SiteResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\VerificationWorkspace;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\WxrSanitizedStream;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
@@ -2021,16 +2021,16 @@ class ImportWordPress extends Command
                 }
             }
 
-            // Check people_groups for uamspeople, tshowcase, or pages with show-people shortcodes
+            // ---
+            // Check people_groups for uamspeople and tshowcase. Pages with show-people
+            // shortcodes need no check here: EntryCreator::createEntries() enables
+            // people and people_groups for them once they are imported.
+            // ---
             if (
                 $destinationType === 'collection'
                 && (
                     $contentType === 'uamspeople'
                     || $contentType === 'tshowcase'
-                    || (
-                        $contentType === 'page'
-                        && $this->entryCreator->hasShowPeople($contentType)
-                    )
                 )
             ) {
                 // Check if taxonomy enabling was successful
@@ -2691,7 +2691,7 @@ class ImportWordPress extends Command
         // ---
         $content = \preg_replace(
             [
-                '/<!--\s*wp:.*?\/\s*-->/s',
+                '/<!--\s*wp:(?:(?!-->).)*?\/\s*-->/s',
                 '/<!--\s*wp:.*?-->/s',
                 '/<!--\s*\/wp:.*?-->/s',
             ],
@@ -2708,7 +2708,9 @@ class ImportWordPress extends Command
      *
      * This method finds all Gutenberg block comment tags, matches opening tags with
      * their corresponding closing tags, and removes the entire block content
-     * including any nested blocks within them.
+     * including any nested blocks within them. Only the outermost spans are cut: a
+     * span lying inside another was measured on content that cutting the other would
+     * change.
      *
      * @param  string  $content  The content to process
      * @return string Content with nested Gutenberg blocks removed
@@ -2720,27 +2722,46 @@ class ImportWordPress extends Command
         // length 0, so cutting it removes nothing.
         $blockPositions = $this->findGutenbergBlockPositions($content);
 
-        // ---
-        // Sort positions by start position (descending) so we can remove from end to
-        // beginning
-        // ---
+        // Sort positions by start position, so each span's outer block comes first
         usort(
             $blockPositions,
-            fn (array $a, array $b): int => $b['start'] - $a['start']
+            fn (array $a, array $b): int => $a['start'] - $b['start']
         );
 
         // ---
-        // Remove blocks from end to beginning to maintain position accuracy
+        // Merge the spans, so a span inside another, or crossing its end where the
+        // tags overlap, is cut as part of it
         // ---
 
-        // Loop through block positions to remove each block
+        // Initialize the merged spans, as start and end, in order
+        $spans = [];
+
+        // Loop through block positions to merge each into the spans
         foreach ($blockPositions as $block) {
-            // Remove block from content using substr_replace
+            $end = $block['start'] + $block['length'];
+            $last = \array_key_last($spans);
+
+            // Spans that touch are cut alike whether merged or apart
+            // @pest-mutate-ignore: GreaterToGreaterOrEqual
+            if ($last === null || $block['start'] > $spans[$last]['end']) {
+                $spans[] = ['start' => $block['start'], 'end' => $end];
+            } else {
+                $spans[$last]['end'] = \max($spans[$last]['end'], $end);
+            }
+        }
+
+        // ---
+        // Remove spans from end to beginning to maintain position accuracy
+        // ---
+
+        // Loop through the spans to remove each one
+        foreach (\array_reverse($spans) as $span) {
+            // Remove span from content using substr_replace
             $content = substr_replace(
                 $content,
                 '',
-                $block['start'],
-                $block['length']
+                $span['start'],
+                $span['end'] - $span['start']
             );
         }
 
@@ -4086,44 +4107,30 @@ class ImportWordPress extends Command
             switch ($designation->outcome) {
                 case DepartmentOrganizationOutcome::Designated:
                     $this->info("Designated site '$site' as a news hub for '{$designation->organizationSlug}'.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::AlreadyDesignated:
                     $this->info("Site '$site' is already designated as a news hub for '{$designation->organizationSlug}'.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DeliberatelyUnmapped:
                     // A recorded rejection is a decision, not a gap - nothing to report
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::NotRecorded:
                     $this->info("No department_organization designation is recorded for site '$site' - its news page will render as a plain listing.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::DanglingReference:
                     $this->warn("Site '$site' is designated for organization '{$designation->organizationSlug}', which does not exist - designation not applied.");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::GlobalMissing:
                     $this->warn('uams_multisite_settings Global not found - skipping department_organization designation');
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
 
                 case DepartmentOrganizationOutcome::SiteUnavailable:
                     $this->warn("uams_multisite_settings Global not available for site '$site' - skipping department_organization designation");
-                    // A continue inside a switch acts as a break.
-                    // @pest-mutate-ignore: BreakToContinue
                     break;
             }
 

@@ -6,14 +6,14 @@ use Illuminate\Support\Facades\Log;
 use Mockery\LegacyMockInterface;
 use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\PeopleShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -68,7 +68,7 @@ beforeEach(function (): void {
     $this->processor = new ShortcodeBlockProcessor;
 
     // Mock AssetImporter since no real asset processing is exercised
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 
     // DOMDocument for building test HTML structures
     $this->doc = new DOMDocument;
@@ -769,25 +769,29 @@ it('process keeps what surrounds a lone shortcode, in the content a string retur
     'text around a caption' => ['Lead [caption id="attachment_1"]<img src="https://example.com/img.jpg" />Cap[/caption] tail', 'caption', 'Lead'],
 ]);
 
-it('process returns what surrounds a shortcode beside its page builder set', function (string $inner, string $html, string $surrounding): void {
+it('process returns what is on each side of a shortcode beside its page builder set', function (string $inner, string $html, ?string $before, ?string $after): void {
     $comment = shortcodeBlockRequireCommentNode($this->doc, '<div><!-- wp:shortcode -->'.$inner.'<!-- /wp:shortcode --></div>');
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
     expect($result)->toBeArray()->toHaveKey('page_builder_set')
-        ->and($result['surrounding_html'] ?? null)->toBe($surrounding)
+        ->and($result['html_before'] ?? null)->toBe($before)
+        ->and($result['html_after'] ?? null)->toBe($after)
         ->and($result['html'] ?? null)->toContain($html)->toContain('data-set-type="people"');
 })->with([
-    'text' => ['Lead [show-people ids="1"] tail', 'Lead ', 'Lead  tail'],
-    'a paragraph after a block with no closing comment' => ['[show-people ids="1"]<p>After</p>', '<p>After</p>', '<p>After</p>'],
+    'text' => ['Lead [show-people ids="1"] tail', 'Lead ', 'Lead ', ' tail'],
+    'only before' => ['Lead [show-people ids="1"]', 'Lead ', 'Lead ', null],
+    'only after' => ['[show-people ids="1"] tail', ' tail', null, ' tail'],
+    'a wrapper holds no text of its own' => ['<p>[show-people ids="1"] tail</p>', ' tail', null, ' tail</p>'],
+    'a paragraph after a block with no closing comment' => ['[show-people ids="1"]<p>After</p>', '<p>After</p>', null, '<p>After</p>'],
 ]);
 
-it('process returns no surrounding html for a shortcode that is all the block holds', function (): void {
+it('process returns nothing around a shortcode that is all the block holds', function (): void {
     $comment = shortcodeBlockRequireCommentNode($this->doc, '<!-- wp:shortcode -->[show-people ids="1"]<!-- /wp:shortcode -->');
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    expect($result)->toBeArray()->not->toHaveKey('surrounding_html');
+    expect($result)->toBeArray()->not->toHaveKey('html_before')->not->toHaveKey('html_after');
 });
 
 it('process reads a wrapper holding only the shortcode as a lone shortcode', function (string $inner): void {
@@ -795,7 +799,7 @@ it('process reads a wrapper holding only the shortcode as a lone shortcode', fun
 
     $result = $this->processor->process($comment, [], 'default', $this->assetImporter, shortcodeBlockOutput(), [], [], 'test-page');
 
-    expect($result)->toBeArray()->toHaveKey('page_builder_set')->not->toHaveKey('surrounding_html');
+    expect($result)->toBeArray()->toHaveKey('page_builder_set')->not->toHaveKey('html_before')->not->toHaveKey('html_after');
 })->with([
     'bare' => '[show-people ids="1"]',
     'in a paragraph' => '<p>[show-people ids="1"]</p>',

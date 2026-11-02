@@ -16,7 +16,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/OutboundUrlGuardInternalsTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\OutboundUrlGuard;
 
 /**
  * Call one of the guard's private static helpers.

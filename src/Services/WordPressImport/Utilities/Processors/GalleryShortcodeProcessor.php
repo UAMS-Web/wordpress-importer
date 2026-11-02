@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use Illuminate\Support\Facades\Log;
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
 
 /**
  * Processes WordPress [gallery] shortcodes into Statamic Bard gallery sets.
@@ -53,13 +53,13 @@ class GalleryShortcodeProcessor implements ShortcodeProcessorInterface
         $attachments = ProcessingContext::getAttachments() ?? [];
 
         // Extract image IDs from the ids attribute
-        $idsString = $attributes['ids'] ?? '';
+        $idsString = $attributes['ids'] ?? null;
 
         // Initialize array to store image IDs
         $imageIds = [];
 
         // Check if we have image IDs to process
-        if (\is_string($idsString) && $idsString !== '') {
+        if (\is_string($idsString)) {
             // Split comma-separated IDs and trim whitespace
             $imageIds = \array_map(
                 trim(...),
@@ -69,10 +69,10 @@ class GalleryShortcodeProcessor implements ShortcodeProcessorInterface
                 )
             );
 
-            // Filter out empty values
+            // Keep the numeric IDs, which drops an empty value too
             $imageIds = \array_filter(
                 $imageIds,
-                fn ($id): bool => $id !== '' && \is_numeric($id)
+                \is_numeric(...)
             );
         }
 

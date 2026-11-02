@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Statamic\Facades\Stache as StacheFacade;
 use Statamic\Stache\Stores\Store;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\StacheIndexUpdateToggle;
 
 uses(TestCase::class);
 
@@ -27,7 +27,7 @@ afterEach(function (): void {
  * a future `composer update` that changes it fails CI loudly instead of silently
  * regressing the import.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/StacheIndexUpdateToggleTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/StacheIndexUpdateToggleTest.php
  */
 it('reports itself supported on the installed statamic', function (): void {
     StacheIndexUpdateToggle::flushSupportCache();

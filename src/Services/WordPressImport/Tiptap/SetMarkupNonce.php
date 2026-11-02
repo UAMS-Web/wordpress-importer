@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap;
 
 use Random\RandomException;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
 
 /**
  * Per-process nonce separating importer-generated Bard set markup from set

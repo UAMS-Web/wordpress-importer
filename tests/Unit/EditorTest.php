@@ -21,9 +21,9 @@ use Tiptap\Nodes\BulletList;
 use Tiptap\Nodes\Document;
 use Tiptap\Nodes\Paragraph;
 use Tiptap\Nodes\Text;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
 
 /**
  * An editor that reports a content type of the test's choosing, so the branch

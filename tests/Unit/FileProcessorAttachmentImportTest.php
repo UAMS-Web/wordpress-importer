@@ -15,10 +15,11 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/FileProcessorAttachmentImportTest.php
  */
 
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\FileProcessor;
 
 /**
  * Build a WXR attachment `<item>` from a post id and extra body XML.
@@ -54,18 +55,18 @@ function fileImportPostmeta(string $key, string $value): string
 }
 
 /**
- * Run the import against a mocked asset importer that records each importFile() call.
+ * Run the import against a test double of the asset importer that records each importFile() call.
  *
- * The mock is built by the test (createMock() is a TestCase method) and configured here.
- * A mock skips AssetImporter's constructor, which reads Laravel config.
+ * The double is built by the test (createStub() is a TestCase method) and configured here.
+ * It skips AssetImporter's constructor, which reads Laravel config.
  *
- * @param  MockObject&AssetImporter  $importer  A fresh mock of the asset importer
+ * @param  Stub&AssetImporter  $importer  A fresh stub or mock of the asset importer
  * @param  array<int|string, mixed>  $attachments  The export's attachment items
  * @param  bool  $uploadFiles  Whether file uploads are enabled
  * @return array{result: ?string, calls: list<list<mixed>>}
  */
 function fileImportRun(
-    AssetImporter&MockObject $importer,
+    AssetImporter&Stub $importer,
     string $attachmentId,
     array $attachments,
     bool $uploadFiles = true
@@ -98,7 +99,7 @@ it('returns nothing for a blank attachment id, even beside an attachment with no
     // match that attachment and import it.
     $attachments = [fileImportAttachment(null, '<wp:attachment_url>https://example.uams.edu/a.pdf</wp:attachment_url>')];
 
-    $run = fileImportRun($this->createMock(AssetImporter::class), '', $attachments);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '', $attachments);
 
     expect($run['result'])->toBeNull()
         ->and($run['calls'])->toBe([]);
@@ -108,7 +109,7 @@ it('returns nothing when no attachment matches the id', function (): void {
     $attachments = [fileImportAttachment('10', '<wp:attachment_url>https://example.uams.edu/a.pdf</wp:attachment_url>')];
 
     // Uploads off, so the missing attachment is not logged and no container is needed
-    $run = fileImportRun($this->createMock(AssetImporter::class), '99', $attachments, uploadFiles: false);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '99', $attachments, uploadFiles: false);
 
     expect($run['result'])->toBeNull()
         ->and($run['calls'])->toBe([]);
@@ -123,16 +124,18 @@ it('hands the importer the file url, title, metadata and attachment page', funct
         .fileImportPostmeta('_media_credit', 'UAMS Communications')
     )];
 
-    $run = fileImportRun($this->createMock(AssetImporter::class), '99', $attachments);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '99', $attachments);
 
     expect($run['result'])->toBe('files/imported.pdf')
         ->and($run['calls'])->toHaveCount(1);
 
-    [$url, $site, , $container, , $pageUrl, $title, $metadata, $attachmentPage] = $run['calls'][0];
+    [$url, $site, , $container, $policy, $pageUrl, $title, $metadata, $attachmentPage] = $run['calls'][0];
 
     expect($url)->toBe('https://example.uams.edu/wp-content/uploads/annual.pdf')
         ->and($site)->toBe('default')
         ->and($container)->toBe('files')
+        // An attachment on another site is skipped
+        ->and($policy)->toBe(SameSitePolicy::SKIP_DIFFERENT_SITE)
         ->and($pageUrl)->toBeNull()
         ->and($title)->toBe('Annual Report')
         ->and($metadata)->toBe(['creator' => 'UAMS Communications'])
@@ -146,7 +149,7 @@ it('passes null rather than an empty value for absent metadata and attachment pa
         '<wp:attachment_url>https://example.uams.edu/wp-content/uploads/plain.pdf</wp:attachment_url>'
     )];
 
-    $run = fileImportRun($this->createMock(AssetImporter::class), '99', $attachments);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '99', $attachments);
 
     [, , , , , , , $metadata, $attachmentPage] = $run['calls'][0];
 
@@ -160,7 +163,7 @@ it('returns the attachment url without importing when file uploads are disabled'
         '<wp:attachment_url>https://example.uams.edu/wp-content/uploads/annual.pdf</wp:attachment_url>'
     )];
 
-    $run = fileImportRun($this->createMock(AssetImporter::class), '99', $attachments, uploadFiles: false);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '99', $attachments, uploadFiles: false);
 
     expect($run['result'])->toBe('https://example.uams.edu/wp-content/uploads/annual.pdf')
         ->and($run['calls'])->toBe([]);
@@ -170,10 +173,38 @@ it('falls back to the attachment link when the export carries no file url', func
     // An attachment exported without `wp:attachment_url` still names itself through `<link>`
     $attachments = [fileImportAttachment('99', '<link>https://example.uams.edu/files/annual.pdf</link>')];
 
-    $run = fileImportRun($this->createMock(AssetImporter::class), '99', $attachments);
+    $run = fileImportRun($this::createStub(AssetImporter::class), '99', $attachments);
 
     expect($run['calls'])->toHaveCount(1)
         ->and($run['calls'][0][0])->toBe('https://example.uams.edu/files/annual.pdf');
+});
+
+it('hands the importer the same-site policy it is given', function (): void {
+    $importer = $this->createMock(AssetImporter::class);
+    $importer->method('getUploadFiles')->willReturn(true);
+    $importer->expects($this->once())
+        ->method('importFile')
+        ->with(
+            'https://uams.edu/a.pdf',
+            'default',
+            $this::anything(),
+            'files',
+            SameSitePolicy::ALWAYS_IMPORT,
+            null,
+            null,
+            null,
+            null
+        )
+        ->willReturn('files/a.pdf');
+
+    expect(FileProcessor::importFileWithDisabledUploadHandling(
+        'https://uams.edu/a.pdf',
+        'default',
+        $importer,
+        new BufferedOutput,
+        'files',
+        sameSitePolicy: SameSitePolicy::ALWAYS_IMPORT
+    ))->toBe('files/a.pdf');
 });
 
 it('imports nothing for a blank file url', function (bool $uploadFiles): void {

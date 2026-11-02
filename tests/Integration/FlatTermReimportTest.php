@@ -25,11 +25,11 @@ use Statamic\Stache\Stores\Store;
 use Statamic\Taxonomies\LocalizedTerm;
 use Statamic\Taxonomies\Taxonomy;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\KbEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\EntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings\Selector as MinervaKbSettingsSelector;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -219,20 +219,20 @@ it('creates a suffixed term beside an existing one', function (): void {
 
     $output = flatTermImport([['original' => 'news', 'name' => 'News']], 'Create an additional term');
 
-    // Statamic's slug setter drops the dot of the importer's "default_news.1"
-    expect(flatTermTitles())->toBe(['default_news' => 'Default — News', 'default_news1' => 'Default — News'])
-        ->and($output)->toContain("Created 'tags::default_news.1'");
+    expect(flatTermTitles())->toBe(['default_news' => 'Default — News', 'default_news-1' => 'Default — News'])
+        ->and($output)->toContain("Created 'tags::default_news-1'");
 });
 
-it('makes the same additional term again on a third run', function (): void {
-    // Characterization of #193: the suffix it looks for is the importer's
-    // dotted one, which Statamic never stores, so a later run builds the same
-    // slug again instead of the next one
+it('makes the next additional term on a third run, beside the first', function (): void {
     flatTermImport([['original' => 'news', 'name' => 'News']]);
     flatTermImport([['original' => 'news', 'name' => 'News']], 'Create an additional term');
 
+    // A later run is a new process that reads the saved terms, which this one has to
+    // warm the store to do
+    flatTermTitles();
+
     $output = flatTermImport([['original' => 'news', 'name' => 'News']], 'Create an additional term');
 
-    expect(flatTermTitles())->toBe(['default_news' => 'Default — News', 'default_news1' => 'Default — News'])
-        ->and($output)->toContain("Created 'tags::default_news.1'");
+    expect(flatTermTitles())->toBe(['default_news' => 'Default — News', 'default_news-1' => 'Default — News', 'default_news-2' => 'Default — News'])
+        ->and($output)->toContain("Created 'tags::default_news-2'");
 });

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators;
 
 use Carbon\Carbon;
 use DateTime;
@@ -14,26 +14,28 @@ use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Symfony\Component\Console\Output\OutputInterface;
-use Tiptap\Editor;
+use Tiptap\Core\DOMParser;
+use Tiptap\Core\Schema;
 use Tiptap\Nodes\Document;
 use Tiptap\Nodes\Paragraph;
 use Tiptap\Nodes\Text;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TablePressTableDataRepairer;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\ContentStreamFactory;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TablePressTableDataRepairer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Converts WordPress 'tablepress_table' content into Statamic entries.
@@ -324,12 +326,10 @@ class TablePressEntryCreator extends BaseEntryCreator
             // ---
             // @pest-mutate-ignore: EmptyStringToNotEmpty
             if ($excerptEncoded !== '') {
-                $editor = new Editor([
-                    'extensions' => [
-                        new Document,
-                        new Paragraph,
-                        new Text,
-                    ],
+                $schema = new Schema([
+                    new Document,
+                    new Paragraph,
+                    new Text,
                 ]);
                 $html = html_entity_decode(
                     $excerptEncoded,
@@ -337,15 +337,17 @@ class TablePressEntryCreator extends BaseEntryCreator
                     'UTF-8'
                 );
                 // ---
+                // An excerpt is always HTML, so it goes to the parser directly:
+                // `Editor::setContent()` reads text that decodes as JSON, such as `42`
+                // or a quoted caption, as a document (#267).
+                //
                 // The Tiptap parser finds no document body in an excerpt with no body
                 // content (whitespace, comments, or head-only markup such as a title or
                 // a script), and throws a TypeError from its DOM reader. That is an
-                // excerpt with no description, so it must not end the import. Any other
-                // TypeError is let through: an excerpt that decodes as JSON throws one
-                // of its own, and its text would be lost (#267).
+                // excerpt with no description, so it must not end the import.
                 // ---
                 try {
-                    $document = $editor->setContent($html)->getDocument();
+                    $document = $schema->apply(new DOMParser($schema)->process($html));
                 } catch (\TypeError $error) {
                     if (! \str_contains($error->getMessage(), 'DOMParser::getDocumentBody()')) {
                         throw $error;
@@ -354,10 +356,18 @@ class TablePressEntryCreator extends BaseEntryCreator
                     $document = null;
                 }
 
-                $description = \is_array($document) ? ($document['content'] ?? null) : null;
+                $content = \is_array($document) ? ($document['content'] ?? null) : null;
+
+                // ---
+                // A Bard document's root holds blocks, and a TablePress excerpt is
+                // normally bare text. Whether the parser wraps that text depends on
+                // the libxml2 PHP is built with: 2.11 adds a paragraph and 2.15 does
+                // not, so the wrap is done here to store one shape on every build (#288).
+                // ---
+                $description = \is_array($content) ? BardParser::wrapRootText($content) : [];
 
                 // Store the description only when it converted to some content
-                if (\is_array($description) && $description !== []) {
+                if ($description !== []) {
                     $data['description'] = $description;
                 }
             }
@@ -580,6 +590,13 @@ class TablePressEntryCreator extends BaseEntryCreator
                 'TablePressEntryCreator::createEntries'
             );
 
+            // Remove any file left at the old slug format
+            $this->deleteOldSlugFile(
+                $site,
+                $tableExportId,
+                $postId
+            );
+
             // Save the entry with the generated data
             $entry = $this->saveEntry(
                 $collectionHandle,
@@ -610,14 +627,42 @@ class TablePressEntryCreator extends BaseEntryCreator
     }
 
     /**
+     * Deletes a file left at the old slug format, to prevent a duplicate.
+     *
+     * The old slug is {site}_tablepress-{tableExportId}-{postId}. A TablePress ID
+     * can hold a hyphen, so the caller passes both IDs rather than this reading
+     * them back out of a slug or entry ID (#286).
+     *
+     * @param  string  $site  The site handle
+     * @param  string  $tableExportId  The table's TablePress export ID
+     * @param  string  $postId  The table's WordPress post ID
+     */
+    private function deleteOldSlugFile(
+        string $site,
+        string $tableExportId,
+        string $postId
+    ): void {
+        // Resolve on the tree this run writes to, not the live submodule
+        $oldSlugPath = ContentRoot::collectionEntry(
+            'tables',
+            $site,
+            "{$site}_tablepress-{$tableExportId}-{$postId}"
+        );
+
+        // Delete the file if one is there
+        if (LaravelFileFacade::exists($oldSlugPath)) {
+            LaravelFileFacade::delete($oldSlugPath);
+        }
+    }
+
+    /**
      * Saves a Statamic entry with overwrite behavior handling.
      *
      * Checks for existing entries with matching IDs or slugs and applies the
      * configured overwrite behavior: overwrite, skip, or create additional entries
-     * with modified slugs. Deletes any entries with incorrect slugs
-     * ({site}_tablepress-{tableExportId}-{postId}) to prevent duplicates. Determines the published
-     * status from status_and_visibility if $published is null, defaulting to true
-     * for TablePress entries when the field is absent, as tables are typically
+     * with modified slugs. Determines the published status from
+     * status_and_visibility if $published is null, defaulting to true for
+     * TablePress entries when the field is absent, as tables are typically
      * published.
      *
      * Checks the collection configuration to determine if dates are enabled
@@ -695,32 +740,6 @@ class TablePressEntryCreator extends BaseEntryCreator
 
         $entry->published($published);
 
-        // Extract export ID and post ID from entry ID
-        $parts = \explode(
-            '_tablepress-',
-            $entryId
-        );
-        if (\count($parts) === 2) {
-            // Handle new 3-part ID format: {site}_tablepress-{exportId}-{postId}-{random}
-            $remainingParts = \explode(
-                '-',
-                $parts[1]
-            );
-            $exportId = $remainingParts[0];
-            $postId = $remainingParts[1];
-            $incorrectSlug = "{$site}_tablepress-{$exportId}-{$postId}";
-            // Resolve on the tree this run writes to, not the live submodule
-            $incorrectPath = ContentRoot::collectionEntry(
-                'tables',
-                $site,
-                $incorrectSlug
-            );
-            // Delete any incorrect slug file
-            if (LaravelFileFacade::exists($incorrectPath)) {
-                LaravelFileFacade::delete($incorrectPath);
-            }
-        }
-
         // ---
         // Check for existing entry with matching ID or slug. Statamic keeps entry ids
         // unique across collections, so the collection criterion on the id query
@@ -762,6 +781,8 @@ class TablePressEntryCreator extends BaseEntryCreator
         $existingBySlug = $existingBySlugQuery->first();
 
         // Handle overwrite behavior
+        $savedSlug = $entrySlug;
+
         if ($existingById || $existingBySlug) {
             switch ($this->overwriteBehavior) {
                 case 'Skip matching files':
@@ -769,30 +790,27 @@ class TablePressEntryCreator extends BaseEntryCreator
 
                     return null;
                 case 'Create an additional file':
+                    // ---
+                    // Statamic drops a dot from a slug, so `12.1` would land on table 121.
+                    // An underscore stays, and no export id reads as a copy of another.
+                    // ---
                     $counter = 1;
-                    $newSlug = $entrySlug;
                     while (
                         $this->countEntriesBySlug(
                             $collectionHandle,
-                            $newSlug
+                            $savedSlug
                         ) > 0
                     ) {
-                        $newSlug = "$entrySlug.$counter";
-
-                        // ---
-                        // Statamic stores the slug without its dot, so the dotted slug
-                        // never counts and the loop runs once whichever way the counter
-                        // moves (#265).
-                        // ---
-                        // @pest-mutate-ignore: PostIncrementToPostDecrement
+                        $savedSlug = "{$entrySlug}_copy-$counter";
                         $counter++;
                     }
 
-                    $entry->slug($newSlug);
+                    $entry->slug($savedSlug);
                     $entryId = $this->generateUniqueId(
-                        $newSlug,
+                        $savedSlug,
                         $entryId
                     );
+                    $entry->id($entryId);
                     $data['id'] = $entryId;
                     break;
                 case 'Overwrite matching files':
@@ -878,7 +896,7 @@ class TablePressEntryCreator extends BaseEntryCreator
         $entry->data($data);
         $entry->save();
 
-        $output->writeln("  - <info>Saving entry with slug '$entrySlug' for collection '$collectionHandle'</info>");
+        $output->writeln("  - <info>Saving entry with slug '$savedSlug' for collection '$collectionHandle'</info>");
 
         return $entry;
     }
@@ -1611,14 +1629,9 @@ class TablePressEntryCreator extends BaseEntryCreator
         string $collectionHandle,
         string $slug
     ): int {
-        // ---
-        // Create a typed query for collection and slug criteria. Only the dotted slugs
-        // of #265 are counted, which no entry in any collection is stored under, so the
-        // collection criterion changes no count.
-        // ---
+        // Create a typed query for collection and slug criteria
         $query = $this->makeEntryQuery();
 
-        // @pest-mutate-ignore: RemoveMethodCall
         $query->where(
             'collection',
             $collectionHandle

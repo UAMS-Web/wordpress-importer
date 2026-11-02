@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities;
 
 /**
  * Translates WordPress alignment values to Statamic equivalents.

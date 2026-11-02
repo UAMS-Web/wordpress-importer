@@ -14,11 +14,11 @@ This file focuses on:
 
 ## Overview
 
-The `ImportWordPress` Artisan command is provided by the Composer package **`uams-web/wordpress-importer`**. In this repository, implementation code lives under `src/`; when the package is installed in a Statamic app, it is typically under `vendor/uams-web/wordpress-importer/src/`. The command imports a WordPress WXR export into Statamic with interactive prompts, content-type mapping, asset handling, and taxonomy validation.
+The `ImportWordPress` Artisan command is provided by the Composer package **`uams-web/aether-wordpress-importer`**. In this repository, implementation code lives under `src/`; when the package is installed in a Statamic app, it is typically under `vendor/uams-web/aether-wordpress-importer/src/`. The command imports a WordPress WXR export into Statamic with interactive prompts, content-type mapping, asset handling, and taxonomy validation.
 
-- **Command class**: `UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress`
-- **Importer services**: `UAMSWeb\WordPressImporter\Services\WordPressImport\...`
-- **Registration**: `UAMSWeb\WordPressImporter\ServiceProvider` (Statamic addon service provider)
+- **Command class**: `UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress`
+- **Importer services**: `UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\...`
+- **Registration**: `UAMSWeb\Aether\WordPressImporter\ServiceProvider` (Statamic addon service provider)
 
 ## Usage
 
@@ -905,6 +905,7 @@ The `src/Services/WordPressImport/Utilities/Processors` directory contains class
   - `fileExists()`: Checks if a file exists at a given URL using HTTP HEAD request.
   - `guessMimeType()`: Determines the MIME type of a file based on its extension.
   - `isSameSiteUrl(string $url, string $baseBlogUrl)`: Checks if a URL is on the same site as the base blog URL by comparing normalized domain paths.
+  - `applySameSitePolicy()`: Returns a `SameSiteDecision` saying whether to import an asset and, if not, what to return. `SKIP_DIFFERENT_SITE` imports nothing, and `AssetImporter` records each skipped asset under the `assets` / `skipped_different_site_assets` warning. `wp:file` blocks use `ALWAYS_IMPORT`, because a block with no path is dropped.
   - `extractWordPressPathInfo()`: Extracts year/month information from WordPress URLs and generates unique filenames with year-month prefixes. Supports both multisite (/sites/{id}/{year}/{month}/) and regular WordPress upload patterns (/wp-content/uploads/{year}/{month}/). Falls back to current date for URLs without year/month patterns. **Applies lowercase conversion when configured in Statamic.**
   - `generateUniqueFilename()`: Creates unique filenames with year-month prefixes to prevent conflicts when multiple files with the same name exist in different WordPress upload directories. **Applies lowercase conversion when configured in Statamic.**
 
@@ -1339,17 +1340,14 @@ The `src/Services/WordPressImport/Utilities` directory contains classes that pro
 
 ### SlugGenerator
 
-- **Purpose**: Generates unique slugs with hierarchical conflict resolution for entries.
+- **Purpose**: Generates the slug and ID for an entry.
 - **File Path**: `src/Services/WordPressImport/Utilities/SlugGenerator.php`
 - **Key Functionality**:
   - Consolidates slug generation logic from various entry creators.
-  - Provides hierarchical slug conflict resolution by checking if slugs conflict at the same parent level.
-  - **Uses `.` as separator for slug conflicts** (e.g., `about-us.1`, `about-us.2`) to match Statamic's default behavior.
-  - Eliminates the need for post-import renaming since generated slugs are already in the correct format.
-  - Handles both structured collections (with hierarchy) and flat taxonomies appropriately.
+  - Uses the base slug if there is one, otherwise a slug from the title, otherwise `item-{postId}`.
+  - Adds no suffix to a slug. Statamic resolves a file path conflict in the filename (`test.1.md`) and keeps the slug, and `BaseEntryCreator::saveEntry()` names an additional copy `{slug}_copy-{n}`.
 - **Methods**:
-  - `generateSlugAndId()`: Generates unique slugs and IDs for entries with hierarchical conflict checking.
-  - `generateTableSlugAndId()`: Generates unique slugs and IDs for table entries with specific format requirements.
+  - `generateSlugAndId()`: Returns the slug and an ID in the form `{slug}-{postId}-{random}`.
 
 ### AcfFieldNormalizer
 
@@ -1967,7 +1965,7 @@ The address is refused unless it is an absolute `https://` URL carrying a host, 
 
 ### Cleaning API-sourced content
 
-`news.uams.edu`'s WXR export is cleaned with [`uams-web/wordpress-wxr-cleanup`](https://github.com/UAMS-Web/wordpress-wxr-cleanup) before it is imported. When the same site is read through the migration API, the importer runs that cleaner itself: `WxrMaterializer` passes every part it writes through `Transform::withDefaultRules()`, the pipeline the cleaner's CLI runs. So a post maps the same way from either source (#1303).
+`news.uams.edu`'s WXR export is cleaned with [`uams-web/aether-wordpress-importer-cleanup`](https://github.com/UAMS-Web/aether-wordpress-importer-cleanup) before it is imported. When the same site is read through the migration API, the importer runs that cleaner itself: `WxrMaterializer` passes every part it writes through `Transform::withDefaultRules()`, the pipeline the cleaner's CLI runs. So a post maps the same way from either source (#1303).
 
 Only listed sites are cleaned, matched against the host of the site's `base_blog_url`:
 

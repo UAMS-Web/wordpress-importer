@@ -19,11 +19,25 @@
         "REMOVAL CRITERION: drop the patch (and, if it is the last one, this file,",
         "patches.lock.json, and the cweagans/composer-patches dev dependency) once a",
         "tagged pestphp/pest-plugin-mutate release on the 5.x line ships the fix. Tracked",
-        "in #1423."
+        "in #1423.",
+        "",
+        "pest-plugin-mutate-windows-mutant-child.patch and",
+        "pest-plugin-mutate-windows-filter-length.patch mirror the two patches of the same",
+        "name in UAMS-Web/uamswp-migration-api, regenerated against v5.0.1 (#107). On Windows",
+        "a mutant child that never ran a test scored as a kill, so a run reported 100.00%",
+        "without testing anything. mutant-child stops the --filter quoting that cmd.exe",
+        "turned into a pipe and honors the lock a child's write asks for. filter-length",
+        "builds on it: a filter too long to launch or compile widens to the covering test",
+        "classes, or the run refuses.",
+        "",
+        "REMOVAL CRITERION: drop each patch once a tagged pestphp/pest-plugin-mutate release",
+        "on the 5.x line ships its fix. Tracked in #355."
     ],
     "patches": {
         "pestphp/pest-plugin-mutate": {
-            "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)": "patches/pest-plugin-mutate-ignore-annotated-statement.patch"
+            "Skip a node whose own comment carries a matching @pest-mutate-ignore marker (temporary; drop once pest-plugin-mutate ships a fix; tracked in #1423)": "patches/pest-plugin-mutate-ignore-annotated-statement.patch",
+            "Let a mutant child on Windows run its tests and write files, so its failure is a real kill (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-windows-mutant-child.patch",
+            "Widen or refuse a mutant child's filter that cannot launch or compile, so it cannot score a kill without running a test (temporary; drop once pest-plugin-mutate ships a fix; tracked in #355)": "patches/pest-plugin-mutate-windows-filter-length.patch"
         }
     }
 }

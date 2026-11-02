@@ -19,6 +19,7 @@ import {
     releaseOwnClaim,
     claimRecord,
     claimRefName,
+    claimSlot,
     mayClearClaim,
     parseClaimRecord,
     releaseLine,
@@ -1060,6 +1061,118 @@ describe('claim — atomic under real concurrency (wordpress-importer-archive#11
 
             assert.equal(winners.length, 0, 'no slot was free, so neither may claim');
             assert.deepEqual([one.code, two.code], [3, 3]);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    // #204: a git failure on a free slot read as a lost race, so `claim` said every slot was held
+    // and exited 3 with a slot free. A ref lock is a git failure that does not depend on timing.
+    const lockRef = (repo, slot) => {
+        const lock = join(repo, '.git', 'refs', 'slots', `${slot}.lock`);
+
+        mkdirSync(join(repo, '.git', 'refs', 'slots'), { recursive: true });
+        writeFileSync(lock, '');
+
+        return lock;
+    };
+
+    it('reports a slot git would not write as a failure, not as held', async () => {
+        const { root, repo } = fixture();
+
+        try {
+            lockRef(repo, 'a');
+            lockRef(repo, 'b');
+
+            const result = await claimAsync(repo, 'c1');
+
+            assert.equal(result.code, 5, result.err);
+            assert.equal(result.slot, null);
+            assert.match(result.err, /^a: .*a\.lock/m);
+            assert.match(result.err, /^b: .*b\.lock/m);
+            assert.doesNotMatch(result.err, /Every provisioned slot is held/);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('takes the next slot when git will not write the first', async () => {
+        const { root, repo } = fixture();
+
+        try {
+            lockRef(repo, 'a');
+
+            const result = await claimAsync(repo, 'c1');
+
+            assert.equal(result.code, 0, result.err);
+            assert.equal(result.slot, 'b');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    // Scripted rather than timed: a lock removed on a timer would make this test depend on the
+    // timing #204 is about.
+    const scriptedAttempts = (outcomes) => {
+        const made = [];
+
+        return { made, attempt: (...args) => { made.push(args); return outcomes.shift(); } };
+    };
+    const refused = { oid: null, reason: 'locked' };
+
+    it('retries a refused claim until it is written', () => {
+        const { root, repo } = fixture();
+
+        try {
+            const { made, attempt } = scriptedAttempts([refused, refused, { oid: 'abc', reason: '' }]);
+
+            assert.deepEqual(claimSlot(repo, 'a', 'c1', 'now', attempt), { oid: 'abc', failure: null });
+            assert.equal(made.length, 3);
+            assert.deepEqual(made[2], [repo, 'a', 'c1', 'now']);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('stops retrying and gives the reason after the last attempt', () => {
+        const { root, repo } = fixture();
+
+        try {
+            const { made, attempt } = scriptedAttempts([refused, refused, { oid: null, reason: 'last' }, refused]);
+
+            assert.deepEqual(claimSlot(repo, 'a', 'c1', 'now', attempt), { oid: null, failure: 'last' });
+            assert.equal(made.length, 3);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('does not retry a slot another claimant holds', async () => {
+        const { root, repo } = fixture();
+
+        try {
+            await claimAsync(repo, 'c1');
+
+            const { made, attempt } = scriptedAttempts([refused, refused, refused]);
+
+            assert.deepEqual(claimSlot(repo, 'a', 'c2', 'now', attempt), { oid: null, failure: null });
+            assert.equal(made.length, 1);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it('still reads a slot another claimant took as held', async () => {
+        const { root, repo } = fixture();
+
+        try {
+            await claimAsync(repo, 'c1');
+            await claimAsync(repo, 'c2');
+
+            const result = await claimAsync(repo, 'c3');
+
+            assert.equal(result.code, 3, result.err);
+            assert.match(result.err, /Every provisioned slot is held/);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }

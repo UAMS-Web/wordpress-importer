@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 /**
  * Manages import warnings throughout the WordPress import process.
@@ -127,6 +127,23 @@ class ImportWarningManager
                     && ($existingWarning['original'] ?? '') === ($data['original'] ?? '')
                     && ($existingWarning['site'] ?? '') === ($data['site'] ?? '')
                     && ($existingWarning['page_slug'] ?? null) === ($data['page_slug'] ?? null)
+                    && ($existingWarning['page_link'] ?? '') === ($data['page_link'] ?? '')
+                ) {
+                    // Duplicate found, don't add this warning
+                    return;
+                }
+            }
+        }
+
+        // For images_beside_shortcodes, check for duplicates before adding
+        if ($category === 'content' && $type === 'images_beside_shortcodes') {
+            // Content reaches more than one processing pass, so the same image on
+            // the same page is reported once
+            foreach ($existingWarnings as $existingWarning) {
+                if (
+                    ($existingWarning['content_snippet'] ?? '') === ($data['content_snippet'] ?? '')
+                    && ($existingWarning['site'] ?? '') === ($data['site'] ?? '')
+                    && ($existingWarning['page_slug'] ?? '') === ($data['page_slug'] ?? '')
                     && ($existingWarning['page_link'] ?? '') === ($data['page_link'] ?? '')
                 ) {
                     // Duplicate found, don't add this warning

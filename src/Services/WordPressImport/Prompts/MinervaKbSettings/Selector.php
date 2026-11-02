@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\MinervaKbSettings;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;

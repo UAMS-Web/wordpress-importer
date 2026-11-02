@@ -6,8 +6,8 @@ use Illuminate\Console\Command;
 use Illuminate\Console\OutputStyle;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * `ContentTypeSelector` offers the content types an export holds, without menu items, and
@@ -31,7 +31,7 @@ function contentTypeSelectorInChild(array $contentTypes): array
         $input->setInteractive(false);
         $output = new Symfony\Component\Console\Output\StreamOutput(fopen('php://stdout', 'w'));
         $command->setOutput(new Illuminate\Console\OutputStyle($input, $output));
-        $selected = (new UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector)->select(json_decode($argv[2], true), $input, $output, $command);
+        $selected = (new UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\ContentTypeSelector)->select(json_decode($argv[2], true), $input, $output, $command);
         echo "returned {$selected}\n";
         PHP;
 

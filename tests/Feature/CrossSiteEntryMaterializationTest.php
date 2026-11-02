@@ -8,8 +8,8 @@ use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Stache\Query\EntryQueryBuilder;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Tests\Feature\WordPressImportTestCase;
 
 /**
  * An import must not create entry files under a site it was not asked to touch (wordpress-importer-archive#1160).
@@ -31,7 +31,7 @@ use UAMSWeb\WordPressImporter\Tests\Feature\WordPressImportTestCase;
  * shape as a probe that cannot see: a negative assertion and a broken setup are
  * indistinguishable from the result alone.
  *
- * @command  php artisan test vendor/uams-web/wordpress-importer/tests/Feature/CrossSiteEntryMaterializationTest.php
+ * @command  php artisan test vendor/uams-web/aether-wordpress-importer/tests/Feature/CrossSiteEntryMaterializationTest.php
  */
 uses(WordPressImportTestCase::class);
 

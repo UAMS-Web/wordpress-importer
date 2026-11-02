@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use Illuminate\Support\Facades\Log;
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TaxonomySlugProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TermMapBuilder;
 
 /**
  * Processes WordPress show-people and show-team shortcodes into Statamic people
@@ -138,8 +138,7 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
      *
      * @param  array<int|string, mixed>  $terms  Array of SimpleXMLElement term
      *                                           objects from XML
-     * @return array<string, array{full_slug: string, parent: mixed, name: mixed}>
-     *                                                                             Slug map
+     * @return array<string, array{full_slug: string, name: string}> Slug map
      */
     private function buildTermMap(
         array $terms
@@ -163,7 +162,6 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
             $slug = $termData['term_slug'];
             $slugBasedTermMap[$slug] = [
                 'full_slug' => $termData['full_slug'],
-                'parent' => $termData['term_parent'],
                 'name' => $termData['term_name'],
             ];
         }
@@ -221,7 +219,9 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
             return self::ORDER_BY_DEFAULT;
         }
 
-        // Pass a supported value through, or map it to its host equivalent
+        // Pass a supported value through, or map it to its host equivalent. Every
+        // supported value is a word, so a loose comparison finds the same matches.
+        // @pest-mutate-ignore: TrueToFalse
         if (\in_array($orderBy, self::ORDER_BY_VALUES, true)) {
             return $orderBy;
         }
@@ -412,10 +412,7 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
             );
 
             // Check if the page slug is set and the term is set
-            if (
-                $pageSlug !== null && $pageSlug !== ''
-                && $fullSlug !== ''
-            ) {
+            if ($pageSlug !== null && $pageSlug !== '') {
                 self::$termsUsed[$fullSlug] ??= [];
 
                 // Check if the page slug is not in the terms used array
@@ -439,12 +436,9 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
         );
 
         // Extract the display items from the display attribute
-        $displayItems = \array_filter(
-            \explode(
-                ',',
-                $display
-            ),
-            static fn (string $value): bool => $value !== ''
+        $displayItems = \explode(
+            ',',
+            $display
         );
 
         // Initialize an empty array to store the display detail
@@ -484,6 +478,8 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
                 \in_array(
                     $item,
                     $validFilterTypes,
+                    // Every filter type is a word, so a loose comparison finds the same matches
+                    // @pest-mutate-ignore: TrueToFalse
                     true
                 )
             ) {
@@ -493,6 +489,8 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
                 \in_array(
                     $item,
                     $validDisplayOptions,
+                    // Every display option is a word, so a loose comparison finds the same matches
+                    // @pest-mutate-ignore: TrueToFalse
                     true
                 )
             ) { // Check if the item is in the valid display options
@@ -506,15 +504,6 @@ class PeopleShortcodeProcessor implements ShortcodeProcessorInterface
             $attributes,
             'url'
         );
-
-        // Initialize entry link query to false
-        $entryLinkQuery = false;
-
-        // Initialize an empty array to store the entry link url
-        $entryLinkUrl = null;
-
-        // Initialize entry link target to false
-        $entryLinkTarget = false;
 
         // Process the URL attribute to determine link behavior
         switch ($url) {

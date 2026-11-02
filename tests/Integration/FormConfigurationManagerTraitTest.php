@@ -19,10 +19,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormConfigurationManagerTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormConfigurationManagerTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -438,7 +438,7 @@ function fcmWarnings(): ArrayObject
 beforeEach(function (): void {
     $this->probe = new FcmTraitProbe;
     $this->mapped = new FcmTraitMappedProbe;
-    $this->importer = $this->createMock(AssetImporter::class);
+    $this->importer = $this::createStub(AssetImporter::class);
 });
 
 afterEach(function (): void {

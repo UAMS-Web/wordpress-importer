@@ -5,16 +5,16 @@ declare(strict_types=1);
 use Statamic\Contracts\Forms\Form as FormContract;
 use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form as ConcreteForm;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\ContentDetector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormIdExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserInteractionHandler;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Selector as GravityFormsSelector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator as GravityFormsValidator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\ContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\FormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\GravityFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms\UserInteractionHandler;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Selector as GravityFormsSelector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\GravityForms\Validator as GravityFormsValidator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Loaders\GravityFormsLoader;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Proves the user-registration configuration survives a real Statamic form (issue wordpress-importer-archive#821).

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use Tiptap\Marks\Bold;
 use Tiptap\Marks\Code;
@@ -26,17 +26,17 @@ use Tiptap\Nodes\OrderedList;
 use Tiptap\Nodes\Paragraph;
 use Tiptap\Nodes\Text;
 // use Tiptap\Nodes\Image;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Editor;
 // use Tiptap\Nodes\Mention;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\CodeBlock;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\ListItem;
 // use Tiptap\Nodes\Table;
 // use Tiptap\Nodes\TableCell;
 // use Tiptap\Nodes\TableHeader;
 // use Tiptap\Nodes\TableRow;
 // use Tiptap\Nodes\TaskItem;
 // use Tiptap\Nodes\TaskList;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\Nodes\Set;
 
 /**
  * Utility class for parsing HTML content into Statamic Bard format using Tiptap.
@@ -60,8 +60,8 @@ class BardParser
      * Processes HTML input using Tiptap to generate ProseMirror JSON, preserving
      * inline marks (e.g., bold, italic, links) and block nodes (e.g., paragraphs,
      * headings, lists). Cleans the input HTML by removing WordPress block comments
-     * and ensuring UTF-8 encoding. Returns an empty array for empty or
-     * whitespace-only input.
+     * and ensuring UTF-8 encoding. Puts text at the root into paragraphs. Returns
+     * an empty array for empty or whitespace-only input.
      *
      * @param  string  $html  The raw HTML content to parse
      * @return array<int|string, mixed> The Bard-compatible ProseMirror JSON array
@@ -139,15 +139,15 @@ class BardParser
         $document = $editor->setContent($html)->getDocument();
         $content = \is_array($document) ? ($document['content'] ?? []) : [];
 
-        return \is_array($content) ? self::dropUntrustedSets($content) : [];
+        return \is_array($content) ? self::wrapRootText(self::dropUntrustedSets($content)) : [];
     }
 
     /**
      * Puts each run of text at the root of a document into a paragraph.
      *
      * Tiptap leaves text that no block holds at the root, and a Bard document
-     * cannot hold a text node there. Text beside a set in a `wp:shortcode` block
-     * is the case that needs this (#180). Whitespace between blocks is dropped.
+     * cannot hold a text node there, so parse() runs this on all it returns
+     * (#335). Whitespace between blocks is dropped.
      *
      * @param  array<int|string, mixed>  $content  Parsed ProseMirror content
      * @return array<int|string, mixed> Content with no text node at its root

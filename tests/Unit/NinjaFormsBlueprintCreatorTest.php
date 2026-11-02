@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FieldtypeMapping;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FormBlueprintCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FieldtypeMapping;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FormBlueprintCreator;
 
 /**
  * Ninja-specific readers on the blueprint creator (#10, extended for #98).
@@ -94,7 +94,7 @@ it('resolves its mapping class from its own namespace', function (): void {
     // The trait derives the class from the namespace, so NinjaForms\FormBlueprintCreator
     // must reach NinjaForms\FieldtypeMapping without explicit wiring.
     expect(nfCreator('getMappingClass'))
-        ->toBe('UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FieldtypeMapping');
+        ->toBe('UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\FieldtypeMapping');
 });
 
 it('maps a repeater field to a replicator through that mapping class', function (): void {

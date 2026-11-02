@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use Illuminate\Support\Facades\Log;
 use SimpleXMLElement;
 use Statamic\Entries\Entry;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Console\Commands\ImportWordPress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
+use UAMSWeb\Aether\WordPressImporter\Console\Commands\ImportWordPress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\MigrationApi\MaterializationScope;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\SplitExportPartLocator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Traits\DisabledUploadHandlingTrait;
 
 /**
  * Processes HTML to import files linked in <a> tags and update href attributes.
@@ -3598,6 +3598,7 @@ class LinkProcessor
      * @param  callable  $findCallback  The callback function to find the entry
      * @param  int  $retryCount  Number of retry attempts (default: 2)
      * @param  int  $retryDelay  Delay between retries in microseconds (default: 100000)
+     * @param  ?callable(int): void  $sleep  Makes each wait, given its microseconds (default: `usleep`)
      * @return ?Entry The found entry or null if not found
      */
     public static function findEntryWithRetry(
@@ -3605,8 +3606,12 @@ class LinkProcessor
         int $retryCount = 2,
         // A microsecond either way is no different wait
         // @pest-mutate-ignore: DecrementInteger, IncrementInteger
-        int $retryDelay = 100000
+        int $retryDelay = 100000,
+        ?callable $sleep = null
     ): ?Entry {
+        // Wait with the given callable, or for real
+        $sleep ??= usleep(...);
+
         // Initialize entry variable for lookup results
         $statamicEntry = null;
 
@@ -3647,7 +3652,7 @@ class LinkProcessor
             // Brief delay before the next targeted retry to let a just-saved
             // entry's cache writes settle (skip the wait after the final attempt)
             if ($i < $retryCount - 1) {
-                usleep($retryDelay);
+                $sleep($retryDelay);
             }
         }
 

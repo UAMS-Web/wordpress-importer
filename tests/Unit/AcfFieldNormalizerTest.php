@@ -10,7 +10,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/AcfFieldNormalizerTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\AcfFieldNormalizer;
 
 it('returns the data unchanged when there are no mappings', function (): void {
     $data = ['side_heading' => 'H', 'side_list_0_text' => 'row', 3 => 'indexed'];

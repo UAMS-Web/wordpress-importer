@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasPromptsSupport;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\Traits\HasQuestionHelper;
 
 /**
  * Regression test for issue wordpress-importer-archive#385.
@@ -87,14 +87,14 @@ function resolveUnsupportedContentPolicy(
 it('resolves a non-interactive run to the configured policy verbatim', function (string $policy): void {
     // Build a non-interactive input stub so the resolver takes the
     // policy-driven branch rather than prompting.
-    $input = $this->createMock(InputInterface::class);
+    $input = $this::createStub(InputInterface::class);
     $input->method('isInteractive')->willReturn(false);
 
     $resolved = resolveUnsupportedContentPolicy(
         $policy,
         $input,
-        $this->createMock(OutputInterface::class),
-        $this->createMock(Command::class)
+        $this::createStub(OutputInterface::class),
+        $this::createStub(Command::class)
     );
 
     expect($resolved)->toBe($policy);

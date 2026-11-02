@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/KbLinkRegistryTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
 
 beforeEach(function (): void {
     KbLinkRegistry::clear();

@@ -7,13 +7,13 @@ use Statamic\Facades\Form as FormFacade;
 use Statamic\Fields\Blueprint;
 use Statamic\Forms\Form;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\DataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms\NinjaFormsCoordinator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Proves the Ninja Forms importer is actually reachable end to end (issue #10).
@@ -195,7 +195,7 @@ it('creates a Statamic form and blueprint for a referenced Ninja Forms ID', func
         $node,
         ['formID' => 2],
         'default',
-        $this->createMock(AssetImporter::class),
+        $this::createStub(AssetImporter::class),
         new BufferedOutput
     );
 
@@ -206,7 +206,7 @@ it('creates a Statamic form and blueprint for a referenced Ninja Forms ID', func
     app(FormPluginCoordinator::class)->processFormImports(
         'default',
         $output,
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     $written = $output->fetch();
@@ -250,7 +250,7 @@ it('configures email notifications, with recipients, for an imported Ninja Forms
         2,
         'Default',
         'default',
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($form)->toBeInstanceOf(Form::class);
@@ -294,7 +294,7 @@ it('reports nothing to import when no Ninja Forms IDs are referenced', function 
     app(FormPluginCoordinator::class)->processFormImports(
         'default',
         $output,
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     // The negative control for the tests above: with no referenced IDs the pass returns

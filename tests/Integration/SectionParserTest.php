@@ -5,10 +5,10 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Mockery\MockInterface;
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SectionParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\SectionParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests that `SectionParser` maps a `uams-section` block, with its InnerBlocks
@@ -196,7 +196,7 @@ it('joins fragments, ignoring ones that are not arrays or carry no string html',
 
 it('renders InnerBlocks without wpautop, so a blank line does not split a paragraph', function (): void {
     expect(sectionSet([], [['html' => "First line\n\nSecond line"]])['body'])->toBe([
-        ['type' => 'text', 'text' => 'First lineSecond line', 'attrs' => []],
+        ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First lineSecond line']], 'attrs' => []],
     ]);
 });
 

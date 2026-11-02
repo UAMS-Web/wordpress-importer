@@ -13,7 +13,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/ImportWarningManagerTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
 
 beforeEach(function (): void {
     ImportWarningManager::clearWarnings();
@@ -84,6 +84,10 @@ it('drops a duplicate of a de-duplicated type, and keeps one that differs in any
     'unaddressed shortcodes, site' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => 'mystery', 'original' => '[mystery a=1]', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'site'],
     'unaddressed shortcodes, page slug' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => 'mystery', 'original' => '[mystery a=1]', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_slug'],
     'unaddressed shortcodes, page link' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => 'mystery', 'original' => '[mystery a=1]', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_link'],
+    'images beside shortcodes, image' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'content_snippet'],
+    'images beside shortcodes, site' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'site'],
+    'images beside shortcodes, page slug' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_slug'],
+    'images beside shortcodes, page link' => ['content', 'images_beside_shortcodes', ['content_snippet' => '<img src="a.jpg">', 'site' => 's', 'page_slug' => 'about', 'page_link' => 'p'], 'page_link'],
 ]);
 
 it('treats two warnings that both lack the compared keys as duplicates', function (string $category, string $type): void {
@@ -97,6 +101,7 @@ it('treats two warnings that both lack the compared keys as duplicates', functio
     ['forms', 'unmapped_subfields'],
     ['content', 'malformed_shortcodes'],
     ['content', 'unaddressed_shortcodes'],
+    ['content', 'images_beside_shortcodes'],
 ]);
 
 it('compares a missing key with an empty or null one as the manager defaults it', function (string $category, string $type, array $explicit): void {
@@ -111,6 +116,7 @@ it('compares a missing key with an empty or null one as the manager defaults it'
     'unmapped subfields' => ['forms', 'unmapped_subfields', ['field_type' => '', 'subfield_label' => '', 'attribute_name' => null, 'form_id' => null]],
     'malformed shortcodes' => ['content', 'malformed_shortcodes', ['shortcode_name' => '', 'attribute' => '', 'original' => '', 'page_url' => null]],
     'unaddressed shortcodes' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => '', 'original' => '', 'site' => '', 'page_slug' => null, 'page_link' => '']],
+    'images beside shortcodes' => ['content', 'images_beside_shortcodes', ['content_snippet' => '', 'site' => '', 'page_slug' => '', 'page_link' => '']],
 ]);
 
 it('keeps checking past an earlier warning that differs', function (string $category, string $type, array $first, array $second): void {
@@ -127,6 +133,7 @@ it('keeps checking past an earlier warning that differs', function (string $cate
     'unmapped subfields' => ['forms', 'unmapped_subfields', ['field_type' => 'a', 'subfield_label' => 'L', 'attribute_name' => 'x', 'form_id' => 1], ['field_type' => 'b', 'subfield_label' => 'L', 'attribute_name' => 'x', 'form_id' => 1]],
     'malformed shortcodes' => ['content', 'malformed_shortcodes', ['shortcode_name' => 'a', 'attribute' => 'x', 'original' => 'o', 'page_url' => 'p'], ['shortcode_name' => 'b', 'attribute' => 'x', 'original' => 'o', 'page_url' => 'p']],
     'unaddressed shortcodes' => ['content', 'unaddressed_shortcodes', ['shortcode_name' => 'a', 'original' => 'o', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l'], ['shortcode_name' => 'b', 'original' => 'o', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l']],
+    'images beside shortcodes' => ['content', 'images_beside_shortcodes', ['content_snippet' => 'a', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l'], ['content_snippet' => 'b', 'site' => 's', 'page_slug' => 'p', 'page_link' => 'l']],
 ]);
 
 it('de-duplicates a type only within its own category', function (): void {

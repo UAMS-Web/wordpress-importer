@@ -27,20 +27,20 @@ use Statamic\Fields\Blueprint;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\CompilesCleanly;
-use UAMSWeb\WordPressImporter\Tests\Support\TemporaryFileRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\BaseEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Entries\Creators\TablePressEntryCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlStreamParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentRoot;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\CompilesCleanly;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\TemporaryFileRegistry;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -688,17 +688,50 @@ describe('saving a table', function (): void {
             }
         }
 
-        // ---
-        // The copies take the slug `default_tablepress-12.1`, which Statamic stores
-        // without its dot, so both land on table 121's slug, and the id the data
-        // carries is not the entry's (#265).
-        // ---
+        \sort($saved);
+
         expect($saved)->toBe([
             ['default_tablepress-12', true],
-            ['default_tablepress-121', false],
-            ['default_tablepress-121', false],
+            ['default_tablepress-12_copy-1', true],
+            ['default_tablepress-12_copy-2', true],
         ])
-            ->and($outputs[0])->toContain("Saving entry with slug 'default_tablepress-12' for collection 'tables'");
+            ->and($outputs[0])->toContain("Saving entry with slug 'default_tablepress-12_copy-1' for collection 'tables'")
+            ->and($outputs[1])->toContain("Saving entry with slug 'default_tablepress-12_copy-2' for collection 'tables'");
+    });
+
+    it('leaves table 121 its own slug after a copy of table 12', function (): void {
+        $export = tablePressExport([['meta' => tablePressMeta()]]);
+        tablePressRun($export);
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior('Create an additional file');
+        tablePressRun($export, $creator);
+
+        tablePressRun(tablePressExport([[
+            'title' => 'The other table',
+            'meta' => tablePressMeta(['_tablepress_export_table_id' => '121']),
+        ]]));
+
+        expect(tablePressEntries()['default_tablepress-121']->get('title'))->toBe('The other table');
+    });
+
+    it('counts only its own collection when numbering a copy', function (): void {
+        $collection = CollectionFacade::make('other_tables');
+        $collection->sites(['default']);
+        $collection->save();
+        $other = new Entry;
+        $other->collection('other_tables');
+        $other->locale('default');
+        $other->slug('default_tablepress-12_copy-1');
+        $other->save();
+        $export = tablePressExport([['meta' => tablePressMeta()]]);
+        tablePressRun($export);
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior('Create an additional file');
+
+        tablePressRun($export, $creator);
+
+        expect(\array_keys(tablePressEntries()))->toContain('default_tablepress-12_copy-1')
+            ->not->toContain('default_tablepress-12_copy-2');
     });
 
     it('deletes a file left under the old slug format', function (): void {
@@ -719,6 +752,32 @@ describe('saving a table', function (): void {
             @\unlink($kept);
         }
     });
+
+    it('keeps the file of a table whose export ID holds a hyphen, and deletes its old slug file', function (string $behavior): void {
+        $export = tablePressExport([['id' => '801', 'meta' => tablePressMeta(['_tablepress_export_table_id' => 'my-table'])]]);
+        tablePressRun($export);
+        $canonical = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table');
+        $stale = ContentRoot::collectionEntry('tables', 'default', 'default_tablepress-my-table-801');
+        @\mkdir(\dirname($stale), 0777, true);
+        \file_put_contents($canonical, "---\ntitle: canonical\n---\n");
+        \file_put_contents($stale, "---\ntitle: stale\n---\n");
+        $creator = new TablePressEntryCreator;
+        $creator->setOverwriteBehavior($behavior);
+
+        try {
+            tablePressRun($export, $creator);
+
+            expect(\file_exists($canonical))->toBeTrue()
+                ->and(\file_exists($stale))->toBeFalse();
+        } finally {
+            @\unlink($canonical);
+            @\unlink($stale);
+        }
+    })->with([
+        'skip' => ['Skip matching files'],
+        'additional' => ['Create an additional file'],
+        'overwrite' => ['Overwrite matching files'],
+    ]);
 });
 
 describe('dating a table', function (): void {
@@ -870,6 +929,12 @@ describe('the defaults and the description', function (): void {
     })->with([
         'bold text' => ['<p>Plain <strong>bold</strong></p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Plain bold']]]]],
         'a double-encoded quote' => ['<p>Say &AMP;quot;hi&AMP;quot;</p>', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Say "hi"']]]]],
+        'bare text, the usual excerpt' => ['A plain caption.', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A plain caption.']]]]],
+        'bare text opening with a mark' => ['<strong>Bold</strong> tail', [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Bold tail']]]]],
+        'bare text after a paragraph' => ['<p>First</p> tail', [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'First']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'tail']]],
+        ]],
         'only a comment' => ['<!-- note -->', null],
         'only whitespace' => [" \n ", null],
         'only a title' => ['<title>Head only</title>', null],
@@ -981,13 +1046,13 @@ describe('saving rules', function (): void {
         $ids = [];
 
         foreach (EntryFacade::all() as $entry) {
-            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables' && tablePressSlug($entry) === 'default_tablepress-121') {
+            if ($entry instanceof Entry && $entry->collectionHandle() === 'tables' && tablePressSlug($entry) === 'default_tablepress-12_copy-1') {
                 $ids[] = $entry->get('id');
             }
         }
 
         expect($ids)->toHaveCount(1)
-            ->and(\is_string($ids[0] ?? null) ? $ids[0] : '')->toMatch('/^default_tablepress-12\.1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
+            ->and(\is_string($ids[0] ?? null) ? $ids[0] : '')->toMatch('/^default_tablepress-12_copy-1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/');
     });
 });
 
@@ -1069,9 +1134,18 @@ describe('mapping options and reporting Premium features', function (): void {
     ]);
 });
 
-describe('an excerpt Tiptap reads as JSON', function (): void {
-    it('lets the TypeError for a quoted-string excerpt through, as main does (#267)', function (): void {
-        expect(fn () => tablePressRun(tablePressExport([['excerpt' => '"Quoted caption"', 'meta' => tablePressMeta()]])))
-            ->toThrow(TypeError::class, 'Cannot access offset of type string on string');
-    });
+describe('an excerpt that decodes as JSON', function (): void {
+    it('stores its text as the description', function (string $excerpt): void {
+        tablePressRun(tablePressExport([['excerpt' => $excerpt, 'meta' => tablePressMeta()]]));
+
+        expect(tablePressEntry('default_tablepress-12')->get('description'))
+            ->toBe([['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $excerpt]]]]);
+    })->with([
+        'a quoted string' => ['"Quoted caption"'],
+        'a number' => ['42'],
+        'an object' => ['{"a":1}'],
+        'a list' => ['[1,2]'],
+        'a boolean' => ['true'],
+        'null' => ['null'],
+    ]);
 });

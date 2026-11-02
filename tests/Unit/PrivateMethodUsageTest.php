@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\PrivateMethodUsage;
-use UAMSWeb\WordPressImporter\Tests\Unit\UncalledPrivateHelperGuardTest;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\PrivateMethodUsage;
+use UAMSWeb\Aether\WordPressImporter\Tests\Unit\UncalledPrivateHelperGuardTest;
 
 /**
  * Pins both directions of the trait-orphan detector behind

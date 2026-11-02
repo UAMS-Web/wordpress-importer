@@ -6,7 +6,7 @@ declare(strict_types=1);
  * The Formidable Forms, Gravity Forms and Ninja Forms coordinators and the FormPluginCoordinatorTrait they share (#98).
  *
  * Each coordinator is a facade over its plugin's detector, ID extractor, data store, prompt
- * handler and form creation coordinator. These tests replace every collaborator with a mock
+ * handler and form creation coordinator. These tests replace every collaborator with a test double
  * and check what each public method hands to which one, and what comes back. Statamic is
  * booted only for the `Form` objects and the `Log` facade the missing-data path writes to.
  *
@@ -20,73 +20,92 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use Statamic\Facades\Form as FormFacade;
 use Statamic\Forms\Form;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseContentDetector;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseFormIdExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginFormCreationCoordinatorContract;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginUserInteractionHandlerContract;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Creators\FormCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseContentDetector;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseDataManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\BaseFormIdExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormidableForms;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginFormCreationCoordinatorContract;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\FormPluginUserInteractionHandlerContract;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\GravityForms;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Forms\Utilities\NinjaForms;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
 /**
- * Narrow a mock built by a test to the class it was built from.
+ * Narrow a test double built by a test to the class it was built from.
  *
  * @template T of object
  *
- * @param  mixed  $mock  The mock
- * @param  class-string<T>  $class  The class it mocks
- * @return T&MockObject The mock, typed
+ * @param  mixed  $double  The double
+ * @param  class-string<T>  $class  The class it stands in for
+ * @return T&Stub The double, typed
  */
-function fpcTyped(mixed $mock, string $class): object
+function fpcTyped(mixed $double, string $class): object
 {
-    if (! $mock instanceof MockObject || ! $mock instanceof $class) {
-        throw new LogicException("Expected a mock of {$class}.");
+    if (! $double instanceof Stub || ! $double instanceof $class) {
+        throw new LogicException("Expected a test double of {$class}.");
     }
 
-    return $mock;
+    return $double;
 }
 
 /**
- * One plugin's coordinator, built over mocked collaborators.
+ * Narrow a role a test named to fpcBuild() to the mock it was built as.
+ *
+ * @template T of object
+ *
+ * @param  T  $double  The double
+ * @return T&MockObject The mock
+ */
+function fpcMock(object $double): object
+{
+    if (! $double instanceof MockObject) {
+        throw new LogicException('Name the role in fpcBuild() to assert calls on it.');
+    }
+
+    return $double;
+}
+
+/**
+ * One plugin's coordinator, built over test doubles.
  *
  * @param  string  $plugin  formidable, gravity or ninja
- * @param  Closure(class-string): object  $mock  Builds a mock of a class; made in the test, where createMock() is callable
- * @param  bool  $injectCreation  Pass a mocked creation coordinator rather than let the coordinator build its own
- * @return array{coordinator: FormidableForms\FormidableFormsCoordinator|GravityForms\GravityFormsCoordinator|NinjaForms\NinjaFormsCoordinator, detector: BaseContentDetector&MockObject, extractor: BaseFormIdExtractor&MockObject, data: BaseDataManager&MockObject, prompts: FormPluginUserInteractionHandlerContract&MockObject, creation: (FormidableForms\FormCreationCoordinator&MockObject)|(GravityForms\FormCreationCoordinator&MockObject)|(NinjaForms\FormCreationCoordinator&MockObject)|null}
+ * @param  Closure(class-string, bool): object  $double  Builds a stub of a class, or a mock when the second argument is true; made in the test, where createMock() is callable
+ * @param  list<string>  $mocked  The roles the test asserts calls on: detector, extractor, data, prompts or creation
+ * @param  bool  $injectCreation  Pass a creation coordinator double rather than let the coordinator build its own
+ * @return array{coordinator: FormidableForms\FormidableFormsCoordinator|GravityForms\GravityFormsCoordinator|NinjaForms\NinjaFormsCoordinator, detector: BaseContentDetector&Stub, extractor: BaseFormIdExtractor&Stub, data: BaseDataManager&Stub, prompts: FormPluginUserInteractionHandlerContract&Stub, creation: (FormidableForms\FormCreationCoordinator&Stub)|(GravityForms\FormCreationCoordinator&Stub)|(NinjaForms\FormCreationCoordinator&Stub)|null}
  */
-function fpcBuild(string $plugin, Closure $mock, bool $injectCreation = true): array
+function fpcBuild(string $plugin, Closure $double, array $mocked = [], bool $injectCreation = true): array
 {
     if ($plugin === 'formidable') {
-        $detector = fpcTyped($mock(FormidableForms\ContentDetector::class), FormidableForms\ContentDetector::class);
-        $extractor = fpcTyped($mock(FormidableForms\FormIdExtractor::class), FormidableForms\FormIdExtractor::class);
-        $data = fpcTyped($mock(FormidableForms\DataManager::class), FormidableForms\DataManager::class);
-        $prompts = fpcTyped($mock(FormidableForms\UserInteractionHandler::class), FormidableForms\UserInteractionHandler::class);
-        $creation = $injectCreation ? fpcTyped($mock(FormidableForms\FormCreationCoordinator::class), FormidableForms\FormCreationCoordinator::class) : null;
+        $detector = fpcTyped($double(FormidableForms\ContentDetector::class, \in_array('detector', $mocked, true)), FormidableForms\ContentDetector::class);
+        $extractor = fpcTyped($double(FormidableForms\FormIdExtractor::class, \in_array('extractor', $mocked, true)), FormidableForms\FormIdExtractor::class);
+        $data = fpcTyped($double(FormidableForms\DataManager::class, \in_array('data', $mocked, true)), FormidableForms\DataManager::class);
+        $prompts = fpcTyped($double(FormidableForms\UserInteractionHandler::class, \in_array('prompts', $mocked, true)), FormidableForms\UserInteractionHandler::class);
+        $creation = $injectCreation ? fpcTyped($double(FormidableForms\FormCreationCoordinator::class, \in_array('creation', $mocked, true)), FormidableForms\FormCreationCoordinator::class) : null;
         $coordinator = new FormidableForms\FormidableFormsCoordinator($detector, $extractor, $data, $prompts, $creation);
     } elseif ($plugin === 'gravity') {
-        $detector = fpcTyped($mock(GravityForms\ContentDetector::class), GravityForms\ContentDetector::class);
-        $extractor = fpcTyped($mock(GravityForms\FormIdExtractor::class), GravityForms\FormIdExtractor::class);
-        $data = fpcTyped($mock(GravityForms\DataManager::class), GravityForms\DataManager::class);
-        $prompts = fpcTyped($mock(GravityForms\UserInteractionHandler::class), GravityForms\UserInteractionHandler::class);
-        $creation = $injectCreation ? fpcTyped($mock(GravityForms\FormCreationCoordinator::class), GravityForms\FormCreationCoordinator::class) : null;
+        $detector = fpcTyped($double(GravityForms\ContentDetector::class, \in_array('detector', $mocked, true)), GravityForms\ContentDetector::class);
+        $extractor = fpcTyped($double(GravityForms\FormIdExtractor::class, \in_array('extractor', $mocked, true)), GravityForms\FormIdExtractor::class);
+        $data = fpcTyped($double(GravityForms\DataManager::class, \in_array('data', $mocked, true)), GravityForms\DataManager::class);
+        $prompts = fpcTyped($double(GravityForms\UserInteractionHandler::class, \in_array('prompts', $mocked, true)), GravityForms\UserInteractionHandler::class);
+        $creation = $injectCreation ? fpcTyped($double(GravityForms\FormCreationCoordinator::class, \in_array('creation', $mocked, true)), GravityForms\FormCreationCoordinator::class) : null;
         $coordinator = new GravityForms\GravityFormsCoordinator($detector, $extractor, $data, $prompts, $creation);
     } else {
-        $detector = fpcTyped($mock(NinjaForms\ContentDetector::class), NinjaForms\ContentDetector::class);
-        $extractor = fpcTyped($mock(NinjaForms\FormIdExtractor::class), NinjaForms\FormIdExtractor::class);
-        $data = fpcTyped($mock(NinjaForms\DataManager::class), NinjaForms\DataManager::class);
-        $prompts = fpcTyped($mock(NinjaForms\UserInteractionHandler::class), NinjaForms\UserInteractionHandler::class);
-        $creation = $injectCreation ? fpcTyped($mock(NinjaForms\FormCreationCoordinator::class), NinjaForms\FormCreationCoordinator::class) : null;
+        $detector = fpcTyped($double(NinjaForms\ContentDetector::class, \in_array('detector', $mocked, true)), NinjaForms\ContentDetector::class);
+        $extractor = fpcTyped($double(NinjaForms\FormIdExtractor::class, \in_array('extractor', $mocked, true)), NinjaForms\FormIdExtractor::class);
+        $data = fpcTyped($double(NinjaForms\DataManager::class, \in_array('data', $mocked, true)), NinjaForms\DataManager::class);
+        $prompts = fpcTyped($double(NinjaForms\UserInteractionHandler::class, \in_array('prompts', $mocked, true)), NinjaForms\UserInteractionHandler::class);
+        $creation = $injectCreation ? fpcTyped($double(NinjaForms\FormCreationCoordinator::class, \in_array('creation', $mocked, true)), NinjaForms\FormCreationCoordinator::class) : null;
         $coordinator = new NinjaForms\NinjaFormsCoordinator($detector, $extractor, $data, $prompts, $creation);
     }
 
@@ -145,27 +164,27 @@ function fpcOps(string $plugin): array
 }
 
 beforeEach(function (): void {
-    $this->mock = function (string $class): object {
+    $this->mock = function (string $class, bool $mocked = true): object {
         if (! \class_exists($class)) {
             throw new LogicException("No class {$class} to mock.");
         }
 
-        return $this->createMock($class);
+        return $mocked ? $this->createMock($class) : $this::createStub($class);
     };
-    $this->parser = $this->createMock(XmlParser::class);
-    $this->assetImporter = $this->createMock(AssetImporter::class);
+    $this->parser = $this::createStub(XmlParser::class);
+    $this->assetImporter = $this::createStub(AssetImporter::class);
 });
 
 dataset('form plugins', ['formidable', 'gravity', 'ninja']);
 
 it('passes the export data to and from its data manager', function (string $plugin): void {
-    ['coordinator' => $coordinator, 'data' => $data] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'data' => $data] = fpcBuild($plugin, $this->mock, ['data']);
     $ops = fpcOps($plugin);
     $forms = [['id' => 1]];
 
-    $data->expects($this->once())->method('setFormsData')->with($forms);
-    $data->expects($this->once())->method('getFormsData')->willReturn($forms);
-    $data->expects($this->once())->method('clearFormsData');
+    fpcMock($data)->expects($this->once())->method('setFormsData')->with($forms);
+    fpcMock($data)->expects($this->once())->method('getFormsData')->willReturn($forms);
+    fpcMock($data)->expects($this->once())->method('clearFormsData');
 
     $ops['setData']($coordinator, $forms);
 
@@ -175,18 +194,18 @@ it('passes the export data to and from its data manager', function (string $plug
 })->with('form plugins');
 
 it('asks its content detector whether the export uses the plugin', function (string $plugin, bool $found): void {
-    ['coordinator' => $coordinator, 'detector' => $detector] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'detector' => $detector] = fpcBuild($plugin, $this->mock, ['detector']);
 
-    $detector->expects($this->once())->method('hasFormPluginContent')->with($this->parser)->willReturn($found);
+    fpcMock($detector)->expects($this->once())->method('hasFormPluginContent')->with($this->parser)->willReturn($found);
 
     expect(fpcOps($plugin)['hasContent']($coordinator, $this->parser))->toBe($found);
 })->with('form plugins')->with([true, false]);
 
 it('re-keys the referenced form IDs and drops an empty one', function (string $plugin): void {
-    ['coordinator' => $coordinator, 'extractor' => $extractor] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'extractor' => $extractor] = fpcBuild($plugin, $this->mock, ['extractor']);
 
     // The empty ID sits between two real ones, so the scan has to continue past it.
-    $extractor->expects($this->once())->method('getFormIdsUsedWithPageSlugs')->with($this->parser)->willReturn([
+    fpcMock($extractor)->expects($this->once())->method('getFormIdsUsedWithPageSlugs')->with($this->parser)->willReturn([
         7 => ['contact'],
         '' => ['orphan'],
         '12' => ['apply', 'apply-again'],
@@ -199,12 +218,12 @@ it('re-keys the referenced form IDs and drops an empty one', function (string $p
 })->with('form plugins');
 
 it('hands detection to its prompt handler and returns what it decided', function (string $plugin, bool $loaded): void {
-    ['coordinator' => $coordinator, 'prompts' => $prompts] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'prompts' => $prompts] = fpcBuild($plugin, $this->mock, ['prompts']);
     $input = new ArrayInput([]);
     $output = new BufferedOutput;
-    $command = $this->createMock(Command::class);
+    $command = $this::createStub(Command::class);
 
-    $prompts->expects($this->once())->method('handleFormPluginDetection')->with($this->parser, $input, $output, $command)->willReturn($loaded);
+    fpcMock($prompts)->expects($this->once())->method('handleFormPluginDetection')->with($this->parser, $input, $output, $command)->willReturn($loaded);
 
     expect(fpcOps($plugin)['detect']($coordinator, $this->parser, $input, $output, $command))->toBe($loaded);
 })->with('form plugins')->with([true, false]);
@@ -216,32 +235,32 @@ it('names the export key that holds a form title', function (string $plugin): vo
 })->with('form plugins');
 
 it('creates the form through its creation coordinator once the export is loaded', function (string $plugin): void {
-    ['coordinator' => $coordinator, 'data' => $data, 'creation' => $creation] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'data' => $data, 'creation' => $creation] = fpcBuild($plugin, $this->mock, ['data', 'creation']);
     $ops = fpcOps($plugin);
     $forms = [7 => ['id' => 7, 'title' => 'Contact']];
     $form = FormFacade::make('contact');
 
-    $data->expects($this->once())->method('getFormsData')->willReturn($forms);
+    fpcMock($data)->expects($this->once())->method('getFormsData')->willReturn($forms);
     if ($creation === null) {
         throw new LogicException('fpcBuild() injects a creation coordinator by default.');
     }
 
-    $creation->expects($this->once())->method($ops['createFrom'])->with(7, $forms, 'Main Site', 'default', $this->assetImporter)->willReturn($form);
+    fpcMock($creation)->expects($this->once())->method($ops['createFrom'])->with(7, $forms, 'Main Site', 'default', $this->assetImporter)->willReturn($form);
 
     expect($ops['createIfNeeded']($coordinator, 7, $this->assetImporter))->toBe($form);
 })->with('form plugins');
 
 it('logs an error and creates nothing when the export is not loaded', function (string $plugin): void {
-    ['coordinator' => $coordinator, 'data' => $data, 'creation' => $creation] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'data' => $data, 'creation' => $creation] = fpcBuild($plugin, $this->mock, ['data', 'creation']);
     $ops = fpcOps($plugin);
     $log = Log::spy();
 
-    $data->expects($this->once())->method('getFormsData')->willReturn(null);
+    fpcMock($data)->expects($this->once())->method('getFormsData')->willReturn(null);
     if ($creation === null) {
         throw new LogicException('fpcBuild() injects a creation coordinator by default.');
     }
 
-    $creation->expects($this->never())->method($ops['createFrom']);
+    fpcMock($creation)->expects($this->never())->method($ops['createFrom']);
 
     expect($ops['createIfNeeded']($coordinator, 7, $this->assetImporter))->toBeNull();
 
@@ -249,7 +268,7 @@ it('logs an error and creates nothing when the export is not loaded', function (
 })->with('form plugins');
 
 it('creates nothing without a creation coordinator of its own plugin', function (string $plugin, string $state): void {
-    ['coordinator' => $coordinator, 'data' => $data] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'data' => $data] = fpcBuild($plugin, $this->mock, ['data']);
 
     // The property is nullable and typed to the shared contract, so these guards cover
     // states the constructors never produce; reflection is the only way to reach them.
@@ -275,13 +294,13 @@ it('creates nothing without a creation coordinator of its own plugin', function 
     };
     (new ReflectionProperty($coordinator, 'formCreationCoordinator'))->setValue($coordinator, $replacement);
 
-    $data->expects($this->never())->method('getFormsData');
+    fpcMock($data)->expects($this->never())->method('getFormsData');
 
     expect(fpcOps($plugin)['createIfNeeded']($coordinator, 7, $this->assetImporter))->toBeNull();
 })->with('form plugins')->with(['none', 'another implementation']);
 
 it('reports the created form handle its creation coordinator holds', function (string $plugin): void {
-    ['coordinator' => $coordinator, 'creation' => $creation] = fpcBuild($plugin, $this->mock);
+    ['coordinator' => $coordinator, 'creation' => $creation] = fpcBuild($plugin, $this->mock, ['creation']);
 
     if (! $coordinator instanceof FormidableForms\FormidableFormsCoordinator && ! $coordinator instanceof GravityForms\GravityFormsCoordinator) {
         throw new LogicException('Only the Formidable Forms and Gravity Forms coordinators report handles.');
@@ -291,7 +310,7 @@ it('reports the created form handle its creation coordinator holds', function (s
         throw new LogicException('fpcBuild() injects a creation coordinator by default.');
     }
 
-    $creation->expects($this->once())->method('getCreatedFormHandle')->with(7)->willReturn('default_contact');
+    fpcMock($creation)->expects($this->once())->method('getCreatedFormHandle')->with(7)->willReturn('default_contact');
 
     expect($coordinator->getCreatedFormHandle(7))->toBe('default_contact');
 
@@ -322,16 +341,16 @@ it('keeps the creation coordinator it was given, and links it back', function (s
     // Built here rather than through fpcBuild(), so the constructor's call can be expected.
     if ($plugin === 'formidable') {
         $creation = $this->createMock(FormidableForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(FormidableForms\FormidableFormsCoordinator::class));
-        $coordinator = new FormidableForms\FormidableFormsCoordinator($this->createMock(FormidableForms\ContentDetector::class), $this->createMock(FormidableForms\FormIdExtractor::class), $this->createMock(FormidableForms\DataManager::class), $this->createMock(FormidableForms\UserInteractionHandler::class), $creation);
+        fpcMock($creation)->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(FormidableForms\FormidableFormsCoordinator::class));
+        $coordinator = new FormidableForms\FormidableFormsCoordinator($this::createStub(FormidableForms\ContentDetector::class), $this::createStub(FormidableForms\FormIdExtractor::class), $this::createStub(FormidableForms\DataManager::class), $this::createStub(FormidableForms\UserInteractionHandler::class), $creation);
     } elseif ($plugin === 'gravity') {
         $creation = $this->createMock(GravityForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(GravityForms\GravityFormsCoordinator::class));
-        $coordinator = new GravityForms\GravityFormsCoordinator($this->createMock(GravityForms\ContentDetector::class), $this->createMock(GravityForms\FormIdExtractor::class), $this->createMock(GravityForms\DataManager::class), $this->createMock(GravityForms\UserInteractionHandler::class), $creation);
+        fpcMock($creation)->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(GravityForms\GravityFormsCoordinator::class));
+        $coordinator = new GravityForms\GravityFormsCoordinator($this::createStub(GravityForms\ContentDetector::class), $this::createStub(GravityForms\FormIdExtractor::class), $this::createStub(GravityForms\DataManager::class), $this::createStub(GravityForms\UserInteractionHandler::class), $creation);
     } else {
         $creation = $this->createMock(NinjaForms\FormCreationCoordinator::class);
-        $creation->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(NinjaForms\NinjaFormsCoordinator::class));
-        $coordinator = new NinjaForms\NinjaFormsCoordinator($this->createMock(NinjaForms\ContentDetector::class), $this->createMock(NinjaForms\FormIdExtractor::class), $this->createMock(NinjaForms\DataManager::class), $this->createMock(NinjaForms\UserInteractionHandler::class), $creation);
+        fpcMock($creation)->expects($this->once())->method('setCoordinator')->with(Assert::isInstanceOf(NinjaForms\NinjaFormsCoordinator::class));
+        $coordinator = new NinjaForms\NinjaFormsCoordinator($this::createStub(NinjaForms\ContentDetector::class), $this::createStub(NinjaForms\FormIdExtractor::class), $this::createStub(NinjaForms\DataManager::class), $this::createStub(NinjaForms\UserInteractionHandler::class), $creation);
     }
 
     expect($coordinator->getFormCreationCoordinator())->toBe($creation);

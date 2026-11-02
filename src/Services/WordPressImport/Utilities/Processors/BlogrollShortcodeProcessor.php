@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use Statamic\Fieldtypes\RowId;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\NewsBlockSourceSites;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Taxonomies\PostCategoryEntryResolver;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\NewsBlockSourceSites;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\DefaultTiptapHtmlTrait;
 
 /**
  * Processes WordPress blogroll shortcodes into Statamic uamsweb_block_news
@@ -144,18 +144,15 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
             $site
         );
 
-        // Check if a slug-shaped category selection was found
-        if ($categorySlugs !== '') {
-            // Resolve the slug(s) on this site; the resolver reports any miss
-            $categoryReferences = PostCategoryEntryResolver::referencesFor(
-                $categorySlugs,
-                $site
-            );
+        // Resolve the slug(s) on this site; the resolver reports any miss
+        $categoryReferences = PostCategoryEntryResolver::referencesFor(
+            $categorySlugs,
+            $site
+        );
 
-            // Only set the field when something actually resolved
-            if ($categoryReferences !== []) {
-                $result['category'] = $categoryReferences;
-            }
+        // Only set the field when something actually resolved
+        if ($categoryReferences !== []) {
+            $result['category'] = $categoryReferences;
         }
 
         // Return the uamsweb_block_news replicator set
@@ -184,19 +181,14 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
     ): string {
         // `category_name` is unambiguously a slug, so it takes precedence
         if (
-            $categoryNameValue !== null
+            \is_scalar($categoryNameValue)
             && $categoryNameValue !== ''
-            && \is_scalar($categoryNameValue)
         ) {
             return (string) $categoryNameValue;
         }
 
         // A non-numeric `category` is a slug; a numeric one is a term id
-        if (
-            $categoryValue !== null
-            && $categoryValue !== ''
-            && \is_scalar($categoryValue)
-        ) {
+        if (\is_scalar($categoryValue)) {
             if (! \is_numeric($categoryValue)) {
                 return (string) $categoryValue;
             }
@@ -232,10 +224,6 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
     ): string {
         $style = $attributes['style'] ?? 'default';
 
-        if (\is_string($style)) {
-            return $style;
-        }
-
         if (\is_scalar($style)) {
             return (string) $style;
         }
@@ -246,54 +234,20 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
     /**
      * Map shortcode style attribute to uamsweb_block_news format.
      *
-     * @param  string|null  $style  Value of style attribute (e.g., card, default)
+     * @param  string  $style  Value of style attribute (e.g., card, default)
      * @return string Format key (cards, grid, etc.)
      */
-    private function mapStyleToFormat(?string $style): string
+    private function mapStyleToFormat(string $style): string
     {
-        // Check if style is missing or empty
-        if (
-            $style === null
-            || $style === ''
-        ) {
-            return 'grid';
-        }
-
         // Normalize style to lowercase for comparison
         $s = \strtolower(\trim($style));
 
-        // Map card to cards format
-        if ($s === 'card') {
-            return 'cards';
-        }
-
-        // Map default to grid format
-        if ($s === 'default') {
-            return 'grid';
-        }
-
-        // ---
-        // Allow other style values to map to grid if unknown
-        // ---
-
-        // If style is a known format key, use it
-        if (
-            \in_array(
-                $s,
-                [
-                    'headlines',
-                    'excerpts',
-                    'full',
-                    'side',
-                ],
-                true
-            )
-        ) {
-            return $s;
-        }
-
-        // Fall back to grid for unknown style values
-        return 'grid';
+        // Keep a known format key, and fall back to grid for anything else
+        return match ($s) {
+            'card' => 'cards',
+            'headlines', 'excerpts', 'full', 'side' => $s,
+            default => 'grid',
+        };
     }
 
     /**
@@ -305,14 +259,6 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
      */
     private function attributeImpliesHide($value): bool
     {
-        // Check if value is null or empty (default to show)
-        if (
-            $value === null
-            || $value === ''
-        ) {
-            return false;
-        }
-
         // Check if value is boolean; hide when false, show when true
         if (\is_bool($value)) {
             return ! $value;
@@ -351,22 +297,6 @@ class BlogrollShortcodeProcessor implements ShortcodeProcessorInterface
     {
         // Prefer category, fall back to category_name
         $cat = $category ?? $categoryName;
-
-        // Check if neither category nor category_name is set
-        if (
-            $cat === null
-            || $cat === ''
-        ) {
-            return false;
-        }
-
-        // Check if value is boolean false
-        if (
-            \is_bool($cat)
-            && ! $cat
-        ) {
-            return false;
-        }
 
         // Trim and cast to string for empty/zero/false checks
         if (! \is_scalar($cat)) {

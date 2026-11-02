@@ -22,10 +22,10 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators\RedirectRuleGlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 it('detects regex and wildcard pattern tokens so pattern targets skip entry resolution', function (string $target, bool $expected): void {
     // Resolve the private static helper via reflection for direct invocation
@@ -277,8 +277,8 @@ it('resolves each branch of resolveTarget against the academicsenate fixture', f
     );
 
     // Build minimal dependencies for the resolveTarget signature
-    $assetImporter = $this->createMock(AssetImporter::class);
-    $output = $this->createMock(OutputInterface::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
+    $output = $this::createStub(OutputInterface::class);
     $site = 'academicsenate';
 
     // ---

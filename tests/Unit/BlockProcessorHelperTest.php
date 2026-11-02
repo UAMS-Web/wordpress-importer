@@ -17,18 +17,18 @@ declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlockProcessorInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\EmbedProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpImageBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpPostFeaturedImageBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\QuoteProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGroupBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSpacerBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BlockProcessorHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlockProcessorInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\EmbedProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpImageBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpPostFeaturedImageBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\QuoteProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGroupBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSpacerBlockProcessor;
 
 /**
  * A processor that records what it is offered and answers as configured.
@@ -129,7 +129,7 @@ it('offers nothing a node that is not a comment', function (): void {
     $processor = new BlockProcessorHelperRecordingProcessor(true, 'html');
     $element = (new DOMDocument)->createElement('div');
 
-    expect(blockHelperRun($element, [$processor], $this->createMock(AssetImporter::class)))->toBeNull()
+    expect(blockHelperRun($element, [$processor], $this::createStub(AssetImporter::class)))->toBeNull()
         ->and($processor->offers)->toBe([]);
 });
 
@@ -139,7 +139,7 @@ it('passes the block attributes and the context to the processor', function (): 
     blockHelperRun(
         blockHelperComment(' wp:image {"id":42,"sizeSlug":"large"} /'),
         [$processor],
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($processor->offers)->toBe([['default', 'a-page']])
@@ -155,7 +155,7 @@ it('passes the block attributes and the context to the processor', function (): 
 it('passes no attributes for a comment that carries none, or carries invalid JSON', function (string $text): void {
     $processor = new BlockProcessorHelperRecordingProcessor(true, 'html');
 
-    blockHelperRun(blockHelperComment($text), [$processor], $this->createMock(AssetImporter::class));
+    blockHelperRun(blockHelperComment($text), [$processor], $this::createStub(AssetImporter::class));
 
     expect($processor->calls[0][0] ?? null)->toBe([]);
 })->with([
@@ -173,7 +173,7 @@ it('passes no attributes for nested JSON, which the lazy match cuts short', func
     blockHelperRun(
         blockHelperComment('wp:group {"style":{"color":"red"},"layout":"flex"} -->'),
         [$processor],
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($processor->calls[0][0] ?? null)->toBe([]);
@@ -185,7 +185,7 @@ it('reads attributes that span lines', function (): void {
     blockHelperRun(
         blockHelperComment("wp:table {\n\"hasFixedLayout\":true\n} /"),
         [$processor],
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($processor->calls[0][0] ?? null)->toBe(['hasFixedLayout' => true]);
@@ -201,7 +201,7 @@ it('returns the first non-empty result, skipping refusals, empty results and non
     $result = blockHelperRun(
         blockHelperComment('wp:paragraph'),
         [$refuses, 'not a processor', $returnsNull, $returnsEmpty, $wins, $after],
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($result)->toBe(['html' => '<p>won</p>', 'skipCount' => 1])
@@ -215,14 +215,14 @@ it('returns null when no processor produces anything', function (): void {
     $result = blockHelperRun(
         blockHelperComment('wp:paragraph'),
         [new BlockProcessorHelperRecordingProcessor(false), new BlockProcessorHelperRecordingProcessor(true, null)],
-        $this->createMock(AssetImporter::class)
+        $this::createStub(AssetImporter::class)
     );
 
     expect($result)->toBeNull();
 });
 
 it('defaults an array result to a skip count of one and keeps one it already has', function (): void {
-    $importer = $this->createMock(AssetImporter::class);
+    $importer = $this::createStub(AssetImporter::class);
 
     $defaulted = blockHelperRun(
         blockHelperComment('wp:paragraph'),
@@ -274,7 +274,7 @@ it('dispatches through the common processors', function (): void {
     $result = BlockProcessorHelper::processBlockNodeWithCommonProcessors(
         $comment,
         'default',
-        $this->createMock(AssetImporter::class),
+        $this::createStub(AssetImporter::class),
         new BufferedOutput
     );
 

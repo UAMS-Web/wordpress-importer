@@ -19,7 +19,7 @@ declare(strict_types=1);
 use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
-use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use Statamic\Events\AssetDeleted;
 use Statamic\Events\AssetSaved;
 use Statamic\Events\EntryDeleted;
@@ -33,9 +33,9 @@ use Statamic\Facades\Search;
 use Statamic\Search\Index;
 use Statamic\Search\UpdateItemIndexes;
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\SearchIndexUpdates;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -265,14 +265,17 @@ it('subscribes nothing afterwards when nothing was removed', function (): void {
 });
 
 /**
- * A mocked search index with a name and an update outcome.
+ * A search index test double with a name and an update outcome.
  *
- * @param  MockObject&Index  $index  A fresh mock of the index
+ * @template T of Index&Stub
+ *
+ * @param  T  $index  A fresh stub or mock of the index
  * @param  mixed  $name  What name() returns
  * @param  ?Throwable  $failure  What update() throws, or null for success; a test that
  *                               expects a rebuild declares it with `expects($this->once())`
+ * @return T The same double
  */
-function searchIndexStub(Index&MockObject $index, mixed $name, ?Throwable $failure = null): Index&MockObject
+function searchIndexStub(Index&Stub $index, mixed $name, ?Throwable $failure = null): Index&Stub
 {
     $index->method('name')->willReturn($name);
 
@@ -304,7 +307,7 @@ it('rebuilds each index once and reports it', function (): void {
 it('logs a failed index and carries on to the next', function (): void {
     $log = Log::spy();
 
-    $failing = searchIndexStub($this->createMock(Index::class), 'default', new RuntimeException('disk full'));
+    $failing = searchIndexStub($this::createStub(Index::class), 'default', new RuntimeException('disk full'));
     $next = searchIndexStub($this->createMock(Index::class), 'cp');
     $next->expects($this->once())->method('update');
 
@@ -339,8 +342,8 @@ it('puts each failed index in the warning summary and no rebuilt one', function 
     Log::spy();
     ImportWarningManager::clearWarnings();
 
-    $failing = searchIndexStub($this->createMock(Index::class), 'audiences', new RuntimeException('Call to a member function collections() on null'));
-    $next = searchIndexStub($this->createMock(Index::class), 'cp');
+    $failing = searchIndexStub($this::createStub(Index::class), 'audiences', new RuntimeException('Call to a member function collections() on null'));
+    $next = searchIndexStub($this::createStub(Index::class), 'cp');
 
     Search::shouldReceive('indexes')->once()->andReturn(collect([$failing, $next]));
 
@@ -356,7 +359,7 @@ it('puts each failed index in the warning summary and no rebuilt one', function 
 it('labels an index whose name is not a string as unknown', function (?Throwable $failure, string $line): void {
     Log::spy();
 
-    $index = searchIndexStub($this->createMock(Index::class), null, $failure);
+    $index = searchIndexStub($this::createStub(Index::class), null, $failure);
 
     Search::shouldReceive('indexes')->once()->andReturn(collect([$index]));
 
@@ -383,7 +386,7 @@ it('logs only the failed index when no output is given', function (): void {
 
     $rebuilt = searchIndexStub($this->createMock(Index::class), 'default');
     $rebuilt->expects($this->once())->method('update');
-    $failing = searchIndexStub($this->createMock(Index::class), 'cp', new RuntimeException('disk full'));
+    $failing = searchIndexStub($this::createStub(Index::class), 'cp', new RuntimeException('disk full'));
 
     Search::shouldReceive('indexes')->once()->andReturn(collect([$rebuilt, $failing]));
 

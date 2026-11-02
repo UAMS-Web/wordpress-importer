@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/TaxonomyNavigationDestinationTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationDestination;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Navigation\TaxonomyNavigationDestination;
 
 it('carries the entry it resolved to and no skip', function (): void {
     $destination = TaxonomyNavigationDestination::entry('entry-1');

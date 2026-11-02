@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use Symfony\Component\Console\Output\BufferedOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Blocks\FindADocProvidersParser;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
  * Tests that an imported Find-a-Doc Providers block preserves the WordPress
@@ -77,7 +77,7 @@ it('enables filtering on an imported Find-a-Doc Providers block', function (): v
     // A typed PHPUnit mock satisfies the AssetImporter parameter. The more-link
     // passes through LinkProcessor, which asks the importer for the source blog URL
     // to tell internal links from external ones.
-    $assetImporter = $this->createMock(AssetImporter::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
     $assetImporter->method('getBaseBlogUrl')->willReturn('https://uamshealth.com/');
 
     $set = parseFadProvidersFixtureBlock($assetImporter);

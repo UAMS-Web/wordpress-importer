@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\Creators;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\Creators;
 
 use SimpleXMLElement;
 use Statamic\Entries\Entry as StatamicEntry;
@@ -12,17 +12,17 @@ use Statamic\Facades\GlobalSet;
 use Statamic\Fieldtypes\RowId;
 use Statamic\Globals\Variables;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Globals\BaseGlobalCreator;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Globals\BaseGlobalCreator;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\XmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ContentProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\EntryQueryHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\HtmlTagStripper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportProgress;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImportWarningManager;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\MetadataMapper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\XpathHelper;
 
 /**
  * Modifies the Statamic 'redirects' global set with WordPress 'redirect_rule'
@@ -255,8 +255,6 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                     case 'Create an additional set':
                         $output->writeln("  - Creating additional redirect rule '$source' with same source URL.");
 
-                        // Inside a switch, continue acts as break, so the two cannot differ.
-                        // @pest-mutate-ignore: BreakToContinue
                         break; // No modification to source, just add it
                     case 'Overwrite matching sets':
                         $output->writeln("  - Overwriting existing redirect rule '$source' (ID: $ruleId).");
@@ -264,8 +262,6 @@ class RedirectRuleGlobalCreator extends BaseGlobalCreator
                         $existingRedirects = \array_values($existingRedirects); // Reindex
                         $isUpdate = true;
 
-                        // Inside a switch, continue acts as break, so the two cannot differ.
-                        // @pest-mutate-ignore: BreakToContinue
                         break;
                 }
             }

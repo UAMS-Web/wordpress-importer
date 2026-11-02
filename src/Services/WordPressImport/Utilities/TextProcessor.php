@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities;
 
 use DOMComment;
 use DOMDocument;
@@ -12,27 +12,27 @@ use DOMText;
 use Illuminate\Support\Facades\Log;
 use SplObjectStorage;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\AcfGalleryBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlockProcessorInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\EmbedProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\FormidableFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpImageBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpPostFeaturedImageBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\QuoteProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\UnwrappingBlockProcessorTrait;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGalleryBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGroupBlockProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSpacerBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\AcfGalleryBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\BlockProcessorInterface;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\EmbedProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FileBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\FormidableFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\GravityFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpImageBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\WpPostFeaturedImageBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\NinjaFormsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\QuoteProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ShortcodeProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TablePressBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\Traits\UnwrappingBlockProcessorTrait;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpBlockBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpDetailsBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGalleryBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpGroupBlockProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\WpSpacerBlockProcessor;
 
 /**
  * Utility class for processing text content during WordPress import.
@@ -612,10 +612,18 @@ class TextProcessor
             $shortcodeOnlyInner = $bareFormShortcodeMatch[1];
         }
 
-        // Check if the post is shortcode-only content that should bypass full DOM traversal
+        // ---
+        // Check if the post is shortcode-only content that should bypass full DOM
+        // traversal. A link or an image beside a shortcode needs that traversal, which
+        // is what processes links and reports images.
+        // ---
         if (
             $shortcodeOnlyInner !== null
             && $shortcodeOnlyInner !== ''
+            && ! ShortcodeBlockProcessor::holdsContentBesideShortcodes(
+                $shortcodeProcessor->extract($shortcodeOnlyInner, $output),
+                $shortcodeOnlyInner
+            )
         ) {
             // Process the shortcode string into Tiptap HTML
             $shortcodeOnlyHtml = $shortcodeProcessor->processShortcodesInContent(
@@ -844,29 +852,26 @@ class TextProcessor
         }
 
         // ---
-        // Find the shortcode and gallery blocks in the content as the replacements
-        // above left it, so their offsets point at the blocks LinkProcessor will
-        // read (#155). Gallery image links are resolved from attachment ids by
-        // WpGalleryBlockProcessor, and links inside a shortcode block by
-        // ShortcodeBlockProcessor, so LinkProcessor must not read them as file
-        // links
-        // ---
-        $excludedBlocks = \array_merge(
-            self::extractBlockPositions($formattedContent, self::SHORTCODE_BLOCK_PATTERN),
-            self::extractBlockPositions($formattedContent, self::GALLERY_BLOCK_PATTERN)
-        );
-
-        // Order them by start, so removing hrefs from the last block first leaves
-        // the offsets of the blocks before it in place
-        \sort($excludedBlocks);
-
-        // ---
-        // Preprocess content to remove href attributes from excluded blocks before
-        // LinkProcessor runs
+        // Find the gallery blocks in the content as the replacements above left it,
+        // so their offsets point at the blocks LinkProcessor will read (#155).
+        // WpGalleryBlockProcessor resolves gallery image links from attachment ids,
+        // so LinkProcessor must not read them as file links
         // ---
         $formattedContent = self::removeHrefFromExcludedBlocks(
             $formattedContent,
-            $excludedBlocks
+            self::extractBlockPositions($formattedContent, self::GALLERY_BLOCK_PATTERN)
+        );
+
+        // ---
+        // The same goes for the links inside a shortcode, which ShortcodeBlockProcessor
+        // handles. A link in the text beside one stays for LinkProcessor (#335). The
+        // blocks are found after the removal above, which moves their offsets.
+        // ---
+        $formattedContent = self::removeHrefFromShortcodes(
+            $formattedContent,
+            self::extractBlockPositions($formattedContent, self::SHORTCODE_BLOCK_PATTERN),
+            $shortcodeProcessor,
+            $output
         );
 
         // Get XML path from ProcessingContext if not provided
@@ -1084,7 +1089,7 @@ class TextProcessor
                                         $bardContent = \array_merge(
                                             $bardContent,
                                             $blockType === 'shortcode'
-                                                ? BardParser::wrapRootText($parsedNodes)
+                                                ? $parsedNodes
                                                 : [$parsedContent]
                                         );
                                     }
@@ -1139,7 +1144,7 @@ class TextProcessor
                                     if ($blockType === 'shortcode') {
                                         $bardContent = \array_merge(
                                             $bardContent,
-                                            BardParser::wrapRootText($parsedResult)
+                                            $parsedResult
                                         );
                                     } else {
                                         $bardContent[] = $firstParsed;
@@ -2043,16 +2048,56 @@ class TextProcessor
                 $blockEnd - $blockStart
             );
 
-            // Remove href attributes from <a> tags within the block
-            $modifiedBlock = \preg_replace(
-                '/<a\s+([^>]*?)href\s*=\s*["\'][^"\']*["\']([^>]*?)>/i',
-                '<a $1$2>',
-                $blockContent
+            // Replace the original block with one that holds no href
+            $content = substr_replace(
+                $content,
+                self::withoutHrefs($blockContent),
+                $blockStart,
+                $blockEnd - $blockStart
             );
+        }
 
-            $modifiedBlock ??= $blockContent;
+        return $content;
+    }
 
-            // Replace the original block with the modified version
+    /**
+     * Removes href attributes from the shortcodes in `wp:shortcode` blocks, leaving
+     * the links in the text beside them for LinkProcessor.
+     *
+     * @param  string  $content  The HTML content to process
+     * @param  array<int, array{int, int}>  $blocks  Block offsets, in order
+     * @param  ShortcodeProcessor  $shortcodeProcessor  Finds the shortcodes in a block
+     * @param  OutputInterface  $output  Console output for logging
+     * @return string The content with href attributes removed from those shortcodes
+     */
+    private static function removeHrefFromShortcodes(
+        string $content,
+        array $blocks,
+        ShortcodeProcessor $shortcodeProcessor,
+        OutputInterface $output
+    ): string {
+        // Process blocks in reverse order to maintain correct positions
+        foreach (\array_reverse($blocks) as [$blockStart, $blockEnd]) {
+            $blockContent = \substr(
+                $content,
+                $blockStart,
+                $blockEnd - $blockStart
+            );
+            $modifiedBlock = $blockContent;
+
+            // Replace each shortcode with a copy that holds no href
+            foreach ($shortcodeProcessor->extract($blockContent, $output) as $shortcode) {
+                $original = \is_array($shortcode) ? ($shortcode['original'] ?? null) : null;
+
+                if (\is_string($original)) {
+                    $modifiedBlock = \str_replace(
+                        $original,
+                        self::withoutHrefs($original),
+                        $modifiedBlock
+                    );
+                }
+            }
+
             $content = substr_replace(
                 $content,
                 $modifiedBlock,
@@ -2062,5 +2107,21 @@ class TextProcessor
         }
 
         return $content;
+    }
+
+    /**
+     * Removes the href attribute from each <a> tag in HTML.
+     *
+     * @param  string  $html  The HTML
+     * @return string The HTML with no href, or as it was if the pattern fails
+     */
+    private static function withoutHrefs(
+        string $html
+    ): string {
+        return \preg_replace(
+            '/<a\s+([^>]*?)href\s*=\s*["\'][^"\']*["\']([^>]*?)>/i',
+            '<a $1$2>',
+            $html
+        ) ?? $html;
     }
 }

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleChange;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
-use UAMSWeb\WordPressImporter\Tests\Support\ContentSubmoduleState;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleChange;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleDiff;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\ContentSubmoduleState;
 
 /**
  * Build a state from `XY path` pairs, joined the way `git status -z` writes them.

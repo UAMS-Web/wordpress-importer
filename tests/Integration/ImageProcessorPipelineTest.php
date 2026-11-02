@@ -17,18 +17,18 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AssetImporterProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\BardSetBuilder;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\CaptionExtractor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\HtmlParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\ImageProcessingStepInterface;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ImageProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AlignmentExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AltTextProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\AssetImporterProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\BardSetBuilder;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\CaptionExtractor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\HtmlParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\ImageProcessor\ImageProcessingStepInterface;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class);
 
@@ -109,7 +109,7 @@ it('hands each step the context the previous one returned, with the call\'s inpu
     $result = imagePipelineWith([$first, $last])->processImage(
         '<img src="a.jpg">',
         'default',
-        $this->createMock(AssetImporter::class),
+        $this::createStub(AssetImporter::class),
         new BufferedOutput,
         ['an attachment'],
         'a-page',
@@ -136,7 +136,7 @@ it('starts with empty block attributes when none are given', function (): void {
     imagePipelineWith([$step])->processImage(
         '<img>',
         'default',
-        $this->createMock(AssetImporter::class),
+        $this::createStub(AssetImporter::class),
         new BufferedOutput
     );
 
@@ -147,13 +147,13 @@ it('returns the steps added after construction', function (): void {
     $processor = imagePipelineWith([]);
     $processor->addProcessor(new ImageProcessorPipelineRecordingStep(['imageSet' => ['added' => true]]));
 
-    expect($processor->processImage('<img>', 'default', $this->createMock(AssetImporter::class), new BufferedOutput))
+    expect($processor->processImage('<img>', 'default', $this::createStub(AssetImporter::class), new BufferedOutput))
         ->toBe(['added' => true]);
 });
 
 it('returns null for an image set that is not an array', function (): void {
     $result = imagePipelineWith([new ImageProcessorPipelineRecordingStep(['imageSet' => 'not a set'])])
-        ->processImage('<img>', 'default', $this->createMock(AssetImporter::class), new BufferedOutput);
+        ->processImage('<img>', 'default', $this::createStub(AssetImporter::class), new BufferedOutput);
 
     expect($result)->toBeNull();
 });
@@ -164,7 +164,7 @@ it('warns with the site, slug and a short snippet when no step produces an image
     $html = \str_repeat('a', 100).'T';
 
     $result = imagePipelineWith([new ImageProcessorPipelineRecordingStep])
-        ->processImage($html, 'default', $this->createMock(AssetImporter::class), new BufferedOutput, [], 'a-page');
+        ->processImage($html, 'default', $this::createStub(AssetImporter::class), new BufferedOutput, [], 'a-page');
 
     expect($result)->toBeNull();
 
@@ -178,7 +178,7 @@ it('keeps a snippet of exactly 100 characters whole and names a missing slug', f
     $log = Log::spy();
     $html = \str_repeat('b', 100);
 
-    imagePipelineWith([])->processImage($html, 'default', $this->createMock(AssetImporter::class), new BufferedOutput);
+    imagePipelineWith([])->processImage($html, 'default', $this::createStub(AssetImporter::class), new BufferedOutput);
 
     $log->shouldHaveReceived('warning', [
         'ImageProcessor::processImage: Image processing pipeline failed to produce an image set',
@@ -190,7 +190,7 @@ it('names the entry being imported in the warning', function (): void {
     $log = Log::spy();
     ProcessingContext::setWordPressPageLink('https://example.edu/a-page/');
 
-    imagePipelineWith([])->processImage('<img>', 'default', $this->createMock(AssetImporter::class), new BufferedOutput);
+    imagePipelineWith([])->processImage('<img>', 'default', $this::createStub(AssetImporter::class), new BufferedOutput);
 
     $log->shouldHaveReceived('warning', [
         'ImageProcessor::processImage: Image processing pipeline failed to produce an image set (from entry: https://example.edu/a-page/)',

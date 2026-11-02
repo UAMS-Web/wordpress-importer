@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -25,11 +26,11 @@ use Statamic\Facades\Stache;
 use Statamic\Testing\Concerns\PreventsSavingStacheItemsToDisk;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\SameSitePolicy;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 uses(StatamicTestCase::class, PreventsSavingStacheItemsToDisk::class);
 
@@ -86,6 +87,8 @@ final class LinkProcessorDeferredImporter extends AssetImporter
 }
 
 beforeEach(function (): void {
+    // A link that falls through to fetching its page must not reach the network
+    Http::preventStrayRequests();
     LinkProcessor::clearDeferredData();
     ProcessingContext::clearXmlPath();
     config(['app.url' => 'https://statamic.test']);
@@ -761,18 +764,18 @@ it('stops retrying once a lookup finds the entry, or after the last attempt', fu
     'never found' => [9, 2, 2],
 ]);
 
-it('waits between attempts but not after the last one', function (int $attempts, float $atLeast, float $under): void {
-    $started = microtime(true);
+it('waits between attempts but not after the last one', function (int $attempts, array $waits): void {
+    $made = new ArrayObject;
 
-    LinkProcessor::findEntryWithRetry(static fn (): ?Entry => null, $attempts, 200000);
+    LinkProcessor::findEntryWithRetry(static fn (): ?Entry => null, $attempts, 200000, static function (int $wait) use ($made): void {
+        $made->append($wait);
+    });
 
-    $elapsed = microtime(true) - $started;
-
-    expect($elapsed)->toBeGreaterThanOrEqual($atLeast)
-        ->and($elapsed)->toBeLessThan($under);
+    expect($made->getArrayCopy())->toBe($waits);
 })->with([
-    'one attempt' => [1, 0.0, 0.15],
-    'two attempts' => [2, 0.19, 0.35],
+    'one attempt' => [1, []],
+    'two attempts' => [2, [200000]],
+    'three attempts' => [3, [200000, 200000]],
 ]);
 
 it('retries twice by default', function (): void {

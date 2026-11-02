@@ -24,7 +24,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/Issue30RegressionTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetUtils;
 
 it('classifies a URL as same-site regardless of trailing slashes on either operand', function (string $url, string $baseBlogUrl, bool $expected): void {
     expect(AssetUtils::isSameSiteUrl($url, $baseBlogUrl))->toBe($expected);

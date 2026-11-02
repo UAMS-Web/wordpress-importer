@@ -22,7 +22,7 @@ declare(strict_types=1);
  * @command  php vendor/bin/pest tests/Unit/EntryReferenceQueryFragmentOrderTest.php
  */
 
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
 
 it('assembles the reference with the query before the fragment', function (?string $fragment, ?string $query, string $expected): void {
     // The "both" row is the #3 regression guard: a reversed append order emits

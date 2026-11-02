@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\Processors;
+namespace UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors;
 
 use DOMDocument;
 use DOMElement;
@@ -11,11 +11,11 @@ use DOMNodeList;
 use DOMXPath;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\Utilities\Alignment;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\BardParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LogContextHelper;
 
 /**
  * Processes WordPress wp:quote blocks into Tiptap-compatible HTML for Statamic
@@ -89,14 +89,13 @@ class QuoteProcessor implements BlockProcessorInterface
             $node
         );
 
-        if (
-            $blockquoteNodes instanceof DOMNodeList
-            && $blockquoteNodes->length > 0
-        ) {
+        // The query is a constant valid expression, so the list check only types it
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if ($blockquoteNodes instanceof DOMNodeList) {
             $blockquoteNode = $blockquoteNodes->item(0);
         }
 
-        if ($blockquoteNode === null) {
+        if (! $blockquoteNode instanceof DOMElement) {
             // Enhance log context with entry information
             $logData = LogContextHelper::enhanceWithEntryContext(
                 [
@@ -118,10 +117,6 @@ class QuoteProcessor implements BlockProcessorInterface
             return null;
         }
 
-        if (! $blockquoteNode instanceof DOMElement) {
-            return null;
-        }
-
         // Initialize arrays and variables for collecting quote content
         $paragraphs = [];
 
@@ -137,12 +132,16 @@ class QuoteProcessor implements BlockProcessorInterface
             $blockquoteNode
         );
 
-        // Loop through all paragraph child nodes
+        // Loop through all paragraph child nodes. The query is a constant valid expression,
+        // so it never answers false.
+        // @pest-mutate-ignore: FalseToTrue
         if ($childNodes === false) {
             return null;
         }
 
         foreach ($childNodes as $childNode) {
+            // A `.//p` query matches only elements
+            // @pest-mutate-ignore: InstanceOfToTrue
             if (! $childNode instanceof DOMElement) {
                 continue;
             }
@@ -163,11 +162,10 @@ class QuoteProcessor implements BlockProcessorInterface
             $blockquoteNode
         );
 
-        // If citation found, store the first one
-        if (
-            $citeNodes instanceof DOMNodeList
-            && $citeNodes->length > 0
-        ) {
+        // If citation found, store the first one. The query is a constant valid expression,
+        // so the list check only types it.
+        // @pest-mutate-ignore: InstanceOfToTrue
+        if ($citeNodes instanceof DOMNodeList) {
             // Set citation from first found cite element
             $citeNode = $citeNodes->item(0);
             if ($citeNode instanceof DOMElement) {
@@ -184,6 +182,8 @@ class QuoteProcessor implements BlockProcessorInterface
             while (
                 $currentNode instanceof DOMNode
                 && ($currentNode->nodeType !== XML_COMMENT_NODE || ! str_contains(
+                    // An empty comment reads as a miss, whichever text stands in for it
+                    // @pest-mutate-ignore: EmptyStringToNotEmpty
                     self::extractNullableString($currentNode->nodeValue) ?? '',
                     '/wp:quote'
                 ))
@@ -245,23 +245,16 @@ class QuoteProcessor implements BlockProcessorInterface
         $bardParser = new BardParser;
         $quoteContent = [];
         foreach ($paragraphs as $p) {
-            $html = self::saveNodeHtml($p);
-            if ($html === '') {
-                continue;
-            }
-
-            $parsed = $bardParser->parse($html);
+            $parsed = $bardParser->parse(self::saveNodeHtml($p));
             foreach ($parsed as $parsedNode) {
                 if (! \is_array($parsedNode)) {
                     continue;
                 }
 
                 $parsedNodeType = self::extractNullableString($parsedNode['type'] ?? null);
-                $parsedNodeContent = $parsedNode['content'] ?? null;
                 if (
                     $parsedNodeType === 'paragraph'
-                    && \is_array($parsedNodeContent)
-                    && $parsedNodeContent !== []
+                    && ($parsedNode['content'] ?? []) !== []
                 ) {
                     $quoteContent[] = $parsedNode;
                 }
@@ -301,7 +294,6 @@ class QuoteProcessor implements BlockProcessorInterface
         );
 
         $values = [
-            'type' => 'pull_quote',
             'align' => $align,
             'quote' => $quoteContent,
         ];
@@ -324,14 +316,12 @@ class QuoteProcessor implements BlockProcessorInterface
 
                 $attrs .= \sprintf(
                     ' data-set-attr-%s="%s"',
-                    htmlspecialchars(
-                        $key
-                    ),
+                    $key,
                     htmlspecialchars(
                         $quoteJson
                     )
                 );
-            } elseif ($key !== 'type') {
+            } else {
                 $stringValue = self::extractNullableString($value);
 
                 if ($stringValue === null) {
@@ -340,9 +330,7 @@ class QuoteProcessor implements BlockProcessorInterface
 
                 $attrs .= \sprintf(
                     ' data-set-attr-%s="%s"',
-                    htmlspecialchars(
-                        $key
-                    ),
+                    $key,
                     htmlspecialchars(
                         $stringValue
                     )
@@ -390,13 +378,17 @@ class QuoteProcessor implements BlockProcessorInterface
     private static function saveNodeHtml(
         DOMNode $node
     ): string {
+        // Every caller passes a node of the document being processed, and such a node
+        // always serializes, so both empty answers only type the result.
         $ownerDocument = $node->ownerDocument;
+        // @pest-mutate-ignore: InstanceOfToTrue
         if (! $ownerDocument instanceof DOMDocument) {
             return '';
         }
 
         $nodeHtml = $ownerDocument->saveHTML($node);
 
+        // @pest-mutate-ignore: EmptyStringToNotEmpty
         return \is_string($nodeHtml) ? $nodeHtml : '';
     }
 }

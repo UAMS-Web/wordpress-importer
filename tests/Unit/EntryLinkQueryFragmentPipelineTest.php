@@ -26,10 +26,10 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\OutputInterface;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\KbLinkRegistry;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\LinkProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 
 /**
  * Base blog URL for the fixture links. Trailing-slash-less so the same-site
@@ -67,7 +67,7 @@ it('orders the query before the fragment on a resolved entry link', function (st
         $wordPressUrl,
         'default',
         assetImporterForBaseUrl(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)->toBe($expected);
@@ -95,7 +95,7 @@ it('rewrites the query before the fragment in page-body HTML', function (): void
         $html,
         'default',
         assetImporterForBaseUrl(),
-        $this->createMock(OutputInterface::class),
+        $this::createStub(OutputInterface::class),
     );
 
     expect($result)

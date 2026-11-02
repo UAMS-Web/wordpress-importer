@@ -17,8 +17,8 @@ declare(strict_types=1);
  */
 
 use Symfony\Component\Console\Output\NullOutput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\AcfBlockParser;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImporter;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Parsers\PageBuilder\AcfBlockParser;
 
 /**
  * Build a comment node carrying $text inside a wrapper element, returning the
@@ -43,7 +43,7 @@ it('skips an ACF closing-tag comment via the early return, regardless of surroun
 
     // Mock the AssetImporter to avoid its config()-dependent constructor; the
     // closing-tag branch returns before any AssetImporter method is used.
-    $assetImporter = $this->createMock(AssetImporter::class);
+    $assetImporter = $this::createStub(AssetImporter::class);
 
     [$comment, $nodes] = acfCommentNode($commentText);
 

@@ -6,9 +6,9 @@ use Illuminate\Console\Command;
 use Statamic\Facades\Site;
 use Statamic\Yaml\ParseException;
 use Symfony\Component\Console\Input\ArrayInput;
-use UAMSWeb\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
-use UAMSWeb\WordPressImporter\Tests\StatamicTestCase;
-use UAMSWeb\WordPressImporter\Tests\Support\LfBufferedOutput;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Prompts\SiteSelector;
+use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
+use UAMSWeb\Aether\WordPressImporter\Tests\Support\LfBufferedOutput;
 
 /**
  * `SiteSelector` lists the Statamic sites and those in `resources/sites.yaml`, asks which one
