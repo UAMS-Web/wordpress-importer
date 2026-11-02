@@ -46,6 +46,42 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processo
 class TextProcessor
 {
     /**
+     * The elements Bard reads through, so a table can be lifted out of one with
+     * nothing lost but the wrapper, which Bard does not keep anyway (#327).
+     *
+     * @var list<string>
+     */
+    private const array TABLE_WRAPPER_TAGS = [
+        'article',
+        'aside',
+        'center',
+        'div',
+        'figure',
+        'font',
+        'main',
+        'p',
+        'section',
+        'span',
+        'table',
+    ];
+
+    /**
+     * The parts of a table, which reach the content only from a layout table, so
+     * each is read through whether or not it holds another table (#327).
+     *
+     * @var list<string>
+     */
+    private const array TABLE_PART_TAGS = [
+        'caption',
+        'tbody',
+        'td',
+        'tfoot',
+        'th',
+        'thead',
+        'tr',
+    ];
+
+    /**
      * Matches a `wp:shortcode` block, whose shortcodes ShortcodeBlockProcessor
      * converts.
      */
@@ -1436,8 +1472,16 @@ class TextProcessor
                 continue;
             }
 
-            // Accumulate non-image, non-block content for later parsing
-            $currentContent .= $nodeHtml;
+            // Accumulate non-image, non-block content for later parsing, with any plain
+            // table in it read as a table (#327)
+            self::accumulateContent(
+                $node,
+                $doc,
+                null,
+                $currentContent,
+                $bardContent,
+                $bardParser
+            );
         }
 
         // Parse any remaining content
@@ -1894,6 +1938,100 @@ class TextProcessor
             $bardParser->parse($currentContent)
         );
         $currentContent = '';
+    }
+
+    /**
+     * Adds a node's content to the accumulated content, with its plain tables as sets.
+     *
+     * Bard has no table node, so a `<table>` left in the accumulated content loses its
+     * rows and cells, and a set is valid only at the top of the document. So a table
+     * is added as a `table` set, and a plain wrapper around one is read child by child
+     * (#327). A table that holds another table is page layout rather than data, as in
+     * the exports' email newsletters, so it is read the same way, and its links and
+     * lists stay in Bard instead of in one cell's HTML. A table in a list or a quote
+     * stays as it was: its wrapper is structure that a set could not sit inside.
+     *
+     * @param  DOMNode  $node  The node to add
+     * @param  DOMDocument  $doc  The document the node belongs to
+     * @param  ?DOMElement  $figure  The figure the node is a child of, when there is one
+     * @param  string  $currentContent  The accumulated content
+     * @param  array<int|string, mixed>  $bardContent  The Bard content so far
+     * @param  BardParser  $bardParser  The parser for the accumulated content
+     */
+    private static function accumulateContent(
+        DOMNode $node,
+        DOMDocument $doc,
+        ?DOMElement $figure,
+        string &$currentContent,
+        array &$bardContent,
+        BardParser $bardParser
+    ): void {
+        // A table of data is added as a set, unless it has no rows to import
+        if (
+            $node instanceof DOMElement
+            && $node->tagName === 'table'
+            && $node->getElementsByTagName('table')->length === 0
+        ) {
+            $tableSet = (new TableProcessor)->renderSet($node, $figure);
+
+            if ($tableSet !== null) {
+                // Parse the content accumulated ahead of the table first
+                self::flushContent(
+                    $currentContent,
+                    $bardContent,
+                    $bardParser
+                );
+
+                $bardContent = \array_merge(
+                    $bardContent,
+                    $bardParser->parse($tableSet)
+                );
+
+                return;
+            }
+        }
+
+        // Anything but a wrapper around a table, or part of a layout table, is ordinary content
+        if (
+            ! $node instanceof DOMElement
+            || (
+                ! \in_array($node->tagName, self::TABLE_PART_TAGS, true)
+                && (
+                    ! \in_array($node->tagName, self::TABLE_WRAPPER_TAGS, true)
+                    || $node->getElementsByTagName('table')->length === 0
+                )
+            )
+        ) {
+            $currentContent .= self::nodeHtml(
+                $doc,
+                $node
+            );
+
+            return;
+        }
+
+        // Read the wrapper child by child; the renderer reads a figure's own caption
+        foreach ($node->childNodes as $child) {
+            if ($node->tagName === 'figure' && $child->nodeName === 'figcaption') {
+                continue;
+            }
+
+            self::accumulateContent(
+                $child,
+                $doc,
+                $node->tagName === 'figure' ? $node : null,
+                $currentContent,
+                $bardContent,
+                $bardParser
+            );
+        }
+
+        // Parse what the wrapper left, so it does not join the content after it
+        self::flushContent(
+            $currentContent,
+            $bardContent,
+            $bardParser
+        );
     }
 
     /**

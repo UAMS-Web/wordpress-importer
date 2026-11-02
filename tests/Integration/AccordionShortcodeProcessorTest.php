@@ -877,3 +877,18 @@ describe('in a list, and with sections that leave their lists uneven (#178)', fu
         ])->and(\json_encode($content))->not->toContain('[section');
     });
 });
+
+it('imports a plain table in an accordion section as a table set', function (string $content): void {
+    // #327: a section body is read as ordinary content whichever way the accordion
+    // reaches Bard, so the table neither flattens nor leaves bare text at the top level
+    $nodes = accordionSectionContent($content);
+
+    expect(is_array($nodes) ? array_column($nodes, 'type') : null)->toBe(str_contains($content, '[section') ? ['heading', 'set'] : ['set'])
+        ->and(data_get($nodes, (str_contains($content, '[section') ? '1' : '0').'.attrs.values.table_data'))->toBe([
+            ['cells' => ['Weight<br>(kg)', 'Dose']],
+            ['cells' => ['1', '2']],
+        ]);
+})->with([
+    'a section body' => ['<table><tbody><tr><th>Weight<br />(kg)</th><th>Dose</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>'],
+    'a whole accordion in content' => ['[accordion][section title="Doses"]<table><tbody><tr><th>Weight<br />(kg)</th><th>Dose</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>[/section][/accordion]'],
+]);

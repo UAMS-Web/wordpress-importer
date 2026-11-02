@@ -8,6 +8,7 @@ use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Assets\AssetImport
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Tiptap\SetMarkupNonce;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\ProcessingContext;
 use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\Processors\TableProcessor;
+use UAMSWeb\Aether\WordPressImporter\Services\WordPressImport\Utilities\TextProcessor;
 use UAMSWeb\Aether\WordPressImporter\Tests\StatamicTestCase;
 
 /**
@@ -184,7 +185,7 @@ it('centers a left-aligned table and escapes its caption', function (): void {
         ->toContain(' data-set-attr-caption="&quot;A&quot; &amp; B" ');
 });
 
-it('keeps rows that have cells and drops the ones that do not', function (): void {
+it('keeps every row that has cells, of either kind, and drops the ones that do not', function (): void {
     $result = processTable(tableOpeningNode(
         '<!-- wp:table --><figure class="wp-block-table"><table>'
         .'<thead><tr><td>not a header cell</td></tr><tr><th>H</th></tr></thead>'
@@ -194,7 +195,7 @@ it('keeps rows that have cells and drops the ones that do not', function (): voi
     ));
 
     expect($result['html'] ?? null)->toContain(
-        " data-set-attr-table_data='[{&quot;cells&quot;:[&quot;H&quot;]},{&quot;cells&quot;:[&quot;B&quot;]},{&quot;cells&quot;:[&quot;F&quot;]}]'"
+        " data-set-attr-table_data='[{&quot;cells&quot;:[&quot;not a header cell&quot;]},{&quot;cells&quot;:[&quot;H&quot;]},{&quot;cells&quot;:[&quot;not a body cell&quot;]},{&quot;cells&quot;:[&quot;B&quot;]},{&quot;cells&quot;:[&quot;not a footer cell&quot;]},{&quot;cells&quot;:[&quot;F&quot;]}]'"
     )->not->toContain('data-set-attr-caption');
 });
 
@@ -202,8 +203,8 @@ it('warns and returns null when no rows have cells', function (): void {
     $warnings = tableWarnings();
     $node = tableOpeningNode(
         '<!-- wp:table --><figure class="wp-block-table">'
-        .'<table><thead><tr><td>header row with no header cell, long enough to pass the snippet limit</td></tr></thead>'
-        .'<tbody><tr></tr></tbody><tfoot><tr><th>footer</th></tr></tfoot></table></figure>'
+        .'<table class="a table with rows but no cells, long enough to pass the snippet limit"><thead><tr></tr></thead>'
+        .'<tbody><tr></tr></tbody><tfoot><tr></tr></tfoot></table></figure>'
     );
     $figure = $node->nextSibling;
     $snippet = $figure instanceof DOMNode ? (string) $node->ownerDocument?->saveHTML($figure) : '';
@@ -214,6 +215,73 @@ it('warns and returns null when no rows have cells', function (): void {
             'TableProcessor::process: No valid table rows parsed in wp:table block',
             ['site' => 'default', 'pageSlug' => 'about', 'node_html' => substr($snippet, 0, 100).'...'],
         ]]);
+});
+
+/**
+ * Render the first table in the HTML as a set, returning what the set's markup says.
+ *
+ * @return array{rows: mixed, html: string}
+ */
+function renderedTable(string $html): array
+{
+    $document = TextProcessor::loadHtml($html);
+    $table = $document->getElementsByTagName('table')->item(0);
+
+    if (! $table instanceof DOMElement) {
+        throw new RuntimeException('No table in the HTML.');
+    }
+
+    $set = (new TableProcessor)->renderSet($table) ?? '';
+    $rendered = TextProcessor::loadHtml($set)->getElementsByTagName('div')->item(1);
+    $data = $rendered instanceof DOMElement ? json_decode($rendered->getAttribute('data-set-attr-table_data'), true) : [];
+
+    return [
+        'rows' => data_get($data, '*.cells'),
+        'html' => $set,
+    ];
+}
+
+it('reads a plain table whatever its sections', function (string $html, array $rows): void {
+    expect(renderedTable($html)['rows'])->toBe($rows);
+})->with([
+    'rows with no section' => ['<table><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>', [['1', '2'], ['3', '4']]],
+    'every body' => ['<table><tbody><tr><td>1</td></tr></tbody><tbody><tr><td>2</td></tr></tbody></table>', [['1'], ['2']]],
+    'a foot written ahead of the body' => ['<table><tfoot><tr><td>F</td></tr></tfoot><tbody><tr><td>B</td></tr></tbody><thead><tr><th>H</th></tr></thead></table>', [['H'], ['B'], ['F']]],
+    'a br in a cell' => ['<table><tbody><tr><th>Weight<br>(kg)</th><th>Dose</th></tr></tbody></table>', [['Weight<br>(kg)', 'Dose']]],
+    'a nested table, left in its cell' => ['<table><tbody><tr><td><table><tbody><tr><td>in</td></tr></tbody></table></td><td>out</td></tr></tbody></table>', [['<table><tbody><tr><td>in</td></tr></tbody></table>', 'out']]],
+    'rows of different widths' => ['<table><tbody><tr><td>1</td><td>2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '2'], ['3', '']]],
+    'a colspan' => ['<table><tbody><tr><td colspan="2">1</td><td>2</td></tr><tr><td>3</td><td>4</td><td>5</td></tr></tbody></table>', [['1', '', '2'], ['3', '4', '5']]],
+    'a rowspan' => ['<table><tbody><tr><td rowspan="2">1</td><td>2</td></tr><tr><td>3</td></tr><tr><td>4</td><td>5</td></tr></tbody></table>', [['1', '2'], ['', '3'], ['4', '5']]],
+    'a rowspan in the last column' => ['<table><tbody><tr><td>1</td><td rowspan="2">2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '2'], ['3', '']]],
+    'a span of both kinds' => ['<table><tbody><tr><td rowspan="2" colspan="2">1</td><td>2</td></tr><tr><td>3</td></tr></tbody></table>', [['1', '', '2'], ['', '', '3']]],
+    'a rowspan past the last row' => ['<table><tbody><tr><td rowspan="9">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
+    'a span that is not a number' => ['<table><tbody><tr><td colspan="x" rowspan="0">1</td><td>2</td></tr></tbody></table>', [['1', '2']]],
+]);
+
+it('holds a colspan to the most HTML allows', function (): void {
+    expect(data_get(renderedTable('<table><tbody><tr><td colspan="99999">1</td></tr></tbody></table>'), 'rows.0'))->toHaveCount(1000);
+});
+
+it('marks a first row of header cells as a header row, with or without a thead', function (string $html, string $expected): void {
+    expect(renderedTable($html)['html'])->toContain(' data-set-attr-first_row_headers="'.$expected.'"');
+})->with([
+    'header cells, no thead' => ['<table><tbody><tr><th>H</th><th>I</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>', 'true'],
+    'a thead' => ['<table><thead><tr><td>H</td></tr></thead><tbody><tr><td>1</td></tr></tbody></table>', 'true'],
+    'mixed cells' => ['<table><tbody><tr><th>H</th><td>I</td></tr></tbody></table>', 'false'],
+    'data cells' => ['<table><tbody><tr><td>1</td></tr></tbody></table>', 'false'],
+]);
+
+it('reads a plain table caption and footer', function (): void {
+    expect(renderedTable('<table><caption> Doses </caption><tbody><tr><td>1</td></tr></tbody><tfoot><tr><td>F</td></tr></tfoot></table>')['html'])
+        ->toContain(' data-set-attr-caption="Doses"')
+        ->toContain(' data-set-attr-last_row_footers="true"');
+});
+
+it('renders nothing for a table with no cells, and marks no footer on an empty one', function (): void {
+    $document = TextProcessor::loadHtml('<table><tfoot><tr></tr></tfoot></table>');
+    $table = $document->getElementsByTagName('table')->item(0);
+
+    expect($table instanceof DOMElement ? (new TableProcessor)->renderSet($table) : 'no table')->toBeNull();
 });
 
 it('warns and returns null when the figure holds no table', function (): void {

@@ -1203,13 +1203,96 @@ it('takes no table figure from past a table block that holds none', function ():
     textProcessorForBardFakes();
     textProcessorForBardWarnings();
 
-    // The figure after the closing comment is ordinary content, so it is parsed as
-    // HTML rather than imported as this block's table
+    // The figure after the closing comment is not this block's, so the block is left
+    // as its paragraph, and the figure is read as ordinary content that holds a table
     $content = textProcessorForBard('<!-- wp:table --><p>A</p><!-- /wp:table --><figure class="wp-block-table"><table><tbody><tr><td>T</td></tr></tbody></table></figure>');
 
-    expect(array_map(textProcessorForBardSummary(...), $content))->not->toContain('set:table')
-        ->and(array_map(textProcessorForBardSummary(...), $content)[0] ?? null)->toBe('paragraph:A');
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['paragraph:A', 'set:table']);
 });
+
+it('imports a plain table as a table set, with no bare text at the top of the document', function (string $html, bool $autoP): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    // #327: the ticket's own table, which lost its cells and left `text` and
+    // `hardBreak` nodes at the top level
+    $content = textProcessorForBard($html, $autoP);
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:table'])
+        ->and(data_get($content, '0.attrs.values.table_data'))->toBe([
+            ['cells' => ['Weight<br>(kg)', 'Dose']],
+            ['cells' => ['1', '2']],
+        ])
+        ->and(data_get($content, '0.attrs.values.first_row_headers'))->toBeTrue();
+})->with(function (): array {
+    $table = '<table><tbody><tr><th>Weight<br />(kg)</th><th>Dose</th></tr><tr><td>1</td><td>2</td></tr></tbody></table>';
+
+    return [
+        'on its own' => [$table, false],
+        'on its own, with wpautop' => [$table, true],
+        'in a div' => ["<div>{$table}</div>", false],
+        'in a div, with wpautop' => ["<div>{$table}</div>", true],
+        'in nested wrappers' => ["<div class=\"a\"><section><center>{$table}</center></section></div>", true],
+        'in a span in a paragraph' => ["<p><span>{$table}</span></p>", false],
+    ];
+});
+
+it('keeps the content around a plain table in its place', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $table = '<table><tbody><tr><td>T</td></tr></tbody></table>';
+
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard("<p>A</p><div><p>B</p>{$table}C</div><div>D</div>{$table}<p>E</p>")))
+        ->toBe(['paragraph:A', 'paragraph:B', 'set:table', 'paragraph:C', 'paragraph:D', 'set:table', 'paragraph:E']);
+});
+
+it('imports two identical plain tables twice', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $table = '<table><tbody><tr><td>T</td></tr></tbody></table>';
+
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard($table.$table)))->toBe(['set:table', 'set:table']);
+});
+
+it('reads a layout table through, keeping its content in Bard and its data tables as sets', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $content = textProcessorForBard(
+        '<table><tbody><tr><td><p>A</p></td><td>B<table><tbody><tr><td>T</td></tr></tbody></table></td></tr>'
+        .'<tr><td><ul><li>C</li></ul></td></tr></tbody></table><p>D</p>'
+    );
+
+    expect(array_map(textProcessorForBardSummary(...), $content))
+        ->toBe(['paragraph:A', 'paragraph:B', 'set:table', 'bulletList', 'paragraph:D'])
+        ->and(data_get($content, '2.attrs.values.table_data'))->toBe([['cells' => ['T']]]);
+});
+
+it('reads a table figure that no block claims, with its caption and classes', function (): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    $content = textProcessorForBard('<figure class="wp-block-table is-style-stripes"><table class="has-fixed-layout"><tbody><tr><td>T</td></tr></tbody></table><figcaption>Doses</figcaption></figure>');
+
+    expect(array_map(textProcessorForBardSummary(...), $content))->toBe(['set:table'])
+        ->and(data_get($content, '0.attrs.values.caption'))->toBe('Doses')
+        ->and(data_get($content, '0.attrs.values.striped'))->toBeTrue()
+        ->and(data_get($content, '0.attrs.values.fixed_width_table_cells'))->toBeTrue();
+});
+
+it('leaves a table with no rows, and a table in a list, as ordinary content', function (string $html, array $summary): void {
+    textProcessorForBardFakes();
+    textProcessorForBardWarnings();
+
+    expect(array_map(textProcessorForBardSummary(...), textProcessorForBard($html)))->toBe($summary);
+})->with([
+    'no rows' => ['<p>A</p><table></table><p>B</p>', ['paragraph:A', 'paragraph:B']],
+    'wrappers with no table in them' => ['<span>A</span><span>B</span>', ['paragraph:AB']],
+    'in a list' => ['<ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul>', ['bulletList']],
+    'a list in a div' => ['<div><ul><li>a<table><tbody><tr><td>1</td></tr></tbody></table></li></ul></div>', ['bulletList']],
+]);
 
 it('reads nothing past a shortcode block that ends the content', function (): void {
     textProcessorForBardFakes();
