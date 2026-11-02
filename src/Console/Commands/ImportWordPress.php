@@ -2640,9 +2640,11 @@ class ImportWordPress extends Command
      * Check if content contains freeform content outside of Gutenberg blocks.
      *
      * Determines if the content has freeform HTML or text that exists outside of
-     * Gutenberg block comments. This includes plain text, HTML tags, or any content
-     * that isn't wrapped in <!-- wp: --> comments. Used for detecting mixed content
-     * scenarios where Gutenberg blocks and freeform content coexist.
+     * Gutenberg block comments: text, or an element that shows something without
+     * text of its own, such as an image. Markup with neither, such as a stray closing
+     * tag, a `<br>` or a `<p>&nbsp;</p>`, has nothing to lose, so it does not count.
+     * Used for detecting mixed content scenarios where Gutenberg blocks and freeform
+     * content coexist.
      *
      * @param  string  $content  The content to analyze
      * @return bool True if freeform content outside blocks is present, false otherwise
@@ -2653,11 +2655,35 @@ class ImportWordPress extends Command
         // Remove all Gutenberg blocks using the improved method
         $contentWithoutBlocks = $this->removeAllGutenbergBlocks($content);
 
-        // Trim whitespace and check if there's any remaining content
-        $remainingContent = \trim($contentWithoutBlocks);
+        // Return true if what remains after block removal is more than empty markup
+        return $this->holdsMoreThanEmptyMarkup($contentWithoutBlocks);
+    }
 
-        // Return true if there is remaining content after block removal
-        return $remainingContent !== '';
+    /**
+     * Check if markup holds text, or an element that shows something without text.
+     *
+     * @param  string  $markup  The markup to check
+     * @return bool True if the markup holds something a reader would see
+     */
+    private function holdsMoreThanEmptyMarkup(
+        string $markup
+    ): bool {
+        // An element that shows something counts, whatever text surrounds it
+        if (\preg_match('~<(?:audio|canvas|embed|iframe|img|object|svg|video)\b~i', $markup) === 1) {
+            return true;
+        }
+
+        // Drop comments and tags. A `<` that opens neither stays, since it may be text.
+        $withoutTags = \preg_replace('~<!--.*?-->|</?[a-z][^>]*>~is', '', $markup);
+
+        // Decode entities, keeping the markup if the match failed, since it may hold text
+        $decoded = \html_entity_decode($withoutTags ?? $markup);
+
+        // Whitespace, which covers a non-breaking space here, and zero-width spaces are not text
+        $text = \preg_replace('~[\s\x{200B}]+~u', '', $decoded);
+
+        // Return true if anything remains, including text the last pass could not read
+        return ($text ?? $decoded) !== '';
     }
 
     /**
