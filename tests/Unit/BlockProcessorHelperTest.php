@@ -164,20 +164,26 @@ it('passes no attributes for a comment that carries none, or carries invalid JSO
     'a bare value in braces' => ['wp:x {1} /'],
 ]);
 
-it('passes no attributes for nested JSON, which the lazy match cuts short', function (): void {
-    // Characterization: `{.+?}` stops at the first closing brace, so nested attributes
-    // decode as invalid JSON and the processor gets none of them. Pinned as today's
-    // behavior; the fix is #123, which flips this test.
+it('passes every attribute of a comment whose JSON nests', function (string $text, array $attributes): void {
     $processor = new BlockProcessorHelperRecordingProcessor(true, 'html');
 
-    blockHelperRun(
-        blockHelperComment('wp:group {"style":{"color":"red"},"layout":"flex"} -->'),
-        [$processor],
-        $this::createStub(AssetImporter::class)
-    );
+    blockHelperRun(blockHelperComment($text), [$processor], $this::createStub(AssetImporter::class));
 
-    expect($processor->calls[0][0] ?? null)->toBe([]);
-});
+    expect($processor->calls[0][0] ?? null)->toBe($attributes);
+})->with([
+    'an object before a sibling' => [
+        'wp:group {"style":{"color":"red"},"layout":"flex"} ',
+        ['style' => ['color' => 'red'], 'layout' => 'flex'],
+    ],
+    'an object last, on a self-closing block' => [
+        'wp:image {"id":42,"style":{"border":{"radius":"8px"}}} /',
+        ['id' => 42, 'style' => ['border' => ['radius' => '8px']]],
+    ],
+    'a closing brace inside a string' => [
+        'wp:quote {"citation":"a}b","align":"left"} ',
+        ['citation' => 'a}b', 'align' => 'left'],
+    ],
+]);
 
 it('reads attributes that span lines', function (): void {
     $processor = new BlockProcessorHelperRecordingProcessor(true, 'html');

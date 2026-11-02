@@ -498,6 +498,16 @@ describe('a self-closing block', function (): void {
             ->and($calls->calls)->toBe([[$parser, $context->arguments($template, ['data' => ['field' => 'value']])]]);
     })->with(acfBlockTypes());
 
+    it('keeps an attribute beside a nested object', function (string $type, string $parser, array $template): void {
+        $calls = new AcfBlockCalls;
+        $context = new AcfBlockContext;
+
+        // The pattern is lazy but anchored to the end of the comment, so it reads past the inner brace
+        acfBlockParse(acfBlockParser($calls), $context, '<!-- wp:acf/'.$type.' {"data":{"field":"value"},"align":"full"} /-->');
+
+        expect($calls->calls)->toBe([[$parser, $context->arguments($template, ['data' => ['field' => 'value'], 'align' => 'full'])]]);
+    })->with(acfBlockTypes());
+
     it('passes empty attributes when its JSON cannot be decoded', function (string $type, string $parser, array $template): void {
         $calls = new AcfBlockCalls;
         $context = new AcfBlockContext;
