@@ -42,6 +42,11 @@ class ReusableBlockCoordinator
     private ?AssetImporter $assetImporter = null;
 
     /**
+     * How the run handles an entry that already exists.
+     */
+    private string $entryOverwriteBehavior = 'Overwrite matching files';
+
+    /**
      * Constructs the ReusableBlockCoordinator with dependencies.
      *
      * @param  SiteManager  $siteManager  Site manager for collection operations
@@ -71,6 +76,18 @@ class ReusableBlockCoordinator
     ): void {
         // Store asset importer instance
         $this->assetImporter = $assetImporter;
+    }
+
+    /**
+     * Sets how the run handles an entry that already exists.
+     *
+     * @param  string  $behavior  The entry overwrite behavior chosen for the run
+     */
+    public function setEntryOverwriteBehavior(
+        string $behavior
+    ): void {
+        // Store the behavior for the creator of each import
+        $this->entryOverwriteBehavior = $behavior;
     }
 
     /**
@@ -186,6 +203,9 @@ class ReusableBlockCoordinator
 
         // Create reusable block entry creator instance
         $creator = $this->entryCreator();
+
+        // Handle existing blocks as the run handles its other entries
+        $creator->setEntryOverwriteBehavior($this->entryOverwriteBehavior);
 
         // ---
         // Track imported post IDs globally to avoid infinite loops
