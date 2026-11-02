@@ -239,7 +239,7 @@ it('asks the processors in order and stops at the first that claims the block', 
     $gravity->shouldNotHaveReceived('canProcess');
 });
 
-it('passes the block comment\'s first JSON object to the processor as its attributes', function (string $comment, array $expected): void {
+it('passes the block comment\'s JSON object to the processor as its attributes', function (string $comment, array $expected): void {
     $tablePress = nonAcfProcessor(TablePressBlockProcessor::class, true, ['html' => '<p>Table</p>']);
     $accumulator = [];
     $nodes = nonAcfNodes($comment);
@@ -249,7 +249,8 @@ it('passes the block comment\'s first JSON object to the processor as its attrib
     $tablePress->shouldHaveReceived('process', [$nodes->item(0), $expected, 'default', Mockery::type(AssetImporter::class), Mockery::type(OutputInterface::class), [], [], 'page']);
 })->with([
     'an object' => ['<!-- wp:tablepress/table {"id":"3","x":true} /-->', ['id' => '3', 'x' => true]],
-    'a nested object, cut at the first closing brace' => ['<!-- wp:block {"a":{"b":1}} /-->', []],
+    'a nested object' => ['<!-- wp:block {"a":{"b":1}} /-->', ['a' => ['b' => 1]]],
+    'an attribute beside a nested object' => ['<!-- wp:block {"a":{"b":1},"id":"3"} /-->', ['a' => ['b' => 1], 'id' => '3']],
     'an object over two lines' => ["<!-- wp:block {\"id\":\n\"3\"} /-->", ['id' => '3']],
     'invalid JSON' => ['<!-- wp:block {nope} /-->', []],
     'empty braces' => ['<!-- wp:block {} /-->', []],

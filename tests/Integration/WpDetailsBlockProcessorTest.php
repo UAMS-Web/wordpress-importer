@@ -136,6 +136,8 @@ it('places the summary one level below the nearest preceding heading', function 
     'the nearest of two headings' => ['<h2>A</h2><h4>B</h4>', 'h5'],
     'wp:heading comment with a level' => ['<!-- wp:heading {"level":3} -->', 'h4'],
     'wp:heading comment with a numeric-string level' => ['<!-- wp:heading {"level":"4"} -->', 'h5'],
+    'wp:heading comment with a level before a nested object' => ['<!-- wp:heading {"level":3,"style":{"color":"red"}} -->', 'h4'],
+    'wp:heading comment with a level after a nested object' => ['<!-- wp:heading {"style":{"color":"red"},"level":4} -->', 'h5'],
     'wp:heading comment at level 1' => ['<!-- wp:heading {"level":1} -->', 'h2'],
     'wp:heading comment at level 6, capped at h6' => ['<!-- wp:heading {"level":6} -->', 'h6'],
     'closing heading comment is skipped for the element before it' => ['<!-- wp:heading {"level":2} --><h4>T</h4><!-- /wp:heading -->', 'h5'],
