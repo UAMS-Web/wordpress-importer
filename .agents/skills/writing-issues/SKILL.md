@@ -189,8 +189,8 @@ Recurring title families with fixed shapes:
 - **Research spike:** prefix with `Research:`: `Research: decide Elavon integration + PCI approach for Statamic form payments`,
   `Research: how much of ACF PRO's REST layer should the migration API reuse?`.
 
-- **Blueprint normalization:** `Normalize the <X> collection blueprint to receive imported fields from wordpress-importer#N`
-  or `Expand the <X> collection blueprint to receive … from wordpress-importer#N`.
+- **Blueprint normalization:** `Normalize the <X> collection blueprint to receive imported fields from aether-wordpress-importer#N`
+  or `Expand the <X> collection blueprint to receive … from aether-wordpress-importer#N`.
 
 ## Body: the standard skeleton
 
@@ -677,7 +677,7 @@ an empty result from an empty tracker.
 
 Vary the terms across the symptom, the affected file/handle/symbol, and the class/label: one
 query rarely surfaces a differently-worded dup. For work that spans repos, search the sibling
-repo too (swap the `repo:` qualifier, e.g. `repo:UAMS-Web/wordpress-importer`). If anything
+repo too (swap the `repo:` qualifier, e.g. `repo:UAMS-Web/aether-wordpress-importer`). If anything
 plausibly covers the concept: **link it and skip**, or add a comment / sharpen the existing
 issue: don't open a duplicate. Only file once you've confirmed nothing matches.
 
@@ -856,7 +856,7 @@ Pick the skeleton that matches the work:
 - **Follow-up cleanup** → `Follow-up to #N.` lede · `## Scope` · short `## Acceptance criteria`.
   `Follow-up to #N.` is provenance and stays; any dependency on `#N` is an edge.
 
-- **Blueprint normalization** → `Normalize/Expand the … from wordpress-importer#N` title ·
+- **Blueprint normalization** → `Normalize/Expand the … from aether-wordpress-importer#N` title ·
   lede · `## Current state` · `## Source-of-truth schema` · `## Acceptance criteria` (ends in
   "unblock #N with the field-mapping table") · `## References`. The dependency on `#N` is an
   edge, not a lede sentence.

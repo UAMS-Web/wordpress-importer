@@ -307,7 +307,7 @@ This repository's invocation:
 
 ```
 python3 .claude/skills/writing-release-notes/gen_release_notes.py <prev-tag> <new-tag> \
-    --repo UAMS-Web/wordpress-importer \
+    --repo UAMS-Web/aether-wordpress-importer \
     --product-path tests \
     --skip 'iteration[- ]planning|audit-run|audit note|exhaustive-audit|pacing/resume|refresh .*afk.*catalog' \
     --lead "One-sentence milestone theme." \

@@ -407,7 +407,7 @@ There is no `mutate` CI job here, so the gate for a `pest-plugin-mutate` patch i
 mutation run per the `adversarial-review` rule:
 
 ```bash
-vendor/bin/pest --mutate --path=src --class="UAMSWeb\WordPressImporter\<Class>"
+vendor/bin/pest --mutate --path=src --class="UAMSWeb\Aether\WordPressImporter\<Class>"
 ```
 
 The [`pcov-setup`](../pcov-setup/SKILL.md) skill installs PCOV and documents the run gotchas

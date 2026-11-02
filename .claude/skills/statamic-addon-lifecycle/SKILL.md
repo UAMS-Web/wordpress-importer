@@ -45,8 +45,13 @@ that step; it does not work around it.
 4. **Human.** Add the repository to the organization's `main` rulesets. This can be done only
    after `main` exists, so it follows the first push. Until it is done, nothing prevents a direct
    push to `main`.
+   Choose the ruleset by the check names the add-on reports. A freshly created add-on has per-job
+   names and no aggregate `CI` job, so it joins the ruleset that requires those names; moving it to
+   the ruleset that requires `CI`, `Attribution footer` and `Closing keywords` before its `ci.yml`
+   has the aggregate job leaves every pull request waiting on a check that never reports. Read the
+   names back from a green run on `main` before the move.
 5. **Session.** Add the add-on to `shared/manifest.json` in `UAMS-Web/uams-claude-skills` with the
-   same profile set as the existing add-ons (copy the `statamic-multisite-forms` entry, including
+   same profile set as the existing add-ons (copy the `aether-multisite-forms` entry, including
    its `exclude` for `rules/running-boost-update` and `labels`), and `public: true` with
    `publicReviewed` left unset until the files the target would receive have been read for
    anything internal. `shared/README.md` covers adding a target and the public review.

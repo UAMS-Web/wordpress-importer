@@ -61,7 +61,7 @@
       }
     ]
   },
-  "wordpress-importer": {
+  "aether-wordpress-importer": {
     "base": "main",
     "php": "8.4",
     "jobs": [
@@ -97,7 +97,7 @@
       }
     ]
   },
-  "uamswp-migration-api": {
+  "aether-wordpress-migration-api": {
     "base": "main",
     "php": "8.2",
     "jobs": [

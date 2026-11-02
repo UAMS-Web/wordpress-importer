@@ -42,6 +42,9 @@ name: CI
 # It installs PCOV through the setup action's `coverage` input, because `--mutate` without a
 # coverage driver either errors or reports `0 Mutations for 0 Files created`, and it fails on
 # a run that created no mutants as well as on any untested, uncovered or timed-out mutant.
+# On a pull request it mutates only the PHP files the pull request adds or changes under the
+# job's MUTATE_PATHS (set it to the paths `composer mutate` passes to `--path`), and passes
+# with the reason printed when there are none; a push mutates everything the script covers.
 # A repository without a `mutate` Composer script, or without the patched pest-plugin-mutate,
 # drops the job. The code-quality skill says how to adopt it.
 #
@@ -215,29 +218,103 @@ jobs:
       - run: php .claude/skills/pest-testing/scripts/check-mutate-ignore.php
 
   mutate:
-    name: Mutation score (full, with PCOV)
+    name: Mutation score (changed files, with PCOV)
     needs: [rector, phpstan]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # An explicit `bash` runs each step with `-eo pipefail`; the default, `bash -e`, does not,
+    # and the run step's `| tee` would then report tee's status in place of Pest's.
+    defaults:
+      run:
+        shell: bash
     steps:
+      # Depth 2: on a pull request the checkout is GitHub's merge commit, and its first parent
+      # is the base branch it was merged onto.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: ./.github/actions/setup
         with:
           coverage: pcov
 
+      # On a pull request, mutate only the PHP files under MUTATE_PATHS that the pull request
+      # adds, changes or renames. They are read from the merge commit against its first parent,
+      # so a later change on the base branch is not counted. A pull request that changes none
+      # passes with the reason printed. A push mutates everything `composer mutate` covers.
+      # Set MUTATE_PATHS to the paths that script passes to `--path` (a Statamic add-on's is
+      # `src`), space-separated.
+      - name: Select the files to mutate
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          MUTATE_PATHS: src
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+            echo "Not a pull request: mutating everything composer mutate covers."
+            exit 0
+          fi
+          if ! git rev-parse --verify --quiet HEAD^2 > /dev/null; then
+            echo "::error::HEAD is not a merge commit, so the pull request's changes cannot be read."
+            exit 1
+          fi
+          # NUL-separated, so a name git would quote (non-ASCII, a tab) is read as it is
+          list=$(mktemp)
+          git diff -z --name-only --diff-filter=AMR HEAD^1 HEAD -- $MUTATE_PATHS > "$list"
+          files=()
+          while IFS= read -r -d '' f; do
+            [[ "$f" == *.php ]] || continue
+            if [[ "$f" == *,* || "$f" == *$'\n'* ]]; then
+              echo "::error::A changed path holds a comma or a newline, which --path cannot carry: $f"
+              exit 1
+            fi
+            files+=("$f")
+          done < "$list"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "mode=none" >> "$GITHUB_OUTPUT"
+            echo "No PHP file under $MUTATE_PATHS is added or changed by this pull request, so there is nothing to mutate."
+            exit 0
+          fi
+          echo "Mutating ${#files[@]} changed file(s):"
+          printf '%s\n' "${files[@]}"
+          echo "mode=changed" >> "$GITHUB_OUTPUT"
+          echo "paths=$(IFS=,; echo "${files[*]}")" >> "$GITHUB_OUTPUT"
+
       # `--min=100` makes Pest fail the step on any survivor. The run is kept in a log
       # because a run that mutated nothing is a setup failure that Pest's exit status
       # reports or not depending on its version and `ignore_min_score_on_zero_mutations`.
-      # Bash runs this step with pipefail, so `tee` does not hide Pest's status.
+      # Bash runs this step with pipefail, so `tee` does not hide Pest's status. A later
+      # `--path` replaces the one `composer mutate` passes. On changed files, zero mutants is
+      # left to the check step, so Pest is told not to fail it.
       - name: Run mutation testing
-        run: composer mutate -- --min=100 2>&1 | tee mutate.log
+        if: steps.select.outputs.mode != 'none'
+        env:
+          MODE: ${{ steps.select.outputs.mode }}
+          PATHS: ${{ steps.select.outputs.paths }}
+        run: |
+          if [ "$MODE" = "changed" ]; then
+            composer mutate -- --min=100 --ignore-min-score-on-zero-mutations --path="$PATHS" 2>&1 | tee mutate.log
+          else
+            composer mutate -- --min=100 2>&1 | tee mutate.log
+          fi
 
       # Reads the log, not the exit status: fails on zero mutants, and on any untested,
       # uncovered, pending or timed-out mutant. Runs even when the step above failed, so the
-      # log's own account of the failure is printed.
+      # log's own account of the failure is printed; skipped only when nothing was selected.
+      # One exception: changed files that exist, mutated with PCOV loaded, that produce zero
+      # mutants hold no code a mutator changes (an interface, say), which is a pass. Zero
+      # mutants on a full run, or with no PCOV, still fails.
       - name: Check the mutation run
-        if: always()
-        run: php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
+        if: always() && steps.select.outputs.mode != 'none'
+        env:
+          MODE: ${{ steps.select.outputs.mode }}
+        run: |
+          if [ "$MODE" = "changed" ] && sed "s/$(printf '\033')\[[0-9;]*m//g" mutate.log | grep -Eq '(^|[^0-9])0 Mutations for 0 Files created' \
+            && php -r 'exit(extension_loaded("pcov") && ini_get("pcov.enabled") ? 0 : 1);'; then
+            echo "The changed files produced no mutants: they hold no code a mutator changes, so there is nothing to test."
+            exit 0
+          fi
+          php .claude/skills/pest-testing/scripts/check-mutation-run.php mutate.log
 
   pest:
     name: Pest
@@ -284,6 +361,8 @@ jobs:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "Needed job results: $RESULTS"
+          # An empty list (an emptied `needs:`, a dropped `env:`) would run no iterations and pass having read nothing.
+          if [ -z "$RESULTS" ]; then echo "::error::No needed job results to read"; exit 1; fi
           for result in $RESULTS; do
             if [ "$result" != "success" ]; then
               echo "::error::A needed job reported $result"

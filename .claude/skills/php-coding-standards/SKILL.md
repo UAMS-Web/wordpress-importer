@@ -59,7 +59,7 @@ property hooks (8.4). Use each only where the repository's PHP constraint allows
 ## 2. File preamble
 
 Where the repository's `pint.json` enables Pint's `declare_strict_types` rule (`uams-statamic`
-and `uamswp-migration-api` do), every first-party PHP file opens the same way: the opening tag, a
+and `aether-wordpress-migration-api` do), every first-party PHP file opens the same way: the opening tag, a
 file-level docblock where the repository uses them, `declare(strict_types=1);`, then the
 namespace.
 
@@ -72,10 +72,10 @@ namespace.
 
 declare(strict_types=1);
 
-namespace UAMSWP\MigrationAPI;
+namespace UAMSWeb\Aether\WordPressImporter\MigrationApi;
 ```
 
-Where the repository does not enable that rule (`wordpress-importer` runs the `laravel` preset
+Where the repository does not enable that rule (`aether-wordpress-importer` runs the `laravel` preset
 with no `pint.json`), do not introduce the declaration one file at a time; enabling it is a
 repository decision made once in `pint.json`, which then adds it everywhere.
 
@@ -279,7 +279,7 @@ use Illuminate\Support\Facades\Log;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Entry;
 use function Laravel\Prompts\confirm;
-use const UAMSWP\MigrationAPI\REST_NAMESPACE;
+use const UAMSWeb\Aether\WordPressImporter\MigrationApi\REST_NAMESPACE;
 ```
 
 The standing Statamic collision: `use Statamic\Facades\Entry;` (facade) **plus**
@@ -338,7 +338,7 @@ private const string SECRET_HEADER = 'X-UAMSWP-Migration-Key';
 ```
 
 The Laravel and Statamic applications are all on PHP 8.3 or newer (`uams-statamic` and
-`wordpress-importer` on `^8.4`), so type the constants there.
+`aether-wordpress-importer` on `^8.4`), so type the constants there.
 
 ## 11. Contract vs concrete types
 

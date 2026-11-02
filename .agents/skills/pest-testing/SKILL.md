@@ -254,7 +254,7 @@ Run the suite on the PHP version production runs. That is not a substitute for `
 
 **Decision: ship C and D, keep A, B and E with the application.** The shipped script carries a test per rule, a negative case for each neighboring shape it must leave alone, and a clean control. Each rule was also exercised against a real tree: the script read all 1,137 files of the `uams-statamic` suite at the commit above with no finding, then reported both rules on a copy with one duplicate function and one no-op import planted.
 
-Of the three consumers, only `uams-statamic` runs `--parallel` (`wordpress-importer` and `uamswp-migration-api` run their suites serially), so the shared script has one parallel consumer today. Adopting it there means replacing rules C and D in its private guard, which is that repository's change. Revisit the split when a second repository adopts `--parallel` and meets a shared-state defect that Rule A or B would have caught outside Laravel.
+Of the three consumers, only `uams-statamic` runs `--parallel` (`aether-wordpress-importer` and `aether-wordpress-migration-api` run their suites serially), so the shared script has one parallel consumer today. Adopting it there means replacing rules C and D in its private guard, which is that repository's change. Revisit the split when a second repository adopts `--parallel` and meets a shared-state defect that Rule A or B would have caught outside Laravel.
 
 ## Mutation testing
 
