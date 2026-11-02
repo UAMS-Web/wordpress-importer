@@ -142,7 +142,7 @@ describe('local-ci.json against ci.yml', () => {
             // A whole line, not a substring: `--testsuite=Unit` is a prefix of ci.yml's
             // `--testsuite=Unit,Integration`, so `includes` would pass a narrowed command.
             // `--shard` is the one difference a shard's command may carry (#376).
-            const mirrored = ciLines.map((line) => line.replace(/ --shard=\S+$/, ''))
+            const mirrored = ciLines.map((line) => line.replace(/ --shard=.*$/, ''))
             assert.ok(mirrored.includes(`run: ${run[name]}`), `${name}: ci.yml does not run \`${run[name]}\``)
         }
     })
