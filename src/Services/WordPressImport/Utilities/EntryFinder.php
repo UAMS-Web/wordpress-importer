@@ -97,14 +97,15 @@ class EntryFinder
      * and includes optional cache refresh functionality to ensure fresh data
      * when needed.
      *
-     * The method supports both custom slugs and Statamic's default slugs. The cache
-     * refresh functionality ensures that newly saved entries are immediately
-     * available for querying, which is particularly important for dated collections
-     * where the entry's date information needs to be properly cached.
+     * The method supports both custom slugs and Statamic's default slugs.
+     *
+     * The Stache caches items by id, so a fresh read finds the entry first, forgets
+     * the item cached under its id, and reads it again. It does nothing for a slug
+     * the first read does not find.
      *
      * @param  string  $collectionHandle  The collection handle to search within
      * @param  string  $slug  The entry slug to find
-     * @param  bool  $forceFresh  Whether to force a fresh query by clearing cache (optional)
+     * @param  bool  $forceFresh  Whether to reload the found entry instead of using its cached item (optional)
      * @param  ?string  $site  The site handle for explicit site filtering (optional)
      * @return ?Entry The found entry or null if not found
      */
@@ -114,17 +115,45 @@ class EntryFinder
         bool $forceFresh = false,
         ?string $site = null
     ): ?Entry {
-        // Handle cache refresh if explicitly requested
-        // This is useful when querying immediately after saving an entry
-        // to ensure the Stache cache has been updated with the latest data
-        if ($forceFresh) {
-            // Clear the collection entry from Stache to force a fresh load
-            self::forgetStacheEntry(
-                $collectionHandle,
-                $slug
-            );
+        $entry = self::queryEntryBySlug(
+            $collectionHandle,
+            $slug,
+            $site
+        );
+        $entryId = $entry?->id();
+
+        // Keep the entry as read unless a fresh read is asked for and its cached item
+        // can be named (an entry file whose YAML reads `id: 123` loads with an integer id)
+        if (! $forceFresh || ! \is_string($entryId)) {
+            return $entry;
         }
 
+        // Forget the cached item, so the second read loads the entry from its file
+        self::forgetStacheEntry(
+            $collectionHandle,
+            $entryId
+        );
+
+        return self::queryEntryBySlug(
+            $collectionHandle,
+            $slug,
+            $site
+        );
+    }
+
+    /**
+     * Run the entry query for a slug.
+     *
+     * @param  string  $collectionHandle  The collection handle to search within
+     * @param  string  $slug  The entry slug to find
+     * @param  ?string  $site  The site handle for explicit site filtering (optional)
+     * @return ?Entry The found entry or null if not found
+     */
+    private static function queryEntryBySlug(
+        string $collectionHandle,
+        string $slug,
+        ?string $site
+    ): ?Entry {
         // Build the base query using standard Statamic syntax
         // Start with Entry::query() and filter by collection handle
         $query = EntryQueryHelper::query();

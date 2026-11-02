@@ -325,12 +325,18 @@ it('skips a deferred link to a redirect rule', function (): void {
 });
 
 it('resolves a deferred link to the entry found by slug, keeping its query and fragment', function (): void {
-    $target = deferredEntry('pages', 'about', 'about-99-abc');
+    deferredEntry('pages', 'about', 'about-99-abc');
     deferredEntry('pages', 'old', 'old-12-abc');
 
-    expect(LinkProcessor::resolveDeferredLink(deferredLink(['fragment' => '#team', 'query' => '?x=1']), 'default'))->toBe([
+    $resolved = LinkProcessor::resolveDeferredLink(deferredLink(['fragment' => '#team', 'query' => '?x=1']), 'default');
+
+    // A fresh slug lookup reloads the entry, so the target is the same entry in a new object
+    expect(($resolved['target_entry'] ?? null)?->id())->toBe('about-99-abc');
+
+    unset($resolved['target_entry']);
+
+    expect($resolved)->toBe([
         'statamic_url' => 'statamic://entry::about-99-abc?x=1#team',
-        'target_entry' => $target,
         'wordpress_url' => 'http://93.184.216.34/site/about/',
         'fragment' => '#team',
         'query' => '?x=1',

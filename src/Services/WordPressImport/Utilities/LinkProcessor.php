@@ -1126,15 +1126,15 @@ class LinkProcessor
 
         // Check if we have a target collection handle to search
         if ($statamicTargetCollectionHandle !== null) {
-            // Try to find the entry by slug if post name is not empty. A fresh
-            // slug lookup invalidates nothing (#127), so asking for one changes
-            // nothing.
+            // Try to find the entry by slug if post name is not empty. The cached
+            // item serves: the reference is built from the entry's ID, which a stale
+            // cached copy shares, so a fresh read would change nothing returned here.
             if ($wordPressPostName !== '') {
                 $statamicTargetEntry = EntryFinder::findEntryBySlug(
                     $statamicTargetCollectionHandle,
                     $wordPressPostName,
-                    // @pest-mutate-ignore: TrueToFalse
-                    true,
+                    // @pest-mutate-ignore: FalseToTrue
+                    false,
                     $statamicSiteHandle
                 );
             }
