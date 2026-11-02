@@ -38,7 +38,7 @@
     {
       "name": "changed-tests",
       "_note": "Reports each changed test file against the base branch's source and fails only when the comparison could not run. Installs dependencies in a scratch tree, after returning early when no test file changed.",
-      "run": "node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --base origin/main",
+      "run": "node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --base origin/main --tests tests/Unit --tests tests/Integration",
       "always": true
     },
     {

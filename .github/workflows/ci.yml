@@ -420,7 +420,9 @@ jobs:
   # reports per file (#306). It reports and does not judge: it fails only when the
   # comparison could not run, and on a push it reports nothing to compare. The script
   # reads the base branch from the environment, and `fetch-depth: 0` makes that branch
-  # present. It installs dependencies in its own scratch tree.
+  # present. It installs dependencies in its own scratch tree. `--tests` holds it to the
+  # two standalone suites, since `tests/Feature/` needs the host app and a changed file
+  # there would otherwise read as a comparison that could not run.
   # PARITY: mirrored by the `changed-tests` job in local-ci.json, which names the base
   # with `--base`.
   changed-tests:
@@ -462,7 +464,7 @@ jobs:
           restore-keys: composer-${{ runner.os }}-
 
       - name: Changed tests against base
-        run: node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs
+        run: node .claude/skills/pest-testing/scripts/changed-tests-against-base.mjs --tests tests/Unit --tests tests/Integration
 
   # The one check the ruleset requires from this workflow (#163). Keep `needs:`
   # listing every other job in the file. Not gated on RUN_REMOTE_CI: it must run,
