@@ -160,10 +160,20 @@ class AttachmentFocalPointCalculator
                 continue;
             }
 
-            // Append normalized floating-point pixel coordinates
+            // Normalize to floating-point pixel coordinates
+            $pointX = (float) $x;
+            $pointY = (float) $y;
+
+            // Skip rows no pixel can match: '1e999' is numeric and reads as INF, and
+            // opposite infinities would center on NAN (#138)
+            if (! \is_finite($pointX) || ! \is_finite($pointY)) {
+                continue;
+            }
+
+            // Append the usable point
             $points[] = [
-                'x' => (float) $x,
-                'y' => (float) $y,
+                'x' => $pointX,
+                'y' => $pointY,
             ];
         }
 
@@ -219,8 +229,7 @@ class AttachmentFocalPointCalculator
         // Compute vertical center of the axis-aligned bounding box
         $centerY = (\min($ys) + \max($ys)) / 2;
 
-        // Convert center x to a clamped integer percent (0 to 100); the cast also
-        // turns a NAN center (from opposite infinite coordinates) into 0
+        // Convert center x to a clamped integer percent (0 to 100)
         $focusX = (int) \min(
             100,
             \max(

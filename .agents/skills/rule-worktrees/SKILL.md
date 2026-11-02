@@ -53,7 +53,7 @@ git fetch origin
 git checkout -b <N>-<slug> origin/main
 ```
 
-Here claim atomically with `node scripts/worktree-slots.mjs claim --branch <N>-<slug>` (branches from `origin/main`; bare `claim` stays detached, for a `gh issue develop` name), never by acting on `status`. A claim ref also marks a slot held. Exit `0` claimed (line 2 names the session), `3` all held (ask or go ephemeral), `4` none provisioned (ask the operator).
+Here claim atomically with `node scripts/worktree-slots.mjs claim --branch <N>-<slug>` (branches from `origin/main`; bare `claim` stays detached, for a `gh issue develop` name), never by acting on `status`. A claim ref also marks a slot held. Exit `0` claimed (line 2 names the session), `3` all held (ask or go ephemeral), `4` none provisioned (ask the operator), `5` git would not write a claim on a free slot (stderr gives the reason, and the slots may be free: fix the reason and claim again, do not read it as all held).
 
 **Release when a ticket ships**, or the next ticket silently branches off the last tip and carries its scratch:
 

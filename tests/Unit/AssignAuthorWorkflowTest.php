@@ -10,8 +10,8 @@ use Symfony\Component\Yaml\Yaml;
  * request, and every issue it closes, to exactly the pull request's author.
  *
  * The shape tests pin what the job runs on: `opened` and a merged `closed`,
- * never a bot's pull request, never gated on `RUN_REMOTE_CI`, and only the two
- * scopes it writes with. The behavior tests run the step's own script, read
+ * never a bot's pull request, the condition the shared template carries, and
+ * only the two scopes it writes with. The behavior tests run the step's own script, read
  * from the workflow, against a stub `gh` that records every call. The real `jq`
  * filters run, so a changed filter is exercised rather than trusted. Each
  * failure the script must report shows here as a non-zero exit: a dropped
@@ -37,11 +37,12 @@ const ASSIGN_AUTHOR_REPO = 'UAMS-Web/aether-wordpress-importer';
 /**
  * The parsed workflow.
  *
+ * @param  string  $path  Workflow path, relative to the repository root.
  * @return array<mixed> The workflow's top-level keys.
  */
-function assignAuthorWorkflow(): array
+function assignAuthorWorkflow(string $path = '.github/workflows/assign-author.yml'): array
 {
-    $workflow = Yaml::parseFile(dirname(__DIR__, 2).'/.github/workflows/assign-author.yml');
+    $workflow = Yaml::parseFile(dirname(__DIR__, 2).'/'.$path);
 
     // Fail with the reason rather than on a later offset read
     if (! is_array($workflow)) {
@@ -54,11 +55,12 @@ function assignAuthorWorkflow(): array
 /**
  * The workflow's single job.
  *
+ * @param  string  $path  Workflow path, relative to the repository root.
  * @return array<mixed> The job's keys.
  */
-function assignAuthorJob(): array
+function assignAuthorJob(string $path = '.github/workflows/assign-author.yml'): array
 {
-    $jobs = assignAuthorWorkflow()['jobs'] ?? null;
+    $jobs = assignAuthorWorkflow($path)['jobs'] ?? null;
 
     // Require exactly one job, so a second, unguarded one cannot slip in
     if (! is_array($jobs) || count($jobs) !== 1) {
@@ -215,21 +217,18 @@ it('triggers on a pull request opening or closing and on nothing else', function
 });
 
 it('runs its job only for a user on an opened or merged pull request', function (): void {
-    expect(assignAuthorJob()['if'] ?? null)->toBe(
+    // A remote-CI gate may precede this, so pin how the condition ends rather than all of it
+    expect(assignAuthorJob()['if'] ?? null)->toEndWith(
         "github.event.pull_request.user.type != 'Bot' && (github.event.action == 'opened' || (github.event.action == 'closed' && github.event.pull_request.merged == true))"
     );
 });
 
-it('is not gated on RUN_REMOTE_CI', function (): void {
-    $source = file_get_contents(dirname(__DIR__, 2).'/.github/workflows/assign-author.yml');
+it('carries the job condition of the shared template', function (): void {
+    // The sync moves the two together, so this holds on either side of a template change
+    $template = assignAuthorJob('.claude/skills/writing-pull-requests/templates/assign-author.yml');
 
-    // Search only the YAML itself, since the header comment names the variable to explain its absence
-    $code = implode("\n", array_filter(
-        explode("\n", (string) $source),
-        fn (string $line): bool => ! str_starts_with(ltrim($line), '#'),
-    ));
-
-    expect($code)->not->toContain('RUN_REMOTE_CI');
+    expect($template['if'] ?? null)->toBeString()
+        ->and(assignAuthorJob()['if'] ?? null)->toBe($template['if'] ?? null);
 });
 
 it('grants no permission beyond writing issues and pull requests', function (): void {

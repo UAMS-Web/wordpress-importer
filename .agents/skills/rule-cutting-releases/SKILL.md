@@ -28,7 +28,7 @@ History: [cutting-releases.md § Overview](../../../.claude/history/cutting-rele
 
 3. **The version line is the repository's decision, recorded with its other decisions, not this rule's.** This rule only fixes when a tag is cut on whatever line the repository is on.
 
-   **Stay in 0.x until Launch.** `1.0.0` is Launch; every release before it is a `--prerelease`. The minor/patch semantics, the breaking-change classes, and the rationale (an app, not a library, in `uams-statamic`; an internal migration tool, not a general-purpose library, in `wordpress-importer`) are recorded in [`docs/DECISIONS.md`](../../../docs/DECISIONS.md).
+   **Stay in 0.x until Launch.** `1.0.0` is Launch; every release before it is a `--prerelease`. The minor/patch semantics, the breaking-change classes, and the rationale (an app, not a library, in `uams-statamic`; an internal migration tool, not a general-purpose library, in `aether-wordpress-importer`) are recorded in [`docs/DECISIONS.md`](../../../docs/DECISIONS.md).
 
 4. **Mechanics are not this rule's job.** *How* to write the notes, generate the body, tag, and publish lives in the [`writing-release-notes`](../writing-release-notes/SKILL.md) skill. This rule is only the *when*.
 

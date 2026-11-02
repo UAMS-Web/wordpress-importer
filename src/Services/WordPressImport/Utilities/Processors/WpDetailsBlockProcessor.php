@@ -252,10 +252,11 @@ class WpDetailsBlockProcessor implements BlockProcessorInterface
     private function extractHeadingLevelFromComment(
         string $commentValue
     ): ?int {
-        // Check if comment contains JSON attributes in braces
+        // Check if comment contains JSON attributes in braces. The match runs to the
+        // last closing brace, since a lazy one stops inside a nested object.
         if (
             \preg_match(
-                '/{.+?}/s',
+                '/{.+}/s',
                 $commentValue,
                 $matches
             ) === 1

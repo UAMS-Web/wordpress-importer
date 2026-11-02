@@ -5,13 +5,11 @@ declare(strict_types=1);
 /**
  * Tests that `EntryFinder` finds an entry by id, slug or embedded WordPress id within
  * one collection, narrows to a site only when one is named, and, when asked for a
- * fresh read by id or WordPress id, forgets the cached Stache item it reads. A fresh
- * slug read forgets a key that holds no item, which is pinned here as it stands (#127).
+ * fresh read, forgets the cached Stache item it reads.
  *
  * Real entries in two collections and two sites, so each filter is shown to exclude
  * something. The cache forgetting is observed by replacing an entry's cached item
  * with a copy titled "stale" and checking which title a lookup returns afterwards.
- * The slug case also writes a sentinel under the key the slug names.
  *
  * @command  php vendor/bin/pest tests/Integration/EntryFinderTest.php
  */
@@ -55,18 +53,6 @@ function entryFinderCacheKey(string $collection, string $key): string
 }
 
 /**
- * Write a sentinel under each item key, so a later read shows which were forgotten.
- *
- * @param  list<array{string, string}>  $items  [collection, key] pairs
- */
-function entryFinderPlantSentinels(array $items): void
-{
-    foreach ($items as [$collection, $key]) {
-        StacheFacade::cacheStore()->forever(entryFinderCacheKey($collection, $key), 'sentinel');
-    }
-}
-
-/**
  * Replace an entry's cached item with a copy whose title reads "stale", as an item
  * cached before a save elsewhere would.
  */
@@ -82,14 +68,6 @@ function entryFinderCacheStale(string $collection, string $id): void
     $stale->set('title', 'stale');
 
     StacheFacade::cacheStore()->forever(entryFinderCacheKey($collection, $id), $stale);
-}
-
-/**
- * Whether the sentinel under an item key is still there.
- */
-function entryFinderSentinelKept(string $collection, string $key): bool
-{
-    return StacheFacade::cacheStore()->get(entryFinderCacheKey($collection, $key)) === 'sentinel';
 }
 
 /**
@@ -194,26 +172,48 @@ it('reads past a stale cached item by id only when a fresh read is asked for', f
         ->and($fresh)->toBe('about');
 });
 
-it('forgets the cache key named by the slug only when a fresh read is asked for', function (): void {
-    // Characterization: items are cached by id, so the key a slug names holds no item
-    // and a fresh slug lookup does not refresh the entry (#127)
-    entryFinderPlantSentinels([['pages', 'about']]);
-
-    EntryFinder::findEntryBySlug('pages', 'about');
-    $keptWithoutFresh = entryFinderSentinelKept('pages', 'about');
-
-    EntryFinder::findEntryBySlug('pages', 'about', forceFresh: true);
-
-    expect($keptWithoutFresh)->toBeTrue()
-        ->and(entryFinderSentinelKept('pages', 'about'))->toBeFalse();
-});
-
-it('still returns a stale cached item from a fresh slug lookup', function (): void {
-    // Characterization of the same gap: the item cached under the entry's id survives
+it('reads past a stale cached item by slug only when a fresh read is asked for', function (): void {
     entryFinderCacheStale('pages', 'about-12-abc');
 
-    expect(EntryFinder::findEntryBySlug('pages', 'about', forceFresh: true, site: 'default')?->get('title'))
-        ->toBe('stale');
+    expect(EntryFinder::findEntryBySlug('pages', 'about', site: 'default')?->get('title'))->toBe('stale')
+        ->and(EntryFinder::findEntryBySlug('pages', 'about', forceFresh: true, site: 'default')?->get('title'))->toBe('about');
+});
+
+it('forgets only the cached item of the entry a fresh slug lookup finds', function (): void {
+    entryFinderCacheStale('pages', 'about-12-abc');
+    entryFinderCacheStale('pages', 'contact-112-mno');
+
+    EntryFinder::findEntryBySlug('pages', 'about', forceFresh: true, site: 'default');
+
+    expect(entryFinderTitle('about-12-abc'))->toBe('about')
+        ->and(entryFinderTitle('contact-112-mno'))->toBe('stale');
+});
+
+it('finds nothing from a fresh slug lookup of a slug no entry has', function (): void {
+    expect(EntryFinder::findEntryBySlug('pages', 'missing', forceFresh: true, site: 'default'))->toBeNull();
+});
+
+it('returns an entry whose id is not a string from a fresh slug lookup', function (): void {
+    // An entry file whose YAML reads `id: 123` loads with an integer id, which no
+    // cached item can be forgotten by
+    $legacy = CollectionFacade::make('legacy');
+    $legacy->sites(['default']);
+    $legacy->save();
+
+    $numbered = EntryFacade::make();
+
+    if (! $numbered instanceof Entry) {
+        throw new RuntimeException('Could not make an entry.');
+    }
+
+    $numbered->collection('legacy');
+    $numbered->locale('default');
+    $numbered->id(123);
+    $numbered->slug('numbered');
+    $numbered->data(['title' => 'numbered']);
+    $numbered->save();
+
+    expect(EntryFinder::findEntryBySlug('legacy', 'numbered', forceFresh: true)?->slug())->toBe('numbered');
 });
 
 it('forgets the cached item of each entry a fresh WordPress id lookup reads', function (): void {

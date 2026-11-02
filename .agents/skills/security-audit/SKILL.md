@@ -46,7 +46,7 @@ Antlers then emits the raw input verbatim: a throw inside a sanitizer is a store
 (`UAMS-Web/uams-statamic-archive#1853`).
 
 **Whether a throw fails open or 500s turns on `Exception` vs `Error`**, re-verified 2026-10-02
-against `statamic/cms` v6.35.0 (the build `wordpress-importer` pins, `UAMS-Web/wordpress-importer-archive#1290`):
+against `statamic/cms` v6.35.0 (the build `aether-wordpress-importer` pins, `UAMS-Web/wordpress-importer-archive#1290`):
 `Modify::modify()` still catches `Exception`, and `NodeProcessor` still catches
 `ModifierException`. The distinction matters because it decides the severity of every sanitizer
 finding:

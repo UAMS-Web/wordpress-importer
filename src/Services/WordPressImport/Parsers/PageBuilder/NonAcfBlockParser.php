@@ -179,9 +179,12 @@ class NonAcfBlockParser
         if ($node->nodeType === XML_COMMENT_NODE) {
             $comment = \trim($node->textContent);
             $attributes = [];
+
+            // The match runs to the last closing brace, since a lazy one stops inside
+            // a nested object
             if (
                 \preg_match(
-                    '/{.+?}/s',
+                    '/{.+}/s',
                     $comment,
                     $matches
                 ) === 1

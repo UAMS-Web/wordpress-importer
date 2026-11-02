@@ -147,6 +147,8 @@ const attr = (tag, name) => {
     const m = tag.match(new RegExp(`\\s${name}="([^"]*)"`))
     return m ? decode(m[1]) : null
 }
+// Pest writes backslashes into the `file` attributes on Windows; the paths read from a diff use slashes.
+const slashes = (file) => (file === null ? null : file.replaceAll('\\', '/'))
 
 /**
  * Every test case of a JUnit log, each `{file, className, name, problem, skipped}`. `file` is the
@@ -168,12 +170,12 @@ export function parseJunit(xml) {
             continue
         }
         if (m[0].startsWith('<testsuite')) {
-            if (m[2] !== '/') stack.push(attr(`<x${m[1]}>`, 'file'))
+            if (m[2] !== '/') stack.push(slashes(attr(`<x${m[1]}>`, 'file')))
             continue
         }
         const tag = `<x${m[3]}>`
         const inner = m[4] ?? ''
-        const own = attr(tag, 'file')
+        const own = slashes(attr(tag, 'file'))
         const suiteFile = [...stack].reverse().find((file) => file !== null) ?? null
         const problem = inner.match(/<(?:failure|error)\b[^>]*>([\s\S]*?)<\/(?:failure|error)>/)
         cases.push({
