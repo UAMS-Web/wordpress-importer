@@ -265,7 +265,7 @@ const DOMAINS = [
       { other: 'responses, logs and error output: values written to a log or returned in an error that carry request data, credentials or personal data' },
       {
         statamic:
-          'hardcoded secrets: API keys, tokens, passwords and private keys as string literals in code, config, routes, scripts, front-end JS and tests; a real value as the default of `env(\'KEY\', \'...\')` in config; a committed `.env*` other than `.env.example`. In `wordpress-importer` the migration API key is pasted at run time and held nowhere (UAMS-Web/wordpress-importer-archive#982), so a committed value for it is a finding. Check the value is live (a placeholder or a test fixture that authenticates nowhere is info at most)',
+          'hardcoded secrets: API keys, tokens, passwords and private keys as string literals in code, config, routes, scripts, front-end JS and tests; a real value as the default of `env(\'KEY\', \'...\')` in config; a committed `.env*` other than `.env.example`. In `aether-wordpress-importer` the migration API key is pasted at run time and held nowhere (UAMS-Web/wordpress-importer-archive#982), so a committed value for it is a finding. Check the value is live (a placeholder or a test fixture that authenticates nowhere is info at most)',
         other:
           'hardcoded secrets: API keys, tokens, passwords and private keys as string literals in code, config, routes, scripts, front-end JS and tests; a real value as the default of `env(\'KEY\', \'...\')` in config; a committed `.env*` other than `.env.example`. Check the value is live (a placeholder or a test fixture that authenticates nowhere is info at most)',
       },
@@ -281,7 +281,7 @@ const DOMAINS = [
       'grep for `unserialize(`, `eval(`, `call_user_func`, `call_user_func_array`, variable-variables `$$`, `{$...}()` method dispatch, and `__call`/`__get` magic',
       {
         statamic:
-          '`unserialize()` without `[\'allowed_classes\' => false]` (or an explicit class list) on data this code did not write; prefer `json_decode()` for data. `wordpress-importer` unserializes WordPress postmeta from the export routinely, and every call there passes `allowed_classes => false`',
+          '`unserialize()` without `[\'allowed_classes\' => false]` (or an explicit class list) on data this code did not write; prefer `json_decode()` for data. `aether-wordpress-importer` unserializes WordPress postmeta from the export routinely, and every call there passes `allowed_classes => false`',
         other:
           '`unserialize()` without `[\'allowed_classes\' => false]` (or an explicit class list) on data this code did not write; prefer `json_decode()` for data',
       },
@@ -300,7 +300,7 @@ const DOMAINS = [
       'grep for `openssl_encrypt(` / `openssl_decrypt(`: an `-ecb` cipher, an empty or constant IV, or no authentication (no GCM tag, no keyed hash over the encrypted data); Laravel `Crypt::encryptString()` / `encrypt()` is the default to prefer',
       {
         statamic:
-          'grep for `Http::withoutVerifying()`, Guzzle `\'verify\' => false`, `CURLOPT_SSL_VERIFYPEER => false`, `CURLOPT_SSL_VERIFYHOST => 0`, and stream contexts with `verify_peer` / `verify_peer_name` => false, including `wordpress-importer`\'s `OutboundUrlGuard`, `GuardedHttpFetcher` and `GuardedRedirectWalk`; a self-signed dev certificate belongs in the trust store, not a disabled check',
+          'grep for `Http::withoutVerifying()`, Guzzle `\'verify\' => false`, `CURLOPT_SSL_VERIFYPEER => false`, `CURLOPT_SSL_VERIFYHOST => 0`, and stream contexts with `verify_peer` / `verify_peer_name` => false, including `aether-wordpress-importer`\'s `OutboundUrlGuard`, `GuardedHttpFetcher` and `GuardedRedirectWalk`; a self-signed dev certificate belongs in the trust store, not a disabled check',
         other:
           'grep for `Http::withoutVerifying()`, Guzzle `\'verify\' => false`, `CURLOPT_SSL_VERIFYPEER => false`, `CURLOPT_SSL_VERIFYHOST => 0`, and stream contexts with `verify_peer` / `verify_peer_name` => false; a self-signed dev certificate belongs in the trust store, not a disabled check',
       },

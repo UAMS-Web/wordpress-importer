@@ -362,7 +362,7 @@ PCOV is set up in Herd's Windows `php84` as a per-machine install (the same shap
 
 - In a Laravel application, `php artisan test --coverage` is the coverage report.
 
-- This package has no `composer mutate` script, so scope `--path` to `src` yourself: `vendor/bin/pest --mutate --path=src --class="UAMSWeb\WordPressImporter\<Class>"`.
+- This package has no `composer mutate` script, so scope `--path` to `src` yourself: `vendor/bin/pest --mutate --path=src --class="UAMSWeb\Aether\WordPressImporter\<Class>"`.
 
 ## Coverage population and instrument scripts
 

@@ -100,7 +100,7 @@ Or skip the only covering test, confirm it is skipped, and require the mutant to
 
 **Assert a hand-rolled mutation changed the file.** Coverage driver: PCOV or Xdebug, not phpdbg, per machine; run `php .claude/skills/pcov-setup/scripts/check-mutation-instrument.php` before trusting a score ([`pcov-setup`](../skills/pcov-setup/SKILL.md)). Track a full-coverage ticket's passes with `build-coverage-scope-csv.php`, kept current in UAMS-Web/uams-claude-skills.
 
-Here: `vendor/bin/pest --mutate --path=src --class="UAMSWeb\WordPressImporter\<Class>"`.
+Here: `vendor/bin/pest --mutate --path=src --class="UAMSWeb\Aether\WordPressImporter\<Class>"`.
 
 Pass a relative `--path`; in a linked worktree, `vendor/bin/pest <test-file> --mutate --path=<source dir>/<Subdir> --class="<Namespace>\<Class>" --covered-only`; on Windows relaunch under a trimmed `env -i`; see [`pcov-setup`](../skills/pcov-setup/SKILL.md).
 

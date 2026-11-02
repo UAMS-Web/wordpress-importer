@@ -129,14 +129,14 @@ On a red (a failing chain, or a review finding) the gate **does not flip the pul
 
 Not a draft flip: `draft` is the author's signal and costs GraphQL; the pull request stays ready.
 
-**`handed-back` comes off when the pull request RE-ENTERS the queue (a push to the head) or a person edits its body**, never on an author's "ready", a title edit, a bot edit or a comment; a workflow removes it, never the gate by hand.
+**`handed-back` comes off when the pull request RE-ENTERS the queue (a push to the head) or a person edits its body**, never on an author's "ready", a title edit, a bot edit or a comment; a workflow removes it, never the gate by hand, except while the repository's remote-CI switch is off and the workflow is skipped (see the `PATCH` below).
 
 `post-verdict.mjs <n> verdict.md --hand-back` ([`local-ci`](../local-ci/SKILL.md)) comments and labels in one command. The removal workflow is a template in [`handed-back-label`](../handed-back-label/SKILL.md), copied to `.github/workflows/clear-handed-back.yml` with its drift check.
 
 Settled 2026-09-09 (`uams-statamic-archive#2323`, `wordpress-importer-archive#1033`, `uamswp-migration-api` D-068).
 
 - It marks a state: label retroactively, once each finding is confirmed outstanding. Queue depth is `open AND not labelled`.
-- **The workflow removes it with `DELETE /repos/{o}/{r}/issues/{n}/labels/handed-back`** under its own token (gate sessions cannot); never gate it on a remote-CI switch.
+- **The workflow removes it with `DELETE /repos/{o}/{r}/issues/{n}/labels/handed-back`** under its own token (gate sessions cannot). It is gated on the repository's remote-CI switch like the rest of CI, so with the switch off a push or a description edit removes nothing; the `PATCH` below clears the label then.
 - **If a push did not clear it, read the run**: ticket a failed one (billing included). A conflicted push runs no workflow; the resolving push clears it. Otherwise `PATCH`, which **replaces the whole set**, from a fresh read:
 
 ```bash
