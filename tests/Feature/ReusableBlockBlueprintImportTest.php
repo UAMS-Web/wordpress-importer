@@ -124,10 +124,10 @@ function blueprintImportRenderLanding(Entry $page): string
 }
 
 it('gives each block the blueprint its content needs, and the host renders it from either kind of page', function (): void {
-    $widget = '<div class="lwcw" data-options="id=20&format=html"></div>';
+    $widget = '<!-- wp:html --><div class="lwcw" data-options="id=20&format=html"></div><!-- /wp:html -->';
     $reference = '<!-- wp:block {"ref":94601} /-->';
     $file = $this->createTemporaryXmlFile($this->buildXmlContent([
-        blueprintImportItem('wp_block', 94601, 'zz-blueprint-plain', '<!-- wp:paragraph --><p>Reused words.</p><!-- /wp:paragraph -->'),
+        blueprintImportItem('wp_block', 94601, 'zz-blueprint-plain', '<!-- wp:paragraph --><p>ReusedWords</p><!-- /wp:paragraph -->'),
         blueprintImportItem('wp_block', 94602, 'zz-blueprint-built', $widget),
         blueprintImportItem('page', 94603, 'zz-blueprint-bard', '<!-- wp:paragraph --><p>Page.</p><!-- /wp:paragraph -->'.$reference.'<!-- wp:paragraph --><p>Page end.</p><!-- /wp:paragraph -->'),
         blueprintImportItem('page', 94604, 'zz-blueprint-landing', $widget.$reference.'<!-- wp:block {"ref":94602} /-->'),
@@ -151,8 +151,8 @@ it('gives each block the blueprint its content needs, and the host renders it fr
 
         expect($bardPage->blueprint()?->handle())->toBe('basic_page')
             ->and($landingPage->blueprint()?->handle())->toBe('landing_page')
-            ->and(blueprintImportRenderBard($bardPage))->toContain('Reused words.')
-            ->and(blueprintImportRenderLanding($landingPage))->toContain('Reused words.');
+            ->and(blueprintImportRenderBard($bardPage))->toContain('ReusedWords')
+            ->and(blueprintImportRenderLanding($landingPage))->toContain('ReusedWords');
     } finally {
         foreach ([['pages', 'zz-blueprint-bard'], ['pages', 'zz-blueprint-landing'], ['reusable_content', 'zz-blueprint-plain'], ['reusable_content', 'zz-blueprint-built']] as [$collection, $slug]) {
             foreach (EntryFacade::whereCollection($collection) as $entry) {
